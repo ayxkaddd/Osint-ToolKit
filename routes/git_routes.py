@@ -11,8 +11,7 @@ git_service = GitService()
 @router.get("/query")
 async def gitfive_query(username: str) -> User:
     try:
-        # result_path = git_service.run_gitfive(username)
-        result_path = f"./assets/{username}_data.json"
+        result_path = git_service.run_gitfive(username)
         with open(result_path, "r") as f:
             data = json.load(f)
             return User.model_validate(data)
