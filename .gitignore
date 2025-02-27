@@ -1,0 +1,5 @@
+assets
+__pycache__
+reports/*.pdf
+.env
+venv/

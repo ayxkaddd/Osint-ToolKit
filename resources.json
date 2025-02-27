@@ -1,0 +1,132 @@
+{
+    "modules": [
+        {
+            "name": "Gitub Lookup",
+            "description": "Analyze and investigate GitHub repositories and users",
+            "endpoint": "/git",
+            "icon": "github",
+            "icon_color": "orange",
+            "icon_type": "fab",
+            "tags": ["Github", "OSINT"]
+        },
+        {
+            "name": "NS Lookup",
+            "description": "Perform DNS queries and analyze domain information",
+            "endpoint": "/ns",
+            "icon": "network-wired",
+            "icon_color": "blue",
+            "icon_type": "fas",
+            "tags": ["DNS", "Network", "OSINT"]
+        },
+        {
+            "name": "Osint Industries API",
+            "description": "Access the osint.industries API to lookup emails, phones and usernames",
+            "endpoint": "/api",
+            "icon": "code",
+            "icon_color": "green",
+            "icon_type": "fas",
+            "tags": ["API", "OSINT"]
+        },
+        {
+            "name": "Hudson Rock Cavalier API",
+            "description": "Access the cavalier API to search for compromised accounts and data",
+            "endpoint": "/cavalier",
+            "icon": "shield-virus",
+            "icon_color": "red",
+            "icon_type": "fas",
+            "tags": ["API", "Breach", "Leaks", "OSINT"]
+        },
+        {
+            "name": "DoxBin Lookup",
+            "description": "Find out email of DoxBin user by username in the breached DoxBin database",
+            "endpoint": "/doxbin",
+            "icon": "user-secret",
+            "icon_color": "purple",
+            "icon_type": "fas",
+            "tags": ["Breach", "Leaks", "OSINT"]
+        },
+        {
+            "name": "Whois History",
+            "description": "Lookup the history of a domain whois records",
+            "endpoint": "/whois",
+            "icon": "globe",
+            "icon_color": "blue",
+            "icon_type": "fas",
+            "tags": ["Whois", "OSINT"]
+        }
+    ],
+    "ext_res": [
+        {
+            "name": "Nomerogram",
+            "url": "https://nomerogram.ru",
+            "favicon": "https://www.google.com/s2/favicons?domain=nomerogram.ru",
+            "description": "Check russian car plates"
+        },
+        {
+            "name": "Website Informer",
+            "url": "https://website.informer.com",
+            "favicon": "https://www.google.com/s2/favicons?domain=website.informer.com",
+            "description": "Get general information about a website"
+        },
+        {
+            "name": "OsintLeak",
+            "url": "https://osintleak.com",
+            "favicon": "https://www.google.com/s2/favicons?domain=osintleak.com",
+            "description": "Search by email, username, hwid, ip, domain name, etc in compromised databases"
+        },
+        {
+            "name": "Breach VIP",
+            "url": "https://breach.vip",
+            "favicon": "https://www.google.com/s2/favicons?domain=breach.vip",
+            "description": "Same as OsintLeak but free and sometimes returns more results"
+        },
+        {
+            "name": "FOFA",
+            "url": "https://en.fofa.info",
+            "favicon": "https://www.google.com/s2/favicons?domain=en.fofa.info",
+            "description": "FOFA search engine. Sometimes can be used to find real ip behind the cloudflare proxy"
+        },
+        {
+            "name": "SecurityTrails",
+            "url": "https://securitytrails.com",
+            "favicon": "https://www.google.com/s2/favicons?domain=securitytrails.com",
+            "description": "Check current and historical DNS records of a domain"
+        },
+        {
+            "name": "Buckets Grayhatwarfare",
+            "url": "https://buckets.grayhatwarfare.com",
+            "favicon": "https://www.google.com/s2/favicons?domain=buckets.grayhatwarfare.com",
+            "description": "Amazon Public Buckets Search"
+        },
+        {
+            "name": "osint.sh/buckets",
+            "url": "https://osint.sh/buckets",
+            "favicon": "https://www.google.com/s2/favicons?domain=osint.sh",
+            "description": "Azure Public Buckets Search"
+        },
+        {
+            "name": "TeleSINT",
+            "url": "https://t.me/telesint_2025_bot",
+            "favicon": "https://www.google.com/s2/favicons?domain=telesint.org",
+            "description": "TeleSINT is a professional tool for searching users in Telegram groups"
+        },
+        {
+            "name": "funstat",
+            "url": "https://t.me/cpamixbot",
+            "favicon": "https://www.google.com/s2/favicons?domain=funstat.online",
+            "description": "Search for groups and messages of telegram user"
+        },
+        {
+            "name": "OpenDataBot",
+            "url": "https://t.me/OpenDataUABot",
+            "favicon": "https://www.google.com/s2/favicons?domain=opendatabot.ua",
+            "description": "Search for ukrainian people and companies"
+        },
+        {
+            "name": "OpenDataBot WebSite",
+            "url": "https://opendatabot.ua",
+            "favicon": "https://www.google.com/s2/favicons?domain=opendatabot.ua",
+            "description": "Search for ukrainian people and companies"
+        }
+    ]
+}

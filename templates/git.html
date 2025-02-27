@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GitFive - GitHub User Analysis</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                }
+            }
+        }
+    </script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        .section-toggle {
+            transition: transform 0.2s ease;
+        }
+        .section-toggle.active {
+            transform: rotate(180deg);
+        }
+        .reposList, #reposList, #sshKeysList, #usernamesHistory, #domainsList,
+        #registeredEmailsList, #allContribsList, #extContribsList, #nearNamesList {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.2s ease-out;
+            opacity: 0;
+            transition: max-height 0.2s ease-out, opacity 0.2s ease-out;
+        }
+        .reposList.expanded, #reposList.expanded, #sshKeysList.expanded, #usernamesHistory.expanded,
+        #domainsList.expanded, #registeredEmailsList.expanded, #allContribsList.expanded,
+        #extContribsList.expanded, #nearNamesList.expanded {
+            max-height: 5000px;
+            opacity: 1;
+            transition: max-height 0.5s ease-in, opacity 0.2s ease-in;
+        }
+    </style>
+</head>
+<body class="bg-black text-white font-mono min-h-screen">
+    <div class="container mx-auto p-4 max-w-4xl">
+        <!-- Search Section -->
+        <div class="flex flex-col items-center justify-center min-h-[50vh]">
+            <h1 class="text-4xl font-bold mb-8">GitFive</h1>
+            <div class="w-full max-w-xl relative">
+                <input
+                    type="text"
+                    id="usernameInput"
+                    placeholder="Enter GitHub username"
+                    class="w-full bg-gray-900 border border-gray-700 rounded-lg py-3 px-4 text-white placeholder-gray-500 focus:outline-none focus:border-gray-500 transition-colors"
+                >
+                <button
+                    id="searchButton"
+                    class="absolute right-2 top-1/2 transform -translate-y-1/2 bg-gray-800 hover:bg-gray-700 text-white px-4 py-1 rounded-md transition-colors"
+                >
+                    Search
+                </button>
+            </div>
+        </div>
+
+        <!-- Loading indicator -->
+        <div id="loadingIndicator" class="hidden flex justify-center my-8">
+            <div class="animate-spin rounded-full h-8 w-8 border-t-2 border-white"></div>
+        </div>
+
+        <!-- Results Section -->
+        <div id="userData" class="hidden space-y-6 mt-8">
+            <!-- Profile Section -->
+            <div class="bg-gray-900 rounded-lg p-6">
+                <div class="flex items-start space-x-6">
+                    <img id="userAvatar" class="w-24 h-24 rounded-lg" src="/placeholder.svg" alt="User avatar">
+                    <div class="flex-1">
+                        <div class="flex items-center space-x-2">
+                            <h2 id="userName" class="text-2xl font-bold"></h2>
+                            <span id="adminBadge" class="hidden px-2 py-0.5 text-xs bg-yellow-500 text-black rounded">Admin</span>
+                            <span id="hireableBadge" class="hidden px-2 py-0.5 text-xs bg-green-500 text-black rounded">Hireable</span>
+                        </div>
+                        <p id="userBio" class="text-gray-400 mt-2"></p>
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
+                            <div class="flex items-center">
+                                <i data-lucide="git-fork" class="w-4 h-4 mr-2"></i>
+                                <span id="repoCount"></span>
+                            </div>
+                            <div class="flex items-center">
+                                <i data-lucide="users" class="w-4 h-4 mr-2"></i>
+                                <span id="followerCount"></span>
+                            </div>
+                            <div class="flex items-center">
+                                <i data-lucide="user-plus" class="w-4 h-4 mr-2"></i>
+                                <span id="followingCount"></span>
+                            </div>
+                            <div class="flex items-center">
+                                <i data-lucide="calendar" class="w-4 h-4 mr-2"></i>
+                                <span id="createdAt"></span>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                            <div id="blogContainer" class="hidden">
+                                <a id="blogLink" href="#" target="_blank" class="flex items-center text-blue-400 hover:text-blue-300">
+                                    <i data-lucide="link" class="w-4 h-4 mr-2"></i>
+                                    <span id="blogUrl"></span>
+                                </a>
+                            </div>
+                            <div id="companyContainer" class="hidden">
+                                <div class="flex items-center text-gray-400">
+                                    <i data-lucide="briefcase" class="w-4 h-4 mr-2"></i>
+                                    <span id="companyName"></span>
+                                </div>
+                            </div>
+                            <div id="locationContainer" class="hidden">
+                                <div class="flex items-center text-gray-400">
+                                    <i data-lucide="map-pin" class="w-4 h-4 mr-2"></i>
+                                    <span id="locationName"></span>
+                                </div>
+                            </div>
+                            <div id="twitterContainer" class="hidden">
+                                <a id="twitterLink" href="#" target="_blank" class="flex items-center text-blue-400 hover:text-blue-300">
+                                    <i data-lucide="twitter" class="w-4 h-4 mr-2"></i>
+                                    <span id="twitterHandle"></span>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Language Stats Section -->
+            <div class="bg-gray-900 rounded-lg p-6">
+                <h3 class="text-xl font-bold mb-4 flex items-center">
+                    <i data-lucide="pie-chart" class="w-5 h-5 mr-2"></i>
+                    Language Statistics
+                </h3>
+                <div id="languageStats" class="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    <!-- Language stats will be inserted here -->
+                </div>
+            </div>
+
+            <!-- Repositories Section -->
+            <div class="bg-gray-900 rounded-lg p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-xl font-bold flex items-center">
+                        <i data-lucide="book" class="w-5 h-5 mr-2"></i>
+                        Repositories
+                    </h3>
+                    <button class="section-toggle" data-section="reposList">
+                        <i data-lucide="chevron-down" class="w-6 h-6"></i>
+                    </button>
+                </div>
+                <div id="reposList" class="space-y-2"></div>
+            </div>
+
+            <!-- SSH Keys Section -->
+            <div class="bg-gray-900 rounded-lg p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-xl font-bold flex items-center">
+                        <i data-lucide="key" class="w-5 h-5 mr-2"></i>
+                        SSH Keys
+                    </h3>
+                    <button class="section-toggle" data-section="sshKeysList">
+                        <i data-lucide="chevron-down" class="w-6 h-6"></i>
+                    </button>
+                </div>
+                <div id="sshKeysList" class="space-y-2"></div>
+            </div>
+
+            <!-- Usernames History Section -->
+            <div class="bg-gray-900 rounded-lg p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-xl font-bold flex items-center">
+                        <i data-lucide="history" class="w-5 h-5 mr-2"></i>
+                        Username History
+                    </h3>
+                    <button class="section-toggle" data-section="usernamesHistory">
+                        <i data-lucide="chevron-down" class="w-6 h-6"></i>
+                    </button>
+                </div>
+                <div id="usernamesHistory" class="space-y-2"></div>
+            </div>
+
+            <!-- Domains Section -->
+            <div class="bg-gray-900 rounded-lg p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-xl font-bold flex items-center">
+                        <i data-lucide="globe" class="w-5 h-5 mr-2"></i>
+                        Domains
+                    </h3>
+                    <button class="section-toggle" data-section="domainsList">
+                        <i data-lucide="chevron-down" class="w-6 h-6"></i>
+                    </button>
+                </div>
+                <div id="domainsList" class="space-y-2"></div>
+            </div>
+
+            <!-- All Contributions Section -->
+            <div class="bg-gray-900 rounded-lg p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-xl font-bold flex items-center">
+                        <i data-lucide="git-commit" class="w-5 h-5 mr-2"></i>
+                        All Contributions
+                    </h3>
+                    <button class="section-toggle" data-section="allContribsList">
+                        <i data-lucide="chevron-down" class="w-6 h-6"></i>
+                    </button>
+                </div>
+                <div id="allContribsList" class="space-y-4"></div>
+            </div>
+
+            <!-- External Contributions Section -->
+            <div class="bg-gray-900 rounded-lg p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-xl font-bold flex items-center">
+                        <i data-lucide="git-branch" class="w-5 h-5 mr-2"></i>
+                        External Contributions
+                    </h3>
+                    <button class="section-toggle" data-section="extContribsList">
+                        <i data-lucide="chevron-down" class="w-6 h-6"></i>
+                    </button>
+                </div>
+                <div id="extContribsList" class="space-y-4"></div>
+            </div>
+
+            <!-- Near Names Section -->
+            <div class="bg-gray-900 rounded-lg p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-xl font-bold flex items-center">
+                        <i data-lucide="users" class="w-5 h-5 mr-2"></i>
+                        Near Names
+                    </h3>
+                    <button class="section-toggle" data-section="nearNamesList">
+                        <i data-lucide="chevron-down" class="w-6 h-6"></i>
+                    </button>
+                </div>
+            <div id="nearNamesList" class="space-y-4"></div>
+            </div>
+            <!-- Registered Emails Section -->
+            <div class="bg-gray-900 rounded-lg p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-xl font-bold flex items-center">
+                        <i data-lucide="mail-check" class="w-5 h-5 mr-2"></i>
+                        Registered Emails
+                    </h3>
+                    <button class="section-toggle" data-section="registeredEmailsList">
+                        <i data-lucide="chevron-down" class="w-6 h-6"></i>
+                    </button>
+                </div>
+                <div id="registeredEmailsList" class="space-y-2"></div>
+            </div>
+
+
+        </div>
+        </div>
+
+    <script>
+      document.addEventListener("DOMContentLoaded", () => {
+  const lucide = window.lucide
+  lucide.createIcons()
+
+  const searchButton = document.getElementById("searchButton")
+  const usernameInput = document.getElementById("usernameInput")
+  const userDataDiv = document.getElementById("userData")
+  const loadingIndicator = document.getElementById("loadingIndicator")
+
+  // Add click handlers for all section toggles
+  document.querySelectorAll(".section-toggle").forEach((toggle) => {
+    toggle.addEventListener("click", () => {
+      const sectionId = toggle.getAttribute("data-section")
+      const section = document.getElementById(sectionId)
+      if (!section) return
+
+      // Toggle the section
+      section.classList.toggle("expanded")
+
+      // Toggle the icon if it exists
+      const icon = toggle.querySelector("i")
+      if (icon) {
+        toggle.classList.toggle("active")
+      }
+
+      // Update button text if it's a repo toggle
+      if (toggle.classList.contains("toggleRepos")) {
+        toggle.textContent = section.classList.contains("expanded") ? "Hide repos" : "Show repos"
+      }
+    })
+  })
+
+  searchButton.addEventListener("click", fetchUserData)
+  usernameInput.addEventListener("keypress", (e) => {
+    if (e.key === "Enter") fetchUserData()
+  })
+
+  async function fetchUserData() {
+    const username = usernameInput.value.trim()
+    if (!username) return
+
+    loadingIndicator.classList.remove("hidden")
+    userDataDiv.classList.add("hidden")
+
+    try {
+      const response = await fetch(`/api/gitfive/query?username=${encodeURIComponent(username)}`)
+      if (!response.ok) throw new Error("Failed to fetch user data")
+      const data = await response.json()
+      displayUserData(data)
+    } catch (error) {
+      console.error("Error fetching user data:", error)
+      alert("Error fetching user data. Please try again.")
+    } finally {
+      loadingIndicator.classList.add("hidden")
+    }
+  }
+
+  function formatDate(dateString) {
+    return new Date(dateString).toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    })
+  }
+
+  function displayUserData(data) {
+    // Update profile section
+    document.getElementById("userAvatar").src = data.avatar_url
+    document.getElementById("userName").textContent = data.name || data.username
+    document.getElementById("userBio").textContent = data.bio || "No bio available"
+    document.getElementById("repoCount").textContent = `${data.nb_public_repos} repositories`
+    document.getElementById("followerCount").textContent = `${data.nb_followers} followers`
+    document.getElementById("followingCount").textContent = `${data.nb_following} following`
+    document.getElementById("createdAt").textContent = formatDate(data.created_at)
+
+    // Update badges
+    document.getElementById("adminBadge").classList.toggle("hidden", !data.is_site_admin)
+    document.getElementById("hireableBadge").classList.toggle("hidden", !data.is_hireable)
+
+    // Update profile links
+    const blogContainer = document.getElementById("blogContainer")
+    const blogLink = document.getElementById("blogLink")
+    const blogUrl = document.getElementById("blogUrl")
+    if (data.blog) {
+      blogContainer.classList.remove("hidden")
+      blogLink.href = data.blog.startsWith("http") ? data.blog : `https://${data.blog}`
+      blogUrl.textContent = data.blog
+    } else {
+      blogContainer.classList.add("hidden")
+    }
+
+    // Update company
+    const companyContainer = document.getElementById("companyContainer")
+    const companyName = document.getElementById("companyName")
+    if (data.company) {
+      companyContainer.classList.remove("hidden")
+      companyName.textContent = data.company
+    } else {
+      companyContainer.classList.add("hidden")
+    }
+
+    // Update location
+    const locationContainer = document.getElementById("locationContainer")
+    const locationName = document.getElementById("locationName")
+    if (data.location) {
+      locationContainer.classList.remove("hidden")
+      locationName.textContent = data.location
+    } else {
+      locationContainer.classList.add("hidden")
+    }
+
+    // Update Twitter
+    const twitterContainer = document.getElementById("twitterContainer")
+    const twitterLink = document.getElementById("twitterLink")
+    const twitterHandle = document.getElementById("twitterHandle")
+    if (data.twitter) {
+      twitterContainer.classList.remove("hidden")
+      twitterLink.href = `https://twitter.com/${data.twitter}`
+      twitterHandle.textContent = `@${data.twitter}`
+    } else {
+      twitterContainer.classList.add("hidden")
+    }
+
+    // Update language stats
+    const languageStats = document.getElementById("languageStats")
+    languageStats.innerHTML = Object.entries(data.languages_stats)
+      .map(
+        ([lang, percentage]) => `
+            <div class="bg-gray-800 p-3 rounded-lg">
+                <div class="flex justify-between items-center">
+                    <span class="text-sm">${lang === "null" ? "Other" : lang}</span>
+                    <span class="text-sm text-gray-400">${percentage}%</span>
+                </div>
+                <div class="w-full bg-gray-700 rounded-full h-2 mt-2">
+                    <div class="bg-blue-500 rounded-full h-2" style="width: ${percentage}%"></div>
+                </div>
+            </div>
+        `,
+      )
+      .join("")
+
+    // Update repositories section
+    const reposList = document.getElementById("reposList")
+    reposList.innerHTML = data.repos
+      .map(
+        (repo) => `
+            <div class="bg-gray-800 p-4 rounded-lg">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <h4 class="font-bold">${repo.name}</h4>
+                        <p class="text-gray-400 text-sm">${repo.main_language || "No language"}</p>
+                    </div>
+                    <div class="flex items-center space-x-4 text-sm">
+                        <span class="flex items-center">
+                            <i data-lucide="star" class="w-4 h-4 mr-1"></i>
+                            ${repo.stars}
+                        </span>
+                        <span class="flex items-center">
+                            <i data-lucide="git-fork" class="w-4 h-4 mr-1"></i>
+                            ${repo.forks}
+                        </span>
+                    </div>
+                </div>
+            </div>
+        `,
+      )
+      .join("")
+
+    // Update SSH keys section
+    const sshKeysList = document.getElementById("sshKeysList")
+    sshKeysList.innerHTML = data.ssh_keys
+      .map(
+        (key) => `
+            <div class="bg-gray-800 p-3 rounded-lg">
+                <code class="text-xs break-all">${key}</code>
+            </div>
+        `,
+      )
+      .join("")
+
+    // Update username history section
+    const usernamesHistory = document.getElementById("usernamesHistory")
+    usernamesHistory.innerHTML = Object.entries(data.usernames_history)
+      .map(
+        ([username, info]) => `
+            <div class="bg-gray-800 p-4 rounded-lg">
+                <h4 class="font-bold">${username}</h4>
+                <div class="mt-2 space-y-2">
+                    ${Object.entries(info.names)
+                      .map(
+                        ([name, nameInfo]) => `
+                        <div class="text-sm">
+                            <span class="text-gray-400">as "${name}" in:</span>
+                            <ul class="list-disc list-inside ml-4 text-gray-300">
+                                ${nameInfo.repos.map((repo) => `<li>${repo}</li>`).join("")}
+                            </ul>
+                        </div>
+                    `,
+                      )
+                      .join("")}
+                </div>
+            </div>
+        `,
+      )
+      .join("")
+
+    // Update domains section
+    const domainsList = document.getElementById("domainsList")
+    domainsList.innerHTML = data.domains
+      .map(
+        (domain) => `
+            <div class="bg-gray-800 p-3 rounded-lg">
+                <code class="text-sm">${domain}</code>
+            </div>
+        `,
+      )
+      .join("")
+
+    // Update registered emails section
+    const registeredEmailsList = document.getElementById("registeredEmailsList")
+    registeredEmailsList.innerHTML = Object.entries(data.registered_emails)
+      .map(
+        ([email, info]) => `
+            <div class="bg-gray-800 p-4 rounded-lg">
+                <div class="flex items-center justify-between">
+                    <code class="text-sm">${email}</code>
+                    ${
+                      info.is_target
+                        ? '<span class="px-2 py-0.5 text-xs bg-green-500 text-black rounded">Target User</span>'
+                        : '<span class="px-2 py-0.5 text-xs bg-gray-700 rounded">Other User</span>'
+                    }
+                </div>
+                <div class="mt-2 text-sm text-gray-400">
+                    <div class="flex items-center mt-1">
+                        <i data-lucide="user" class="w-4 h-4 mr-2"></i>
+                        ${info.username}
+                    </div>
+                    ${
+                      info.full_name
+                        ? `
+                        <div class="flex items-center mt-1">
+                            <i data-lucide="id-card" class="w-4 h-4 mr-2"></i>
+                            ${info.full_name}
+                        </div>
+                    `
+                        : ""
+                    }
+                </div>
+            </div>
+        `,
+      )
+      .join("")
+
+    // Update all contributions section
+    const allContribsList = document.getElementById("allContribsList")
+    allContribsList.innerHTML = Object.entries(data.all_contribs)
+      .map(
+        ([email, info]) => `
+            <div class="bg-gray-800 p-4 rounded-lg">
+                <div class="flex justify-between items-start">
+                    <code class="text-sm">${email}</code>
+                    <button class="toggleRepos bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded text-sm transition-colors">
+                        Show repos
+                    </button>
+                </div>
+                <div class="reposList mt-4 space-y-2">
+                    ${Object.entries(info.names)
+                      .map(
+                        ([name, nameInfo]) => `
+                        <div class="ml-4">
+                            <div class="text-sm font-bold mb-1">as "${name}":</div>
+                            <ul class="list-disc list-inside ml-4 text-sm text-gray-400">
+                                ${nameInfo.repos.map((repo) => `<li>${repo}</li>`).join("")}
+                            </ul>
+                        </div>
+                    `,
+                      )
+                      .join("")}
+                </div>
+            </div>
+        `,
+      )
+      .join("")
+
+    // Update external contributions section
+    const extContribsList = document.getElementById("extContribsList")
+    extContribsList.innerHTML = Object.entries(data.ext_contribs)
+      .map(
+        ([email, info]) => `
+            <div class="bg-gray-800 p-4 rounded-lg">
+                <div class="flex justify-between items-start">
+                    <code class="text-sm">${email}</code>
+                    <button class="toggleRepos bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded text-sm transition-colors">
+                        Show repos
+                    </button>
+                </div>
+                <div class="reposList mt-4 space-y-2">
+                    ${Object.entries(info.names)
+                      .map(
+                        ([name, nameInfo]) => `
+                        <div class="ml-4">
+                            <div class="text-sm font-bold mb-1">as "${name}":</div>
+                            <ul class="list-disc list-inside ml-4 text-sm text-gray-400">
+                                ${nameInfo.repos.map((repo) => `<li>${repo}</li>`).join("")}
+                            </ul>
+                        </div>
+                    `,
+                      )
+                      .join("")}
+                </div>
+            </div>
+        `,
+      )
+      .join("")
+
+    // Update near names section
+    const nearNamesList = document.getElementById("nearNamesList")
+    nearNamesList.innerHTML = Object.entries(data.near_names)
+      .map(
+        ([name, info]) => `
+            <div class="bg-gray-800 p-4 rounded-lg">
+                <h4 class="font-bold">${name}</h4>
+                <div class="mt-2 space-y-2">
+                    ${Object.entries(info.related_data)
+                      .map(
+                        ([email, emailInfo]) => `
+                        <div>
+                            <code class="text-sm">${email}</code>
+                            <div class="mt-2 text-sm text-gray-400"></div>
+                            <div class="mt-2">
+                                ${Object.entries(emailInfo.names)
+                                  .map(
+                                    ([userName, userInfo]) => `
+                                    <div class="ml-4">
+                                        <div class="text-sm font-bold mb-1">as "${userName}":</div>
+                                        <ul class="list-disc list-inside ml-4 text-sm text-gray-400">
+                                            ${userInfo.repos.map((repo) => `<li>${repo}</li>`).join("")}
+                                        </ul>
+                                    </div>
+                                `,
+                                  )
+                                  .join("")}
+                            </div>
+                        </div>
+                    `,
+                      )
+                      .join("")}
+                </div>
+            </div>
+        `,
+      )
+      .join("")
+
+    // Show results
+    userDataDiv.classList.remove("hidden")
+
+    // Reinitialize Lucide icons for new content
+    lucide.createIcons()
+
+    // Add event listeners for repo toggles
+    document.querySelectorAll(".toggleRepos").forEach((button) => {
+      button.addEventListener("click", (e) => {
+        const reposList = e.target.closest("div.bg-gray-800").querySelector(".reposList")
+        reposList.classList.toggle("expanded")
+        e.target.textContent = reposList.classList.contains("expanded") ? "Hide repos" : "Show repos"
+      })
+    })
+  }
+})
+
+
+    </script>
+</body>
+</html>
