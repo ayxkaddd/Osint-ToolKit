@@ -20,8 +20,8 @@ A modern web interface for various OSINT tools and resources. Built with FastAPI
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/osint-toolkit.git
-cd osint-toolkit
+git clone https://github.com/ayxkaddd/Osint-ToolKit
+cd Osint-ToolKit
 ```
 
 2. Create and activate a virtual environment:
