@@ -2,6 +2,10 @@
 
 A modern web interface for various OSINT tools and resources. Built with FastAPI, TailwindCSS, and a focus on user experience.
 
+## Preview
+
+![preview](https://github.com/user-attachments/assets/56aa5659-461a-4c97-af07-6abb857aa5d9)
+
 ## Features
 
 - **GitHub Analysis**: Deep dive into GitHub profiles using GitFive
