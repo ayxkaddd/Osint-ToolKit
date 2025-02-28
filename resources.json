@@ -1,13 +1,23 @@
 {
     "modules": [
         {
-            "name": "Gitub Lookup",
+            "name": "Github Lookup",
             "description": "Analyze and investigate GitHub repositories and users",
             "endpoint": "/git",
             "icon": "github",
             "icon_color": "orange",
             "icon_type": "fab",
-            "tags": ["Github", "OSINT"]
+            "tags": ["Github", "OSINT"],
+            "settings": {
+                "GITFIVE_VENV_PATH": {
+                    "type": "text",
+                    "label": "GitFive Virtual Environment Path"
+                },
+                "GITFIVE_SCRIPT_PATH": {
+                    "type": "text",
+                    "label": "GitFive Script Path"
+                }
+            }
         },
         {
             "name": "NS Lookup",
@@ -16,7 +26,13 @@
             "icon": "network-wired",
             "icon_color": "blue",
             "icon_type": "fas",
-            "tags": ["DNS", "Network", "OSINT"]
+            "tags": ["DNS", "Network", "OSINT"],
+            "settings": {
+                "HACKER_TARGET_API_KEY": {
+                    "type": "password",
+                    "label": "Hacker Target API Key"
+                }
+            }
         },
         {
             "name": "Osint Industries API",
@@ -25,7 +41,13 @@
             "icon": "code",
             "icon_color": "green",
             "icon_type": "fas",
-            "tags": ["API", "OSINT"]
+            "tags": ["API", "OSINT"],
+            "settings": {
+                "OSINT_INDUSTRIES_API_KEY": {
+                    "type": "password",
+                    "label": "Osint Industries API Key"
+                }
+            }
         },
         {
             "name": "Hudson Rock Cavalier API",
@@ -52,7 +74,13 @@
             "icon": "globe",
             "icon_color": "blue",
             "icon_type": "fas",
-            "tags": ["Whois", "OSINT"]
+            "tags": ["Whois", "OSINT"],
+            "settings": {
+                "WHOIS_XML_API_KEY": {
+                    "type": "password",
+                    "label": "Whois XML API Key"
+                }
+            }
         }
     ],
     "ext_res": [
