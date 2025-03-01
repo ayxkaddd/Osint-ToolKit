@@ -48,8 +48,8 @@ class InternalContribs(BaseModel):
 class Org(BaseModel):
     handle: str
     name: str
-    link: str
-    cname: str
+    link: Optional[str] = None
+    cname: Optional[str] = None
 
 class User(BaseModel):
     username: str
