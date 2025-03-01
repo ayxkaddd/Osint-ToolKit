@@ -1,0 +1,39 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "osint-toolkit"
+version = "1.0.0"
+description = "A modern web interface for various OSINT tools and resources"
+readme = "README.md"
+requires-python = ">=3.8"
+license = "MIT"
+authors = [
+    { name = "ayxkaddd", email = "bladeec1ty@protonmail.com" }
+]
+
+keywords=["osint", "cybersecurity", "investigation"]
+
+dependencies = [
+    "fastapi>=0.115.8",
+    "uvicorn>=0.34.0",
+    "python-dotenv>=1.0.1",
+    "pydantic>=2.10.6",
+    "Jinja2>=3.1.5",
+    "aiohttp>=3.11.12",
+    "requests>=2.32.3",
+    "PyJWT>=2.10.1",
+    "passlib>=1.7.4",
+    "python-jose>=3.4.0",
+    "python-multipart>=0.0.20",
+    "bcrypt>=4.2.1"
+]
+
+[project.urls]
+"Homepage" = "https://github.com/ayxkaddd/Osint-ToolKit"
+"Bug Reports" = "https://github.com/ayxkaddd/Osint-ToolKit/issues"
+"Source" = "https://github.com/ayxkaddd/Osint-ToolKit"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]

@@ -30,17 +30,19 @@ python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 ```
 
-3. Install dependencies:
+3. Install the project and its dependencies:
 ```bash
-pip install -r requirements.txt
+pip install .
 ```
 
 4. Create a `.env` file with your configuration:
 ```env
-GITFIVE_VENV_PATH=/path/to/gitfive/venv/bin/python
-GITFIVE_SCRIPT_PATH=/path/to/GitFive/main.py
-OSINT_INDUSTRIES_API_KEY=your_api_key_here
+JWT_SECRET=your_jwt_secret_key
+ROOT_EMAIL=your_email@example.com
+ROOT_PASSWORD=your_password_encrypted_with_bcrypt
 ```
+
+You can configure other variables in the web interface.
 
 ## Usage
 
