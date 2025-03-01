@@ -45,6 +45,12 @@ class InternalContribs(BaseModel):
     all: Dict = Field(default_factory=dict)
     no_github: Dict = Field(default_factory=dict)
 
+class Org(BaseModel):
+    handle: str
+    name: str
+    link: str
+    cname: str
+
 class User(BaseModel):
     username: str
     name: str
@@ -81,7 +87,7 @@ class User(BaseModel):
     registered_emails: Dict[str, RegisteredEmail]
     type: str
     hireable: Optional[Any] = None
-    orgs: List[str] = Field(default_factory=list)
+    orgs: List[Org] = Field(default_factory=list)
 
     class Config:
         populate_by_name = True
