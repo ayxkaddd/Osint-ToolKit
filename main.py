@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 import os
 
 from models.auth_models import AuthDetails
-from routes import doxbin_routes, git_routes, oi_routes, rosources_routes, settings_routes, templates, ns_routers, whois_route
+from routes import doxbin_routes, git_routes, oi_routes, rosources_routes, settings_routes, templates, ns_routers, updates_routes, whois_route
 from auth.auth_handler import AuthHandler
 
 load_dotenv()
@@ -98,6 +98,10 @@ class OsintFrameWork:
         self.app.include_router(
             settings_routes.router,
             tags=["settings"],
+        )
+        self.app.include_router(
+            updates_routes.router,
+            tags=["updates"],
         )
         self.app.include_router(
             templates.router,

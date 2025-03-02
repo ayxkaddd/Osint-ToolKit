@@ -1,46 +1,31 @@
-<!DOCTYPE html>
-<html lang="en" class="dark">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WhoisFive - WHOIS History Analysis</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    fontFamily: {
-                        mono: ['JetBrains Mono', 'monospace'],
-                    },
-                }
-            }
-        }
-    </script>
-    <script src="https://unpkg.com/lucide@latest"></script>
-    <style>
-        .section-toggle {
-            transition: transform 0.2s ease;
-        }
-        .section-toggle.active {
-            transform: rotate(180deg);
-        }
-        .recordDetails {
-            max-height: 0;
-            overflow: hidden;
-            transition: max-height 0.2s ease-out;
-            opacity: 0;
-            transition: max-height 0.2s ease-out, opacity 0.2s ease-out;
-        }
-        .recordDetails.expanded {
-            max-height: 5000px;
-            opacity: 1;
-            transition: max-height 0.5s ease-in, opacity 0.2s ease-in;
-        }
-    </style>
-</head>
-<body class="bg-black text-white font-mono min-h-screen">
+{% extends "base.html" %}
+
+{% block title %}WhoisFive - WHOIS History Analysis{% endblock %}
+
+{% block extra_head %}
+<style>
+    .section-toggle {
+        transition: transform 0.2s ease;
+    }
+    .section-toggle.active {
+        transform: rotate(180deg);
+    }
+    .recordDetails {
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 0.2s ease-out;
+        opacity: 0;
+        transition: max-height 0.2s ease-out, opacity 0.2s ease-out;
+    }
+    .recordDetails.expanded {
+        max-height: 5000px;
+        opacity: 1;
+        transition: max-height 0.5s ease-in, opacity 0.2s ease-in;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
     <div class="container mx-auto p-4 max-w-4xl">
         <!-- Search Section -->
         <div class="flex flex-col items-center justify-center min-h-[50vh]">
@@ -303,5 +288,4 @@
             }
         })
     </script>
-</body>
-</html>
+{% endblock %}
