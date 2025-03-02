@@ -81,7 +81,15 @@
                     </div>
                 </div>
                 <div class="border-t border-gray-700 pt-4">
-                    <p id="updateMessage" class="text-gray-300"></p>
+                    <div class="flex items-start gap-1">
+                        <p id="updateMessage" class="text-gray-300"></p>
+                        <div id="descriptionContainer" class="hidden">
+                            <button id="toggleDescription" class="text-sm text-gray-500 hover:text-gray-400">
+                                <i class="fas fa-chevron-down transition-transform duration-200"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <p id="updateDescription" class="mt-2 text-gray-500 text-sm hidden"></p>
                 </div>
                 <div class="bg-gray-800 rounded-lg p-4 space-y-3">
                     <div class="flex items-center justify-between text-sm">
@@ -147,9 +155,32 @@
                     document.getElementById('updateAuthorAvatar').src = update.author_avatar;
                     document.getElementById('updateAuthorName').textContent = update.committer;
                     document.getElementById('updateDate').textContent = formattedDate;
-                    document.getElementById('updateMessage').textContent = update.message;
-                    document.getElementById('updateCommitHash').textContent = update.hash.substring(0, 7);
-                    document.getElementById('updateCommitUrl').href = update.url;
+
+                    // Handle message and description
+                    const [message, description] = update.message.split('\n\n');
+                    document.getElementById('updateMessage').textContent = message;
+
+                    const descContainer = document.getElementById('descriptionContainer');
+                    const descElement = document.getElementById('updateDescription');
+                    const toggleBtn = document.getElementById('toggleDescription');
+
+                    if (description) {
+                        descElement.textContent = description;
+                        descContainer.classList.remove('hidden');
+
+                        toggleBtn.addEventListener('click', () => {
+                            const icon = toggleBtn.querySelector('i');
+                            if (descElement.classList.contains('hidden')) {
+                                descElement.classList.remove('hidden');
+                                icon.style.transform = 'rotate(180deg)';
+                            } else {
+                                descElement.classList.add('hidden');
+                                icon.style.transform = 'rotate(0deg)';
+                            }
+                        });
+                    } else {
+                        descContainer.classList.add('hidden');
+                    }
 
                     // Update stats
                     const stats = update.stats;
