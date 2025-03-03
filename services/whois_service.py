@@ -11,14 +11,19 @@ class WhoisService:
         self.uri = "/api/whois"
         self.whois_history_domain = "whois-history.whoisxmlapi.com"
         self.wx_api_key = os.getenv("WHOIS_XML_API_KEY")
-
+    
     async def lookup_whois_history(self, domain: str):
         async with aiohttp.ClientSession() as session:
-            async with session.post(f'https://{self.whois_history_domain}/api/v1?apiKey={self.wx_api_key}&domainName={domain}&mode=purchase') as resp:
+            params = {
+                'apiKey': self.wx_api_key,
+                'domainName': domain,
+                'mode': 'purchase'
+            }
+            async with session.get(f'https://{self.whois_history_domain}/api/v1', params=params) as resp:
                 if resp.status != 200:
                     raise HTTPException(status_code=resp.status, detail="WHOIS lookup failed")
-        data = await resp.json()
-        return data
+                data = await resp.json()
+                return data
 
     async def lookup_whois(self, domain: str):
         async with aiohttp.ClientSession() as session:
