@@ -4,7 +4,8 @@ A modern web interface for various OSINT tools and resources. Built with FastAPI
 
 ## Preview
 
-![preview](https://github.com/user-attachments/assets/56aa5659-461a-4c97-af07-6abb857aa5d9)
+![image](https://github.com/user-attachments/assets/faf405e4-f0c8-43ba-95cf-bcea0469bcfc)
+
 
 ## Features
 
