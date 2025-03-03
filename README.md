@@ -65,7 +65,14 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-4. Add GitFive paths to your `.env`:
+4. Login to your GitHub account (not recommended to use main account):
+```bash
+python main.py login
+```
+
+5. Follow the instuctions of GitFive
+
+6. Add GitFive paths to your `.env`:
 ```env
 GITFIVE_VENV_PATH=/path/to/GitFive/venv/bin/python
 GITFIVE_SCRIPT_PATH=/path/to/GitFive/main.py
