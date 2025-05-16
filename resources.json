@@ -81,6 +81,25 @@
                     "label": "Whois XML API Key"
                 }
             }
+        },
+        {
+            "name": "VK.com Profile History",
+            "description": "Get profile history of a VK.com user (integrates @VKHistoryRobot)",
+            "endpoint": "/vk",
+            "icon": "vk",
+            "icon_color": "blue",
+            "icon_type": "fab",
+            "tags": ["VK", "TG Bot", "OSINT"],
+            "settings": {
+                "TG_API_ID": {
+                    "type": "API ID",
+                    "label": "Telegram API ID (https://my.telegram.org)"
+                },
+                "TG_API_HASH": {
+                    "type": "API Hash",
+                    "label": "Telegram API HASH (https://my.telegram.org)"
+                }
+            }
         }
     ],
     "ext_res": [
