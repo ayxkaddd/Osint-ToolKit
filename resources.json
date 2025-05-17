@@ -92,11 +92,11 @@
             "tags": ["VK", "TG Bot", "OSINT"],
             "settings": {
                 "TG_API_ID": {
-                    "type": "API ID",
+                    "type": "password",
                     "label": "Telegram API ID (https://my.telegram.org)"
                 },
                 "TG_API_HASH": {
-                    "type": "API Hash",
+                    "type": "password",
                     "label": "Telegram API HASH (https://my.telegram.org)"
                 }
             }
