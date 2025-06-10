@@ -1,0 +1,22 @@
+ /* WHOIS history styles */
+.section-toggle {
+    transition: transform 0.2s ease;
+}
+
+.section-toggle.active {
+    transform: rotate(180deg);
+}
+
+.recordDetails {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.2s ease-out;
+    opacity: 0;
+    transition: max-height 0.2s ease-out, opacity 0.2s ease-out;
+}
+
+.recordDetails.expanded {
+    max-height: 5000px;
+    opacity: 1;
+    transition: max-height 0.5s ease-in, opacity 0.2s ease-in;
+}
