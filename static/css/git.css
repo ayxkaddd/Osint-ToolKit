@@ -1,0 +1,25 @@
+ /* GitHub analysis page styles */
+.section-toggle {
+    transition: transform 0.2s ease;
+}
+
+.section-toggle.active {
+    transform: rotate(180deg);
+}
+
+.reposList, #reposList, #sshKeysList, #usernamesHistory, #domainsList,
+#registeredEmailsList, #allContribsList, #extContribsList, #nearNamesList {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.2s ease-out;
+    opacity: 0;
+    transition: max-height 0.2s ease-out, opacity 0.2s ease-out;
+}
+
+.reposList.expanded, #reposList.expanded, #sshKeysList.expanded, #usernamesHistory.expanded,
+#domainsList.expanded, #registeredEmailsList.expanded, #allContribsList.expanded,
+#extContribsList.expanded, #nearNamesList.expanded {
+    max-height: 5000px;
+    opacity: 1;
+    transition: max-height 0.5s ease-in, opacity 0.2s ease-in;
+}

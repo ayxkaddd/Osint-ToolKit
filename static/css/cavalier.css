@@ -1,0 +1,106 @@
+ /* Cavalier data analysis styles */
+.spinner {
+    border: 4px solid rgba(255, 255, 255, 0.1);
+    border-radius: 50%;
+    border-top: 4px solid #ffffff;
+    width: 40px;
+    height: 40px;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.bg-dark { background-color: #0a0c11; }
+
+.stealer-card {
+    background-color: #0f1218;
+    border-radius: 0.5rem;
+    border: 1px solid #4a5568;
+    padding: 1.5rem;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    margin-bottom: 2rem;
+    margin-top: 2rem;
+}
+
+.stealer-title {
+    color: #e2e8f0;
+    font-size: 1.5rem;
+    font-weight: bold;
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: center;
+}
+
+.stealer-title i {
+    margin-right: 0.5rem;
+    color: #f56565;
+}
+
+.stealer-content p {
+    margin: 0.75rem 0;
+    border-bottom: 1px solid #4a5568;
+    padding-bottom: 0.75rem;
+    display: flex;
+    align-items: center;
+}
+
+.stealer-content p:last-child {
+    border-bottom: none;
+}
+
+.stealer-label {
+    font-weight: bold;
+    color: #a0aec0;
+    margin-right: 0.5rem;
+    min-width: 150px;
+}
+
+.stealer-value {
+    color: #e2e8f0;
+}
+
+.stealer-icon {
+    margin-right: 0.5rem;
+    width: 20px;
+    text-align: center;
+}
+
+.stealer-list {
+    list-style-type: none;
+    padding-left: 0;
+    margin: 0;
+}
+
+.stealer-list li {
+    margin-bottom: 0.25rem;
+}
+
+.credentials-grid {
+    display: grid;
+    gap: 6px;
+    padding-left: 1.5rem;
+}
+
+.credential-line {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    font-family: monospace;
+}
+
+.cred-domain {
+    color: #93c5fd;
+    min-width: 240px;
+}
+
+.cred-username {
+    color: #fca5a5;
+    min-width: 200px;
+}
+
+.cred-password {
+    color: #86efac;
+}
