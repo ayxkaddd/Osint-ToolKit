@@ -10,7 +10,8 @@ A modern web interface for various OSINT tools and resources. Built with FastAPI
 ## Features
 
 - **GitHub Analysis**: Deep dive into GitHub profiles using GitFive
-- **DNS Lookup**: Find shared nameservers and domain relationships
+- **DNS Recon**: Comprehensive domain reconnaissance with subdomain discovery and security analysis
+- **NS Lookup**: Find shared nameservers and domain relationships
 - **OSINT Industries Integration**: Search for emails, phones, and usernames
 - **Cavalier API**: Search for compromised accounts and data
 - **DoxBin Search**: Search the breached DoxBin database
@@ -130,8 +131,38 @@ WHOIS_HISTORY_API_KEY=your_api_key
 2. Enter domain name
 3. View historical WHOIS records and changes
 
+## 5. DNS Recon
 
-#### The rest of the modules do not require any setup
+1. Install required tools:
+
+```bash
+go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
+go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest
+```
+
+2. Get API keys for external services (Optional):
+```env
+SECURITYTRAILS_API_KEY=your_key
+VIRUSTOTAL_API_KEY=your_key
+```
+
+### Usage
+
+1. Navigate to /dnsrecon in the web
+2. Enter a domain name
+3. Choose scan options:
+   - Deep Scan (more comprehensive)
+   - Port Scanning (additional port checks)
+   - External APIs (enhanced intelligence)
+4. View comprehensive report including:
+   - Subdomains with HTTP status
+   - Technology stack analysis
+   - Security vulnerabilities
+   - DNS records
+   - WHOIS information
+   - External intelligence
+
+**The rest of the modules do not require any setup**
 
 
 ## Start using OSINT Toolkit
