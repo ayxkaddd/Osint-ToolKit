@@ -38,6 +38,10 @@ def doxbin_page(request: Request):
 def whois_page(request: Request):
     return templates.TemplateResponse(request=request, name="whois_history.html")
 
+@router.get('/dnsrecon')
+def dnsrecon_page(request: Request):
+    return templates.TemplateResponse(request=request, name="dnsrecon.html")
+
 @router.get('/telegram_auth')
 def telegram_auth_page(request: Request):
     return templates.TemplateResponse(request=request, name="telegram_auth.html")
@@ -45,7 +49,6 @@ def telegram_auth_page(request: Request):
 @router.get('/vk')
 def vk_page(request: Request):
     return templates.TemplateResponse(request=request, name="telegram.html")
-
 
 @router.get("/reports/{filename}")
 async def get_report(filename: str):

@@ -83,6 +83,37 @@
             }
         },
         {
+            "name": "DNS Recon",
+            "description": "Request DNS reconnaissance for a domain",
+            "endpoint": "/dnsrecon",
+            "icon": "network-wired",
+            "icon_color": "blue",
+            "icon_type": "fas",
+            "tags": ["DNS", "Network", "OSINT"],
+            "settings": {
+                "SECURITY_TRIALS_API_KEY": {
+                    "type": "password",
+                    "label": "Security Trails API Key (Optional)"
+                },
+                "VIRUSTOTAL_API_KEY": {
+                    "type": "password",
+                    "label": "VirusTotal API Key (Optional)"
+                },
+                "HTTPX_PATH": {
+                    "type": "text",
+                    "label": "Path to HTTPX executable"
+                },
+                "SUBFINDER_PATH": {
+                    "type": "text",
+                    "label": "Path to Subfinder executable"
+                },
+                "NMAP_PATH": {
+                    "type": "text",
+                    "label": "Path to Nmap executable"
+                }
+            }
+        },
+        {
             "name": "VK.com Profile History",
             "description": "Get profile history of a VK.com user (integrates @VKHistoryRobot)",
             "endpoint": "/vk",

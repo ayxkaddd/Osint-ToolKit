@@ -1,0 +1,563 @@
+{% extends "base.html" %}
+
+{% block title %}DNS Recon - Domain Analysis Tool{% endblock %}
+
+{% block extra_head %}
+<style>
+    .section-toggle {
+        transition: transform 0.2s ease;
+    }
+    .section-toggle.active {
+        transform: rotate(180deg);
+    }
+    #subdomainsList, #httpxResults, #dnsRecords, #securityAnalysis,
+    #technologyStack, #portScanResults, #externalApiData, #whoisInfo {
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 0.2s ease-out;
+        opacity: 0;
+        transition: max-height 0.2s ease-out, opacity 0.2s ease-out;
+    }
+    #subdomainsList.expanded, #httpxResults.expanded, #dnsRecords.expanded,
+    #securityAnalysis.expanded, #technologyStack.expanded, #portScanResults.expanded,
+    #externalApiData.expanded, #whoisInfo.expanded {
+        max-height: 5000px;
+        opacity: 1;
+        transition: max-height 0.5s ease-in, opacity 0.2s ease-in;
+    }
+    .tech-badge {
+        @apply px-2 py-1 text-xs bg-blue-600 text-white rounded-full;
+    }
+    .status-badge {
+        @apply px-2 py-0.5 text-xs rounded;
+    }
+    .status-success { @apply bg-green-500 text-black; }
+    .status-warning { @apply bg-yellow-500 text-black; }
+    .status-error { @apply bg-red-500 text-white; }
+    .status-info { @apply bg-blue-500 text-white; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mx-auto p-4 max-w-4xl">
+    <!-- Search Section -->
+    <div class="flex flex-col items-center justify-center min-h-[50vh]">
+        <h1 class="text-4xl font-bold mb-8">DNS Recon</h1>
+        <div class="w-full max-w-xl relative">
+            <input
+                type="text"
+                id="domainInput"
+                placeholder="Enter domain (e.g., example.com)"
+                class="w-full bg-gray-900 border border-gray-700 rounded-lg py-3 px-4 text-white placeholder-gray-500 focus:outline-none focus:border-gray-500 transition-colors"
+            >
+            <button
+                id="scanButton"
+                class="absolute right-2 top-1/2 transform -translate-y-1/2 bg-gray-800 hover:bg-gray-700 text-white px-4 py-1 rounded-md transition-colors"
+            >
+                Scan
+            </button>
+        </div>
+        <div class="flex flex-wrap gap-4 justify-center text-sm mt-4">
+            <label class="flex items-center space-x-2 cursor-pointer">
+                <input type="checkbox" id="deepScan" class="rounded bg-gray-800 border-gray-600 text-blue-500 focus:ring-blue-500">
+                <span>Deep Scan</span>
+            </label>
+            <label class="flex items-center space-x-2 cursor-pointer">
+                <input type="checkbox" id="includePorts" class="rounded bg-gray-800 border-gray-600 text-blue-500 focus:ring-blue-500">
+                <span>Port Scanning</span>
+            </label>
+            <label class="flex items-center space-x-2 cursor-pointer">
+                <input type="checkbox" id="useExternalApis" checked class="rounded bg-gray-800 border-gray-600 text-blue-500 focus:ring-blue-500">
+                <span>External APIs</span>
+            </label>
+        </div>
+    </div>
+
+    <!-- Loading indicator -->
+    <div id="loadingIndicator" class="hidden flex justify-center my-8">
+        <div class="animate-spin rounded-full h-8 w-8 border-t-2 border-white"></div>
+    </div>
+
+    <!-- Results Section -->
+    <div id="reconResults" class="hidden space-y-6 mt-8">
+        <!-- Summary Section -->
+        <div class="bg-gray-900 rounded-lg p-6">
+            <h2 class="text-xl font-bold mb-4 flex items-center">
+                <i data-lucide="activity" class="w-5 h-5 mr-2"></i>
+                Domain Analysis: <span id="domainTitle" class="ml-1"></span>
+            </h2>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="bg-gray-800 p-4 rounded-lg text-center">
+                    <div class="text-2xl font-bold text-blue-400" id="totalSubdomains">0</div>
+                    <div class="text-sm text-gray-400">Subdomains</div>
+                </div>
+                <div class="bg-gray-800 p-4 rounded-lg text-center">
+                    <div class="text-2xl font-bold text-green-400" id="aliveSubdomains">0</div>
+                    <div class="text-sm text-gray-400">Active</div>
+                </div>
+                <div class="bg-gray-800 p-4 rounded-lg text-center">
+                    <div class="text-2xl font-bold text-purple-400" id="uniqueTechnologies">0</div>
+                    <div class="text-sm text-gray-400">Technologies</div>
+                </div>
+                <div class="bg-gray-800 p-4 rounded-lg text-center">
+                    <div class="text-2xl font-bold text-yellow-400" id="securityScore">0%</div>
+                    <div class="text-sm text-gray-400">Security Score</div>
+                </div>
+            </div>
+            <div class="mt-4 text-sm text-gray-400">
+                <span>Scan completed at <span id="scanTimestamp"></span></span>
+            </div>
+        </div>
+
+        <!-- Subdomains Section -->
+        <div class="bg-gray-900 rounded-lg p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-xl font-bold flex items-center">
+                    <i data-lucide="globe" class="w-5 h-5 mr-2"></i>
+                    Discovered Subdomains
+                </h3>
+                <button class="section-toggle" data-section="subdomainsList">
+                    <i data-lucide="chevron-down" class="w-6 h-6"></i>
+                </button>
+            </div>
+            <div id="subdomainsList" class="space-y-3"></div>
+        </div>
+
+        <!-- HTTP Analysis Section -->
+        <div class="bg-gray-900 rounded-lg p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-xl font-bold flex items-center">
+                    <i data-lucide="monitor" class="w-5 h-5 mr-2"></i>
+                    HTTP Analysis
+                </h3>
+                <button class="section-toggle" data-section="httpxResults">
+                    <i data-lucide="chevron-down" class="w-6 h-6"></i>
+                </button>
+            </div>
+            <div id="httpxResults" class="space-y-3"></div>
+        </div>
+
+        <!-- DNS Records Section -->
+        <div class="bg-gray-900 rounded-lg p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-xl font-bold flex items-center">
+                    <i data-lucide="server" class="w-5 h-5 mr-2"></i>
+                    DNS Records
+                </h3>
+                <button class="section-toggle" data-section="dnsRecords">
+                    <i data-lucide="chevron-down" class="w-6 h-6"></i>
+                </button>
+            </div>
+            <div id="dnsRecords" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+        </div>
+
+        <!-- Security Analysis Section -->
+        <div class="bg-gray-900 rounded-lg p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-xl font-bold flex items-center">
+                    <i data-lucide="shield" class="w-5 h-5 mr-2"></i>
+                    Security Analysis
+                </h3>
+                <button class="section-toggle" data-section="securityAnalysis">
+                    <i data-lucide="chevron-down" class="w-6 h-6"></i>
+                </button>
+            </div>
+            <div id="securityAnalysis" class="space-y-4"></div>
+        </div>
+
+        <!-- Technology Stack Section -->
+        <div class="bg-gray-900 rounded-lg p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-xl font-bold flex items-center">
+                    <i data-lucide="code" class="w-5 h-5 mr-2"></i>
+                    Technology Stack
+                </h3>
+                <button class="section-toggle" data-section="technologyStack">
+                    <i data-lucide="chevron-down" class="w-6 h-6"></i>
+                </button>
+            </div>
+            <div id="technologyStack" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3"></div>
+        </div>
+
+        <!-- Port Scan Section -->
+        <div id="portScanSection" class="hidden bg-gray-900 rounded-lg p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-xl font-bold flex items-center">
+                    <i data-lucide="network" class="w-5 h-5 mr-2"></i>
+                    Port Scan Results
+                </h3>
+                <button class="section-toggle" data-section="portScanResults">
+                    <i data-lucide="chevron-down" class="w-6 h-6"></i>
+                </button>
+            </div>
+            <div id="portScanResults" class="space-y-2"></div>
+        </div>
+
+        <!-- External API Data Section -->
+        <div class="bg-gray-900 rounded-lg p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-xl font-bold flex items-center">
+                    <i data-lucide="database" class="w-5 h-5 mr-2"></i>
+                    External Intelligence
+                </h3>
+                <button class="section-toggle" data-section="externalApiData">
+                    <i data-lucide="chevron-down" class="w-6 h-6"></i>
+                </button>
+            </div>
+            <div id="externalApiData" class="space-y-4"></div>
+        </div>
+
+        <!-- WHOIS Information Section -->
+        <div class="bg-gray-900 rounded-lg p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-xl font-bold flex items-center">
+                    <i data-lucide="info" class="w-5 h-5 mr-2"></i>
+                    WHOIS Information
+                </h3>
+                <button class="section-toggle" data-section="whoisInfo">
+                    <i data-lucide="chevron-down" class="w-6 h-6"></i>
+                </button>
+            </div>
+            <div id="whoisInfo" class="space-y-3"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", () => {
+        const lucide = window.lucide;
+        lucide.createIcons();
+
+        const scanButton = document.getElementById("scanButton");
+        const domainInput = document.getElementById("domainInput");
+        const reconResults = document.getElementById("reconResults");
+        const loadingIndicator = document.getElementById("loadingIndicator");
+
+        // Add click handlers for all section toggles
+        document.querySelectorAll(".section-toggle").forEach((toggle) => {
+            toggle.addEventListener("click", () => {
+                const sectionId = toggle.getAttribute("data-section");
+                const section = document.getElementById(sectionId);
+                if (!section) return;
+
+                section.classList.toggle("expanded");
+                toggle.classList.toggle("active");
+            });
+        });
+
+        scanButton.addEventListener("click", performRecon);
+        domainInput.addEventListener("keypress", (e) => {
+            if (e.key === "Enter") performRecon();
+        });
+
+        async function performRecon() {
+            const domain = domainInput.value.trim();
+            if (!domain) return;
+
+            const deepScan = document.getElementById("deepScan").checked;
+            const includePorts = document.getElementById("includePorts").checked;
+            const useExternalApis = document.getElementById("useExternalApis").checked;
+
+            loadingIndicator.classList.remove("hidden");
+            reconResults.classList.add("hidden");
+
+            try {
+                const response = await fetch("/api/recon/", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        domain: domain,
+                        deep_scan: deepScan,
+                        include_ports: includePorts,
+                        use_external_apis: useExternalApis
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+                displayResults(data);
+            } catch (error) {
+                console.error("Error performing reconnaissance:", error);
+                alert(`Error performing reconnaissance: ${error.message}`);
+            } finally {
+                loadingIndicator.classList.add("hidden");
+            }
+        }
+
+        function formatDate(dateString) {
+            return new Date(dateString).toLocaleString("en-US", {
+                year: "numeric",
+                month: "short",
+                day: "numeric",
+                hour: "2-digit",
+                minute: "2-digit"
+            });
+        }
+
+        function getStatusBadge(statusCode) {
+            if (!statusCode) return '<span class="status-badge bg-gray-600">Unknown</span>';
+            if (statusCode >= 200 && statusCode < 300) return '<span class="status-badge status-success">Online</span>';
+            if (statusCode >= 300 && statusCode < 400) return '<span class="status-badge status-warning">Redirect</span>';
+            if (statusCode >= 400) return '<span class="status-badge status-error">Error</span>';
+            return '<span class="status-badge status-info">Info</span>';
+        }
+
+        function displayResults(data) {
+            // Update summary with safer property access
+            document.getElementById("domainTitle").textContent = data.domain;
+            document.getElementById("totalSubdomains").textContent = data.summary?.total_subdomains || 0;
+            document.getElementById("aliveSubdomains").textContent = data.summary?.alive_subdomains || 0;
+            document.getElementById("uniqueTechnologies").textContent = data.summary?.unique_technologies || 0;
+            document.getElementById("securityScore").textContent = Math.round(data.summary?.security_score || 0) + "%";
+            document.getElementById("scanTimestamp").textContent = formatDate(data.timestamp);
+
+            // Display subdomains
+            const subdomainsList = document.getElementById("subdomainsList");
+            subdomainsList.innerHTML = data.subdomains.map(subdomain => {
+                // Get corresponding httpx data for more info
+                const httpxData = data.httpx_results.find(result =>
+                    result.input === subdomain.name || result.url?.includes(subdomain.name)
+                );
+
+                return `
+                    <div class="bg-gray-800 p-4 rounded-lg">
+                        <div class="flex justify-between items-start mb-2">
+                            <h4 class="font-bold">${subdomain.name}</h4>
+                            <div class="flex space-x-2">
+                                ${httpxData ? getStatusBadge(httpxData.status_code) : getStatusBadge(subdomain.status_code)}
+                                ${httpxData?.scheme === 'https' || subdomain.has_https ? '<span class="status-badge bg-green-600">HTTPS</span>' : ''}
+                                ${httpxData?.cdn ? '<span class="status-badge bg-blue-600">CDN</span>' : ''}
+                            </div>
+                        </div>
+                        ${httpxData?.title ? `<p class="text-gray-400 mb-2">${httpxData.title}</p>` : ''}
+                        ${httpxData?.tech && httpxData.tech.length > 0 ? `
+                            <div class="flex flex-wrap gap-1 mt-2">
+                                ${httpxData.tech.map(tech => `<span class="tech-badge">${tech}</span>`).join('')}
+                            </div>
+                        ` : ''}
+                        <div class="text-xs text-gray-500 mt-2">
+                            ${httpxData?.webserver ? `Server: ${httpxData.webserver} | ` : ''}
+                            ${httpxData?.content_length ? `Size: ${httpxData.content_length} bytes | ` : ''}
+                            ${httpxData?.time ? `Response: ${httpxData.time}` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            // Display httpx results
+            const httpxResults = document.getElementById("httpxResults");
+            httpxResults.innerHTML = data.httpx_results.map(result => `
+                <div class="bg-gray-800 p-4 rounded-lg">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <h5 class="font-bold">${result.url || result.input}</h5>
+                            <p class="text-sm text-gray-400">Status: ${result.status_code || 'Unknown'}</p>
+                            ${result.title ? `<p class="text-sm text-gray-400">Title: ${result.title}</p>` : ''}
+                            ${result.scheme ? `<p class="text-sm text-gray-400">Protocol: ${result.scheme.toUpperCase()}</p>` : ''}
+                        </div>
+                        <div class="text-sm space-y-1">
+                            ${result.tech && result.tech.length > 0 ? `<p><strong>Tech:</strong> ${result.tech.join(', ')}</p>` : ''}
+                            ${result.webserver ? `<p><strong>Server:</strong> ${result.webserver}</p>` : ''}
+                            ${result.content_length ? `<p><strong>Size:</strong> ${result.content_length} bytes</p>` : ''}
+                            ${result.time ? `<p><strong>Response Time:</strong> ${result.time}</p>` : ''}
+                            ${result.cdn_name ? `<p><strong>CDN:</strong> ${result.cdn_name}</p>` : ''}
+                            ${result.jarm_hash ? `<p class="font-mono text-xs"><strong>JARM:</strong> ${result.jarm_hash}</p>` : ''}
+                        </div>
+                    </div>
+                    ${result.favicon_url ? `
+                        <div class="mt-3 flex items-center space-x-2">
+                            <img src="${result.favicon_url}" alt="Favicon" class="w-4 h-4" onerror="this.style.display='none'">
+                            <span class="text-xs text-gray-500">Favicon: ${result.favicon_url}</span>
+                        </div>
+                    ` : ''}
+                </div>
+            `).join('');
+
+            // Display DNS records
+            const dnsRecords = document.getElementById("dnsRecords");
+            dnsRecords.innerHTML = Object.entries(data.dns_records)
+                .filter(([type, records]) => records && records.length > 0)
+                .map(([type, records]) => `
+                    <div class="bg-gray-800 p-4 rounded-lg">
+                        <h5 class="font-bold text-blue-400 mb-2">${type} Records</h5>
+                        <ul class="space-y-1">
+                            ${records.map(record => `
+                                <li class="text-sm font-mono bg-gray-900 p-2 rounded">${record}</li>
+                            `).join('')}
+                        </ul>
+                    </div>
+                `).join('');
+
+            // Display security analysis
+            const securityAnalysis = document.getElementById("securityAnalysis");
+            const security = data.security_analysis;
+            securityAnalysis.innerHTML = `
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="bg-gray-800 p-4 rounded-lg">
+                        <h5 class="font-bold text-green-400 mb-2">SSL Analysis</h5>
+                        <p class="text-sm">HTTPS Enabled: ${security.ssl_analysis.https_enabled}/${security.ssl_analysis.total_endpoints}</p>
+                        <div class="w-full bg-gray-700 rounded-full h-2 mt-2">
+                            <div class="bg-blue-500 rounded-full h-2" style="width: ${(security.ssl_analysis.https_enabled / security.ssl_analysis.total_endpoints) * 100}%"></div>
+                        </div>
+                    </div>
+                    <div class="bg-gray-800 p-4 rounded-lg">
+                        <h5 class="font-bold text-yellow-400 mb-2">Security Headers</h5>
+                        <p class="text-sm">Good Headers: ${security.security_headers.good_headers}</p>
+                        <p class="text-sm">Endpoints Checked: ${security.security_headers.endpoints_checked}</p>
+                    </div>
+                    <div class="bg-gray-800 p-4 rounded-lg">
+                        <h5 class="font-bold text-red-400 mb-2">Reputation</h5>
+                        <p class="text-sm">Malicious Votes: ${security.reputation.malicious_votes}</p>
+                        <p class="text-sm">Clean Votes: ${security.reputation.clean_votes}</p>
+                    </div>
+                </div>
+            `;
+
+            // Display technology stack
+            const technologyStack = document.getElementById("technologyStack");
+            if (data.technology_stack && data.technology_stack.length > 0) {
+                technologyStack.innerHTML = data.technology_stack.map(tech => `
+                    <div class="bg-gray-800 p-3 rounded-lg">
+                        <div class="flex justify-between items-center">
+                            <span class="font-medium">${tech.technology}</span>
+                            <span class="text-sm text-gray-400">${tech.count} uses</span>
+                        </div>
+                    </div>
+                `).join('');
+            } else {
+                // Extract technologies from httpx results as fallback
+                const allTechs = [];
+                data.httpx_results.forEach(result => {
+                    if (result.tech) {
+                        allTechs.push(...result.tech);
+                    }
+                });
+                const techCounts = {};
+                allTechs.forEach(tech => {
+                    techCounts[tech] = (techCounts[tech] || 0) + 1;
+                });
+
+                if (Object.keys(techCounts).length > 0) {
+                    technologyStack.innerHTML = Object.entries(techCounts)
+                        .sort((a, b) => b[1] - a[1])
+                        .map(([tech, count]) => `
+                            <div class="bg-gray-800 p-3 rounded-lg">
+                                <div class="flex justify-between items-center">
+                                    <span class="font-medium">${tech}</span>
+                                    <span class="text-sm text-gray-400">${count} uses</span>
+                                </div>
+                            </div>
+                        `).join('');
+                } else {
+                    technologyStack.innerHTML = '<p class="text-gray-400">No technologies detected</p>';
+                }
+            }
+
+            // Display port scan results if available
+            if (data.port_scan_results && data.port_scan_results.length > 0) {
+                document.getElementById("portScanSection").classList.remove("hidden");
+                const portScanResults = document.getElementById("portScanResults");
+                portScanResults.innerHTML = data.port_scan_results.map(port => `
+                    <div class="bg-gray-800 p-3 rounded-lg flex justify-between items-center">
+                        <div>
+                            <span class="font-bold text-cyan-400">Port ${port.port}</span>
+                            <span class="text-gray-400 ml-2">${port.service || 'Unknown'}</span>
+                        </div>
+                        <span class="status-badge ${port.state === 'open' ? 'status-success' : 'status-error'}">${port.state}</span>
+                    </div>
+                `).join('');
+            }
+
+            // Display external API data
+            const externalApiData = document.getElementById("externalApiData");
+            let externalContent = '';
+
+            if (data.external_api_data && Object.keys(data.external_api_data).length > 0) {
+                if (data.external_api_data.securitytrails && !data.external_api_data.securitytrails.error) {
+                    externalContent += `
+                        <div class="bg-gray-800 p-4 rounded-lg">
+                            <h5 class="font-bold text-orange-400 mb-2">SecurityTrails Data</h5>
+                            <p class="text-sm text-gray-400">Historical DNS and domain intelligence available</p>
+                        </div>
+                    `;
+                }
+
+                if (data.external_api_data.virustotal && !data.external_api_data.virustotal.error) {
+                    externalContent += `
+                        <div class="bg-gray-800 p-4 rounded-lg">
+                            <h5 class="font-bold text-red-400 mb-2">VirusTotal Analysis</h5>
+                            <p class="text-sm text-gray-400">Threat intelligence and reputation data available</p>
+                        </div>
+                    `;
+                }
+            }
+
+            if (!externalContent) {
+                externalContent = '<p class="text-gray-400">No external API data available (API keys not configured or external APIs disabled)</p>';
+            }
+
+            externalApiData.innerHTML = externalContent;
+
+            // Display WHOIS information
+            const whoisInfo = document.getElementById("whoisInfo");
+            if (data.whois_info && data.whois_info.error) {
+                whoisInfo.innerHTML = `<p class="text-red-400">WHOIS Error: ${data.whois_info.error}</p>`;
+            } else if (data.whois_info) {
+                whoisInfo.innerHTML = `
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        ${data.whois_info.registrar ? `
+                            <div class="bg-gray-800 p-3 rounded-lg">
+                                <h5 class="font-bold text-indigo-400">Registrar</h5>
+                                <p class="text-sm">${data.whois_info.registrar}</p>
+                            </div>
+                        ` : ''}
+                        ${data.whois_info.creation_date ? `
+                            <div class="bg-gray-800 p-3 rounded-lg">
+                                <h5 class="font-bold text-indigo-400">Created</h5>
+                                <p class="text-sm">${data.whois_info.creation_date}</p>
+                            </div>
+                        ` : ''}
+                        ${data.whois_info.expiration_date ? `
+                            <div class="bg-gray-800 p-3 rounded-lg">
+                                <h5 class="font-bold text-indigo-400">Expires</h5>
+                                <p class="text-sm">${data.whois_info.expiration_date}</p>
+                            </div>
+                        ` : ''}
+                        ${data.whois_info.name_servers && data.whois_info.name_servers.length > 0 ? `
+                            <div class="bg-gray-800 p-3 rounded-lg">
+                                <h5 class="font-bold text-indigo-400">Name Servers</h5>
+                                <ul class="text-sm space-y-1">
+                                    ${data.whois_info.name_servers.map(ns => `<li class="font-mono">${ns}</li>`).join('')}
+                                </ul>
+                            </div>
+                        ` : ''}
+                        ${data.whois_info.org ? `
+                            <div class="bg-gray-800 p-3 rounded-lg">
+                                <h5 class="font-bold text-indigo-400">Organization</h5>
+                                <p class="text-sm">${data.whois_info.org}</p>
+                            </div>
+                        ` : ''}
+                        ${data.whois_info.country ? `
+                            <div class="bg-gray-800 p-3 rounded-lg">
+                                <h5 class="font-bold text-indigo-400">Country</h5>
+                                <p class="text-sm">${data.whois_info.country}</p>
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+            } else {
+                whoisInfo.innerHTML = '<p class="text-gray-400">No WHOIS information available</p>';
+            }
+
+            // Show results
+            reconResults.classList.remove("hidden");
+            lucide.createIcons();
+        }
+    });
+</script>
+{% endblock %}
