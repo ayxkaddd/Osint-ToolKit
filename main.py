@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 import os
 
 from models.auth_models import AuthDetails
-from routes import doxbin_routes, git_routes, oi_routes, rosources_routes, settings_routes, templates, ns_routers, updates_routes, whois_route, telegram_routes
+from routes import dnsrecon_routes, doxbin_routes, git_routes, oi_routes, rosources_routes, settings_routes, templates, ns_routers, updates_routes, whois_route, telegram_routes
 from auth.auth_handler import AuthHandler
 
 load_dotenv()
@@ -98,6 +98,10 @@ class OsintFrameWork:
         self.app.include_router(
             telegram_routes.bot_router,
             tags=["vk history"],
+        )
+        self.app.include_router(
+            dnsrecon_routes.router,
+            tags=["dnsrecon"],
         )
         self.app.include_router(
             rosources_routes.router,
