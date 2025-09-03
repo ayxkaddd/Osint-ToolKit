@@ -1,0 +1,477 @@
+{% extends "base.html" %}
+
+{% block title %}Breach.Vip - Search Results{% endblock %}
+
+{% block content %}
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Breach.Vip - Search Results</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        mono: ['JetBrains Mono', 'monospace'],
+                    }
+                }
+            }
+        }
+    </script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="bg-black text-white font-mono min-h-screen">
+    <div class="container mx-auto p-4 max-w-6xl">
+        <!-- Search Section -->
+        <div class="flex flex-col items-center justify-center min-h-[30vh]">
+            <h1 class="text-4xl font-bold mb-8">Breach.Vip</h1>
+            <p class="text-gray-400 text-lg mb-8">Search data breach records</p>
+            <div class="w-full max-w-2xl flex gap-4">
+                <input
+                    type="text"
+                    id="searchInput"
+                    placeholder="Enter search term..."
+                    class="flex-1 bg-gray-900 border border-gray-700 rounded-lg py-3 px-4 text-white placeholder-gray-500 focus:outline-none focus:border-gray-500 transition-colors"
+                >
+                <button
+                    id="searchButton"
+                    class="bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg px-6 py-3 transition-colors flex items-center gap-2 opacity-50 cursor-not-allowed"
+                    disabled
+                >
+                    <i data-lucide="search" class="w-4 h-4"></i>
+                    Search
+                </button>
+            </div>
+            <div class="mt-4 flex flex-wrap gap-2 text-sm text-gray-400">
+                <label class="flex items-center gap-2">
+                    <input type="checkbox" id="wildcardCheck" class="rounded bg-gray-800 border-gray-600">
+                    Wildcard
+                </label>
+                <label class="flex items-center gap-2">
+                    <input type="checkbox" id="caseSensitiveCheck" class="rounded bg-gray-800 border-gray-600">
+                    Case Sensitive
+                </label>
+            </div>
+        </div>
+
+        <!-- Field Selection -->
+        <div class="mb-8">
+            <div class="bg-gray-900 border border-gray-700 rounded-lg p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-bold">Select Fields to Search</h3>
+                    <div class="text-sm text-gray-400">
+                        Selected: <span id="selectedCount" class="text-white font-bold">0</span>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                    <label class="flex items-center gap-2 p-3 bg-gray-800/50 rounded-lg hover:bg-gray-800 transition-colors cursor-pointer">
+                        <input type="checkbox" class="field-checkbox rounded bg-gray-700 border-gray-600" value="email">
+                        <i data-lucide="mail" class="w-4 h-4 text-gray-400"></i>
+                        <span class="text-sm">Email</span>
+                    </label>
+                    <label class="flex items-center gap-2 p-3 bg-gray-800/50 rounded-lg hover:bg-gray-800 transition-colors cursor-pointer">
+                        <input type="checkbox" class="field-checkbox rounded bg-gray-700 border-gray-600" value="username">
+                        <i data-lucide="user" class="w-4 h-4 text-gray-400"></i>
+                        <span class="text-sm">Username</span>
+                    </label>
+                    <label class="flex items-center gap-2 p-3 bg-gray-800/50 rounded-lg hover:bg-gray-800 transition-colors cursor-pointer">
+                        <input type="checkbox" class="field-checkbox rounded bg-gray-700 border-gray-600" value="password">
+                        <i data-lucide="key" class="w-4 h-4 text-gray-400"></i>
+                        <span class="text-sm">Password</span>
+                    </label>
+                    <label class="flex items-center gap-2 p-3 bg-gray-800/50 rounded-lg hover:bg-gray-800 transition-colors cursor-pointer">
+                        <input type="checkbox" class="field-checkbox rounded bg-gray-700 border-gray-600" value="hash">
+                        <i data-lucide="hash" class="w-4 h-4 text-gray-400"></i>
+                        <span class="text-sm">Hash</span>
+                    </label>
+                    <label class="flex items-center gap-2 p-3 bg-gray-800/50 rounded-lg hover:bg-gray-800 transition-colors cursor-pointer">
+                        <input type="checkbox" class="field-checkbox rounded bg-gray-700 border-gray-600" value="salt">
+                        <i data-lucide="shield" class="w-4 h-4 text-gray-400"></i>
+                        <span class="text-sm">Salt</span>
+                    </label>
+                    <label class="flex items-center gap-2 p-3 bg-gray-800/50 rounded-lg hover:bg-gray-800 transition-colors cursor-pointer">
+                        <input type="checkbox" class="field-checkbox rounded bg-gray-700 border-gray-600" value="ip">
+                        <i data-lucide="globe" class="w-4 h-4 text-gray-400"></i>
+                        <span class="text-sm">IP</span>
+                    </label>
+                    <label class="flex items-center gap-2 p-3 bg-gray-800/50 rounded-lg hover:bg-gray-800 transition-colors cursor-pointer">
+                        <input type="checkbox" class="field-checkbox rounded bg-gray-700 border-gray-600" value="domain">
+                        <i data-lucide="globe" class="w-4 h-4 text-gray-400"></i>
+                        <span class="text-sm">Domain</span>
+                    </label>
+                    <label class="flex items-center gap-2 p-3 bg-gray-800/50 rounded-lg hover:bg-gray-800 transition-colors cursor-pointer">
+                        <input type="checkbox" class="field-checkbox rounded bg-gray-700 border-gray-600" value="phone">
+                        <i data-lucide="phone" class="w-4 h-4 text-gray-400"></i>
+                        <span class="text-sm">Phone</span>
+                    </label>
+                    <label class="flex items-center gap-2 p-3 bg-gray-800/50 rounded-lg hover:bg-gray-800 transition-colors cursor-pointer">
+                        <input type="checkbox" class="field-checkbox rounded bg-gray-700 border-gray-600" value="steamid">
+                        <i data-lucide="gamepad-2" class="w-4 h-4 text-gray-400"></i>
+                        <span class="text-sm">Steam ID</span>
+                    </label>
+                    <label class="flex items-center gap-2 p-3 bg-gray-800/50 rounded-lg hover:bg-gray-800 transition-colors cursor-pointer">
+                        <input type="checkbox" class="field-checkbox rounded bg-gray-700 border-gray-600" value="discordid">
+                        <i data-lucide="message-circle" class="w-4 h-4 text-gray-400"></i>
+                        <span class="text-sm">Discord ID</span>
+                    </label>
+                    <label class="flex items-center gap-2 p-3 bg-gray-800/50 rounded-lg hover:bg-gray-800 transition-colors cursor-pointer">
+                        <input type="checkbox" class="field-checkbox rounded bg-gray-700 border-gray-600" value="uuid">
+                        <i data-lucide="tag" class="w-4 h-4 text-gray-400"></i>
+                        <span class="text-sm">UUID</span>
+                    </label>
+                    <label class="flex items-center gap-2 p-3 bg-gray-800/50 rounded-lg hover:bg-gray-800 transition-colors cursor-pointer">
+                        <input type="checkbox" class="field-checkbox rounded bg-gray-700 border-gray-600" value="name">
+                        <i data-lucide="user-circle" class="w-4 h-4 text-gray-400"></i>
+                        <span class="text-sm">Name</span>
+                    </label>
+                </div>
+                <div class="mt-4 flex gap-2">
+                    <button
+                        id="selectAllBtn"
+                        class="text-sm text-blue-400 hover:text-blue-300 transition-colors"
+                    >
+                        Select All
+                    </button>
+                    <button
+                        id="clearAllBtn"
+                        class="text-sm text-red-400 hover:text-red-300 transition-colors"
+                    >
+                        Clear All
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading indicator -->
+        <div id="loadingIndicator" class="hidden flex justify-center my-8">
+            <div class="animate-spin rounded-full h-8 w-8 border-t-2 border-white"></div>
+        </div>
+
+        <!-- Stats Section -->
+        <div id="statsContainer" class="hidden mb-8">
+            <div class="bg-gray-900 border border-gray-700 rounded-lg p-4 text-center">
+                <p class="text-gray-400">Found <span id="resultsCount" class="text-white font-bold">0</span> results</p>
+            </div>
+        </div>
+
+        <!-- Results Section -->
+        <div id="resultsContainer" class="space-y-6">
+            <!-- Results will be dynamically inserted here -->
+        </div>
+    </div>
+
+    <script>
+        // Icon mapping for different field types
+        const fieldIcons = {
+            'email': 'mail',
+            'username': 'user',
+            'password': 'key',
+            'hash': 'hash',
+            'salt': 'shield',
+            'ip': 'globe',
+            'domain': 'globe',
+            'phone': 'phone',
+            'steamid': 'gamepad-2',
+            'discordid': 'message-circle',
+            'uuid': 'tag',
+            'name': 'user-circle',
+            'uid': 'fingerprint',
+            'source': 'database',
+            'categories': 'tags'
+        };
+
+        // Copy to clipboard functionality
+        window.copyToClipboard = function(text, button) {
+            navigator.clipboard.writeText(text).then(() => {
+                const copyIcon = button.querySelector('[data-lucide="copy"]');
+                const originalColor = button.className;
+
+                // Change button appearance
+                button.className = button.className.replace('text-gray-400 hover:text-white', 'text-green-400');
+                copyIcon.setAttribute('data-lucide', 'check');
+
+                // Update icon
+                lucide.createIcons();
+
+                // Add success animation
+                button.style.transform = 'scale(0.95)';
+                setTimeout(() => button.style.transform = 'scale(1)', 100);
+
+                // Reset button after 2 seconds
+                setTimeout(() => {
+                    button.className = originalColor;
+                    copyIcon.setAttribute('data-lucide', 'copy');
+                    lucide.createIcons();
+                }, 2000);
+            }).catch(err => {
+                console.error('Failed to copy text: ', err);
+            });
+        }
+
+        // Toggle sensitive info
+        window.toggleSensitiveInfo = function(index) {
+            const infoDiv = document.getElementById(`sensitive-info-${index}`);
+            const chevron = document.getElementById(`chevron-${index}`);
+            const button = chevron.parentElement;
+
+            if (infoDiv.classList.contains('hidden')) {
+                infoDiv.classList.remove('hidden');
+                chevron.style.transform = 'rotate(180deg)';
+                button.querySelector('span').textContent = 'Hide sensitive data';
+            } else {
+                infoDiv.classList.add('hidden');
+                chevron.style.transform = 'rotate(0deg)';
+                button.querySelector('span').textContent = 'Show sensitive data';
+            }
+        }
+
+        document.addEventListener("DOMContentLoaded", () => {
+            const searchInput = document.getElementById("searchInput");
+            const searchButton = document.getElementById("searchButton");
+            const resultsContainer = document.getElementById("resultsContainer");
+            const loadingIndicator = document.getElementById("loadingIndicator");
+            const statsContainer = document.getElementById("statsContainer");
+            const resultsCount = document.getElementById("resultsCount");
+            const wildcardCheck = document.getElementById("wildcardCheck");
+            const caseSensitiveCheck = document.getElementById("caseSensitiveCheck");
+            const selectedCount = document.getElementById("selectedCount");
+            const selectAllBtn = document.getElementById("selectAllBtn");
+            const clearAllBtn = document.getElementById("clearAllBtn");
+
+            // Initialize Lucide icons
+            lucide.createIcons();
+
+            // Get selected fields function
+            function getSelectedFields() {
+                const checkedBoxes = document.querySelectorAll('.field-checkbox:checked');
+                return Array.from(checkedBoxes).map(checkbox => checkbox.value);
+            }
+
+            // Update selected count and button state
+            function updateSelectedCount() {
+                const checkedBoxes = document.querySelectorAll('.field-checkbox:checked');
+                selectedCount.textContent = checkedBoxes.length;
+
+                // Enable/disable search button based on selection
+                searchButton.disabled = checkedBoxes.length === 0;
+                if (checkedBoxes.length === 0) {
+                    searchButton.classList.add('opacity-50', 'cursor-not-allowed');
+                } else {
+                    searchButton.classList.remove('opacity-50', 'cursor-not-allowed');
+                }
+            }
+
+            // Add event listeners to all field checkboxes
+            document.querySelectorAll('.field-checkbox').forEach(checkbox => {
+                checkbox.addEventListener('change', updateSelectedCount);
+            });
+
+            // Select all button
+            selectAllBtn.addEventListener('click', () => {
+                document.querySelectorAll('.field-checkbox').forEach(checkbox => {
+                    checkbox.checked = true;
+                });
+                updateSelectedCount();
+            });
+
+            // Clear all button
+            clearAllBtn.addEventListener('click', () => {
+                document.querySelectorAll('.field-checkbox').forEach(checkbox => {
+                    checkbox.checked = false;
+                });
+                updateSelectedCount();
+            });
+
+            // Search functionality
+            const performSearch = async () => {
+                const query = searchInput.value.trim();
+                const selectedFields = getSelectedFields();
+
+                if (!query) {
+                    alert('Please enter a search term');
+                    return;
+                }
+
+                if (selectedFields.length === 0) {
+                    alert('Please select at least one field to search');
+                    return;
+                }
+
+                loadingIndicator.classList.remove("hidden");
+                resultsContainer.innerHTML = "";
+                statsContainer.classList.add("hidden");
+
+                try {
+                    const searchParams = new URLSearchParams({
+                        term: query,
+                        wildcard: wildcardCheck.checked,
+                        case_sensitive: caseSensitiveCheck.checked
+                    });
+
+                    const response = await fetch(`/api/breach/search?${searchParams}`, {
+                        method: 'POST',
+                        headers: {
+                            'accept': 'application/json',
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(selectedFields)
+                    });
+
+                    const data = await response.json();
+
+                    if (!response.ok) {
+                        throw new Error(data.detail || "Failed to fetch results");
+                    }
+
+                    displayResults(data.results || data);
+                } catch (error) {
+                    console.error("Error fetching results:", error);
+                    resultsContainer.innerHTML = `
+                        <div class="bg-red-900/50 border border-red-700 rounded-lg p-4 text-center">
+                            <i data-lucide="alert-circle" class="w-8 h-8 mx-auto mb-2 text-red-400"></i>
+                            <p class="text-red-300">Error: ${error.message}</p>
+                        </div>
+                    `;
+                    lucide.createIcons();
+                } finally {
+                    loadingIndicator.classList.add("hidden");
+                }
+            };
+
+            searchButton.addEventListener("click", performSearch);
+            searchInput.addEventListener("keypress", (e) => {
+                if (e.key === "Enter") performSearch();
+            });
+
+            function displayResults(results) {
+                if (!results.length) {
+                    resultsContainer.innerHTML = `
+                        <div class="bg-gray-900 border border-gray-700 rounded-lg p-8 text-center">
+                            <i data-lucide="search-x" class="w-12 h-12 mx-auto mb-4 text-gray-400"></i>
+                            <p class="text-gray-400 text-lg">No results found</p>
+                        </div>
+                    `;
+                    lucide.createIcons();
+                    return;
+                }
+
+                resultsCount.textContent = results.length;
+                statsContainer.classList.remove("hidden");
+
+                resultsContainer.innerHTML = results.map((result, index) => {
+                    const sensitiveFields = ['password', 'hash', 'salt'];
+                    const publicFields = Object.entries(result).filter(([key]) => !sensitiveFields.includes(key));
+                    const privateFields = Object.entries(result).filter(([key]) => sensitiveFields.includes(key));
+
+                    return `
+                        <div class="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
+                            <!-- Header -->
+                            <div class="bg-gray-800 p-4 border-b border-gray-700">
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center gap-3">
+                                        <i data-lucide="database" class="w-5 h-5 text-gray-400"></i>
+                                        <h3 class="text-lg font-bold">${result.source || 'Unknown Source'}</h3>
+                                        ${result.categories ? `
+                                            <div class="flex gap-2">
+                                                ${result.categories.map(cat => `
+                                                    <span class="text-xs bg-blue-900/50 text-blue-300 px-2 py-1 rounded">${cat}</span>
+                                                `).join('')}
+                                            </div>
+                                        ` : ''}
+                                    </div>
+                                    ${result.uid ? `<span class="text-xs bg-gray-700 px-2 py-1 rounded font-mono">ID: ${result.uid}</span>` : ''}
+                                </div>
+                            </div>
+
+                            <!-- Public Fields -->
+                            <div class="p-4">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    ${publicFields.map(([key, value]) => {
+                                        if (key === 'categories' || key === 'source') return ''; // Already shown in header
+
+                                        const icon = fieldIcons[key] || 'info';
+                                        const displayValue = Array.isArray(value) ? value.join(', ') : value;
+
+                                        return `
+                                            <div class="flex items-center justify-between p-3 bg-gray-800/50 rounded-lg group hover:bg-gray-800 transition-colors">
+                                                <div class="flex items-center gap-3 flex-1 min-w-0">
+                                                    <i data-lucide="${icon}" class="w-4 h-4 text-gray-400 flex-shrink-0"></i>
+                                                    <div class="min-w-0 flex-1">
+                                                        <div class="text-xs text-gray-500 uppercase tracking-wide">${key}</div>
+                                                        <div class="text-sm font-mono break-all">${displayValue}</div>
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    onclick="copyToClipboard('${displayValue}', this)"
+                                                    class="ml-3 p-1 text-gray-400 hover:text-white transition-colors opacity-0 group-hover:opacity-100"
+                                                    title="Copy to clipboard"
+                                                >
+                                                    <i data-lucide="copy" class="w-4 h-4"></i>
+                                                </button>
+                                            </div>
+                                        `;
+                                    }).filter(Boolean).join('')}
+                                </div>
+
+                                <!-- Sensitive Data Toggle -->
+                                ${privateFields.length > 0 ? `
+                                    <div class="mt-6">
+                                        <button
+                                            onclick="toggleSensitiveInfo(${index})"
+                                            class="flex items-center gap-2 text-sm text-gray-400 hover:text-white transition-colors mb-4"
+                                        >
+                                            <i data-lucide="chevron-down" class="w-4 h-4 transition-transform" id="chevron-${index}"></i>
+                                            <i data-lucide="eye-off" class="w-4 h-4"></i>
+                                            <span>Show sensitive data</span>
+                                        </button>
+
+                                        <div id="sensitive-info-${index}" class="hidden space-y-3 pl-6 border-l-2 border-red-900/50">
+                                            ${privateFields.map(([key, value]) => {
+                                                const icon = fieldIcons[key] || 'key';
+                                                const displayValue = typeof value === 'string' && value.length > 64
+                                                    ? value.slice(0, 64) + '...'
+                                                    : value;
+
+                                                return `
+                                                    <div class="flex items-center justify-between p-3 bg-red-900/20 border border-red-900/50 rounded-lg group">
+                                                        <div class="flex items-center gap-3 flex-1 min-w-0">
+                                                            <i data-lucide="${icon}" class="w-4 h-4 text-red-400 flex-shrink-0"></i>
+                                                            <div class="min-w-0 flex-1">
+                                                                <div class="text-xs text-red-300 uppercase tracking-wide">${key}</div>
+                                                                <div class="text-sm font-mono break-all text-red-200">${displayValue}</div>
+                                                            </div>
+                                                        </div>
+                                                        <button
+                                                            onclick="copyToClipboard('${value}', this)"
+                                                            class="ml-3 p-1 text-red-400 hover:text-red-300 transition-colors"
+                                                            title="Copy full value"
+                                                        >
+                                                            <i data-lucide="copy" class="w-4 h-4"></i>
+                                                        </button>
+                                                    </div>
+                                                `;
+                                            }).join('')}
+                                        </div>
+                                    </div>
+                                ` : ''}
+                            </div>
+                        </div>
+                    `;
+                }).join("");
+
+                // Initialize Lucide icons for new content
+                lucide.createIcons();
+            }
+
+            // Initialize the selected count on page load
+            updateSelectedCount();
+        });
+    </script>
+</body>
+</html>
+{% endblock %}

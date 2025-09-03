@@ -59,6 +59,15 @@
             "tags": ["API", "Breach", "Leaks", "OSINT"]
         },
         {
+            "name": "Breach.VIP API",
+            "description": "Access the Breach.VIP API to search for compromised accounts and data",
+            "endpoint": "/breach",
+            "icon": "database",
+            "icon_color": "pink",
+            "icon_type": "fas",
+            "tags": ["API", "Breach", "Leaks", "OSINT"]
+        },
+        {
             "name": "DoxBin Lookup",
             "description": "Find out email of DoxBin user by username in the breached DoxBin database",
             "endpoint": "/doxbin",
