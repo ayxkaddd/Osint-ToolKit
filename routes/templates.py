@@ -54,6 +54,10 @@ def vk_page(request: Request):
 def breach_page(request: Request):
     return templates.TemplateResponse(request=request, name="breach.html")
 
+@router.get('/username')
+def username_page(request: Request):
+    return templates.TemplateResponse(request=request, name="username.html")
+
 @router.get("/reports/{filename}")
 async def get_report(filename: str):
     REPORTS_DIR = Path("reports").resolve()

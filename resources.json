@@ -50,6 +50,15 @@
             }
         },
         {
+            "name": "Username Search",
+            "description": "Search for usernames across multiple platforms",
+            "endpoint": "/username",
+            "icon": "user",
+            "icon_color": "green",
+            "icon_type": "fas",
+            "tags": ["API", "Username", "OSINT"]
+        },
+        {
             "name": "Hudson Rock Cavalier API",
             "description": "Access the cavalier API to search for compromised accounts and data",
             "endpoint": "/cavalier",

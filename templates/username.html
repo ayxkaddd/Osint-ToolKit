@@ -1,0 +1,479 @@
+{% extends "base.html" %}
+
+{% block title %}Username Search - OSINT Toolkit{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-6 py-8 max-w-7xl">
+    <!-- Header Section -->
+    <div class="text-center mb-12">
+        <h1 class="text-4xl font-bold mb-4">Username Search</h1>
+        <p class="text-gray-400 text-lg">Search for usernames across multiple platforms</p>
+    </div>
+
+    <!-- Search Form -->
+    <div class="bg-[#1a1b26]/50 backdrop-blur-sm border border-[#24283b] rounded-xl p-6 mb-8 max-w-4xl mx-auto">
+        <form id="searchForm" class="flex flex-col md:flex-row gap-4">
+            <div class="flex-1">
+                <input
+                    type="text"
+                    id="username"
+                    name="username"
+                    placeholder="Enter username to search"
+                    class="w-full bg-gray-900/80 border border-gray-700 rounded-lg py-3 px-4 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 transition-colors"
+                    required
+                >
+            </div>
+            <div class="flex gap-2">
+                <button
+                    type="submit"
+                    id="searchBtn"
+                    class="bg-purple-600 hover:bg-purple-700 px-6 py-3 rounded-lg font-medium transition-colors"
+                >
+                    <i class="fas fa-search mr-2"></i>Search Username
+                </button>
+                <button
+                    type="button"
+                    id="stopBtn"
+                    class="hidden bg-red-600 hover:bg-red-700 px-4 py-3 rounded-lg font-medium transition-colors"
+                >
+                    <i class="fas fa-stop mr-2"></i>Stop
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Stats -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8 max-w-4xl mx-auto" id="statsSection">
+        <div class="bg-[#1a1b26]/50 backdrop-blur-sm border border-[#24283b] rounded-xl p-4">
+            <div class="flex items-center justify-between mb-2">
+                <span class="text-gray-400 text-sm">Sources Scanned</span>
+                <div class="w-2 h-2 bg-blue-500 rounded-full"></div>
+            </div>
+            <div class="text-2xl font-bold" id="sourcesScanned">0</div>
+        </div>
+        <div class="bg-[#1a1b26]/50 backdrop-blur-sm border border-[#24283b] rounded-xl p-4">
+            <div class="flex items-center justify-between mb-2">
+                <span class="text-gray-400 text-sm">Usernames</span>
+                <div class="w-2 h-2 bg-green-500 rounded-full"></div>
+            </div>
+            <div class="text-2xl font-bold" id="usernamesFound">0</div>
+        </div>
+        <div class="bg-[#1a1b26]/50 backdrop-blur-sm border border-[#24283b] rounded-xl p-4">
+            <div class="flex items-center justify-between mb-2">
+                <span class="text-gray-400 text-sm">Total Accounts</span>
+                <div class="w-2 h-2 bg-purple-500 rounded-full"></div>
+            </div>
+            <div class="text-2xl font-bold" id="totalAccounts">0</div>
+        </div>
+        <div class="bg-[#1a1b26]/50 backdrop-blur-sm border border-[#24283b] rounded-xl p-4">
+            <div class="flex items-center justify-between mb-2">
+                <span class="text-gray-400 text-sm">Progress</span>
+                <div class="w-2 h-2 bg-yellow-500 rounded-full"></div>
+            </div>
+            <div class="text-2xl font-bold" id="progressPercent">0%</div>
+        </div>
+    </div>
+
+    <!-- Progress Bar -->
+    <div id="progressSection" class="hidden mb-8 max-w-4xl mx-auto">
+        <div class="bg-[#1a1b26]/50 backdrop-blur-sm border border-[#24283b] rounded-xl p-4">
+            <div class="flex items-center justify-between mb-2">
+                <span class="text-sm text-gray-400">Scanning progress</span>
+                <span id="progressText" class="text-sm text-gray-400">0 / 0</span>
+            </div>
+            <div class="w-full bg-gray-700 rounded-full h-2">
+                <div id="progressBar" class="bg-purple-500 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Currently Checking -->
+    <div id="currentlyChecking" class="hidden mb-6 max-w-4xl mx-auto">
+        <div class="bg-[#1a1b26]/50 backdrop-blur-sm border border-[#24283b] rounded-xl p-4">
+            <div class="flex items-center space-x-3">
+                <div class="animate-spin rounded-full h-4 w-4 border-2 border-purple-500 border-t-transparent"></div>
+                <span class="text-gray-300">Checking:</span>
+                <span id="currentSite" class="text-white font-medium"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Results Grid -->
+    <div id="resultsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <!-- Results will be inserted here -->
+    </div>
+</div>
+
+<style>
+    @keyframes fadeInUp {
+        from {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+    .fade-in {
+        animation: fadeInUp 0.4s ease-out;
+    }
+
+    .platform-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-weight: bold;
+        font-size: 18px;
+    }
+
+    .github-green { background: #238636; }
+    .twitter-blue { background: #1da1f2; }
+    .instagram-gradient { background: linear-gradient(45deg, #f09433 0%,#e6683c 25%,#dc2743 50%,#cc2366 75%,#bc1888 100%); }
+    .spotify-green { background: #1db954; }
+    .cashapp-green { background: #00d632; }
+    .tiktok-black { background: #000000; }
+    .linkedin-blue { background: #0077b5; }
+    .youtube-red { background: #ff0000; }
+    .reddit-orange { background: #ff4500; }
+    .discord-purple { background: #5865f2; }
+</style>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    class OSINTSearch {
+        constructor() {
+            this.eventSource = null;
+            this.searchActive = false;
+            this.results = [];
+            this.stats = {
+                scanned: 0,
+                total: 0,
+                found: 0
+            };
+
+            this.initializeElements();
+            this.bindEvents();
+        }
+
+        initializeElements() {
+            this.elements = {
+                form: document.getElementById('searchForm'),
+                searchBtn: document.getElementById('searchBtn'),
+                stopBtn: document.getElementById('stopBtn'),
+                progressSection: document.getElementById('progressSection'),
+                progressBar: document.getElementById('progressBar'),
+                progressText: document.getElementById('progressText'),
+                progressPercent: document.getElementById('progressPercent'),
+                sourcesScanned: document.getElementById('sourcesScanned'),
+                usernamesFound: document.getElementById('usernamesFound'),
+                totalAccounts: document.getElementById('totalAccounts'),
+                currentlyChecking: document.getElementById('currentlyChecking'),
+                currentSite: document.getElementById('currentSite'),
+                resultsGrid: document.getElementById('resultsGrid')
+            };
+        }
+
+        bindEvents() {
+            this.elements.form.addEventListener('submit', (e) => {
+                e.preventDefault();
+                this.startSearch();
+            });
+
+            this.elements.stopBtn.addEventListener('click', () => {
+                this.stopSearch();
+            });
+        }
+
+        getPlatformIcon(siteName, category) {
+            const name = siteName.toLowerCase();
+
+            if (name.includes('github')) return { class: 'github-green', icon: 'GH' };
+            if (name.includes('twitter') || name.includes('x.com')) return { class: 'twitter-blue', icon: '𝕏' };
+            if (name.includes('instagram')) return { class: 'instagram-gradient', icon: 'IG' };
+            if (name.includes('spotify')) return { class: 'spotify-green', icon: '♪' };
+            if (name.includes('cashapp')) return { class: 'cashapp-green', icon: '$' };
+            if (name.includes('tiktok')) return { class: 'tiktok-black', icon: 'TT' };
+            if (name.includes('linkedin')) return { class: 'linkedin-blue', icon: 'in' };
+            if (name.includes('youtube')) return { class: 'youtube-red', icon: 'YT' };
+            if (name.includes('reddit')) return { class: 'reddit-orange', icon: 'R' };
+            if (name.includes('discord')) return { class: 'discord-purple', icon: 'D' };
+
+            const firstLetter = siteName.charAt(0).toUpperCase();
+            const secondLetter = siteName.length > 1 ? siteName.charAt(1).toUpperCase() : '';
+
+            return {
+                class: 'bg-gray-600',
+                icon: firstLetter + secondLetter
+            };
+        }
+
+        startSearch() {
+            if (this.searchActive) return;
+
+            const username = document.getElementById('username').value.trim();
+            if (!username) return;
+
+            this.resetResults();
+            this.showProgress();
+            this.searchActive = true;
+            this.elements.searchBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Searching...';
+            this.elements.searchBtn.disabled = true;
+            this.elements.stopBtn.classList.remove('hidden');
+
+            const url = `/api/username/search/stream?username=${encodeURIComponent(username)}&include_duckduckgo=false&extract_profile=true`;
+
+            this.eventSource = new EventSource(url);
+
+            this.eventSource.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    this.handleEvent(data);
+                } catch (error) {
+                    console.error('Error parsing event data:', error);
+                }
+            };
+
+            this.eventSource.onerror = (error) => {
+                console.error('EventSource error:', error);
+                this.stopSearch();
+            };
+        }
+
+        handleEvent(event) {
+            switch (event.event_type) {
+                case 'search_started':
+                    this.stats.total = event.data.total_sites;
+                    this.updateStats();
+                    break;
+
+                case 'site_checking':
+                    this.showCurrentlyChecking(event.data.site_name);
+                    break;
+
+                case 'site_result':
+                    if (event.data.status === 'found') {
+                        this.handleFoundResult(event.data);
+                    }
+                    if (event.data.progress) {
+                        this.updateProgress(event.data.progress);
+                    }
+                    break;
+
+                case 'search_completed':
+                    this.handleSearchCompleted(event.data);
+                    break;
+            }
+        }
+
+        showCurrentlyChecking(siteName) {
+            this.elements.currentSite.textContent = siteName;
+            this.elements.currentlyChecking.classList.remove('hidden');
+        }
+
+        handleFoundResult(data) {
+            const result = {
+                siteName: data.site_name,
+                category: data.category,
+                url: data.url,
+                statusCode: data.status_code,
+                profileData: data.profile_data,
+                responseTime: data.response_time,
+                checkedAt: data.checked_at
+            };
+
+            this.results.push(result);
+            this.addResultCard(result);
+            this.stats.found++;
+            this.updateStats();
+        }
+
+        addResultCard(result) {
+            const platformInfo = this.getPlatformIcon(result.siteName, result.category);
+            const responseTime = result.responseTime ? Math.round(result.responseTime * 1000) : 0;
+            const timeAgo = this.getTimeAgo(result.checkedAt);
+
+            const card = document.createElement('div');
+            card.className = 'bg-[#1a1b26]/50 backdrop-blur-sm border border-[#24283b] rounded-xl p-6 hover:border-purple-500/50 transition-all fade-in';
+
+            card.innerHTML = `
+                <div class="flex items-start justify-between mb-4">
+                    <div class="flex items-center space-x-3">
+                        <div class="platform-icon ${platformInfo.class}">
+                            ${platformInfo.icon}
+                        </div>
+                        <div>
+                            <h3 class="font-semibold text-white">${result.siteName}</h3>
+                            <div class="flex items-center space-x-2 mt-1">
+                                <span class="text-green-400 text-xs font-medium"><i class="fas fa-check-circle mr-1"></i>Active</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-xs text-gray-400">${timeAgo}</div>
+                        <div class="text-xs text-gray-500">${responseTime}ms</div>
+                    </div>
+                </div>
+
+                <div class="space-y-3">
+                    <div class="flex justify-between">
+                        <span class="text-gray-400 text-sm">Account ID</span>
+                        <span class="text-white text-sm font-mono">${this.extractAccountId(result.url)}</span>
+                    </div>
+
+                    ${result.profileData ? this.renderProfileData(result.profileData) : ''}
+
+                    <div class="flex justify-between">
+                        <span class="text-gray-400 text-sm">Category</span>
+                        <span class="text-white text-sm capitalize">${result.category}</span>
+                    </div>
+                </div>
+
+                <div class="flex justify-between items-center mt-4 pt-4 border-t border-gray-700">
+                    <a href="${result.url}" target="_blank"
+                       class="text-purple-400 hover:text-purple-300 text-sm font-medium transition-colors flex items-center space-x-1">
+                        <i class="fas fa-external-link-alt"></i>
+                        <span>View Account</span>
+                    </a>
+                </div>
+            `;
+
+            this.elements.resultsGrid.appendChild(card);
+        }
+
+        renderProfileData(profileData) {
+            if (!profileData || Object.keys(profileData).length === 0) return '';
+
+            let html = '';
+
+            for (const [key, value] of Object.entries(profileData)) {
+                if (value === null || value === undefined || value === '') continue;
+
+                const formattedKey = key
+                    .replace(/_/g, ' ')
+                    .split(' ')
+                    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                    .join(' ');
+
+                let formattedValue = value;
+
+                if (typeof value === 'string' && (value.startsWith('http://') || value.startsWith('https://'))) {
+                    formattedValue = `<a href="${value}" target="_blank" class="text-purple-400 hover:text-purple-300 hover:underline">${this.truncateUrl(value)}</a>`;
+                } else if (typeof value === 'boolean') {
+                    formattedValue = `<span class="px-2 py-0.5 rounded ${value ? 'bg-green-900 text-green-300' : 'bg-red-900 text-red-300'} text-xs">${value ? 'Yes' : 'No'}</span>`;
+                } else if (typeof value === 'string' && value.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/)) {
+                    const date = new Date(value);
+                    formattedValue = date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+                } else if (key === 'username' || key === 'gravatar_username') {
+                    formattedValue = `<span class="font-mono">@${value}</span>`;
+                } else {
+                    formattedValue = this.escapeHtml(String(value));
+                }
+
+                html += `
+                    <div class="flex justify-between items-start gap-4">
+                        <span class="text-gray-400 text-sm whitespace-nowrap">${formattedKey}</span>
+                        <span class="text-white text-sm text-right break-words">${formattedValue}</span>
+                    </div>
+                `;
+            }
+
+            return html;
+        }
+
+        truncateUrl(url) {
+            if (url.length <= 40) return url;
+            return url.substring(0, 37) + '...';
+        }
+
+        escapeHtml(text) {
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return text.replace(/[&<>"']/g, m => map[m]);
+        }
+
+        extractAccountId(url) {
+            const urlParts = url.split('/');
+            const id = urlParts[urlParts.length - 1] || urlParts[urlParts.length - 2];
+            return id.length > 20 ? id.substring(0, 8) + '...' : id;
+        }
+
+        getTimeAgo(timestamp) {
+            const now = new Date();
+            const time = new Date(timestamp);
+            const diffInSeconds = Math.floor((now - time) / 1000);
+
+            if (diffInSeconds < 60) return 'Just now';
+            if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`;
+            if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`;
+            return time.toLocaleDateString();
+        }
+
+        updateProgress(progress) {
+            this.stats.scanned = progress.checked;
+            const percentage = progress.percentage;
+
+            this.elements.progressBar.style.width = `${percentage}%`;
+            this.elements.progressText.textContent = `${progress.checked} / ${progress.total}`;
+            this.elements.progressPercent.textContent = `${Math.round(percentage)}%`;
+
+            this.updateStats();
+            this.elements.currentlyChecking.classList.add('hidden');
+        }
+
+        updateStats() {
+            this.elements.sourcesScanned.textContent = this.stats.scanned;
+            this.elements.usernamesFound.textContent = this.stats.found;
+            this.elements.totalAccounts.textContent = this.stats.found;
+        }
+
+        showProgress() {
+            this.elements.progressSection.classList.remove('hidden');
+        }
+
+        resetResults() {
+            this.results = [];
+            this.stats = { scanned: 0, total: 0, found: 0 };
+            this.elements.resultsGrid.innerHTML = '';
+            this.elements.currentlyChecking.classList.add('hidden');
+            this.updateStats();
+
+            this.elements.progressBar.style.width = '0%';
+            this.elements.progressText.textContent = '0 / 0';
+            this.elements.progressPercent.textContent = '0%';
+        }
+
+        handleSearchCompleted(data) {
+            console.log('Search completed:', data);
+            this.stopSearch();
+        }
+
+        stopSearch() {
+            if (this.eventSource) {
+                this.eventSource.close();
+                this.eventSource = null;
+            }
+
+            this.searchActive = false;
+            this.elements.searchBtn.disabled = false;
+            this.elements.searchBtn.innerHTML = '<i class="fas fa-search mr-2"></i>Search Username';
+            this.elements.stopBtn.classList.add('hidden');
+            this.elements.currentlyChecking.classList.add('hidden');
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        new OSINTSearch();
+    });
+</script>
+{% endblock %}

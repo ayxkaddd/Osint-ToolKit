@@ -5,10 +5,31 @@ from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
 import os
+import logging
 
 from models.auth_models import AuthDetails
-from routes import breach_routes, dnsrecon_routes, doxbin_routes, git_routes, oi_routes, rosources_routes, settings_routes, templates, ns_routers, updates_routes, whois_route, telegram_routes
+from routes import (
+    username_routes,
+    breach_routes,
+    dnsrecon_routes,
+    doxbin_routes,
+    git_routes,
+    oi_routes,
+    resources_routes,
+    settings_routes,
+    templates,
+    ns_routers,
+    whois_route,
+    telegram_routes
+)
 from auth.auth_handler import AuthHandler
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
+
 
 load_dotenv()
 
@@ -70,59 +91,32 @@ class OsintFrameWork:
             )
             return {"success": True}
 
-    def setup_routes(self):
-        self.app.include_router(
-            git_routes.router,
-            tags=["gitfive"],
-        )
-        self.app.include_router(
-            ns_routers.router,
-            tags=["ns"],
-        )
-        self.app.include_router(
-            whois_route.router,
-            tags=["whois"],
-        )
-        self.app.include_router(
-            oi_routes.router,
-            tags=["oi"],
-        )
-        self.app.include_router(
-            doxbin_routes.router,
-            tags=["doxbin"],
-        )
-        self.app.include_router(
-            telegram_routes.auth_router,
-            tags=["telegram auth"],
-        )
-        self.app.include_router(
-            telegram_routes.bot_router,
-            tags=["vk history"],
-        )
-        self.app.include_router(
-            dnsrecon_routes.router,
-            tags=["dnsrecon"],
-        )
-        self.app.include_router(
-            breach_routes.router,
-            tags=["breach"],
-        )
-        self.app.include_router(
-            rosources_routes.router,
-            tags=["resources"],
-        )
-        self.app.include_router(
-            settings_routes.router,
-            tags=["settings"],
-        )
-        self.app.include_router(
-            updates_routes.router,
-            tags=["updates"],
-        )
-        self.app.include_router(
-            templates.router,
-            tags=["templates"]
-        )
+    def setup_routes(self) -> None:
+        """Register all application routes."""
+
+        routes_config = [
+            (git_routes.router, "GitFive"),
+            (ns_routers.router, "DNS"),
+            (whois_route.router, "WHOIS"),
+            (oi_routes.router, "OSINT"),
+            (doxbin_routes.router, "Doxbin"),
+            (telegram_routes.auth_router, "Telegram Auth"),
+            (telegram_routes.bot_router, "Telegram Bot"),
+            (dnsrecon_routes.router, "DNS Reconnaissance"),
+            (breach_routes.router, "Breach Data"),
+            (username_routes.router, "Username"),
+            (resources_routes.router, "Resources"),
+            (settings_routes.router, "Settings"),
+            (templates.router, "Templates")
+        ]
+
+        for router, tag in routes_config:
+            self.app.include_router(
+                router,
+                tags=[tag],
+            )
+
+        logger.info(f"Registered {len(routes_config)} route groups")
 
 
 app = OsintFrameWork().app
