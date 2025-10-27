@@ -118,23 +118,27 @@ class RateLimiter:
         self.max_requests = max_requests
         self.time_window = time_window
         self.requests = defaultdict(list)
+        self._lock = asyncio.Lock()
 
     async def wait_if_needed(self, domain: str) -> float:
         """Wait if rate limit would be exceeded, return wait time"""
-        now = time.time()
-        self.requests[domain] = [
-            t for t in self.requests[domain]
-            if now - t < self.time_window
-        ]
+        async with self._lock:
+            now = time.time()
+            self.requests[domain] = [
+                t for t in self.requests[domain]
+                if now - t < self.time_window
+            ]
 
-        if len(self.requests[domain]) >= self.max_requests:
-            sleep_time = self.time_window - (now - self.requests[domain][0])
-            if sleep_time > 0:
-                await asyncio.sleep(sleep_time)
-                return sleep_time
+            if len(self.requests[domain]) >= self.max_requests:
+                sleep_time = self.time_window - (now - self.requests[domain][0])
+                if sleep_time > 0:
+                    await asyncio.sleep(sleep_time)
+                    self.requests[domain].clear()
+                    self.requests[domain].append(time.time())
+                    return sleep_time
 
-        self.requests[domain].append(now)
-        return 0
+            self.requests[domain].append(now)
+            return 0
 
 
 class StreamingUsernameSearchService:
@@ -165,9 +169,11 @@ class StreamingUsernameSearchService:
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
         ]
 
         self._url_pattern = re.compile(r'\{account\}')
+        self._regex_cache = {}
 
     @lru_cache(maxsize=1)
     def get_metadata(self) -> dict:
@@ -190,6 +196,43 @@ class StreamingUsernameSearchService:
         """Get random user agent"""
         return random.choice(self.user_agents)
 
+    def _get_compiled_regex(self, pattern: str) -> Optional[re.Pattern]:
+        """Get or compile regex pattern with caching"""
+        if pattern not in self._regex_cache:
+            try:
+                self._regex_cache[pattern] = re.compile(pattern, re.IGNORECASE)
+            except re.error:
+                self._regex_cache[pattern] = None
+        return self._regex_cache[pattern]
+
+    def _try_parse_json(self, text: str) -> Optional[dict]:
+        """Try to parse text as JSON, return dict or None"""
+        try:
+            text = text.strip()
+
+            if text.startswith(('{', '[')):
+                data = json.loads(text)
+                if isinstance(data, dict):
+                    return data
+
+            brace_start = text.find('{')
+            if brace_start != -1:
+                brace_count = 0
+                for i in range(brace_start, len(text)):
+                    if text[i] == '{':
+                        brace_count += 1
+                    elif text[i] == '}':
+                        brace_count -= 1
+                        if brace_count == 0:
+                            json_str = text[brace_start:i+1]
+                            data = json.loads(json_str)
+                            if isinstance(data, dict):
+                                return data
+                            break
+        except (json.JSONDecodeError, ValueError):
+            pass
+        return None
+
     async def _check_response_match(self,
                                    response_status: int,
                                    text: str,
@@ -198,11 +241,12 @@ class StreamingUsernameSearchService:
         if response_status == site.get("e_code"):
             e_string = site.get("e_string", "")
             if e_string:
-                if any(char in e_string for char in ['*', '+', '?', '[', ']', '(', ')']):
-                    try:
-                        if re.search(e_string, text, re.IGNORECASE):
+                if any(char in e_string for char in ['*', '+', '?', '[', ']', '(', ')', '|', '^', '$']):
+                    compiled_pattern = self._get_compiled_regex(e_string)
+                    if compiled_pattern:
+                        if compiled_pattern.search(text):
                             return True, False
-                    except re.error:
+                    else:
                         if e_string in text:
                             return True, False
                 else:
@@ -210,8 +254,19 @@ class StreamingUsernameSearchService:
                         return True, False
 
         if "m_code" in site and "m_string" in site:
-            if response_status == site["m_code"] and site["m_string"] in text:
-                return False, True
+            if response_status == site["m_code"]:
+                m_string = site["m_string"]
+                if any(char in m_string for char in ['*', '+', '?', '[', ']', '(', ')', '|', '^', '$']):
+                    compiled_pattern = self._get_compiled_regex(m_string)
+                    if compiled_pattern:
+                        if compiled_pattern.search(text):
+                            return False, True
+                    else:
+                        if m_string in text:
+                            return False, True
+                else:
+                    if m_string in text:
+                        return False, True
 
         return False, False
 
@@ -233,12 +288,15 @@ class StreamingUsernameSearchService:
 
             headers = {
                 "User-Agent": self.get_random_user_agent(),
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
                 "Accept-Language": "en-US,en;q=0.5",
-                "Accept-Encoding": "gzip, deflate",
+                "Accept-Encoding": "gzip, deflate, br",
                 "DNT": "1",
                 "Connection": "keep-alive",
-                "Upgrade-Insecure-Requests": "1"
+                "Upgrade-Insecure-Requests": "1",
+                "Sec-Fetch-Dest": "document",
+                "Sec-Fetch-Mode": "navigate",
+                "Sec-Fetch-Site": "none",
             }
 
             if "headers" in site:
@@ -255,11 +313,13 @@ class StreamingUsernameSearchService:
                     raw_bytes = await response.read()
 
                     text = None
-                    for encoding in ['utf-8', 'latin-1', 'iso-8859-1']:
+                    encodings = ['utf-8', 'utf-8-sig', 'latin-1', 'iso-8859-1', 'windows-1252']
+
+                    for encoding in encodings:
                         try:
                             text = raw_bytes.decode(encoding)
                             break
-                        except UnicodeDecodeError:
+                        except (UnicodeDecodeError, LookupError):
                             continue
 
                     if not text:
@@ -281,13 +341,22 @@ class StreamingUsernameSearchService:
                             response_time=response_time
                         )
 
-                        if extract_profile and extract:
-                            try:
-                                profile = extract(text)
-                                if profile:
-                                    result.profile_data = profile
-                            except Exception as e:
-                                logger.debug(f"Profile extraction failed for {url}: {str(e)}")
+                        if extract_profile:
+                            profile_data = None
+
+                            if extract:
+                                try:
+                                    profile_data = extract(text)
+                                except Exception as e:
+                                    logger.debug(f"socid_extractor failed for {url}: {str(e)}")
+
+                            if not profile_data:
+                                json_data = self._try_parse_json(text)
+                                if json_data:
+                                    profile_data = json_data
+
+                            if profile_data:
+                                result.profile_data = profile_data
 
                         return result
 
@@ -320,6 +389,15 @@ class StreamingUsernameSearchService:
                     error_message="Timeout",
                     response_time=time.time() - start_time
                 )
+            except aiohttp.ClientError as e:
+                return SiteResult(
+                    site_name=site["name"],
+                    category=site.get("cat", "unknown"),
+                    url=url,
+                    status=CheckStatus.ERROR,
+                    error_message=f"Client error: {str(e)}",
+                    response_time=time.time() - start_time
+                )
             except Exception as e:
                 return SiteResult(
                     site_name=site["name"],
@@ -345,8 +423,14 @@ class StreamingUsernameSearchService:
                 return result
 
             last_result = result
-            if attempt < self.max_retries - 1:
-                await asyncio.sleep(0.1 * (2 ** attempt))
+
+            if result.error_message and any(x in result.error_message.lower()
+                                           for x in ['timeout', 'rate limit', 'too many']):
+                if attempt < self.max_retries - 1:
+                    backoff_time = 0.2 * (2 ** attempt)
+                    await asyncio.sleep(backoff_time)
+            else:
+                break
 
         return last_result
 
@@ -418,16 +502,13 @@ class StreamingUsernameSearchService:
         sites = metadata.get("sites", [])
 
         if categories:
-            sites = [s for s in sites if s.get("cat") in categories]
+            categories_set = set(categories)
+            sites = [s for s in sites if s.get("cat") in categories_set]
 
         if priority_sites:
-            priority = []
-            regular = []
-            for site in sites:
-                if site.get("name") in priority_sites:
-                    priority.append(site)
-                else:
-                    regular.append(site)
+            priority_set = set(priority_sites)
+            priority = [s for s in sites if s.get("name") in priority_set]
+            regular = [s for s in sites if s.get("name") not in priority_set]
             sites = priority + regular
 
         yield StreamEvent(
@@ -472,10 +553,16 @@ class StreamingUsernameSearchService:
         connector = TCPConnector(
             limit=self.max_concurrent_requests,
             limit_per_host=5,
-            ttl_dns_cache=300
+            ttl_dns_cache=300,
+            force_close=False,
+            enable_cleanup_closed=True
         )
 
-        async with aiohttp.ClientSession(connector=connector) as session:
+        async with aiohttp.ClientSession(
+            connector=connector,
+            timeout=self.timeout,
+            trust_env=True
+        ) as session:
             tasks = []
             for site in sites:
                 task = asyncio.create_task(process_site(site))
@@ -533,9 +620,31 @@ class StreamingUsernameSearchService:
 
             while not result_queue.empty():
                 event = await result_queue.get()
+
+                if event.event_type == EventType.SITE_RESULT:
+                    checked_count += 1
+                    site_data = event.data
+
+                    if site_data["status"] == CheckStatus.FOUND.value:
+                        found_count += 1
+                    elif site_data["status"] == CheckStatus.NOT_FOUND.value:
+                        not_found_count += 1
+                    else:
+                        error_count += 1
+
+                    event.data["progress"] = {
+                        "checked": checked_count,
+                        "total": len(sites),
+                        "found": found_count,
+                        "not_found": not_found_count,
+                        "errors": error_count,
+                        "percentage": round((checked_count / len(sites)) * 100, 2)
+                    }
+
                 yield event
                 await asyncio.sleep(self.stream_delay)
 
+        # Yield completion event
         elapsed_time = time.time() - start_time
         yield StreamEvent(
             event_type=EventType.SEARCH_COMPLETED,

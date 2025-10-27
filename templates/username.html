@@ -141,6 +141,82 @@
     .youtube-red { background: #ff0000; }
     .reddit-orange { background: #ff4500; }
     .discord-purple { background: #5865f2; }
+
+    .line-clamp-2 {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+
+    /* Added modal styles for popup */
+    .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.8);
+        backdrop-filter: blur(4px);
+        z-index: 1000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+    }
+
+    .modal-content {
+        background: #1a1b26;
+        border: 1px solid #24283b;
+        border-radius: 12px;
+        max-width: 800px;
+        width: 100%;
+        max-height: 90vh;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .modal-header {
+        padding: 20px;
+        border-bottom: 1px solid #24283b;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .modal-body {
+        padding: 20px;
+        overflow-y: auto;
+        flex: 1;
+    }
+
+    .modal-footer {
+        padding: 16px 20px;
+        border-top: 1px solid #24283b;
+        display: flex;
+        gap: 12px;
+        justify-content: flex-end;
+    }
+
+    .copy-btn {
+        padding: 8px 16px;
+        border-radius: 6px;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+        border: 1px solid #24283b;
+    }
+
+    .copy-btn:hover {
+        transform: translateY(-1px);
+    }
+
+    .copy-btn.success {
+        background: #10b981;
+        border-color: #10b981;
+    }
 </style>
 {% endblock %}
 
@@ -298,20 +374,25 @@
             const responseTime = result.responseTime ? Math.round(result.responseTime * 1000) : 0;
             const timeAgo = this.getTimeAgo(result.checkedAt);
 
+            const keyInfo = this.extractKeyInfo(result.profileData);
+            const hasProfileData = result.profileData && Object.keys(result.profileData).length > 0;
+
             const card = document.createElement('div');
             card.className = 'bg-[#1a1b26]/50 backdrop-blur-sm border border-[#24283b] rounded-xl p-6 hover:border-purple-500/50 transition-all fade-in';
 
             card.innerHTML = `
                 <div class="flex items-start justify-between mb-4">
                     <div class="flex items-center space-x-3">
-                        <div class="platform-icon ${platformInfo.class}">
-                            ${platformInfo.icon}
-                        </div>
+                        ${keyInfo.profileImage ? `
+                            <img src="${keyInfo.profileImage}" alt="Profile" class="w-12 h-12 rounded-lg object-cover border border-gray-700">
+                        ` : `
+                            <div class="platform-icon ${platformInfo.class}">
+                                ${platformInfo.icon}
+                            </div>
+                        `}
                         <div>
                             <h3 class="font-semibold text-white">${result.siteName}</h3>
-                            <div class="flex items-center space-x-2 mt-1">
-                                <span class="text-green-400 text-xs font-medium"><i class="fas fa-check-circle mr-1"></i>Active</span>
-                            </div>
+                            ${keyInfo.username ? `<div class="text-sm text-gray-400 font-mono">@${keyInfo.username}</div>` : ''}
                         </div>
                     </div>
                     <div class="text-right">
@@ -321,18 +402,100 @@
                 </div>
 
                 <div class="space-y-3">
-                    <div class="flex justify-between">
-                        <span class="text-gray-400 text-sm">Account ID</span>
-                        <span class="text-white text-sm font-mono">${this.extractAccountId(result.url)}</span>
-                    </div>
+                    ${keyInfo.fullName ? `
+                        <div class="flex justify-between">
+                            <span class="text-gray-400 text-sm">Full Name</span>
+                            <span class="text-white text-sm">${this.escapeHtml(keyInfo.fullName)}</span>
+                        </div>
+                    ` : ''}
 
-                    ${result.profileData ? this.renderProfileData(result.profileData) : ''}
+                    ${keyInfo.bio ? `
+                        <div>
+                            <span class="text-gray-400 text-sm block mb-1">Bio</span>
+                            <p class="text-white text-sm line-clamp-2">${this.escapeHtml(keyInfo.bio)}</p>
+                        </div>
+                    ` : ''}
+
+                    ${(keyInfo.followers !== null && keyInfo.followers > 0) || (keyInfo.following !== null && keyInfo.following > 0) ? `
+                        <div class="flex justify-between">
+                            ${keyInfo.followers !== null && keyInfo.followers > 0 ? `
+                                <div>
+                                    <span class="text-gray-400 text-xs">Followers</span>
+                                    <div class="text-white text-sm font-semibold">${this.formatNumber(keyInfo.followers)}</div>
+                                </div>
+                            ` : ''}
+                            ${keyInfo.following !== null && keyInfo.following > 0 ? `
+                                <div>
+                                    <span class="text-gray-400 text-xs">Following</span>
+                                    <div class="text-white text-sm font-semibold">${this.formatNumber(keyInfo.following)}</div>
+                                </div>
+                            ` : ''}
+                        </div>
+                    ` : ''}
+
+                    ${keyInfo.country || keyInfo.gender ? `
+                        <div class="flex justify-between flex-wrap gap-2">
+                            ${keyInfo.country ? `
+                                <div class="flex items-center space-x-1">
+                                    <i class="fas fa-map-marker-alt text-gray-400 text-xs"></i>
+                                    <span class="text-white text-sm">${this.escapeHtml(keyInfo.country)}</span>
+                                </div>
+                            ` : ''}
+                            ${keyInfo.gender ? `
+                                <div class="flex items-center space-x-1">
+                                    <i class="fas fa-user text-gray-400 text-xs"></i>
+                                    <span class="text-white text-sm capitalize">${this.escapeHtml(keyInfo.gender)}</span>
+                                </div>
+                            ` : ''}
+                        </div>
+                    ` : ''}
+
+                    ${keyInfo.createdAt ? `
+                        <div class="flex justify-between">
+                            <span class="text-gray-400 text-sm">Joined</span>
+                            <span class="text-white text-sm">${keyInfo.createdAt}</span>
+                        </div>
+                    ` : ''}
+
+                    ${keyInfo.verified ? `
+                        <div class="flex items-center space-x-2">
+                            <i class="fas fa-check-circle text-blue-400"></i>
+                            <span class="text-blue-400 text-sm">Verified Account</span>
+                        </div>
+                    ` : ''}
+
+                    ${keyInfo.genres && keyInfo.genres.length > 0 ? `
+                        <div>
+                            <span class="text-gray-400 text-sm block mb-1">Genres</span>
+                            <div class="flex flex-wrap gap-1">
+                                ${keyInfo.genres.map(g => `<span class="px-2 py-0.5 bg-purple-900/30 text-purple-300 text-xs rounded">${this.escapeHtml(g)}</span>`).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+
+                    ${keyInfo.skills && keyInfo.skills.length > 0 ? `
+                        <div>
+                            <span class="text-gray-400 text-sm block mb-1">Skills</span>
+                            <div class="flex flex-wrap gap-1">
+                                ${keyInfo.skills.map(s => `<span class="px-2 py-0.5 bg-blue-900/30 text-blue-300 text-xs rounded">${this.escapeHtml(s)}</span>`).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
 
                     <div class="flex justify-between">
                         <span class="text-gray-400 text-sm">Category</span>
                         <span class="text-white text-sm capitalize">${result.category}</span>
                     </div>
                 </div>
+
+                ${hasProfileData ? `
+                    <div class="mt-4 pt-4 border-t border-gray-700">
+                        <button class="expand-btn w-full text-purple-400 hover:text-purple-300 text-sm font-medium transition-colors flex items-center justify-center space-x-2">
+                            <span>Expand Result</span>
+                            <i class="fas fa-external-link-alt"></i>
+                        </button>
+                    </div>
+                ` : ''}
 
                 <div class="flex justify-between items-center mt-4 pt-4 border-t border-gray-700">
                     <a href="${result.url}" target="_blank"
@@ -343,13 +506,267 @@
                 </div>
             `;
 
+            const expandBtn = card.querySelector('.expand-btn');
+            if (expandBtn) {
+                expandBtn.addEventListener('click', () => {
+                    this.openModal(result);
+                });
+            }
+
             this.elements.resultsGrid.appendChild(card);
         }
 
-        renderProfileData(profileData) {
+        openModal(result) {
+            const modal = document.createElement('div');
+            modal.className = 'modal-overlay';
+            modal.innerHTML = `
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <div>
+                            <h2 class="text-xl font-bold text-white">${result.siteName}</h2>
+                            <p class="text-sm text-gray-400 mt-1">Full Profile Data</p>
+                        </div>
+                        <button class="close-modal text-gray-400 hover:text-white transition-colors">
+                            <i class="fas fa-times text-xl"></i>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <pre class="text-sm text-gray-300 whitespace-pre-wrap break-words" id="modalContent">${this.renderFullProfileData(result.profileData)}</pre>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="copy-btn bg-purple-600 hover:bg-purple-700 text-white" data-format="json">
+                            <i class="fas fa-copy mr-2"></i>Copy as JSON
+                        </button>
+                        <button class="copy-btn bg-blue-600 hover:bg-blue-700 text-white" data-format="text">
+                            <i class="fas fa-copy mr-2"></i>Copy as Text
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            document.body.appendChild(modal);
+
+            // Close modal on overlay click
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    document.body.removeChild(modal);
+                }
+            });
+
+            // Close modal on close button click
+            modal.querySelector('.close-modal').addEventListener('click', () => {
+                document.body.removeChild(modal);
+            });
+
+            // Copy buttons
+            modal.querySelectorAll('.copy-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const format = btn.dataset.format;
+                    let textToCopy = '';
+
+                    if (format === 'json') {
+                        textToCopy = JSON.stringify(result.profileData, null, 2);
+                    } else {
+                        textToCopy = this.convertToPlainText(result.profileData);
+                    }
+
+                    navigator.clipboard.writeText(textToCopy).then(() => {
+                        const originalHTML = btn.innerHTML;
+                        btn.innerHTML = '<i class="fas fa-check mr-2"></i>Copied!';
+                        btn.classList.add('success');
+
+                        setTimeout(() => {
+                            btn.innerHTML = originalHTML;
+                            btn.classList.remove('success');
+                        }, 2000);
+                    });
+                });
+            });
+
+            // Close on Escape key
+            const escapeHandler = (e) => {
+                if (e.key === 'Escape') {
+                    document.body.removeChild(modal);
+                    document.removeEventListener('keydown', escapeHandler);
+                }
+            };
+            document.addEventListener('keydown', escapeHandler);
+        }
+
+        convertToPlainText(data, indent = 0) {
+            let text = '';
+            const spaces = '  '.repeat(indent);
+
+            for (const [key, value] of Object.entries(data)) {
+                if (value === null || value === undefined || value === '') continue;
+
+                if (Array.isArray(value)) {
+                    text += `${spaces}${key}:\n`;
+                    value.forEach((item, index) => {
+                        if (typeof item === 'object' && item !== null) {
+                            text += `${spaces}  [${index}]:\n`;
+                            text += this.convertToPlainText(item, indent + 2);
+                        } else {
+                            text += `${spaces}  - ${item}\n`;
+                        }
+                    });
+                } else if (typeof value === 'object' && value !== null) {
+                    text += `${spaces}${key}:\n`;
+                    text += this.convertToPlainText(value, indent + 1);
+                } else {
+                    text += `${spaces}${key}: ${value}\n`;
+                }
+            }
+
+            return text;
+        }
+
+        extractKeyInfo(profileData) {
+            if (!profileData) return {};
+
+            const info = {
+                username: null,
+                fullName: null,
+                bio: null,
+                profileImage: null,
+                followers: null,
+                following: null,
+                createdAt: null,
+                verified: null,
+                genres: [],
+                skills: [],
+                country: null,
+                gender: null
+            };
+
+            // Extract username
+            info.username = profileData.username || profileData.disqus_username ||
+                           profileData.imgur_username || profileData.name ||
+                           profileData.handle || profileData.login || null;
+
+            // Extract full name
+            info.fullName = profileData.fullname || profileData.full_name ||
+                           profileData.displayName || profileData.display_name ||
+                           profileData.realName || profileData.name || null;
+
+            // Extract bio/description
+            info.bio = profileData.bio || profileData.description ||
+                      profileData.about || profileData.aboutMe ||
+                      profileData.motto || profileData.statusMessage ||
+                      profileData.blurb || profileData.note || null;
+
+            info.profileImage =
+                profileData.profileImageUrl ||
+                profileData.profile_image_url ||
+                profileData.profilePic ||
+                profileData.image ||
+                profileData.avatar ||
+                profileData.avatar_static ||
+                profileData.icon_img ||
+                profileData.logo ||
+                profileData.logoUrl ||
+                profileData.pic_url ||
+                (profileData.picture && typeof profileData.picture === 'object' ? profileData.picture.url : null) ||
+                (profileData.picture && typeof profileData.picture === 'string' ? profileData.picture : null) ||
+                null;
+
+            if (profileData.country) {
+                if (typeof profileData.country === 'object') {
+                    info.country = profileData.country.name || profileData.country.code || null;
+                } else {
+                    info.country = profileData.country;
+                }
+            } else if (profileData.location) {
+                info.country = profileData.location;
+            } else if (profileData.city) {
+                info.country = profileData.city;
+            } else if (profileData.place) {
+                info.country = profileData.place;
+            } else if (profileData.nationality) {
+                info.country = profileData.nationality;
+            }
+
+            if (profileData.gender) {
+                info.gender = profileData.gender;
+            } else if (profileData.genderVerbal) {
+                info.gender = profileData.genderVerbal;
+            }
+
+            // Extract follower/following counts only if they exist
+            if (profileData.follower_count !== undefined) info.followers = parseInt(profileData.follower_count);
+            if (profileData.followers_count !== undefined) info.followers = parseInt(profileData.followers_count);
+            if (profileData.followersCount !== undefined) info.followers = parseInt(profileData.followersCount);
+            if (profileData.followerCount !== undefined) info.followers = parseInt(profileData.followerCount);
+            if (profileData.counters && profileData.counters.followers !== undefined) {
+                info.followers = parseInt(profileData.counters.followers);
+            }
+
+            if (profileData.following_count !== undefined) info.following = parseInt(profileData.following_count);
+            if (profileData.follows_count !== undefined) info.following = parseInt(profileData.follows_count);
+            if (profileData.followsCount !== undefined) info.following = parseInt(profileData.followsCount);
+            if (profileData.followingCount !== undefined) info.following = parseInt(profileData.followingCount);
+            if (profileData.followeeCount !== undefined) info.following = parseInt(profileData.followeeCount);
+            if (profileData.followees !== undefined) info.following = parseInt(profileData.followees);
+            if (profileData.counters && profileData.counters.following !== undefined) {
+                info.following = parseInt(profileData.counters.following);
+            }
+
+            // Extract creation date
+            const dateFields = ['created_at', 'createdAt', 'createdOn', 'created', 'memberSince', 'createdDate', 'updated_at'];
+            for (const field of dateFields) {
+                if (profileData[field]) {
+                    // Handle Unix timestamps (in milliseconds)
+                    if (typeof profileData[field] === 'number') {
+                        const date = new Date(profileData[field]);
+                        if (!isNaN(date.getTime())) {
+                            info.createdAt = date.toLocaleDateString();
+                            break;
+                        }
+                    } else {
+                        const date = new Date(profileData[field]);
+                        if (!isNaN(date.getTime())) {
+                            info.createdAt = date.toLocaleDateString();
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // Extract verified status
+            info.verified = profileData.verified || profileData.isVerified ||
+                           profileData.is_verified === 'True' ||
+                           profileData.is_verified === true ||
+                           profileData.is_twitter_verified === 'True' ||
+                           profileData.is_twitter_verified === true || false;
+
+            // Extract genres
+            if (profileData.genres && Array.isArray(profileData.genres)) {
+                info.genres = profileData.genres.map(g =>
+                    typeof g === 'object' ? g.name : g
+                ).filter(Boolean);
+            }
+
+            // Extract skills
+            if (profileData.skills && Array.isArray(profileData.skills)) {
+                info.skills = profileData.skills.map(s =>
+                    typeof s === 'object' ? s.name : s
+                ).filter(Boolean);
+            }
+
+            return info;
+        }
+
+        formatNumber(num) {
+            if (num === null || num === undefined) return '0';
+            if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+            if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+            return num.toString();
+        }
+
+        renderFullProfileData(profileData) {
             if (!profileData || Object.keys(profileData).length === 0) return '';
 
-            let html = '';
+            let html = '<div class="text-xs text-gray-400 mb-2 font-semibold">Full Profile Data:</div>';
 
             for (const [key, value] of Object.entries(profileData)) {
                 if (value === null || value === undefined || value === '') continue;
@@ -360,30 +777,104 @@
                     .map(word => word.charAt(0).toUpperCase() + word.slice(1))
                     .join(' ');
 
-                let formattedValue = value;
+                html += this.renderValue(formattedKey, value);
+            }
 
-                if (typeof value === 'string' && (value.startsWith('http://') || value.startsWith('https://'))) {
-                    formattedValue = `<a href="${value}" target="_blank" class="text-purple-400 hover:text-purple-300 hover:underline">${this.truncateUrl(value)}</a>`;
-                } else if (typeof value === 'boolean') {
-                    formattedValue = `<span class="px-2 py-0.5 rounded ${value ? 'bg-green-900 text-green-300' : 'bg-red-900 text-red-300'} text-xs">${value ? 'Yes' : 'No'}</span>`;
-                } else if (typeof value === 'string' && value.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/)) {
-                    const date = new Date(value);
-                    formattedValue = date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
-                } else if (key === 'username' || key === 'gravatar_username') {
-                    formattedValue = `<span class="font-mono">@${value}</span>`;
-                } else {
-                    formattedValue = this.escapeHtml(String(value));
-                }
+            return html;
+        }
+
+        renderValue(key, value, indent = 0) {
+            const indentClass = indent > 0 ? `ml-${indent * 4}` : '';
+            let html = '';
+
+            if (value === null || value === undefined || value === '') {
+                return '';
+            }
+
+            // Handle arrays
+            if (Array.isArray(value)) {
+                if (value.length === 0) return '';
 
                 html += `
-                    <div class="flex justify-between items-start gap-4">
-                        <span class="text-gray-400 text-sm whitespace-nowrap">${formattedKey}</span>
-                        <span class="text-white text-sm text-right break-words">${formattedValue}</span>
+                    <div class="${indentClass} mb-2">
+                        <span class="text-gray-400 text-sm font-medium">${key}:</span>
+                `;
+
+                value.forEach((item, index) => {
+                    if (typeof item === 'object' && item !== null) {
+                        html += `<div class="ml-4 mt-1 p-2 bg-gray-800/50 rounded border border-gray-700">`;
+                        for (const [subKey, subValue] of Object.entries(item)) {
+                            html += this.renderValue(subKey, subValue, indent + 1);
+                        }
+                        html += `</div>`;
+                    } else {
+                        html += `<div class="ml-4 text-white text-sm">${this.escapeHtml(String(item))}</div>`;
+                    }
+                });
+
+                html += `</div>`;
+                return html;
+            }
+
+            // Handle nested objects
+            if (typeof value === 'object' && value !== null) {
+                const entries = Object.entries(value);
+                if (entries.length === 0) return '';
+
+                html += `
+                    <div class="${indentClass} mb-2">
+                        <span class="text-gray-400 text-sm font-medium">${key}:</span>
+                        <div class="ml-4 mt-1 p-2 bg-gray-800/50 rounded border border-gray-700">
+                `;
+
+                for (const [subKey, subValue] of entries) {
+                    html += this.renderValue(subKey, subValue, indent + 1);
+                }
+
+                html += `</div></div>`;
+                return html;
+            }
+
+            // Handle URLs
+            if (typeof value === 'string' && (value.startsWith('http://') || value.startsWith('https://'))) {
+                return `
+                    <div class="${indentClass} flex justify-between items-start gap-4 mb-2">
+                        <span class="text-gray-400 text-sm whitespace-nowrap">${key}</span>
+                        <a href="${value}" target="_blank" class="text-purple-400 hover:text-purple-300 hover:underline text-sm text-right break-all">${this.truncateUrl(value)}</a>
                     </div>
                 `;
             }
 
-            return html;
+            // Handle booleans
+            if (typeof value === 'boolean' || value === 'True' || value === 'False') {
+                const boolValue = value === true || value === 'True';
+                return `
+                    <div class="${indentClass} flex justify-between items-start gap-4 mb-2">
+                        <span class="text-gray-400 text-sm whitespace-nowrap">${key}</span>
+                        <span class="px-2 py-0.5 rounded ${boolValue ? 'bg-green-900 text-green-300' : 'bg-red-900 text-red-300'} text-xs">${boolValue ? 'Yes' : 'No'}</span>
+                    </div>
+                `;
+            }
+
+            // Handle dates
+            if (typeof value === 'string' && value.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/)) {
+                const date = new Date(value);
+                const formattedValue = date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+                return `
+                    <div class="${indentClass} flex justify-between items-start gap-4 mb-2">
+                        <span class="text-gray-400 text-sm whitespace-nowrap">${key}</span>
+                        <span class="text-white text-sm text-right">${formattedValue}</span>
+                    </div>
+                `;
+            }
+
+            // Handle regular strings and numbers
+            return `
+                <div class="${indentClass} flex justify-between items-start gap-4 mb-2">
+                    <span class="text-gray-400 text-sm whitespace-nowrap">${key}</span>
+                    <span class="text-white text-sm text-right break-words">${this.escapeHtml(String(value))}</span>
+                </div>
+            `;
         }
 
         truncateUrl(url) {
