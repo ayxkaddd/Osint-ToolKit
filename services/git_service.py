@@ -11,9 +11,6 @@ class GitService:
         self.venv_path = os.getenv('GITFIVE_VENV_PATH', 'venv/bin/python')
         self.gitfive_path = os.getenv('GITFIVE_SCRIPT_PATH', 'GitFive/main.py')
 
-        self.venv_path = str(Path(self.venv_path).resolve())
-        self.gitfive_path = str(Path(self.gitfive_path).resolve())
-
         self.assets_path = Path('./assets')
         self.assets_path.mkdir(exist_ok=True)
 

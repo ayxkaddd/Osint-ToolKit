@@ -1,17 +1,15 @@
-from collections import defaultdict
-import json
-from fastapi import APIRouter, HTTPException, Query
-from fastapi.responses import JSONResponse, StreamingResponse
-from services.username_service import StreamingUsernameSearchService
-import asyncio
+import logging
 from typing import List, Optional
+from collections import defaultdict
+from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import StreamingResponse
 
+from services.username_service import StreamingUsernameSearchService
 
 router = APIRouter(prefix="/api/username")
 
 search_service = StreamingUsernameSearchService()
 
-import logging
 logger = logging.getLogger("username_routes")
 logging.basicConfig(level=logging.INFO)
 

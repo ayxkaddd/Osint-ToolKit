@@ -16,12 +16,11 @@ class TelegramService:
     def __init__(self):
         self.session_name = "telegram_session"
         self.logger = logging.getLogger(__name__)
-        self.api_id = os.getenv('TG_API_ID')
-        self.api_hash = os.getenv('TG_API_HASH')
+        self.api_id = os.getenv('TELEGRAM_API_ID')
+        self.api_hash = os.getenv('TELEGRAM_API_HASH')
 
         if not all([self.api_id, self.api_hash]):
             self.logger.error("Telegram API credentials not found in environment variables")
-            raise ValueError("Missing Telegram API credentials")
 
         self.client = None
 

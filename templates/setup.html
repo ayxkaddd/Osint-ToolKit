@@ -1,0 +1,268 @@
+{% extends "base.html" %}
+
+{% block title %}OSINT Toolkit Setup{% endblock %}
+
+{% block content %}
+<!DOCTYPE html>
+<html lang="en" class="dark">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OSINT Toolkit Setup</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+    <script>tailwind.config = { darkMode: 'class', theme: { extend: { fontFamily: { mono: ['JetBrains Mono', 'monospace'] } } } }</script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+
+<body class="bg-black text-white font-mono min-h-screen">
+    <div class="container mx-auto p-4 max-w-6xl">
+        <div class="text-center mb-12 mt-8">
+            <h1 class="text-4xl font-bold mb-4">OSINT Toolkit Setup</h1>
+            <p class="text-gray-400 text-lg">Configure your toolkit with comprehensive options</p>
+        </div>
+
+        <!-- Progress Steps -->
+        <div class="max-w-4xl mx-auto mb-12">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center flex-1">
+                    <div class="step-indicator" id="step-1-indicator"><span>1</span></div>
+                    <div class="flex-1 h-1 bg-gray-800 mx-2" id="line-1"></div>
+                </div>
+                <div class="flex items-center flex-1">
+                    <div class="step-indicator" id="step-2-indicator"><span>2</span></div>
+                    <div class="flex-1 h-1 bg-gray-800 mx-2" id="line-2"></div>
+                </div>
+                <div class="flex items-center flex-1">
+                    <div class="step-indicator" id="step-3-indicator"><span>3</span></div>
+                    <div class="flex-1 h-1 bg-gray-800 mx-2" id="line-3"></div>
+                </div>
+                <div class="flex items-center flex-1">
+                    <div class="step-indicator" id="step-4-indicator"><span>4</span></div>
+                    <div class="flex-1 h-1 bg-gray-800 mx-2" id="line-4"></div>
+                </div>
+                <div class="step-indicator" id="step-5-indicator"><span>5</span></div>
+            </div>
+            <div class="flex justify-between mt-3 text-sm text-gray-500">
+                <span>Admin</span><span>Features</span><span>Tools</span><span>APIs</span><span>Complete</span>
+            </div>
+        </div>
+
+        <div class="max-w-4xl mx-auto bg-gray-900 border border-gray-700 rounded-lg p-8">
+
+            <!-- Step 1: Admin Setup -->
+            <div id="step-1" class="setup-step">
+                <h2 class="text-2xl font-bold mb-2">Administrator Account</h2>
+                <p class="text-gray-400 mb-6">Create secure admin credentials with enhanced validation</p>
+                <form id="admin-form" class="space-y-4">
+                    <div>
+                        <label class="block text-gray-400 mb-2 text-sm">Email Address</label>
+                        <input type="email" name="email" required
+                            class="w-full px-4 py-3 bg-gray-800 border border-gray-700 text-white rounded-lg focus:outline-none focus:border-gray-500 transition-colors placeholder-gray-500"
+                            placeholder="admin@example.com">
+                    </div>
+                    <div>
+                        <label class="block text-gray-400 mb-2 text-sm">Password</label>
+                        <input type="password" name="password" id="password" required
+                            class="w-full px-4 py-3 bg-gray-800 border border-gray-700 text-white rounded-lg focus:outline-none focus:border-gray-500 transition-colors placeholder-gray-500"
+                            placeholder="Enter secure password">
+                        <div class="mt-2 text-xs text-gray-500 space-y-1" id="password-requirements">
+                            <div class="flex items-center gap-2"><span id="req-length"
+                                    class="text-red-400">✗</span><span>At least 8 characters</span></div>
+                            <div class="flex items-center gap-2"><span id="req-upper"
+                                    class="text-red-400">✗</span><span>One uppercase letter</span></div>
+                            <div class="flex items-center gap-2"><span id="req-lower"
+                                    class="text-red-400">✗</span><span>One lowercase letter</span></div>
+                            <div class="flex items-center gap-2"><span id="req-digit"
+                                    class="text-red-400">✗</span><span>One number</span></div>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-gray-400 mb-2 text-sm">Confirm Password</label>
+                        <input type="password" name="confirm_password" required
+                            class="w-full px-4 py-3 bg-gray-800 border border-gray-700 text-white rounded-lg focus:outline-none focus:border-gray-500 transition-colors placeholder-gray-500"
+                            placeholder="Confirm password">
+                    </div>
+                    <button type="submit"
+                        class="w-full bg-gray-800 hover:bg-gray-700 border border-gray-700 text-white font-bold py-3 px-6 rounded-lg transition-colors flex items-center justify-center gap-2">Continue
+                        <i data-lucide="arrow-right" class="w-4 h-4"></i></button>
+                </form>
+            </div>
+
+            <!-- Additional steps will be loaded dynamically via JavaScript to keep file size manageable -->
+            <div id="dynamic-steps"></div>
+
+            <!-- Loading overlay -->
+            <div id="loading-overlay"
+                class="hidden fixed inset-0 bg-black bg-opacity-75 backdrop-blur-sm flex items-center justify-center z-50">
+                <div class="bg-gray-900 border border-gray-700 rounded-lg p-8 text-center">
+                    <div class="animate-spin rounded-full h-16 w-16 border-b-2 border-white mx-auto mb-4"></div>
+                    <p class="text-white" id="loading-text">Processing...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        .step-indicator {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background-color: #1f2937;
+            color: #6b7280;
+            border: 2px solid #374151;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            transition: all .3s
+        }
+
+        .step-indicator.active {
+            background-color: #374151;
+            color: white;
+            border-color: #4b5563
+        }
+
+        .step-indicator.completed {
+            background-color: #10B981;
+            color: white;
+            border-color: #10B981
+        }
+
+        .feature-card,
+        .api-config-card {
+            background-color: #1f2937;
+            border: 1px solid #374151;
+            padding: 1rem;
+            border-radius: .5rem;
+            transition: all .2s
+        }
+
+        .feature-card:hover,
+        .api-config-card:hover {
+            background-color: #374151;
+            border-color: #4b5563
+        }
+    </style>
+
+    <script src="/static/js/setup.js"></script>
+    <script>
+        let currentStep = 1;
+        const systemStatus = {{ system_status| tojson | safe }};
+
+        // Password validation
+        document.getElementById('password')?.addEventListener('input', function (e) {
+            const pwd = e.target.value;
+            document.getElementById('req-length').textContent = pwd.length >= 8 ? '✓' : '✗';
+            document.getElementById('req-length').className = pwd.length >= 8 ? 'text-green-400' : 'text-red-400';
+            document.getElementById('req-upper').textContent = /[A-Z]/.test(pwd) ? '✓' : '✗';
+            document.getElementById('req-upper').className = /[A-Z]/.test(pwd) ? 'text-green-400' : 'text-red-400';
+            document.getElementById('req-lower').textContent = /[a-z]/.test(pwd) ? '✓' : '✗';
+            document.getElementById('req-lower').className = /[a-z]/.test(pwd) ? 'text-green-400' : 'text-red-400';
+            document.getElementById('req-digit').textContent = /\d/.test(pwd) ? '✓' : '✗';
+            document.getElementById('req-digit').className = /\d/.test(pwd) ? 'text-green-400' : 'text-red-400';
+        });
+
+        function showStep(step) {
+            document.querySelectorAll('.setup-step').forEach(el => el.classList.add('hidden'));
+            const stepEl = document.getElementById(`step-${step}`);
+            if (stepEl) stepEl.classList.remove('hidden');
+
+            for (let i = 1; i <= 5; i++) {
+                const indicator = document.getElementById(`step-${i}-indicator`);
+                if (i < step) {
+                    indicator.classList.add('completed');
+                    indicator.classList.remove('active');
+                    indicator.innerHTML = '<i data-lucide="check" class="w-4 h-4"></i>';
+                } else if (i === step) {
+                    indicator.classList.add('active');
+                    indicator.classList.remove('completed');
+                    indicator.textContent = i;
+                } else {
+                    indicator.classList.remove('active', 'completed');
+                    indicator.textContent = i;
+                }
+                if (i < 5) {
+                    const line = document.getElementById(`line-${i}`);
+                    line.className = i < step ? 'flex-1 h-1 bg-green-500 mx-2' : 'flex-1 h-1 bg-gray-800 mx-2';
+                }
+            }
+            currentStep = step;
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+
+            // Load step content dynamically
+            loadStepContent(step);
+        }
+
+        function loadStepContent(step) {
+            const container = document.getElementById('dynamic-steps');
+            if (step === 2) {
+                container.innerHTML = getStep2HTML();
+            } else if (step === 3) {
+                container.innerHTML = getStep3HTML();
+                checkGoTools();
+            } else if (step === 4) {
+                container.innerHTML = getStep4HTML();
+            } else if (step === 5) {
+                container.innerHTML = getStep5HTML();
+            }
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+
+        function nextStep() {
+            if (currentStep < 5) showStep(currentStep + 1);
+        }
+
+        function previousStep() {
+            if (currentStep > 1) showStep(currentStep - 1);
+        }
+
+        function showLoading(show, text = 'Processing...') {
+            document.getElementById('loading-overlay').classList.toggle('hidden', !show);
+            document.getElementById('loading-text').textContent = text;
+        }
+
+        function showNotification(message, type = 'info') {
+            const colors = { success: 'bg-green-600 border-green-600', error: 'bg-red-600 border-red-600', info: 'bg-gray-700 border-gray-600' };
+            const notification = document.createElement('div');
+            notification.className = `fixed top-4 right-4 ${colors[type]} border text-white px-6 py-3 rounded-lg shadow-lg z-50`;
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            setTimeout(() => notification.remove(), 3000);
+        }
+
+        // Admin form handler
+        document.getElementById('admin-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            if (formData.get('password') !== formData.get('confirm_password')) {
+                showNotification('Passwords do not match', 'error');
+                return;
+            }
+            showLoading(true, 'Configuring admin account...');
+            try {
+                const response = await fetch('/setup/admin', { method: 'POST', body: formData });
+                const data = await response.json();
+                if (data.success) {
+                    showNotification('Admin configured successfully', 'success');
+                    nextStep();
+                } else {
+                    showNotification(data.detail || 'Configuration failed', 'error');
+                }
+            } catch (error) {
+                showNotification('Error: ' + error.message, 'error');
+            } finally {
+                showLoading(false);
+            }
+        });
+
+        document.addEventListener('DOMContentLoaded', () => {
+            showStep({{ step }});
+        });
+    </script>
+</body>
+
+</html>
+{% endblock %}
