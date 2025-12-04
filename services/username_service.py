@@ -5,7 +5,7 @@ import json
 import time
 import logging
 from typing import List, Optional, AsyncGenerator
-from urllib.parse import urlparse, parse_qs, quote
+from urllib.parse import parse_qsl, urlparse, parse_qs, quote
 from bs4 import BeautifulSoup
 from fastapi import HTTPException
 from dataclasses import dataclass, asdict
@@ -172,6 +172,18 @@ class StreamingUsernameSearchService:
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
         ]
 
+        self.base_headers = {
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.5",
+            "Accept-Encoding": "gzip, deflate, br",
+            "DNT": "1",
+            "Connection": "keep-alive",
+            "Upgrade-Insecure-Requests": "1",
+            "Sec-Fetch-Dest": "document",
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-Site": "none",
+        }
+
         self._url_pattern = re.compile(r'\{account\}')
         self._regex_cache = {}
 
@@ -271,13 +283,44 @@ class StreamingUsernameSearchService:
         return False, False
 
     async def check_single_site(self,
-                               session: aiohttp.ClientSession,
-                               site: dict,
-                               username: str,
-                               extract_profile: bool = False) -> SiteResult:
-        """Check username on a single site"""
+                                session: aiohttp.ClientSession,
+                                site: dict,
+                                username: str,
+                                extract_profile: bool = False) -> SiteResult:
+        """Check username on a single site (supports GET, JSON POST, and form POST)."""
+        PLACEHOLDER = "{account}"
+
         url = self._url_pattern.sub(quote(username), site["uri_check"])
+        url = url.replace(PLACEHOLDER, quote(username))
         domain = urlparse(url).netloc
+
+        headers = self.base_headers.copy()
+        headers["User-Agent"] = self.get_random_user_agent()
+        if "headers" in site:
+            headers.update(site["headers"])
+
+        is_post = bool(site.get("post_body"))
+        data = None
+        json_data = None
+
+        if is_post:
+            post_body = site["post_body"].replace(PLACEHOLDER, username)
+            content_type = headers.get("Content-Type", "").lower()
+
+            if "json" in content_type:
+                try:
+                    json_data = json.loads(post_body)
+                except json.JSONDecodeError:
+                    json_data = post_body
+            elif "form-urlencoded" in content_type:
+                data = dict(parse_qsl(post_body))
+            else:
+                data = post_body
+
+        base_result = {
+            "site_name": site["name"],
+            "category": site.get("cat", "unknown"),
+        }
 
         start_time = time.time()
 
@@ -286,44 +329,29 @@ class StreamingUsernameSearchService:
             if wait_time > 0:
                 logger.debug(f"Rate limited for {domain}, waited {wait_time:.2f}s")
 
-            headers = {
-                "User-Agent": self.get_random_user_agent(),
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-                "Accept-Language": "en-US,en;q=0.5",
-                "Accept-Encoding": "gzip, deflate, br",
-                "DNT": "1",
-                "Connection": "keep-alive",
-                "Upgrade-Insecure-Requests": "1",
-                "Sec-Fetch-Dest": "document",
-                "Sec-Fetch-Mode": "navigate",
-                "Sec-Fetch-Site": "none",
-            }
-
-            if "headers" in site:
-                headers.update(site["headers"])
-
             try:
-                async with session.get(
-                    url,
-                    headers=headers,
-                    timeout=self.timeout,
-                    allow_redirects=True,
-                    ssl=False
-                ) as response:
+                method = 'POST' if is_post else 'GET'
+                request_kwargs = {
+                    'url': url,
+                    'headers': headers,
+                    'timeout': self.timeout,
+                    'allow_redirects': True,
+                    'ssl': False
+                }
+
+                if is_post:
+                    if isinstance(json_data, dict):
+                        request_kwargs['json'] = json_data
+                    elif data:
+                        request_kwargs['data'] = data
+
+                async with session.request(method, **request_kwargs) as response:
                     raw_bytes = await response.read()
 
-                    text = None
-                    encodings = ['utf-8', 'utf-8-sig', 'latin-1', 'iso-8859-1', 'windows-1252']
-
-                    for encoding in encodings:
-                        try:
-                            text = raw_bytes.decode(encoding)
-                            break
-                        except (UnicodeDecodeError, LookupError):
-                            continue
-
-                    if not text:
-                        text = raw_bytes.decode('utf-8', errors='ignore')
+                    try:
+                        text = raw_bytes.decode('utf-8')
+                    except UnicodeDecodeError:
+                        text = raw_bytes.decode('latin-1', errors='ignore')
 
                     response_time = time.time() - start_time
 
@@ -333,9 +361,8 @@ class StreamingUsernameSearchService:
 
                     if is_found:
                         result = SiteResult(
-                            site_name=site["name"],
-                            category=site.get("cat", "unknown"),
-                            url=url,
+                            **base_result,
+                            url=site["uri_pretty"].replace("{account}", username),
                             status=CheckStatus.FOUND,
                             status_code=response.status,
                             response_time=response_time
@@ -343,17 +370,16 @@ class StreamingUsernameSearchService:
 
                         if extract_profile:
                             profile_data = None
-
                             if extract:
                                 try:
                                     profile_data = extract(text)
                                 except Exception as e:
-                                    logger.debug(f"socid_extractor failed for {url}: {str(e)}")
+                                    logger.debug(f"socid_extractor failed for {url}: {e}")
 
                             if not profile_data:
-                                json_data = self._try_parse_json(text)
-                                if json_data:
-                                    profile_data = json_data
+                                parsed_json = self._try_parse_json(text)
+                                if parsed_json:
+                                    profile_data = parsed_json
 
                             if profile_data:
                                 result.profile_data = profile_data
@@ -362,17 +388,16 @@ class StreamingUsernameSearchService:
 
                     elif is_not_found:
                         return SiteResult(
-                            site_name=site["name"],
-                            category=site.get("cat", "unknown"),
+                            **base_result,
                             url=url,
                             status=CheckStatus.NOT_FOUND,
                             status_code=response.status,
                             response_time=response_time
                         )
+
                     else:
                         return SiteResult(
-                            site_name=site["name"],
-                            category=site.get("cat", "unknown"),
+                            **base_result,
                             url=url,
                             status=CheckStatus.ERROR,
                             status_code=response.status,
@@ -382,8 +407,7 @@ class StreamingUsernameSearchService:
 
             except asyncio.TimeoutError:
                 return SiteResult(
-                    site_name=site["name"],
-                    category=site.get("cat", "unknown"),
+                    **base_result,
                     url=url,
                     status=CheckStatus.ERROR,
                     error_message="Timeout",
@@ -391,17 +415,15 @@ class StreamingUsernameSearchService:
                 )
             except aiohttp.ClientError as e:
                 return SiteResult(
-                    site_name=site["name"],
-                    category=site.get("cat", "unknown"),
+                    **base_result,
                     url=url,
                     status=CheckStatus.ERROR,
-                    error_message=f"Client error: {str(e)}",
+                    error_message=f"Client error: {e}",
                     response_time=time.time() - start_time
                 )
             except Exception as e:
                 return SiteResult(
-                    site_name=site["name"],
-                    category=site.get("cat", "unknown"),
+                    **base_result,
                     url=url,
                     status=CheckStatus.ERROR,
                     error_message=str(e),

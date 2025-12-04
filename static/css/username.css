@@ -1,0 +1,238 @@
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Added shimmer animation for progress bar */
+@keyframes shimmer {
+    0% {
+        background-position: -1000px 0;
+    }
+
+    100% {
+        background-position: 1000px 0;
+    }
+}
+
+.shimmer {
+    background: linear-gradient(90deg, #9333ea 0%, #a855f7 50%, #9333ea 100%);
+    background-size: 1000px 100%;
+    animation: shimmer 2s infinite linear;
+}
+
+.fade-in {
+    animation: fadeInUp 0.4s ease-out;
+}
+
+/* Added slide-down animation for category sections */
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        max-height: 0;
+    }
+
+    to {
+        opacity: 1;
+        max-height: 2000px;
+    }
+}
+
+.category-content {
+    overflow: hidden;
+    transition: max-height 0.3s ease-out, opacity 0.3s ease-out;
+}
+
+.category-content.collapsed {
+    max-height: 0;
+    opacity: 0;
+}
+
+.platform-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: bold;
+    font-size: 18px;
+}
+
+/* Expanded platform color classes */
+.github-green {
+    background: #238636;
+}
+
+.twitter-blue {
+    background: #1da1f2;
+}
+
+.instagram-gradient {
+    background: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);
+}
+
+.spotify-green {
+    background: #1db954;
+}
+
+.cashapp-green {
+    background: #00d632;
+}
+
+.tiktok-black {
+    background: #000000;
+}
+
+.linkedin-blue {
+    background: #0077b5;
+}
+
+.youtube-red {
+    background: #ff0000;
+}
+
+.reddit-orange {
+    background: #ff4500;
+}
+
+.discord-purple {
+    background: #5865f2;
+}
+
+.steam-blue {
+    background: #1b2838;
+}
+
+.twitch-purple {
+    background: #9146ff;
+}
+
+.pinterest-red {
+    background: #e60023;
+}
+
+.gitlab-orange {
+    background: #fc6d26;
+}
+
+.stackoverflow-orange {
+    background: #f48024;
+}
+
+.telegram-blue {
+    background: #0088cc;
+}
+
+.snapchat-yellow {
+    background: #fffc00;
+    color: #000;
+}
+
+.epic-black {
+    background: #313131;
+}
+
+.mastodon-purple {
+    background: #6364ff;
+}
+
+.patreon-orange {
+    background: #ff424d;
+}
+
+.vimeo-blue {
+    background: #1ab7ea;
+}
+
+.line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(4px);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.modal-content {
+    background: #1a1b26;
+    border: 1px solid #24283b;
+    border-radius: 12px;
+    max-width: 800px;
+    width: 100%;
+    max-height: 90vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.modal-header {
+    padding: 20px;
+    border-bottom: 1px solid #24283b;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.modal-body {
+    padding: 20px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.modal-footer {
+    padding: 16px 20px;
+    border-top: 1px solid #24283b;
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+}
+
+.copy-btn {
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: 1px solid #24283b;
+}
+
+.copy-btn:hover {
+    transform: translateY(-1px);
+}
+
+.copy-btn.success {
+    background: #10b981;
+    border-color: #10b981;
+}
+
+/* Added copy username button styles */
+.copy-username-btn {
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.result-card:hover .copy-username-btn {
+    opacity: 1;
+}
