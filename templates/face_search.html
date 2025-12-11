@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+
+{% block title %}Face Search - OSINT Toolkit{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="/static/css/face_search.css">
+{% endblock %}
+
+{% block content %}
+<div class="container mx-auto p-4 max-w-6xl">
+    <div class="flex flex-col items-center justify-center min-h-[50vh]">
+        <h1 class="text-4xl font-bold mb-8">Face Search</h1>
+
+        <div class="w-full max-w-4xl bg-gray-900 rounded-lg p-6 border border-gray-800 shadow-xl">
+            <!-- Upload Section -->
+            <div id="uploadArea"
+                class="border-2 border-dashed border-gray-700 rounded-lg p-12 text-center cursor-pointer hover:border-purple-500 transition-colors mb-8">
+                <input type="file" id="fileInput" class="hidden" accept="image/*">
+                <div class="flex flex-col items-center space-y-4">
+                    <i data-lucide="upload-cloud" class="w-16 h-16 text-gray-500"></i>
+                    <p class="text-xl text-gray-400">Drag and drop an image here, or click to select</p>
+                    <p class="text-sm text-gray-600">Supports JPG, PNG</p>
+                </div>
+            </div>
+
+            <!-- Image Preview & Detection Section -->
+            <div id="previewSection" class="hidden mb-8">
+                <div class="relative inline-block w-full flex justify-center">
+                    <div class="relative">
+                        <img id="previewImage" src="" alt="Preview" class="max-h-[500px] rounded-lg shadow-lg">
+                        <canvas id="overlayCanvas" class="absolute top-0 left-0"></canvas>
+                    </div>
+                </div>
+
+                <div class="flex justify-center mt-6 space-x-4">
+                    <button id="detectButton"
+                        class="bg-purple-600 hover:bg-purple-700 text-white px-6 py-2 rounded-lg font-semibold transition-colors flex items-center">
+                        <i data-lucide="scan-face" class="w-5 h-5 mr-2"></i>
+                        Detect Faces
+                    </button>
+                    <button id="searchButton"
+                        class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-semibold transition-colors flex items-center hidden">
+                        <i data-lucide="search" class="w-5 h-5 mr-2"></i>
+                        Search Faces
+                    </button>
+                    <button id="resetButton"
+                        class="bg-gray-700 hover:bg-gray-600 text-white px-6 py-2 rounded-lg font-semibold transition-colors flex items-center">
+                        <i data-lucide="refresh-cw" class="w-5 h-5 mr-2"></i>
+                        Reset
+                    </button>
+                </div>
+            </div>
+
+            <!-- Loading Indicator -->
+            <div id="loadingIndicator" class="hidden flex flex-col items-center justify-center my-8">
+                <div class="animate-spin rounded-full h-10 w-10 border-t-2 border-purple-500 border-r-2 mb-4"></div>
+                <p id="loadingText" class="text-gray-400">Processing...</p>
+            </div>
+
+            <!-- Results Section -->
+            <div id="resultsSection" class="hidden mt-8 border-t border-gray-800 pt-8">
+                <h2 class="text-2xl font-bold mb-6 flex items-center">
+                    <i data-lucide="users" class="w-6 h-6 mr-3 text-purple-400"></i>
+                    Search Results
+                </h2>
+                <div id="resultsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <!-- Results will be injected here -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="/static/js/face_search.js"></script>
+{% endblock %}

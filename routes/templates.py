@@ -58,6 +58,10 @@ def breach_page(request: Request):
 def username_page(request: Request):
     return templates.TemplateResponse(request=request, name="username.html")
 
+@router.get('/face-search')
+def face_page(request: Request):
+    return templates.TemplateResponse(request=request, name="face_search.html")
+
 @router.get("/reports/{filename}")
 async def get_report(filename: str):
     REPORTS_DIR = Path("reports").resolve()

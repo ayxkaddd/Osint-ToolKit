@@ -15,12 +15,14 @@ from telethon.errors import (
     PhoneCodeEmptyError
 )
 
-load_dotenv()
 
 class AuthHandler:
     security = HTTPBearer()
     pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-    secret = os.getenv('JWT_SECRET')
+
+    def __init__(self):
+        load_dotenv()
+        self.secret = os.getenv('JWT_SECRET')
 
     def get_password_hash(self, password):
         return self.pwd_context.hash(password)
@@ -56,8 +58,8 @@ class AuthHandler:
 class TelegramAuthHandler:
     def __init__(self):
         load_dotenv()
-        self.api_id = int(os.getenv("TG_API_ID", 123))
-        self.api_hash = os.getenv("TG_API_HASH", "invalud")
+        self.api_id = int(os.getenv("TELEGRAM_API_ID", 123))
+        self.api_hash = os.getenv("TELEGRAM_API_HASH", "invalid")
         self.session_name = "telegram_session"
         self.client = TelegramClient(self.session_name, self.api_id, self.api_hash)
         self.phone_code_hash = None

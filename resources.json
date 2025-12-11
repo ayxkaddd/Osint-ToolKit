@@ -20,21 +20,6 @@
             }
         },
         {
-            "name": "NS Lookup",
-            "description": "Perform DNS queries and analyze domain information",
-            "endpoint": "/ns",
-            "icon": "network-wired",
-            "icon_color": "blue",
-            "icon_type": "fas",
-            "tags": ["DNS", "Network", "OSINT"],
-            "settings": {
-                "HACKER_TARGET_API_KEY": {
-                    "type": "password",
-                    "label": "Hacker Target API Key"
-                }
-            }
-        },
-        {
             "name": "Osint Industries API",
             "description": "Access the osint.industries API to lookup emails, phones and usernames",
             "endpoint": "/api",
@@ -130,6 +115,34 @@
                     "label": "Path to Nmap executable"
                 }
             }
+        },
+        {
+            "name": "NS Lookup",
+            "description": "Perform DNS queries and analyze domain information",
+            "endpoint": "/ns",
+            "icon": "network-wired",
+            "icon_color": "blue",
+            "icon_type": "fas",
+            "tags": ["DNS", "Network", "OSINT"],
+            "settings": {
+                "HACKER_TARGET_API_KEY": {
+                    "type": "password",
+                    "label": "Hacker Target API Key"
+                }
+            }
+        },
+        {
+            "name": "Face Search",
+            "description": "Search for faces in an image",
+            "endpoint": "/face-search",
+            "icon": "smile",
+            "icon_color": "green",
+            "icon_type": "fas",
+            "tags": [
+                "Face",
+                "VK",
+                "OSINT"
+            ]
         },
         {
             "name": "VK.com Profile History",

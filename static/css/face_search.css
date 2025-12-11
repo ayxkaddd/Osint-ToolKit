@@ -1,0 +1,59 @@
+#uploadArea.drag-over {
+    border-color: #a855f7; /* purple-500 */
+    background-color: rgba(168, 85, 247, 0.1);
+}
+
+.face-box {
+    position: absolute;
+    border: 2px solid #a855f7;
+    background-color: rgba(168, 85, 247, 0.2);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.face-box:hover {
+    border-color: #ec4899; /* pink-500 */
+    background-color: rgba(236, 72, 153, 0.3);
+    box-shadow: 0 0 10px rgba(236, 72, 153, 0.5);
+}
+
+.result-card {
+    background-color: #1f2937; /* gray-800 */
+    border: 1px solid #374151; /* gray-700 */
+    border-radius: 0.5rem;
+    overflow: hidden;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.result-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+    border-color: #4b5563; /* gray-600 */
+}
+
+.similarity-badge {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    background-color: rgba(0, 0, 0, 0.7);
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    backdrop-filter: blur(4px);
+}
+
+.similarity-high {
+    color: #4ade80; /* green-400 */
+    border: 1px solid rgba(74, 222, 128, 0.3);
+}
+
+.similarity-medium {
+    color: #facc15; /* yellow-400 */
+    border: 1px solid rgba(250, 204, 21, 0.3);
+}
+
+.similarity-low {
+    color: #f87171; /* red-400 */
+    border: 1px solid rgba(248, 113, 113, 0.3);
+}

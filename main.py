@@ -9,6 +9,7 @@ import logging
 
 from models.auth_models import AuthDetails
 from routes import (
+    setup_routes,
     username_routes,
     breach_routes,
     dnsrecon_routes,
@@ -20,7 +21,8 @@ from routes import (
     templates,
     ns_routers,
     whois_route,
-    telegram_routes
+    telegram_routes,
+    face_search_routes
 )
 from auth.auth_handler import AuthHandler
 
@@ -40,6 +42,7 @@ class OsintFrameWork:
         self.setup_routes()
         self.setup_static_files()
         self.setup_auth()
+        self.app.middleware("http")(self.setup_redirect_middleware)
         self.app.middleware("http")(self.verify_token_middleware)
         self.app.add_middleware(
             CORSMiddleware,
@@ -53,20 +56,56 @@ class OsintFrameWork:
         self.app.mount("/static", StaticFiles(directory="static"), name="static")
 
     async def verify_token_middleware(self, request: Request, call_next):
-        if request.url.path == "/" or request.url.path == "/login":
+        SKIP_PATHS = ["/", "/login"]
+        SKIP_PREFIXES = ["/static", "/setup"]
+        if request.url.path in SKIP_PATHS or any(request.url.path.startswith(prefix) for prefix in SKIP_PREFIXES):
             response = await call_next(request)
             return response
 
         token = request.cookies.get("access_token")
         if not token:
+            logger.warning("token not found")
             return RedirectResponse(url="/")
 
         try:
             self.auth_handler.decode_token(token)
             response = await call_next(request)
             return response
-        except:
+        except HTTPException as e:
+            logger.error(e)
             return RedirectResponse(url="/")
+        except Exception as e:
+            logger.error(e)
+            return Response(status_code=501, content=f"Internal Server Error. Error message: {e}")
+
+    async def setup_redirect_middleware(self, request: Request, call_next):
+        def is_setup_complete():
+            return setup_routes.check_setup_complete()
+
+        ALLOWED_PATHS = {
+            "/setup",
+            "/setup/",
+            "/setup/status",
+            "/setup/complete",
+            "/setup/admin",
+            "/setup/features",
+            "/setup/apis",
+            "/setup/install-tools",
+            "/setup/validate-api",
+            "/setup/gitfive-guide",
+            "/setup/system-check",
+            "/login",
+        }
+
+        path = request.url.path
+
+        if path.startswith("/static/"):
+            return await call_next(request)
+
+        if not is_setup_complete() and path not in ALLOWED_PATHS:
+            return RedirectResponse(url="/setup")
+
+        return await call_next(request)
 
     def setup_auth(self):
         root_email = os.getenv('ROOT_EMAIL')
@@ -105,9 +144,11 @@ class OsintFrameWork:
             (dnsrecon_routes.router, "DNS Reconnaissance"),
             (breach_routes.router, "Breach Data"),
             (username_routes.router, "Username"),
+            (face_search_routes.router, "Face Search"),
             (resources_routes.router, "Resources"),
             (settings_routes.router, "Settings"),
-            (templates.router, "Templates")
+            (templates.router, "Templates"),
+            (setup_routes.router, "Setup"),
         ]
 
         for router, tag in routes_config:
