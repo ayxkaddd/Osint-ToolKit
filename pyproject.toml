@@ -13,27 +13,38 @@ authors = [
     { name = "ayxkaddd", email = "bladeec1ty@protonmail.com" }
 ]
 
-keywords=["osint", "cybersecurity", "investigation"]
+keywords = ["osint", "cybersecurity", "investigation"]
 
 dependencies = [
     "fastapi>=0.115.8",
+    "starlette>=0.45.3",
     "uvicorn>=0.34.0",
-    "python-dotenv>=1.0.1",
-    "pydantic>=2.10.6",
-    "Jinja2>=3.1.5",
+    "jinja2>=3.1.5",
     "aiohttp>=3.11.12",
+    "httpx>=0.28.1",
     "requests>=2.32.3",
-    "PyJWT>=2.10.1",
+    "python-jose>=3.5.0",
+    "pyjwt>=2.10.1",
     "passlib>=1.7.4",
-    "python-jose>=3.4.0",
+    "bcrypt==4.3.0",
+    "cryptography>=44.0.1",
+    "python-dotenv>=1.0.1",
     "python-multipart>=0.0.20",
-    "bcrypt>=4.2.1"
+    "pydantic>=2.10.6",
+    "pydantic-settings>=2.10.1",
+    "pydantic[email]>=2.10.6",
+    "telethon>=1.39.0",
+    "dnspython>=2.7.0",
+    "python-whois>=0.9.5",
+    "beautifulsoup4>=4.12.3",
+    "socid-extractor>=0.0.27",
+    "sse-starlette>=2.2.1"
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/ayxkaddd/Osint-ToolKit"
-"Bug Reports" = "https://github.com/ayxkaddd/Osint-ToolKit/issues"
-"Source" = "https://github.com/ayxkaddd/Osint-ToolKit"
+Homepage = "https://github.com/ayxkaddd/Osint-ToolKit"
+Source = "https://github.com/ayxkaddd/Osint-ToolKit"
+Issues = "https://github.com/ayxkaddd/Osint-ToolKit/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src"]
