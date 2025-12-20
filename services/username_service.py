@@ -360,9 +360,11 @@ class StreamingUsernameSearchService:
                     )
 
                     if is_found:
+                        url = site.get("uri_pretty", site["uri_check"]).replace("{account}", username)
+
                         result = SiteResult(
                             **base_result,
-                            url=site["uri_pretty"].replace("{account}", username),
+                            url=url,
                             status=CheckStatus.FOUND,
                             status_code=response.status,
                             response_time=response_time
