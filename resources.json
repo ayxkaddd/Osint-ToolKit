@@ -168,73 +168,97 @@
         {
             "name": "Nomerogram",
             "url": "https://nomerogram.ru",
-            "favicon": "https://www.google.com/s2/favicons?domain=nomerogram.ru",
+            "favicon": "https://www.google.com/s2/favicons?domain=nomerogram.ru&sz=128",
             "description": "Check russian car plates"
         },
         {
             "name": "Website Informer",
             "url": "https://website.informer.com",
-            "favicon": "https://www.google.com/s2/favicons?domain=website.informer.com",
+            "favicon": "https://www.google.com/s2/favicons?domain=website.informer.com&sz=128",
             "description": "Get general information about a website"
+        },
+        {
+            "name": "IntelX",
+            "url": "https://intelx.io",
+            "favicon": "https://www.google.com/s2/favicons?domain=intelx.io&sz=128",
+            "description": "Search engine for leaked and breached data"
         },
         {
             "name": "OsintLeak",
             "url": "https://osintleak.com",
-            "favicon": "https://www.google.com/s2/favicons?domain=osintleak.com",
+            "favicon": "https://www.google.com/s2/favicons?domain=osintleak.com&sz=128",
             "description": "Search by email, username, hwid, ip, domain name, etc in compromised databases"
         },
         {
             "name": "Breach VIP",
             "url": "https://breach.vip",
-            "favicon": "https://www.google.com/s2/favicons?domain=breach.vip",
+            "favicon": "https://www.google.com/s2/favicons?domain=breach.vip&sz=128",
             "description": "Same as OsintLeak but free and sometimes returns more results"
         },
         {
+            "name": "findhomo",
+            "url": "https://findhomo.com",
+            "favicon": "https://www.google.com/s2/favicons?domain=findhomo.com&sz=128",
+            "description": "Russian based breached database search engine, Archives date back to 1921."
+        },
+        {
             "name": "FOFA",
-            "url": "https://en.fofa.info",
-            "favicon": "https://www.google.com/s2/favicons?domain=en.fofa.info",
-            "description": "FOFA search engine. Sometimes can be used to find real ip behind the cloudflare proxy"
+            "url": "https://en.fofa.zinfo",
+            "favicon": "https://www.google.com/s2/favicons?domain=en.fofa.info&sz=128",
+            "description": "FOFA search engine. A powerful search engine used discover and analyze devices, services, and digital assets"
         },
         {
             "name": "SecurityTrails",
             "url": "https://securitytrails.com",
-            "favicon": "https://www.google.com/s2/favicons?domain=securitytrails.com",
+            "favicon": "https://www.google.com/s2/favicons?domain=securitytrails.com&sz=128",
             "description": "Check current and historical DNS records of a domain"
         },
         {
             "name": "Buckets Grayhatwarfare",
             "url": "https://buckets.grayhatwarfare.com",
-            "favicon": "https://www.google.com/s2/favicons?domain=buckets.grayhatwarfare.com",
+            "favicon": "https://www.google.com/s2/favicons?domain=buckets.grayhatwarfare.com&sz=128",
             "description": "Amazon Public Buckets Search"
         },
         {
             "name": "osint.sh/buckets",
             "url": "https://osint.sh/buckets",
-            "favicon": "https://www.google.com/s2/favicons?domain=osint.sh",
+            "favicon": "https://www.google.com/s2/favicons?domain=osint.sh&sz=128",
             "description": "Azure Public Buckets Search"
         },
         {
             "name": "TeleSINT",
-            "url": "https://t.me/telesint_2025_bot",
-            "favicon": "https://www.google.com/s2/favicons?domain=telesint.org",
+            "url": "https://t.me/teles_sin_t_bot",
+            "favicon": "https://www.google.com/s2/favicons?domain=telesint.org&sz=128",
             "description": "TeleSINT is a professional tool for searching users in Telegram groups"
         },
         {
-            "name": "funstat",
-            "url": "https://t.me/coolstats_0s1nt_bot",
-            "favicon": "https://www.google.com/s2/favicons?domain=funstat.online",
+            "name": "funstat / telelog",
+            "url": "https://t.me/ReallyFunnyStatsRobot?start=0101FC34885E00000000",
+            "favicon": "https://www.google.com/s2/favicons?domain=funstat.info&sz=128",
             "description": "Search for groups and messages of telegram user"
+        },
+        {
+            "name": "Phind",
+            "url": "https://www.phind.com/",
+            "favicon": "https://www.google.com/s2/favicons?domain=www.phind.com&sz=128",
+            "description": "AI search engine"
+        },
+        {
+            "name": "urlgen.watchdawg.io",
+            "url": "https://urlgen.watchdawg.io/",
+            "favicon": "https://www.google.com/s2/favicons?domain=urlgen.watchdawg.io&sz=128",
+            "description": "Search engine for searching URLs, domains, and related strings across multiple providers"
         },
         {
             "name": "OpenDataBot",
             "url": "https://t.me/OpenDataUABot",
-            "favicon": "https://www.google.com/s2/favicons?domain=opendatabot.ua",
+            "favicon": "https://www.google.com/s2/favicons?domain=opendatabot.ua&sz=128",
             "description": "Search for ukrainian people and companies"
         },
         {
             "name": "OpenDataBot WebSite",
             "url": "https://opendatabot.ua",
-            "favicon": "https://www.google.com/s2/favicons?domain=opendatabot.ua",
+            "favicon": "https://www.google.com/s2/favicons?domain=opendatabot.ua&sz=128",
             "description": "Search for ukrainian people and companies"
         }
     ]
