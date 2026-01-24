@@ -1,0 +1,1698 @@
+{% extends "base.html" %}
+
+{% block title %}Funstat Intelligence - OSINT Toolkit{% endblock %}
+
+{% block extra_head %}
+<style>
+    .custom-scrollbar::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+        background: #1a1b26;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+        background: #414868;
+        border-radius: 4px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+        background: #565f89;
+    }
+    .card-hover {
+        transition: all 0.3s ease;
+    }
+    .card-hover:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 30px rgba(139, 92, 246, 0.2);
+    }
+    .stat-badge {
+        background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(59, 130, 246, 0.1) 100%);
+        border: 1px solid rgba(139, 92, 246, 0.3);
+    }
+    .result-card {
+        background: linear-gradient(135deg, #1a1b26 0%, #16171f 100%);
+    }
+    @keyframes pulse-glow {
+        0%, 100% { box-shadow: 0 0 10px rgba(139, 92, 246, 0.3); }
+        50% { box-shadow: 0 0 20px rgba(139, 92, 246, 0.5); }
+    }
+    .loading-pulse {
+        animation: pulse-glow 2s infinite;
+    }
+    .media-thumbnail {
+        max-width: 200px;
+        max-height: 200px;
+        border-radius: 8px;
+        object-fit: cover;
+        cursor: pointer;
+    }
+    .pagination-btn {
+        background: #gray-800;
+        border: 1px solid #gray-700;
+        color: white;
+        padding: 0.5rem 1rem;
+        border-radius: 0.5rem;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+    .pagination-btn:hover:not(:disabled) {
+        background: #purple-600;
+        border-color: #purple-600;
+    }
+    .pagination-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+    .message-link {
+        color: #8b5cf6;
+        text-decoration: none;
+        hover:text-decoration: underline;
+    }
+    .context-modal {
+        max-width: 800px;
+        max-height: 85vh;
+        overflow-y: auto;
+    }
+    .context-message {
+        border-left: 3px solid #414868;
+        padding-left: 12px;
+        margin: 8px 0;
+    }
+    .context-message.target {
+        border-left-color: #8b5cf6;
+        background: rgba(139, 92, 246, 0.1);
+        border-radius: 0 8px 8px 0;
+    }
+    .context-message.reply-chain {
+        border-left-color: #f59e0b;
+        background: rgba(245, 158, 11, 0.05);
+    }
+    .context-section-header {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #6b7280;
+        margin: 16px 0 8px 0;
+        padding-bottom: 4px;
+        border-bottom: 1px solid #374151;
+    }
+    .context-btn {
+        opacity: 0.7;
+        transition: opacity 0.2s;
+    }
+    .context-btn:hover {
+        opacity: 1;
+    }
+    .context-btn:disabled {
+        opacity: 0.3;
+        cursor: not-allowed;
+    }
+    .risk-badge-critical {
+        background: rgba(239, 68, 68, 0.2);
+        border: 1px solid rgba(239, 68, 68, 0.5);
+        color: #ef4444;
+    }
+    .risk-badge-high {
+        background: rgba(249, 115, 22, 0.2);
+        border: 1px solid rgba(249, 115, 22, 0.5);
+        color: #f97316;
+    }
+    .risk-badge-medium {
+        background: rgba(234, 179, 8, 0.2);
+        border: 1px solid rgba(234, 179, 8, 0.5);
+        color: #eab308;
+    }
+    .risk-badge-low {
+        background: rgba(34, 197, 94, 0.2);
+        border: 1px solid rgba(34, 197, 94, 0.5);
+        color: #22c55e;
+    }
+    .analysis-tag {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        margin: 2px;
+        background: rgba(139, 92, 246, 0.15);
+        border: 1px solid rgba(139, 92, 246, 0.3);
+        color: #a78bfa;
+    }
+    .sensitive-message-card {
+        border-left: 3px solid #f59e0b;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mx-auto p-6 max-w-7xl">
+    <!-- Header Section -->
+    <div class="mb-8">
+        <div class="flex items-center justify-between">
+            <div>
+                <h1 class="text-4xl font-bold mb-2 bg-gradient-to-r from-purple-400 to-blue-400 bg-clip-text text-transparent">
+                    Funstat Intelligence
+                </h1>
+                <p class="text-gray-400">Advanced Telegram user and group analysis</p>
+            </div>
+            <!-- <div class="flex items-center space-x-4">
+                <div class="stat-badge px-4 py-2 rounded-lg">
+                    <span class="text-sm text-gray-400">API Balance:</span>
+                    <span id="apiBalance" class="ml-2 font-bold text-purple-400">--</span>
+                </div>
+            </div> -->
+        </div>
+    </div>
+
+    <!-- Search Tabs -->
+    <div class="bg-gray-900/50 backdrop-blur-md border border-gray-800 rounded-xl p-2 mb-6">
+        <div class="flex space-x-2">
+            <button onclick="switchTab('user')" id="userTab"
+                class="flex-1 px-4 py-3 rounded-lg font-medium transition-all bg-purple-600 text-white">
+                <i class="fas fa-user mr-2"></i>User Search
+            </button>
+            <button onclick="switchTab('group')" id="groupTab"
+                class="flex-1 px-4 py-3 rounded-lg font-medium transition-all text-gray-400 hover:bg-gray-800">
+                <i class="fas fa-users mr-2"></i>Group Search
+            </button>
+            <button onclick="switchTab('text')" id="textTab"
+                class="flex-1 px-4 py-3 rounded-lg font-medium transition-all text-gray-400 hover:bg-gray-800">
+                <i class="fas fa-search mr-2"></i>Text Search
+            </button>
+            <!-- <button onclick="switchTab('username')" id="usernameTab"
+                class="flex-1 px-4 py-3 rounded-lg font-medium transition-all text-gray-400 hover:bg-gray-800">
+                <i class="fas fa-at mr-2"></i>Username Lookup
+            </button> -->
+        </div>
+    </div>
+
+    <!-- User Search Tab -->
+    <div id="userSearchTab" class="tab-content">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Search Panel -->
+            <div class="lg:col-span-1">
+                <div class="bg-gray-900/80 backdrop-blur-md border border-gray-800 rounded-xl p-6 sticky top-24">
+                    <h3 class="text-xl font-bold mb-4 flex items-center">
+                        <i class="fas fa-search text-purple-400 mr-2"></i>
+                        User Lookup
+                    </h3>
+
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-400 mb-2">Search by:</label>
+                            <select id="userSearchType"
+                                class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-purple-500">
+                                <option value="id">User ID</option>
+                                <option value="username">Username</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-400 mb-2">Enter value:</label>
+                            <input type="text" id="userSearchInput" placeholder="e.g., 123456789 or @username"
+                                class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-purple-500">
+                        </div>
+
+                        <button onclick="searchUser()"
+                            class="w-full bg-purple-600 hover:bg-purple-500 text-white px-4 py-3 rounded-lg font-semibold transition-all shadow-lg">
+                            <i class="fas fa-search mr-2"></i>Search User
+                        </button>
+
+                        <div class="border-t border-gray-800 pt-4 mt-4">
+                            <h4 class="text-sm font-medium text-gray-400 mb-3">Quick Actions:</h4>
+                            <div class="space-y-2">
+                                <button onclick="getUserStats()" id="getStatsBtn" disabled
+                                    class="w-full bg-gray-800 hover:bg-gray-700 text-white px-3 py-2 rounded-lg text-sm transition-all border border-gray-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                                    <i class="fas fa-chart-bar mr-2"></i>Get Full Stats (Cost: 1)
+                                </button>
+                                <button onclick="getUserGroups()" id="getGroupsBtn" disabled
+                                    class="w-full bg-gray-800 hover:bg-gray-700 text-white px-3 py-2 rounded-lg text-sm transition-all border border-gray-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                                    <i class="fas fa-users mr-2"></i>Get Groups (Cost: 5)
+                                </button>
+                                <button onclick="getUserMessages()" id="getMessagesBtn" disabled
+                                    class="w-full bg-gray-800 hover:bg-gray-700 text-white px-3 py-2 rounded-lg text-sm transition-all border border-gray-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                                    <i class="fas fa-comments mr-2"></i>Get Messages (Cost: 10)
+                                </button>
+                                <!-- Added Get All Messages button -->
+                                <button onclick="getAllUserMessages()" id="getAllMessagesBtn" disabled
+                                    class="w-full bg-gray-800 hover:bg-gray-700 text-white px-3 py-2 rounded-lg text-sm transition-all border border-gray-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                                    <i class="fas fa-download mr-2"></i>Get All Messages (Cost: 10)
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Results Panel -->
+            <div class="lg:col-span-2">
+                <div id="userResults" class="space-y-6">
+                    <div class="bg-gray-900/50 backdrop-blur-md border border-gray-800 rounded-xl p-12 text-center">
+                        <i class="fas fa-user-circle text-6xl text-gray-700 mb-4"></i>
+                        <p class="text-gray-500">Search for a user to view results</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Group Search Tab -->
+    <div id="groupSearchTab" class="tab-content hidden">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Search Panel -->
+            <div class="lg:col-span-1">
+                <div class="bg-gray-900/80 backdrop-blur-md border border-gray-800 rounded-xl p-6 sticky top-24">
+                    <h3 class="text-xl font-bold mb-4 flex items-center">
+                        <i class="fas fa-users text-purple-400 mr-2"></i>
+                        Group Lookup
+                    </h3>
+
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-400 mb-2">Group ID:</label>
+                            <input type="text" id="groupIdInput" placeholder="e.g., -1001234567890"
+                                class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-purple-500">
+                        </div>
+
+                        <button onclick="searchGroup()"
+                            class="w-full bg-purple-600 hover:bg-purple-500 text-white px-4 py-3 rounded-lg font-semibold transition-all shadow-lg">
+                            <i class="fas fa-search mr-2"></i>Search Group
+                        </button>
+
+                        <div class="border-t border-gray-800 pt-4 mt-4">
+                            <button onclick="getGroupMembers()" id="getMembersBtn" disabled
+                                class="w-full bg-gray-800 hover:bg-gray-700 text-white px-3 py-2 rounded-lg text-sm transition-all border border-gray-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                                <i class="fas fa-user-friends mr-2"></i>Get Members (Cost: 15)
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Results Panel -->
+            <div class="lg:col-span-2">
+                <div id="groupResults" class="space-y-6">
+                    <div class="bg-gray-900/50 backdrop-blur-md border border-gray-800 rounded-xl p-12 text-center">
+                        <i class="fas fa-users text-6xl text-gray-700 mb-4"></i>
+                        <p class="text-gray-500">Search for a group to view results</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Text Search Tab -->
+    <div id="textSearchTab" class="tab-content hidden">
+        <div class="bg-gray-900/80 backdrop-blur-md border border-gray-800 rounded-xl p-6 mb-6">
+            <h3 class="text-xl font-bold mb-4 flex items-center">
+                <i class="fas fa-search text-purple-400 mr-2"></i>
+                Text Search
+            </h3>
+
+            <div class="flex gap-4">
+                <input type="text" id="textSearchInput" placeholder="Enter text to search..."
+                    class="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-purple-500">
+                <button onclick="searchText()"
+                    class="bg-purple-600 hover:bg-purple-500 text-white px-6 py-2 rounded-lg font-semibold transition-all shadow-lg">
+                    <i class="fas fa-search mr-2"></i>Search
+                </button>
+            </div>
+            <p class="text-xs text-gray-500 mt-2">Cost: 0.1 per request</p>
+        </div>
+
+        <div id="textResults" class="space-y-6">
+            <div class="bg-gray-900/50 backdrop-blur-md border border-gray-800 rounded-xl p-12 text-center">
+                <i class="fas fa-file-alt text-6xl text-gray-700 mb-4"></i>
+                <p class="text-gray-500">Search for text to view results</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Username Lookup Tab -->
+    <div id="usernameTab" class="tab-content hidden">
+        <div class="bg-gray-900/80 backdrop-blur-md border border-gray-800 rounded-xl p-6 mb-6">
+            <h3 class="text-xl font-bold mb-4 flex items-center">
+                <i class="fas fa-at text-purple-400 mr-2"></i>
+                Username Usage Lookup
+            </h3>
+
+            <div class="flex gap-4">
+                <input type="text" id="usernameSearchInput" placeholder="Enter username (without @)..."
+                    class="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-purple-500">
+                <button onclick="searchUsernameUsage()"
+                    class="bg-purple-600 hover:bg-purple-500 text-white px-6 py-2 rounded-lg font-semibold transition-all shadow-lg">
+                    <i class="fas fa-search mr-2"></i>Lookup
+                </button>
+            </div>
+            <p class="text-xs text-gray-500 mt-2">Cost: 0.1 per request</p>
+        </div>
+
+        <div id="usernameResults" class="space-y-6">
+            <div class="bg-gray-900/50 backdrop-blur-md border border-gray-800 rounded-xl p-12 text-center">
+                <i class="fas fa-at text-6xl text-gray-700 mb-4"></i>
+                <p class="text-gray-500">Lookup a username to view usage history</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Indicator -->
+    <div id="loadingIndicator" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50">
+        <div class="bg-gray-900 border border-purple-500 rounded-xl p-8 text-center loading-pulse">
+            <div class="animate-spin rounded-full h-16 w-16 border-t-2 border-purple-500 border-r-2 mx-auto mb-4"></div>
+            <p id="loadingText" class="text-gray-400 font-medium">Processing request...</p>
+        </div>
+    </div>
+
+    <!-- Media Modal -->
+    <div id="mediaModal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50">
+        <div class="relative max-w-2xl">
+            <button onclick="closeMediaModal()" class="absolute -top-10 right-0 text-white hover:text-purple-400">
+                <i class="fas fa-times text-2xl"></i>
+            </button>
+            <img id="mediaImage" src="/placeholder.svg" alt="Media" class="max-w-full max-h-96 rounded-lg">
+        </div>
+    </div>
+
+    <!-- Conversation Context Modal -->
+    <div id="contextModal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div class="context-modal bg-gray-900 border border-gray-700 rounded-xl w-full custom-scrollbar">
+            <div class="sticky top-0 bg-gray-900 border-b border-gray-700 p-4 flex justify-between items-center">
+                <h3 class="text-xl font-bold flex items-center">
+                    <i class="fas fa-comments text-purple-400 mr-2"></i>
+                    Conversation Context
+                </h3>
+                <button onclick="closeContextModal()" class="text-gray-400 hover:text-white transition-colors">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+            <div id="contextModalContent" class="p-4">
+                <!-- Context content will be injected here -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Set current service for result loading
+window.currentService = 'funstat';
+
+let currentUserId = null;
+let currentGroupId = null;
+let messagesPaginationState = {
+    page: 1,
+    pageSize: 20,
+    totalPages: 1
+};
+
+// Store all messages globally for filtering
+window.allMessages = [];
+window.currentUserGroups = [];
+window.thumbnailCache = {};
+
+document.addEventListener('DOMContentLoaded', checkTelegramAuthorization);
+
+function switchTab(tab) {
+    document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+    document.querySelectorAll('[id$="Tab"]').forEach(btn => {
+        btn.classList.remove('bg-purple-600', 'text-white');
+        btn.classList.add('text-gray-400', 'hover:bg-gray-800');
+    });
+
+    document.getElementById(`${tab}SearchTab`).classList.remove('hidden');
+
+    const activeBtn = document.getElementById(`${tab}Tab`);
+    activeBtn.classList.add('bg-purple-600', 'text-white');
+    activeBtn.classList.remove('text-gray-400', 'hover:bg-gray-800');
+}
+
+function showLoading(text = 'Processing request...') {
+    document.getElementById('loadingText').textContent = text;
+    document.getElementById('loadingIndicator').classList.remove('hidden');
+}
+
+function hideLoading() {
+    document.getElementById('loadingIndicator').classList.add('hidden');
+}
+
+function openMediaModal(src) {
+    document.getElementById('mediaImage').src = src;
+    document.getElementById('mediaModal').classList.remove('hidden');
+}
+
+function closeMediaModal() {
+    document.getElementById('mediaModal').classList.add('hidden');
+}
+
+function closeContextModal() {
+    document.getElementById('contextModal').classList.add('hidden');
+}
+
+async function getMessageContext(chatUsername, messageId, contextSize = 5) {
+    // Only allow username-based lookups, not group IDs
+    if (!chatUsername || chatUsername.trim() === '') {
+        alert('Cannot fetch context: Username is not available for this chat. Context can only be fetched for chats with a public username.');
+        return;
+    }
+
+    // Clean the username (remove @ if present)
+    const cleanUsername = chatUsername.replace('@', '').trim();
+
+    if (!cleanUsername) {
+        alert('Cannot fetch context: Invalid username.');
+        return;
+    }
+
+    showLoading('Fetching conversation context...');
+
+    try {
+        const params = new URLSearchParams({
+            chat_identifier: cleanUsername,
+            message_id: messageId,
+            context_size: contextSize,
+            fetch_replies: true
+        });
+
+        const response = await fetch(`/funstat/media/context/message?${params}`);
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.detail || `Failed to fetch context (${response.status})`);
+        }
+
+        const context = await response.json();
+        displayContextModal(context, cleanUsername);
+    } catch (error) {
+        console.error('Error fetching message context:', error);
+        alert(`Error: ${error.message}`);
+    } finally {
+        hideLoading();
+    }
+}
+
+function displayContextModal(context, chatUsername) {
+    const modal = document.getElementById('contextModal');
+    const content = document.getElementById('contextModalContent');
+
+    const formatContextMessage = (msg, type = 'normal') => {
+        if (!msg) return '';
+
+        const date = msg.date ? new Date(msg.date).toLocaleString() : '';
+        const senderName = msg.sender_name || msg.sender?.first_name || 'Unknown';
+        const senderUsername = msg.sender_username || msg.sender?.username || '';
+        const text = msg.text || msg.message || '';
+        const hasMedia = msg.media_type || msg.media;
+        const messageId = msg.message_id || msg.id;
+        const messageLink = `https://t.me/${chatUsername}/${messageId}`;
+
+        let typeClass = '';
+        let typeLabel = '';
+        if (type === 'target') {
+            typeClass = 'target';
+            typeLabel = '<span class="text-xs bg-purple-600 text-white px-2 py-0.5 rounded ml-2">Target</span>';
+        } else if (type === 'reply') {
+            typeClass = 'reply-chain';
+            typeLabel = '<span class="text-xs bg-amber-600 text-white px-2 py-0.5 rounded ml-2">Reply Chain</span>';
+        }
+
+        return `
+            <div class="context-message ${typeClass} p-3 rounded-r-lg">
+                <div class="flex justify-between items-start mb-1">
+                    <div class="flex items-center gap-2">
+                        <span class="font-medium text-purple-400">${senderName}</span>
+                        ${senderUsername ? `<span class="text-gray-500 text-sm">@${senderUsername}</span>` : ''}
+                        ${typeLabel}
+                    </div>
+                    <span class="text-xs text-gray-500">${date}</span>
+                </div>
+                ${text ? `<p class="text-white text-sm mb-2">${escapeHtml(text)}</p>` : ''}
+                ${hasMedia ? `
+                    <div class="flex items-center gap-2 mb-2">
+                        <span class="text-xs bg-blue-900/50 text-blue-400 px-2 py-1 rounded">
+                            <i class="fas fa-paperclip mr-1"></i>${msg.media_type || 'Media'}
+                        </span>
+                    </div>
+                ` : ''}
+                <a href="${messageLink}" target="_blank" class="text-xs text-purple-400 hover:text-purple-300">
+                    <i class="fas fa-external-link-alt mr-1"></i>Open in Telegram
+                </a>
+            </div>
+        `;
+    };
+
+    let html = `
+        <div class="mb-4 p-3 bg-gray-800/50 rounded-lg">
+            <div class="flex items-center justify-between">
+                <div>
+                    <span class="text-gray-400 text-sm">Chat:</span>
+                    <a href="https://t.me/${chatUsername}" target="_blank" class="ml-2 text-purple-400 hover:text-purple-300 font-medium">
+                        @${chatUsername}
+                    </a>
+                </div>
+                <div class="text-sm text-gray-500">
+                    ${context.total_messages || 0} messages in context
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Reply chain section (if any)
+    if (context.reply_chain && context.reply_chain.length > 0) {
+        html += `<div class="context-section-header"><i class="fas fa-reply mr-1"></i> Reply Chain (${context.reply_chain.length})</div>`;
+        context.reply_chain.forEach(msg => {
+            html += formatContextMessage(msg, 'reply');
+        });
+    }
+
+    // Previous messages
+    if (context.previous_messages && context.previous_messages.length > 0) {
+        html += `<div class="context-section-header"><i class="fas fa-arrow-up mr-1"></i> Previous Messages (${context.previous_messages.length})</div>`;
+        context.previous_messages.forEach(msg => {
+            html += formatContextMessage(msg);
+        });
+    }
+
+    // Target message
+    if (context.target_message) {
+        html += `<div class="context-section-header"><i class="fas fa-bullseye mr-1"></i> Target Message</div>`;
+        html += formatContextMessage(context.target_message, 'target');
+    }
+
+    // Next messages
+    if (context.next_messages && context.next_messages.length > 0) {
+        html += `<div class="context-section-header"><i class="fas fa-arrow-down mr-1"></i> Following Messages (${context.next_messages.length})</div>`;
+        context.next_messages.forEach(msg => {
+            html += formatContextMessage(msg);
+        });
+    }
+
+    // No messages found
+    if (!context.target_message && (!context.previous_messages || context.previous_messages.length === 0) && (!context.next_messages || context.next_messages.length === 0)) {
+        html += `
+            <div class="text-center py-8">
+                <i class="fas fa-inbox text-4xl text-gray-600 mb-3"></i>
+                <p class="text-gray-500">No context messages found</p>
+            </div>
+        `;
+    }
+
+    content.innerHTML = html;
+    modal.classList.remove('hidden');
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function buildTelegramLink(chatId, messageId, username = null) {
+    if (username) {
+        return `https://t.me/${username}/${messageId}`;
+    }
+    const absId = Math.abs(parseInt(chatId));
+    if (String(absId).startsWith('100')) {
+        return `https://t.me/c/${String(absId).slice(3)}/${messageId}`;
+    }
+    return `https://t.me/${absId}/${messageId}`;
+}
+
+function buildTelegramChatLink(chatId, username = null) {
+    if (username) {
+        return `https://t.me/${username}`;
+    }
+    const absId = Math.abs(parseInt(chatId));
+    if (String(absId).startsWith('100')) {
+        return `https://t.me/c/${String(absId).slice(3)}`;
+    }
+    return `https://t.me/${absId}`;
+}
+
+async function searchUser() {
+    const searchType = document.getElementById('userSearchType').value;
+    const searchValue = document.getElementById('userSearchInput').value.trim();
+
+    if (!searchValue) {
+        alert('Please enter a search value');
+        return;
+    }
+
+    showLoading('Searching user...');
+
+    try {
+        let endpoint;
+        let params;
+
+        if (searchType === 'id') {
+            endpoint = '/funstat/users/basic_info_by_id';
+            params = `id=${searchValue}`;
+        } else {
+            const username = searchValue.replace('@', '');
+            endpoint = '/funstat/users/resolve_username';
+            params = `name=${username}`;
+        }
+
+        const response = await fetch(`${endpoint}?${params}`);
+        const users = await response.json();
+
+        if (users && users.length > 0) {
+            currentUserId = users[0].id;
+            displayUserBasicInfo(users[0]);
+            enableUserActions();
+
+            getUserStatsMin();
+        } else {
+            displayNoResults('userResults', 'User not found');
+        }
+    } catch (error) {
+        console.error('Error searching user:', error);
+        displayError('userResults', error.message);
+    } finally {
+        hideLoading();
+    }
+}
+
+async function getUserStatsMin() {
+    if (!currentUserId) return;
+
+    try {
+        const response = await fetch(`/funstat/users/${currentUserId}/stats_min`);
+        const stats = await response.json();
+        displayUserStats(stats);
+    } catch (error) {
+        console.error('Error getting user stats:', error);
+    }
+}
+
+async function getUserStats() {
+    if (!currentUserId) return;
+
+    showLoading('Getting full user statistics...');
+
+    try {
+        const response = await fetch(`/funstat/users/${currentUserId}/stats`);
+        const stats = await response.json();
+        displayUserStats(stats, true);
+    } catch (error) {
+        console.error('Error getting user stats:', error);
+        displayError('userResults', error.message);
+    } finally {
+        hideLoading();
+    }
+}
+
+async function getUserGroups() {
+    if (!currentUserId) return;
+
+    showLoading('Getting user groups...');
+
+    try {
+        const response = await fetch(`/funstat/users/${currentUserId}/groups`);
+        const groups = await response.json();
+        displayUserGroups(groups);
+    } catch (error) {
+        console.error('Error getting user groups:', error);
+        displayError('userResults', error.message);
+    } finally {
+        hideLoading();
+    }
+}
+
+async function getUserMessages(page = 1) {
+    if (!currentUserId) return;
+
+    showLoading(`Getting user messages (page ${page})...`);
+
+    try {
+        const response = await fetch(`/funstat/users/${currentUserId}/messages?page=${page}&pageSize=20`);
+        const data = await response.json();
+
+        messagesPaginationState = {
+            page: page,
+            pageSize: 20,
+            totalPages: Math.ceil(data.paging.total / 20) || 1
+        };
+
+        displayUserMessages(data);
+    } catch (error) {
+        console.error('Error getting user messages:', error);
+        displayError('userResults', error.message);
+    } finally {
+        hideLoading();
+    }
+}
+
+async function getAllUserMessages() {
+    if (!currentUserId) return;
+
+    showLoading('Fetching all messages...');
+
+    try {
+        const response = await fetch(`/funstat/users/${currentUserId}/messages/all`);
+        const data = await response.json();
+
+        // Store all messages globally for filtering
+        window.allMessages = data.messages || [];
+        
+        // Store the messages analysis data
+        window.messagesAnalysis = data.messages_analysis || null;
+
+        // Deduplicate groups by ID
+        const groupMap = new Map();
+        window.allMessages.forEach(msg => {
+            if (msg.group && msg.group.id) {
+                groupMap.set(msg.group.id, msg.group);
+            }
+        });
+        window.currentUserGroups = Array.from(groupMap.values());
+
+        // Batch create thumbnails for messages with media
+        await createThumbnailsForMessages(window.allMessages);
+
+        // Display the analysis section if available
+        if (window.messagesAnalysis) {
+            displayMessagesAnalysis(window.messagesAnalysis);
+        }
+
+        displayAllMessagesWithFilters(window.allMessages);
+    } catch (error) {
+        console.error('Error getting all messages:', error);
+        displayError('userResults', error.message);
+    } finally {
+        hideLoading();
+    }
+}
+
+async function createThumbnailsForMessages(messages) {
+    // Group messages by chat username for batch thumbnail creation
+    // Only process messages from groups that have usernames
+    const mediaMessagesByChat = {};
+
+    messages.forEach(msg => {
+        if (msg.mediaCode !== null && msg.mediaCode !== undefined && msg.group.username) {
+            const chatIdentifier = msg.group.username;
+            if (!mediaMessagesByChat[chatIdentifier]) {
+                mediaMessagesByChat[chatIdentifier] = [];
+            }
+            mediaMessagesByChat[chatIdentifier].push(msg.messageId);
+        }
+    });
+
+    // Batch create thumbnails for each chat
+    const thumbnailPromises = [];
+    for (const [chatIdentifier, messageIds] of Object.entries(mediaMessagesByChat)) {
+        if (messageIds.length > 0) {
+            const promise = fetch(`/funstat/media/thumbnail/batch?chat_identifier=${encodeURIComponent(chatIdentifier)}&${messageIds.map(id => `message_ids=${id}`).join('&')}`, {
+                method: 'POST'
+            })
+            .then(res => res.json())
+            .catch(err => {
+                console.error(`Failed to create thumbnails for chat ${chatIdentifier}:`, err);
+                return [];
+            });
+            thumbnailPromises.push(promise);
+        }
+    }
+
+    // Wait for all thumbnail batches to complete
+    const results = await Promise.all(thumbnailPromises);
+
+    // Store thumbnail URLs in a map for quick lookup
+    window.thumbnailCache = {};
+    results.flat().forEach(result => {
+        if (result && result.message_id && result.thumbnail_url) {
+            window.thumbnailCache[result.message_id] = result.thumbnail_url;
+        }
+    });
+}
+
+async function searchGroup() {
+    const groupId = document.getElementById('groupIdInput').value.trim();
+
+    if (!groupId) {
+        alert('Please enter a group ID');
+        return;
+    }
+
+    showLoading('Searching group...');
+
+    try {
+        const response = await fetch(`/funstat/groups/${groupId}`);
+        const group = await response.json();
+
+        currentGroupId = groupId;
+        displayGroupInfo(group);
+        document.getElementById('getMembersBtn').disabled = false;
+    } catch (error) {
+        console.error('Error searching group:', error);
+        displayError('groupResults', error.message);
+    } finally {
+        hideLoading();
+    }
+}
+
+async function getGroupMembers() {
+    if (!currentGroupId) return;
+
+    showLoading('Getting group members...');
+
+    try {
+        const response = await fetch(`/funstat/groups/${currentGroupId}/members`);
+        const members = await response.json();
+        displayGroupMembers(members);
+    } catch (error) {
+        console.error('Error getting group members:', error);
+        displayError('groupResults', error.message);
+    } finally {
+        hideLoading();
+    }
+}
+
+async function searchText() {
+    const searchText = document.getElementById('textSearchInput').value.trim();
+
+    if (!searchText) {
+        alert('Please enter text to search');
+        return;
+    }
+
+    showLoading('Searching text...');
+
+    try {
+        const response = await fetch(`/funstat/search/text?input=${encodeURIComponent(searchText)}&page=1&pageSize=50`);
+        const data = await response.json();
+        displayTextResults(data);
+    } catch (error) {
+        console.error('Error searching text:', error);
+        displayError('textResults', error.message);
+    } finally {
+        hideLoading();
+    }
+}
+
+async function searchUsernameUsage() {
+    const username = document.getElementById('usernameSearchInput').value.trim().replace('@', '');
+
+    if (!username) {
+        alert('Please enter a username');
+        return;
+    }
+
+    showLoading('Looking up username...');
+
+    try {
+        const response = await fetch(`/funstat/users/username_usage?username=${username}`);
+        const data = await response.json();
+        displayUsernameResults(data);
+    } catch (error) {
+        console.error('Error searching username:', error);
+        displayError('usernameResults', error.message);
+    } finally {
+        hideLoading();
+    }
+}
+
+function enableUserActions() {
+    document.getElementById('getStatsBtn').disabled = false;
+    document.getElementById('getGroupsBtn').disabled = false;
+    document.getElementById('getMessagesBtn').disabled = false;
+    document.getElementById('getAllMessagesBtn').disabled = false;
+}
+
+function displayUserBasicInfo(user) {
+    const html = `
+        <div class="result-card border border-gray-800 rounded-xl p-6 card-hover">
+            <div class="flex items-start justify-between mb-4">
+                <div class="flex items-center space-x-4">
+                    <div class="bg-purple-600 rounded-full w-16 h-16 flex items-center justify-center text-2xl">
+                        ${user.is_bot ? '🤖' : '👤'}
+                    </div>
+                    <div>
+                        <h3 class="text-2xl font-bold text-white">
+                            ${user.first_name || ''} ${user.last_name || ''}
+                        </h3>
+                        ${user.username ? `<p class="text-purple-400">@${user.username}</p>` : ''}
+                        <p class="text-gray-500 text-sm">ID: ${user.id}</p>
+                    </div>
+                </div>
+                <div class="flex flex-col gap-2">
+                    ${user.is_active ? '<span class="stat-badge px-3 py-1 rounded-full text-xs text-green-400">Active</span>' : '<span class="stat-badge px-3 py-1 rounded-full text-xs text-red-400">Inactive</span>'}
+                    ${user.has_premium ? '<span class="stat-badge px-3 py-1 rounded-full text-xs text-yellow-400">Premium</span>' : ''}
+                    ${user.is_bot ? '<span class="stat-badge px-3 py-1 rounded-full text-xs text-blue-400">Bot</span>' : ''}
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.getElementById('userResults').innerHTML = html;
+}
+
+function displayUserStats(stats, full = false) {
+    const existingCard = document.querySelector('#userResults .result-card');
+
+    const statsHtml = `
+        <div class="result-card border border-gray-800 rounded-xl p-6 mt-6">
+            <h4 class="text-xl font-bold mb-4 flex items-center">
+                <i class="fas fa-chart-bar text-purple-400 mr-2"></i>
+                ${full ? 'Full Statistics' : 'Basic Statistics'}
+            </h4>
+
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="stat-badge p-4 rounded-lg text-center">
+                    <div class="text-3xl font-bold text-purple-400">${stats.total_msg_count || 0}</div>
+                    <div class="text-xs text-gray-400 mt-1">Total Messages</div>
+                </div>
+                <div class="stat-badge p-4 rounded-lg text-center">
+                    <div class="text-3xl font-bold text-blue-400">${stats.total_groups || 0}</div>
+                    <div class="text-xs text-gray-400 mt-1">Total Groups</div>
+                </div>
+                <div class="stat-badge p-4 rounded-lg text-center">
+                    <div class="text-3xl font-bold text-green-400">${stats.adm_in_groups || 0}</div>
+                    <div class="text-xs text-gray-400 mt-1">Admin Groups</div>
+                </div>
+                <div class="stat-badge p-4 rounded-lg text-center">
+                    <div class="text-3xl font-bold text-yellow-400">${stats.usernames_count || 0}</div>
+                    <div class="text-xs text-gray-400 mt-1">Usernames Used</div>
+                </div>
+            </div>
+
+            ${full && stats.favorite_chat ? `
+                <div class="mt-6 p-4 bg-gray-800/50 rounded-lg">
+                    <p class="text-sm text-gray-400 mb-2">Favorite Chat:</p>
+                    <p class="text-white font-medium">${stats.favorite_chat.title}</p>
+                </div>
+            ` : ''}
+
+            ${stats.first_msg_date ? `
+                <div class="mt-4 grid grid-cols-2 gap-4">
+                    <div class="text-sm">
+                        <span class="text-gray-400">First Message:</span>
+                        <span class="ml-2 text-white">${new Date(stats.first_msg_date).toLocaleDateString()}</span>
+                    </div>
+                    <div class="text-sm">
+                        <span class="text-gray-400">Last Message:</span>
+                        <span class="ml-2 text-white">${new Date(stats.last_msg_date).toLocaleDateString()}</span>
+                    </div>
+                </div>
+            ` : ''}
+        </div>
+    `;
+
+    if (existingCard) {
+        existingCard.insertAdjacentHTML('afterend', statsHtml);
+    } else {
+        document.getElementById('userResults').innerHTML = statsHtml;
+    }
+}
+
+function displayUserGroups(groups) {
+    const html = `
+        <div class="result-card border border-gray-800 rounded-xl p-6 mt-6">
+            <h4 class="text-xl font-bold mb-4 flex items-center">
+                <i class="fas fa-users text-purple-400 mr-2"></i>
+                User Groups (${groups.length})
+            </h4>
+
+            <div class="space-y-3 max-h-96 overflow-y-auto custom-scrollbar">
+                ${groups.map(g => `
+                    <div class="bg-gray-800/50 p-4 rounded-lg hover:bg-gray-800 transition-all">
+                        <div class="flex justify-between items-start">
+                            <div class="flex-1">
+                                <p class="font-semibold text-white">${g.chat.title}</p>
+                                ${g.chat.username ? `
+                                    <a href="https://t.me/${g.chat.username}" target="_blank" class="text-sm text-purple-400 hover:text-purple-300">
+                                        @${g.chat.username}
+                                    </a>
+                                ` : ''}
+                                <p class="text-xs text-gray-500">ID: ${g.chat.id}</p>
+                                <div class="flex items-center gap-4 mt-2 text-xs text-gray-400">
+                                    <span><i class="fas fa-comments mr-1"></i>${g.messages_count || 0} messages</span>
+                                    ${g.is_admin ? '<span class="text-green-400"><i class="fas fa-crown mr-1"></i>Admin</span>' : ''}
+                                    ${g.is_left ? '<span class="text-red-400"><i class="fas fa-door-open mr-1"></i>Left</span>' : ''}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+    `;
+
+    const existingStats = document.querySelector('#userResults .result-card:last-child');
+    existingStats.insertAdjacentHTML('afterend', html);
+}
+
+function displayUserMessages(data) {
+    const messages = data.messages || [];
+    const paging = data.paging || {};
+    const totalPages = Math.ceil(paging.total / paging.pageSize) || 1;
+
+    const html = `
+        <div class="result-card border border-gray-800 rounded-xl p-6 mt-6">
+            <h4 class="text-xl font-bold mb-4 flex items-center">
+                <i class="fas fa-comments text-purple-400 mr-2"></i>
+                Messages (${paging.total || messages.length})
+            </h4>
+
+            <div class="space-y-3 max-h-96 overflow-y-auto custom-scrollbar">
+                ${messages.map(msg => {
+                    const isMedia = msg.media_code !== null;
+                    const messageLink = buildTelegramLink(msg.group.id, msg.messageId, msg.group.username);
+                    const chatLink = buildTelegramChatLink(msg.group.id, msg.group.username);
+
+                    return `
+                        <div class="bg-gray-800/50 p-4 rounded-lg hover:bg-gray-800 transition-all">
+                            <div class="flex justify-between items-start mb-2">
+                                <div class="flex-1">
+                                    <a href="${chatLink}" target="_blank" class="text-sm font-medium text-purple-400 hover:text-purple-300">
+                                        ${msg.group.title}
+                                    </a>
+                                    <p class="text-xs text-gray-500">ID: ${msg.group.id}</p>
+                                </div>
+                                <span class="text-xs text-gray-500">${new Date(msg.date).toLocaleString()}</span>
+                            </div>
+
+                            <p class="text-white mb-2">${msg.text || '<i class="text-gray-500">No text</i>'}</p>
+
+                            ${isMedia ? `
+                                <div class="flex items-center gap-2 mb-2">
+                                    <span class="text-xs bg-blue-900/30 text-blue-400 px-2 py-1 rounded">
+                                        <i class="fas fa-image mr-1"></i>Media
+                                    </span>
+                                    ${msg.media_name ? `<span class="text-xs text-gray-400">${msg.media_name}</span>` : ''}
+                                </div>
+                            ` : ''}
+
+                            <div class="flex items-center gap-3">
+                                <a href="${messageLink}" target="_blank" class="text-xs text-purple-400 hover:text-purple-300">
+                                    <i class="fas fa-external-link-alt mr-1"></i>Open in Telegram
+                                </a>
+                                ${msg.group.username ? `
+                                    <button onclick="getMessageContext('${msg.group.username}', ${msg.messageId})"
+                                        class="context-btn text-xs text-blue-400 hover:text-blue-300 bg-blue-900/30 px-2 py-1 rounded">
+                                        <i class="fas fa-comments mr-1"></i>Get Context
+                                    </button>
+                                ` : `
+                                    <span class="text-xs text-gray-600" title="Context unavailable - no public username">
+                                        <i class="fas fa-comments mr-1"></i>No context
+                                    </span>
+                                `}
+                            </div>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+
+            ${totalPages > 1 ? `
+                <div class="mt-4 flex justify-center items-center gap-2">
+                    <button onclick="getUserMessages(${Math.max(1, messagesPaginationState.page - 1)})"
+                            class="pagination-btn" ${messagesPaginationState.page === 1 ? 'disabled' : ''}>
+                        <i class="fas fa-chevron-left mr-1"></i>Previous
+                    </button>
+                    <span class="text-sm text-gray-400">
+                        Page <span class="font-bold">${messagesPaginationState.page}</span> of <span class="font-bold">${totalPages}</span>
+                    </span>
+                    <button onclick="getUserMessages(${Math.min(totalPages, messagesPaginationState.page + 1)})"
+                            class="pagination-btn" ${messagesPaginationState.page === totalPages ? 'disabled' : ''}>
+                        Next<i class="fas fa-chevron-right ml-1"></i>
+                    </button>
+                </div>
+            ` : ''}
+        </div>
+    `;
+
+    const existingStats = document.querySelector('#userResults .result-card:last-child');
+    existingStats.insertAdjacentHTML('afterend', html);
+}
+
+function displayAllMessagesWithFilters(messages) {
+    const groups = window.currentUserGroups;
+
+    const html = `
+        <div class="result-card border border-gray-800 rounded-xl p-6 mt-6">
+            <h4 class="text-xl font-bold mb-4 flex items-center">
+                <i class="fas fa-comments text-purple-400 mr-2"></i>
+                All Messages (${messages.length})
+            </h4>
+
+            <!-- Filtering UI - only shows when messages are loaded -->
+            <div class="mb-6 space-y-4 border-b border-gray-700 pb-4">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-400 mb-2">Keyword Search:</label>
+                        <input type="text" id="messageKeywordSearch" placeholder="Search in messages..."
+                            class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-purple-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-400 mb-2">Filter by Group:</label>
+                        <select id="messageGroupFilter"
+                            class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-purple-500">
+                            <option value="">All Groups</option>
+                            ${groups.map(g => `<option value="${g.id}">${g.title}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-400 mb-2">Media Type:</label>
+                        <select id="messageMediaFilter"
+                            class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-purple-500">
+                            <option value="">All Types</option>
+                            <option value="4">Images (4)</option>
+                            <option value="1">Videos (1)</option>
+                            <option value="8">GIFs (8)</option>
+                            <option value="10">Stickers (10)</option>
+                            <option value="no-media">Text Only</option>
+                        </select>
+                    </div>
+                </div>
+                <button onclick="applyMessageFilters()" class="w-full bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded-lg font-semibold transition-all">
+                    <i class="fas fa-filter mr-2"></i>Apply Filters
+                </button>
+            </div>
+
+            <div id="filteredMessagesContainer" class="space-y-3 max-h-[600px] overflow-y-auto custom-scrollbar">
+                ${renderMessages(messages)}
+            </div>
+        </div>
+    `;
+
+    const existingStats = document.querySelector('#userResults .result-card:last-child');
+    existingStats.insertAdjacentHTML('afterend', html);
+}
+
+function displayMessagesAnalysis(analysis) {
+    if (!analysis) return;
+
+    const riskSummary = analysis.risk_summary || {};
+    const dataTypeFreq = analysis.data_type_frequency || {};
+    const aggregatedData = analysis.aggregated_data || {};
+    const messageAnalyses = analysis.message_analyses || [];
+
+    // Format data type names for display
+    const formatDataType = (type) => {
+        return type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    };
+
+    // Get risk level color class
+    const getRiskBadgeClass = (level) => {
+        switch(level) {
+            case 'critical': return 'risk-badge-critical';
+            case 'high': return 'risk-badge-high';
+            case 'medium': return 'risk-badge-medium';
+            case 'low': return 'risk-badge-low';
+            default: return 'risk-badge-low';
+        }
+    };
+
+    const html = `
+        <div class="result-card border border-gray-800 rounded-xl p-6 mt-6">
+            <h4 class="text-xl font-bold mb-4 flex items-center">
+                <i class="fas fa-shield-alt text-purple-400 mr-2"></i>
+                Messages Analysis
+                ${analysis.has_sensitive_data ? '<span class="ml-2 px-2 py-1 text-xs rounded bg-yellow-900/30 text-yellow-400 border border-yellow-700">Contains Sensitive Data</span>' : '<span class="ml-2 px-2 py-1 text-xs rounded bg-green-900/30 text-green-400 border border-green-700">No Sensitive Data</span>'}
+            </h4>
+
+            <!-- Summary Stats -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <div class="stat-badge p-4 rounded-lg text-center">
+                    <div class="text-3xl font-bold text-white">${analysis.total_messages || 0}</div>
+                    <div class="text-xs text-gray-400 mt-1">Total Messages</div>
+                </div>
+                <div class="stat-badge p-4 rounded-lg text-center">
+                    <div class="text-3xl font-bold text-yellow-400">${analysis.messages_with_sensitive_data || 0}</div>
+                    <div class="text-xs text-gray-400 mt-1">With Sensitive Data</div>
+                </div>
+                <div class="stat-badge p-4 rounded-lg text-center">
+                    <div class="text-3xl font-bold text-green-400">${((analysis.total_messages - analysis.messages_with_sensitive_data) / analysis.total_messages * 100).toFixed(1)}%</div>
+                    <div class="text-xs text-gray-400 mt-1">Clean Messages</div>
+                </div>
+                <div class="stat-badge p-4 rounded-lg text-center">
+                    <div class="text-3xl font-bold text-purple-400">${Object.keys(dataTypeFreq).length}</div>
+                    <div class="text-xs text-gray-400 mt-1">Data Types Found</div>
+                </div>
+            </div>
+
+            <!-- Risk Summary -->
+            <div class="mb-6">
+                <h5 class="text-sm font-semibold text-gray-300 mb-3 flex items-center">
+                    <i class="fas fa-exclamation-triangle mr-2 text-yellow-500"></i>
+                    Risk Summary
+                </h5>
+                <div class="grid grid-cols-4 gap-3">
+                    <div class="p-3 rounded-lg bg-red-900/20 border border-red-900/50 text-center">
+                        <div class="text-2xl font-bold text-red-400">${riskSummary.critical || 0}</div>
+                        <div class="text-xs text-gray-400">Critical</div>
+                    </div>
+                    <div class="p-3 rounded-lg bg-orange-900/20 border border-orange-900/50 text-center">
+                        <div class="text-2xl font-bold text-orange-400">${riskSummary.high || 0}</div>
+                        <div class="text-xs text-gray-400">High</div>
+                    </div>
+                    <div class="p-3 rounded-lg bg-yellow-900/20 border border-yellow-900/50 text-center">
+                        <div class="text-2xl font-bold text-yellow-400">${riskSummary.medium || 0}</div>
+                        <div class="text-xs text-gray-400">Medium</div>
+                    </div>
+                    <div class="p-3 rounded-lg bg-green-900/20 border border-green-900/50 text-center">
+                        <div class="text-2xl font-bold text-green-400">${riskSummary.low || 0}</div>
+                        <div class="text-xs text-gray-400">Low</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Data Type Frequency -->
+            ${Object.keys(dataTypeFreq).length > 0 ? `
+                <div class="mb-6">
+                    <h5 class="text-sm font-semibold text-gray-300 mb-3 flex items-center">
+                        <i class="fas fa-tags mr-2 text-blue-500"></i>
+                        Data Types Found
+                    </h5>
+                    <div class="flex flex-wrap gap-2">
+                        ${Object.entries(dataTypeFreq).map(([type, count]) => `
+                            <span class="analysis-tag">
+                                ${formatDataType(type)}: <strong>${count}</strong>
+                            </span>
+                        `).join('')}
+                    </div>
+                </div>
+            ` : ''}
+
+            <!-- Aggregated Data -->
+            ${Object.keys(aggregatedData).length > 0 ? `
+                <div class="mb-6">
+                    <h5 class="text-sm font-semibold text-gray-300 mb-3 flex items-center">
+                        <i class="fas fa-database mr-2 text-green-500"></i>
+                        Extracted Data Summary
+                    </h5>
+                    <div class="space-y-3">
+                        ${Object.entries(aggregatedData).map(([type, values]) => `
+                            <div class="bg-gray-800/50 p-3 rounded-lg">
+                                <div class="text-xs text-gray-400 mb-2 font-semibold uppercase">${formatDataType(type)} (${values.length})</div>
+                                <div class="flex flex-wrap gap-1">
+                                    ${values.slice(0, 10).map(v => `
+                                        <span class="text-xs bg-gray-700 px-2 py-1 rounded text-gray-300">${v}</span>
+                                    `).join('')}
+                                    ${values.length > 10 ? `<span class="text-xs text-gray-500">+${values.length - 10} more</span>` : ''}
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            ` : ''}
+
+            <!-- Sensitive Messages List -->
+            ${messageAnalyses.length > 0 ? `
+                <div>
+                    <h5 class="text-sm font-semibold text-gray-300 mb-3 flex items-center">
+                        <i class="fas fa-list mr-2 text-yellow-500"></i>
+                        Messages with Sensitive Data (${messageAnalyses.length})
+                    </h5>
+                    <div class="space-y-2 max-h-96 overflow-y-auto custom-scrollbar">
+                        ${messageAnalyses.slice(0, 20).map(msg => {
+                            const messageLink = buildTelegramLink(msg.group?.id, msg.message_id, msg.group?.username);
+                            const chatLink = buildTelegramChatLink(msg.group?.id, msg.group?.username);
+                            return `
+                                <div class="bg-gray-800/50 p-3 rounded-lg sensitive-message-card hover:bg-gray-800 transition-all">
+                                    <div class="flex justify-between items-start mb-2">
+                                        <div class="flex-1">
+                                            <a href="${chatLink}" target="_blank" class="text-sm font-medium text-purple-400 hover:text-purple-300">
+                                                ${msg.group?.title || 'Unknown Group'}
+                                            </a>
+                                            <div class="flex items-center gap-2 mt-1">
+                                                <span class="px-2 py-0.5 rounded text-xs ${getRiskBadgeClass(msg.risk_level)}">
+                                                    ${msg.risk_level?.toUpperCase() || 'LOW'} (Score: ${msg.risk_score || 0})
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <span class="text-xs text-gray-500">${msg.date ? new Date(msg.date).toLocaleString() : ''}</span>
+                                    </div>
+                                    <p class="text-sm text-white mb-2 line-clamp-2">${msg.text || '<i class="text-gray-500">No text</i>'}</p>
+                                    <div class="flex flex-wrap gap-1 mb-2">
+                                        ${(msg.data_types_found || []).map(t => `
+                                            <span class="text-xs bg-purple-900/30 text-purple-300 px-2 py-0.5 rounded">${formatDataType(t)}</span>
+                                        `).join('')}
+                                    </div>
+                                    <a href="${messageLink}" target="_blank" class="text-xs text-purple-400 hover:text-purple-300">
+                                        <i class="fas fa-external-link-alt mr-1"></i>Open in Telegram
+                                    </a>
+                                </div>
+                            `;
+                        }).join('')}
+                        ${messageAnalyses.length > 20 ? `
+                            <p class="text-center text-gray-500 text-sm py-2">Showing 20 of ${messageAnalyses.length} messages</p>
+                        ` : ''}
+                    </div>
+                </div>
+            ` : ''}
+        </div>
+    `;
+
+    const existingStats = document.querySelector('#userResults .result-card:last-child');
+    existingStats.insertAdjacentHTML('afterend', html);
+}
+
+function renderMessages(messages) {
+    if (messages.length === 0) {
+        return '<p class="text-center text-gray-500 py-8">No messages match the filters</p>';
+    }
+
+    return messages.map(msg => {
+        const hasMedia = msg.mediaCode !== null && msg.mediaCode !== undefined;
+        const messageLink = buildTelegramLink(msg.group.id, msg.messageId, msg.group.username);
+        const chatLink = buildTelegramChatLink(msg.group.id, msg.group.username);
+        const thumbnailUrl = window.thumbnailCache && window.thumbnailCache[msg.messageId];
+
+        return `
+            <div class="bg-gray-800/50 p-4 rounded-lg hover:bg-gray-800 transition-all">
+                <div class="flex justify-between items-start mb-2">
+                    <div class="flex-1">
+                        <a href="${chatLink}" target="_blank" class="text-sm font-medium text-purple-400 hover:text-purple-300">
+                            ${msg.group.title}
+                        </a>
+                        <p class="text-xs text-gray-500">ID: ${msg.group.id}</p>
+                    </div>
+                    <span class="text-xs text-gray-500">${new Date(msg.date).toLocaleString()}</span>
+                </div>
+
+                ${hasMedia ? `
+                    <div class="mb-3">
+                        ${thumbnailUrl ? `
+                            <img src="${thumbnailUrl}" alt="Thumbnail" class="media-thumbnail" onclick="openMediaModal('${thumbnailUrl}')">
+                        ` : `
+                            <div class="bg-gray-900/50 p-3 rounded-lg flex items-center gap-2">
+                                <i class="fas fa-image text-blue-400"></i>
+                                <span class="text-sm text-gray-400">${msg.mediaName || 'Media'} (Code: ${msg.mediaCode})</span>
+                            </div>
+                        `}
+                    </div>
+                ` : ''}
+
+                ${msg.text ? `<p class="text-white mb-2">${msg.text}</p>` : ''}
+
+                <div class="flex items-center gap-3">
+                    <a href="${messageLink}" target="_blank" class="text-xs text-purple-400 hover:text-purple-300">
+                        <i class="fas fa-external-link-alt mr-1"></i>Open in Telegram
+                    </a>
+                    ${msg.group.username ? `
+                        <button onclick="getMessageContext('${msg.group.username}', ${msg.messageId})"
+                            class="context-btn text-xs text-blue-400 hover:text-blue-300 bg-blue-900/30 px-2 py-1 rounded">
+                            <i class="fas fa-comments mr-1"></i>Get Context
+                        </button>
+                    ` : `
+                        <span class="text-xs text-gray-600" title="Context unavailable - no public username">
+                            <i class="fas fa-comments mr-1"></i>No context
+                        </span>
+                    `}
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function applyMessageFilters() {
+    const keyword = document.getElementById('messageKeywordSearch').value.toLowerCase();
+    const groupId = document.getElementById('messageGroupFilter').value;
+    const mediaType = document.getElementById('messageMediaFilter').value;
+
+    let filtered = window.allMessages;
+
+    // Apply keyword filter
+    if (keyword) {
+        filtered = filtered.filter(msg =>
+            (msg.text && msg.text.toLowerCase().includes(keyword))
+        );
+    }
+
+    // Apply group filter
+    if (groupId) {
+        filtered = filtered.filter(msg => msg.group.id == groupId);
+    }
+
+    // Apply media type filter
+    if (mediaType === 'no-media') {
+        filtered = filtered.filter(msg => msg.mediaCode === null || msg.mediaCode === undefined);
+    } else if (mediaType) {
+        filtered = filtered.filter(msg => msg.mediaCode == mediaType);
+    }
+
+    document.getElementById('filteredMessagesContainer').innerHTML = renderMessages(filtered);
+}
+
+function displayGroupInfo(group) {
+    const data = group.data || group;
+
+    const html = `
+        <div class="result-card border border-gray-800 rounded-xl p-6">
+            <div class="flex items-start justify-between mb-4">
+                <div class="flex items-center space-x-4">
+                    <div class="bg-blue-600 rounded-full w-16 h-16 flex items-center justify-center text-2xl">
+                        👥
+                    </div>
+                    <div>
+                        <h3 class="text-2xl font-bold text-white">${data.title || 'Unknown Group'}</h3>
+                        ${data.username ? `
+                            <a href="https://t.me/${data.username}" target="_blank" class="text-blue-400 hover:text-blue-300">
+                                @${data.username}
+                            </a>
+                        ` : ''}
+                        <p class="text-gray-500 text-sm">ID: ${currentGroupId}</p>
+                    </div>
+                </div>
+            </div>
+
+            ${data.description ? `
+                <div class="mt-4 p-4 bg-gray-800/50 rounded-lg">
+                    <p class="text-sm text-gray-300">${data.description}</p>
+                </div>
+            ` : ''}
+
+            ${data.stats ? `
+                <div class="mt-4 grid grid-cols-3 gap-4">
+                    <div class="stat-badge p-3 rounded-lg text-center">
+                        <div class="text-2xl font-bold text-purple-400">${data.stats.members || 0}</div>
+                        <div class="text-xs text-gray-400">Members</div>
+                    </div>
+                    <div class="stat-badge p-3 rounded-lg text-center">
+                        <div class="text-2xl font-bold text-blue-400">${data.stats.today_messages || 0}</div>
+                        <div class="text-xs text-gray-400">Today's Messages</div>
+                    </div>
+                    <div class="stat-badge p-3 rounded-lg text-center">
+                        <div class="text-2xl font-bold text-green-400">${data.stats.active_members || 0}</div>
+                        <div class="text-xs text-gray-400">Active Members</div>
+                    </div>
+                </div>
+            ` : ''}
+        </div>
+    `;
+
+    document.getElementById('groupResults').innerHTML = html;
+}
+
+function displayGroupMembers(members) {
+    const html = `
+        <div class="result-card border border-gray-800 rounded-xl p-6 mt-6">
+            <h4 class="text-xl font-bold mb-4 flex items-center">
+                <i class="fas fa-user-friends text-purple-400 mr-2"></i>
+                Group Members (${members.length})
+            </h4>
+
+            <div class="space-y-2 max-h-96 overflow-y-auto custom-scrollbar">
+                ${members.map(member => `
+                    <div class="bg-gray-800/50 p-3 rounded-lg hover:bg-gray-800 transition-all flex justify-between items-center">
+                        <div class="flex items-center space-x-3">
+                            <div class="w-10 h-10 bg-purple-600 rounded-full flex items-center justify-center">
+                                ${member.is_admin ? '👑' : '👤'}
+                            </div>
+                            <div>
+                                <p class="font-medium text-white">
+                                    ${member.first_name || ''} ${member.last_name || ''}
+                                </p>
+                                ${member.username ? `
+                                    <a href="https://t.me/${member.username}" target="_blank" class="text-sm text-purple-400 hover:text-purple-300">
+                                        @${member.username}
+                                    </a>
+                                ` : ''}
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            ${member.is_admin ? '<span class="stat-badge px-2 py-1 rounded text-xs text-yellow-400">Admin</span>' : ''}
+                            ${member.has_prem ? '<span class="stat-badge px-2 py-1 rounded text-xs text-blue-400">Premium</span>' : ''}
+                            <span class="text-xs text-gray-400">${member.today_msg || 0} msgs today</span>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+    `;
+
+    const existingCard = document.querySelector('#groupResults .result-card');
+    existingCard.insertAdjacentHTML('afterend', html);
+}
+
+function displayTextResults(data) {
+    const results = data.results || [];
+
+    const html = `
+        <div class="result-card border border-gray-800 rounded-xl p-6">
+            <h4 class="text-xl font-bold mb-4 flex items-center">
+                <i class="fas fa-file-alt text-purple-400 mr-2"></i>
+                Search Results (${data.total || results.length})
+            </h4>
+
+            <div class="space-y-3 max-h-[600px] overflow-y-auto custom-scrollbar">
+                ${results.map(result => {
+                    const messageLink = result.group ? buildTelegramLink(result.group.id, result.message_id, result.group.username) : '#';
+                    const chatLink = result.group ? buildTelegramChatLink(result.group.id, result.group.username) : '#';
+
+                    return `
+                        <div class="bg-gray-800/50 p-4 rounded-lg hover:bg-gray-800 transition-all">
+                            <div class="flex justify-between items-start mb-2">
+                                <div class="flex items-center gap-2">
+                                    ${result.username ? `<span class="text-purple-400">@${result.username}</span>` : ''}
+                                    ${result.name ? `<span class="text-white">${result.name}</span>` : ''}
+                                </div>
+                                <span class="text-xs text-gray-500">${result.date ? new Date(result.date).toLocaleString() : ''}</span>
+                            </div>
+
+                            ${result.group ? `
+                                <p class="text-sm text-gray-400 mb-2">
+                                    <i class="fas fa-users mr-1"></i>
+                                    <a href="${chatLink}" target="_blank" class="hover:text-purple-400">
+                                        ${result.group.title}
+                                    </a>
+                                </p>
+                            ` : ''}
+
+                            <p class="text-white bg-gray-900/50 p-3 rounded mb-2">${result.text || ''}</p>
+
+                            ${result.group ? `
+                                <div class="flex items-center gap-3">
+                                    <a href="${messageLink}" target="_blank" class="text-xs text-purple-400 hover:text-purple-300">
+                                        <i class="fas fa-external-link-alt mr-1"></i>Open in Telegram
+                                    </a>
+                                    ${result.group.username ? `
+                                        <button onclick="getMessageContext('${result.group.username}', ${result.message_id})"
+                                            class="context-btn text-xs text-blue-400 hover:text-blue-300 bg-blue-900/30 px-2 py-1 rounded">
+                                            <i class="fas fa-comments mr-1"></i>Get Context
+                                        </button>
+                                    ` : `
+                                        <span class="text-xs text-gray-600" title="Context unavailable - no public username">
+                                            <i class="fas fa-comments mr-1"></i>No context
+                                        </span>
+                                    `}
+                                </div>
+                            ` : ''}
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+
+            ${data.totalPages > 1 ? `
+                <div class="mt-4 flex justify-center items-center gap-2">
+                    <button class="pagination-btn" ${data.currentPage === 1 ? 'disabled' : ''}>
+                        <i class="fas fa-chevron-left mr-1"></i>Previous
+                    </button>
+                    <span class="text-sm text-gray-400">Page ${data.currentPage} of ${data.totalPages}</span>
+                    <button class="pagination-btn" ${data.isLastPage ? 'disabled' : ''}>
+                        Next<i class="fas fa-chevron-right ml-1"></i>
+                    </button>
+                </div>
+            ` : ''}
+        </div>
+    `;
+
+    document.getElementById('textResults').innerHTML = html;
+}
+
+function displayUsernameResults(data) {
+    const html = `
+        <div class="result-card border border-gray-800 rounded-xl p-6">
+            <h4 class="text-xl font-bold mb-4 flex items-center">
+                <i class="fas fa-at text-purple-400 mr-2"></i>
+                Username Usage Results
+            </h4>
+
+            ${data.actual_users && data.actual_users.length > 0 ? `
+                <div class="mb-6">
+                    <h5 class="text-lg font-semibold mb-3 text-green-400">Current Users</h5>
+                    <div class="space-y-2">
+                        ${data.actual_users.map(user => `
+                            <div class="bg-gray-800/50 p-3 rounded-lg flex justify-between items-center">
+                                <div>
+                                    <p class="font-medium text-white">${user.first_name || ''} ${user.last_name || ''}</p>
+                                    <p class="text-sm text-gray-400">ID: ${user.id}</p>
+                                </div>
+                                ${user.is_active ? '<span class="stat-badge px-2 py-1 rounded text-xs text-green-400">Active</span>' : ''}
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            ` : ''}
+
+            ${data.usage_by_users_in_the_past && data.usage_by_users_in_the_past.length > 0 ? `
+                <div class="mb-6">
+                    <h5 class="text-lg font-semibold mb-3 text-yellow-400">Previously Used By</h5>
+                    <div class="space-y-2">
+                        ${data.usage_by_users_in_the_past.map(user => `
+                            <div class="bg-gray-800/50 p-3 rounded-lg">
+                                <p class="font-medium text-white">${user.first_name || ''} ${user.last_name || ''}</p>
+                                <p class="text-sm text-gray-400">ID: ${user.id}</p>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            ` : ''}
+
+            ${data.actual_groups_or_channels && data.actual_groups_or_channels.length > 0 ? `
+                <div class="mb-6">
+                    <h5 class="text-lg font-semibold mb-3 text-blue-400">Groups/Channels</h5>
+                    <div class="space-y-2">
+                        ${data.actual_groups_or_channels.map(group => `
+                            <div class="bg-gray-800/50 p-3 rounded-lg">
+                                <a href="https://t.me/${group.username}" target="_blank" class="font-medium text-white hover:text-purple-400">
+                                    ${group.title}
+                                </a>
+                                ${group.username ? `<p class="text-sm text-purple-400">@${group.username}</p>` : ''}
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            ` : ''}
+
+            ${!data.actual_users?.length && !data.usage_by_users_in_the_past?.length && !data.actual_groups_or_channels?.length ? `
+                <p class="text-center text-gray-500 py-8">No usage found for this username</p>
+            ` : ''}
+        </div>
+    `;
+
+    document.getElementById('usernameResults').innerHTML = html;
+}
+
+function displayNoResults(containerId, message) {
+    document.getElementById(containerId).innerHTML = `
+        <div class="bg-gray-900/50 backdrop-blur-md border border-gray-800 rounded-xl p-12 text-center">
+            <i class="fas fa-search text-6xl text-gray-700 mb-4"></i>
+            <p class="text-gray-500">${message}</p>
+        </div>
+    `;
+}
+
+function displayError(containerId, message) {
+    document.getElementById(containerId).innerHTML = `
+        <div class="bg-red-900/20 border border-red-800 rounded-xl p-12 text-center">
+            <i class="fas fa-exclamation-triangle text-6xl text-red-400 mb-4"></i>
+            <p class="text-red-400">${message}</p>
+        </div>
+    `;
+}
+
+async function checkTelegramAuthorization() {
+    try {
+        const response = await fetch('/auth/tg/status');
+        const data = await response.json();
+
+        if (data.authorized === false) {
+            window.location.href = '/telegram_auth';
+        }
+    } catch (error) {
+        console.error('Error checking Telegram authorization:', error);
+    }
+}
+
+</script>
+{% endblock %}

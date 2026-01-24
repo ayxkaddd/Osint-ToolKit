@@ -6,3 +6,4 @@ venv/
 *.session
 .setup*
 .env*
+.vscode/

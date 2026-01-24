@@ -9,6 +9,7 @@ import logging
 
 from models.auth_models import AuthDetails
 from routes import (
+    funstat_routes,
     setup_routes,
     username_routes,
     breach_routes,
@@ -145,6 +146,11 @@ class OsintFrameWork:
             (breach_routes.router, "Breach Data"),
             (username_routes.router, "Username"),
             (face_search_routes.router, "Face Search"),
+            (funstat_routes.user_router, "Funstat Users"),
+            (funstat_routes.group_router, "Funstat Groups"),
+            (funstat_routes.search_router, "Funstat Search"),
+            (funstat_routes.media_router, "Funstat Media"),
+            (funstat_routes.bot_router, "Funstat Bot"),
             (resources_routes.router, "Resources"),
             (settings_routes.router, "Settings"),
             (templates.router, "Templates"),

@@ -44,6 +44,21 @@
             "tags": ["API", "Username", "OSINT"]
         },
         {
+            "name": "Funstat Intelligence",
+            "description": "Advanced Telegram user and group analysis",
+            "endpoint": "/funstat",
+            "icon": "message",
+            "icon_color": "blue",
+            "icon_type": "fas",
+            "tags": ["API", "OSINT", "Telegram"],
+            "settings": {
+                "FUNSTAT_API_KEY": {
+                    "type": "password",
+                    "label": "Funstat API Key"
+                }
+            }
+        },
+        {
             "name": "Hudson Rock Cavalier API",
             "description": "Access the cavalier API to search for compromised accounts and data",
             "endpoint": "/cavalier",

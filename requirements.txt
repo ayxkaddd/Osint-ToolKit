@@ -46,3 +46,5 @@ dnspython==2.7.0
 python-whois==0.9.5
 beautifulsoup4==4.12.3
 socid-extractor==0.0.27
+aiofiles==25.1.0
+pillow==12.1.0

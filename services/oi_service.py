@@ -14,14 +14,14 @@ class OiService:
     async def query_oi_api(self, type: str, query: str) -> JSONResponse:
         async with aiohttp.ClientSession() as session:
             headers = {
-                'accept': 'application/pdf',
                 'api-key': self.token,
+                'accept': 'application/pdf'
             }
 
             params = {
                 'type': type,
                 'query': query,
-                'timeout': '60',
+                'timeout': '80'
             }
 
             async with session.get(f'https://api.osint.industries/v2/request', headers=headers, params=params) as resp:

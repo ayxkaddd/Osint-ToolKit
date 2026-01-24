@@ -75,3 +75,8 @@ async def get_report(filename: str):
         return FileResponse(str(requested_path))
     except (ValueError, OSError):
         return HTMLResponse("Invalid file path", status_code=400)
+
+
+@router.get("/funstat")
+def funstat_page(request: Request):
+    return templates.TemplateResponse(request=request, name="funstat.html")
