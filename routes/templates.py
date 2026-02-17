@@ -80,3 +80,7 @@ async def get_report(filename: str):
 @router.get("/funstat")
 def funstat_page(request: Request):
     return templates.TemplateResponse(request=request, name="funstat.html")
+
+@router.get("/websearch")
+def websearch_page(request: Request):
+    return templates.TemplateResponse(request=request, name="web_search.html")

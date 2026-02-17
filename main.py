@@ -21,6 +21,7 @@ from routes import (
     settings_routes,
     templates,
     ns_routers,
+    web_search_routes,
     whois_route,
     telegram_routes,
     face_search_routes
@@ -151,6 +152,7 @@ class OsintFrameWork:
             (funstat_routes.search_router, "Funstat Search"),
             (funstat_routes.media_router, "Funstat Media"),
             (funstat_routes.bot_router, "Funstat Bot"),
+            (web_search_routes.osint_router, "Web Search"),
             (resources_routes.router, "Resources"),
             (settings_routes.router, "Settings"),
             (templates.router, "Templates"),

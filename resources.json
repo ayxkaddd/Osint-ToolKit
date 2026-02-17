@@ -59,6 +59,25 @@
             }
         },
         {
+            "name": "Web Search",
+            "description": "Automatic web search for a query using multiple search engines",
+            "endpoint": "/websearch",
+            "icon": "search",
+            "icon_color": "blue",
+            "icon_type": "fas",
+            "tags": [
+                "Web",
+                "Dorks",
+                "OSINT"
+            ],
+            "settings": {
+                "SERPAPI_KEY": {
+                    "type": "password",
+                    "label": "SerpAPI Key"
+                }
+            }
+        },
+        {
             "name": "Hudson Rock Cavalier API",
             "description": "Access the cavalier API to search for compromised accounts and data",
             "endpoint": "/cavalier",
