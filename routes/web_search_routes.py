@@ -6,7 +6,8 @@ import json
 import os
 from fastapi import APIRouter, HTTPException, Body
 from typing import List
-from dotenv import load_dotenv
+
+from config.token_manager import tokens
 
 from services.web_search_service import (
     OSINTSearchService,
@@ -21,8 +22,6 @@ from models.web_search_models import (
     DorksResponse,
 )
 
-load_dotenv()
-
 osint_router = APIRouter(prefix="/web", tags=["OSINT Search"])
 
 _osint_service = None
@@ -33,7 +32,7 @@ def get_osint_service() -> OSINTSearchService:
     global _osint_service
 
     if _osint_service is None:
-        api_key = os.getenv("SERPAPI_KEY")
+        api_key = tokens.get("SERPAPI_KEY")
         if not api_key:
             raise HTTPException(
                 status_code=500,

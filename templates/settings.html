@@ -1,0 +1,696 @@
+{% extends "base.html" %}
+
+{% block title %}OSINT Toolkit Settings{% endblock %}
+
+{% block content %}
+<!DOCTYPE html>
+<html lang="en" class="dark">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OSINT Toolkit Settings</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+    <script>tailwind.config = { darkMode: 'class', theme: { extend: { fontFamily: { mono: ['JetBrains Mono', 'monospace'] } } } }</script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+
+<body class="bg-black text-white font-mono min-h-screen">
+    <div class="container mx-auto p-4 max-w-6xl">
+
+        <!-- Header -->
+        <div class="text-center mb-12 mt-8">
+            <h1 class="text-4xl font-bold mb-4">Settings</h1>
+            <p class="text-gray-400 text-lg">Manage API keys, tool paths, and application configuration</p>
+        </div>
+
+        <!-- Category Tabs -->
+        <div class="max-w-4xl mx-auto mb-6">
+            <div class="flex gap-2 border-b border-gray-800 overflow-x-auto pb-0">
+                <button class="tab-btn active" data-tab="app" onclick="switchTab('app')">
+                    <i data-lucide="shield" class="w-4 h-4 inline-block mr-1"></i>Application
+                </button>
+                <button class="tab-btn" data-tab="tool_path" onclick="switchTab('tool_path')">
+                    <i data-lucide="terminal" class="w-4 h-4 inline-block mr-1"></i>Tool Paths
+                </button>
+                <button class="tab-btn" data-tab="api_key" onclick="switchTab('api_key')">
+                    <i data-lucide="key" class="w-4 h-4 inline-block mr-1"></i>OSINT APIs
+                </button>
+                <button class="tab-btn" data-tab="telegram" onclick="switchTab('telegram')">
+                    <i data-lucide="send" class="w-4 h-4 inline-block mr-1"></i>Telegram
+                </button>
+            </div>
+        </div>
+
+        <!-- Main Card -->
+        <div class="max-w-4xl mx-auto bg-gray-900 border border-gray-700 rounded-lg p-8">
+
+            <!-- Status Bar -->
+            <div id="status-bar" class="hidden mb-6 px-4 py-3 rounded-lg border text-sm flex items-center gap-3">
+                <i data-lucide="info" class="w-4 h-4 flex-shrink-0"></i>
+                <span id="status-message"></span>
+            </div>
+
+            <!-- Missing Required Banner -->
+            <div id="missing-banner" class="hidden mb-6 px-4 py-3 rounded-lg border border-yellow-600 bg-yellow-600/10 text-sm flex items-center gap-3">
+                <i data-lucide="alert-triangle" class="w-4 h-4 flex-shrink-0 text-yellow-400"></i>
+                <span class="text-yellow-300">Some required tokens are not configured: <span id="missing-list" class="font-bold"></span></span>
+            </div>
+
+            <!-- ── TAB: Application ─────────────────────────────────────────── -->
+            <div id="tab-app" class="tab-content">
+                <h2 class="text-2xl font-bold mb-2">Application</h2>
+                <p class="text-gray-400 mb-6">Core credentials and authentication settings.</p>
+
+                <div class="space-y-5">
+                    <div class="token-card" data-key="JWT_SECRET">
+                        <div class="flex items-start justify-between mb-2">
+                            <div>
+                                <span class="text-white font-semibold text-sm">JWT Secret</span>
+                                <span class="required-badge ml-2">required</span>
+                            </div>
+                            <span class="status-dot" id="dot-JWT_SECRET"></span>
+                        </div>
+                        <p class="text-gray-500 text-xs mb-3">Secret key used to sign JWT tokens. Change before first run.</p>
+                        <div class="input-row">
+                            <input type="password" id="inp-JWT_SECRET" class="token-input" placeholder="Any long random string — e.g. openssl rand -hex 32">
+                            <button class="toggle-btn" onclick="toggleVisibility('JWT_SECRET')"><i data-lucide="eye" class="w-4 h-4"></i></button>
+                            <button class="save-btn" onclick="saveToken('JWT_SECRET')"><i data-lucide="save" class="w-4 h-4"></i></button>
+                        </div>
+                    </div>
+
+                    <div class="token-card" data-key="ROOT_EMAIL">
+                        <div class="flex items-start justify-between mb-2">
+                            <div>
+                                <span class="text-white font-semibold text-sm">Root Admin Email</span>
+                                <span class="required-badge ml-2">required</span>
+                            </div>
+                            <span class="status-dot" id="dot-ROOT_EMAIL"></span>
+                        </div>
+                        <p class="text-gray-500 text-xs mb-3">Login email for the root admin account.</p>
+                        <div class="input-row">
+                            <input type="text" id="inp-ROOT_EMAIL" class="token-input" placeholder="admin@localhost">
+                            <button class="save-btn" onclick="saveToken('ROOT_EMAIL')"><i data-lucide="save" class="w-4 h-4"></i></button>
+                        </div>
+                    </div>
+
+                    <div class="token-card" data-key="ROOT_PASSWORD">
+                        <div class="flex items-start justify-between mb-2">
+                            <div>
+                                <span class="text-white font-semibold text-sm">Root Admin Password (bcrypt)</span>
+                                <span class="required-badge ml-2">required</span>
+                            </div>
+                            <span class="status-dot" id="dot-ROOT_PASSWORD"></span>
+                        </div>
+                        <p class="text-gray-500 text-xs mb-3">Bcrypt hash of the root admin password. Never store plaintext.</p>
+                        <div class="input-row">
+                            <input type="password" id="inp-ROOT_PASSWORD" class="token-input" placeholder="$2a$12$...">
+                            <button class="toggle-btn" onclick="toggleVisibility('ROOT_PASSWORD')"><i data-lucide="eye" class="w-4 h-4"></i></button>
+                            <button class="save-btn" onclick="saveToken('ROOT_PASSWORD')"><i data-lucide="save" class="w-4 h-4"></i></button>
+                        </div>
+                        <a href="https://bcrypt-generator.com/" target="_blank" class="hint-link mt-2 inline-flex items-center gap-1">
+                            <i data-lucide="external-link" class="w-3 h-3"></i>Generate hash at bcrypt-generator.com
+                        </a>
+                    </div>
+                </div>
+
+                <div class="mt-8 flex gap-3">
+                    <button onclick="saveCategory('app')" class="action-btn-primary">
+                        <i data-lucide="save" class="w-4 h-4"></i>Save All
+                    </button>
+                    <button onclick="reloadTokens()" class="action-btn-secondary">
+                        <i data-lucide="refresh-cw" class="w-4 h-4"></i>Reload from .env
+                    </button>
+                </div>
+            </div>
+
+            <!-- ── TAB: Tool Paths ──────────────────────────────────────────── -->
+            <div id="tab-tool_path" class="tab-content hidden">
+                <h2 class="text-2xl font-bold mb-2">Tool Paths</h2>
+                <p class="text-gray-400 mb-6">Absolute paths to external binaries and scripts used by services.</p>
+
+                <div class="space-y-5">
+                    <div class="token-card" data-key="GITFIVE_VENV_PATH">
+                        <div class="flex items-start justify-between mb-2">
+                            <span class="text-white font-semibold text-sm">GitFive — Venv Python Path</span>
+                            <span class="status-dot" id="dot-GITFIVE_VENV_PATH"></span>
+                        </div>
+                        <p class="text-gray-500 text-xs mb-3">Absolute path to the GitFive virtualenv Python binary.</p>
+                        <div class="input-row">
+                            <input type="text" id="inp-GITFIVE_VENV_PATH" class="token-input" placeholder="/home/user/GitFive/venv/bin/python">
+                            <button class="save-btn" onclick="saveToken('GITFIVE_VENV_PATH')"><i data-lucide="save" class="w-4 h-4"></i></button>
+                        </div>
+                        <p class="text-gray-600 text-xs mt-2">Windows: <span class="text-gray-500">venv\Scripts\python.exe</span></p>
+                    </div>
+
+                    <div class="token-card" data-key="GITFIVE_SCRIPT_PATH">
+                        <div class="flex items-start justify-between mb-2">
+                            <span class="text-white font-semibold text-sm">GitFive — Script Path</span>
+                            <span class="status-dot" id="dot-GITFIVE_SCRIPT_PATH"></span>
+                        </div>
+                        <p class="text-gray-500 text-xs mb-3">Absolute path to the GitFive main.py entry point.</p>
+                        <div class="input-row">
+                            <input type="text" id="inp-GITFIVE_SCRIPT_PATH" class="token-input" placeholder="/home/user/scripts/GitFive/main.py">
+                            <button class="save-btn" onclick="saveToken('GITFIVE_SCRIPT_PATH')"><i data-lucide="save" class="w-4 h-4"></i></button>
+                        </div>
+                    </div>
+
+                    <div class="token-card" data-key="HTTPX_PATH">
+                        <div class="flex items-start justify-between mb-2">
+                            <span class="text-white font-semibold text-sm">httpx Binary Path</span>
+                            <span class="status-dot" id="dot-HTTPX_PATH"></span>
+                        </div>
+                        <p class="text-gray-500 text-xs mb-3">Absolute path to the httpx binary (ProjectDiscovery).</p>
+                        <div class="input-row">
+                            <input type="text" id="inp-HTTPX_PATH" class="token-input" placeholder="/usr/local/bin/httpx">
+                            <button class="save-btn" onclick="saveToken('HTTPX_PATH')"><i data-lucide="save" class="w-4 h-4"></i></button>
+                        </div>
+                    </div>
+
+                    <div class="token-card" data-key="SUBFINDER_PATH">
+                        <div class="flex items-start justify-between mb-2">
+                            <span class="text-white font-semibold text-sm">Subfinder Binary Path</span>
+                            <span class="status-dot" id="dot-SUBFINDER_PATH"></span>
+                        </div>
+                        <p class="text-gray-500 text-xs mb-3">Absolute path to the subfinder binary.</p>
+                        <div class="input-row">
+                            <input type="text" id="inp-SUBFINDER_PATH" class="token-input" placeholder="/usr/local/bin/subfinder">
+                            <button class="save-btn" onclick="saveToken('SUBFINDER_PATH')"><i data-lucide="save" class="w-4 h-4"></i></button>
+                        </div>
+                    </div>
+
+                    <div class="token-card" data-key="NMAP_PATH">
+                        <div class="flex items-start justify-between mb-2">
+                            <span class="text-white font-semibold text-sm">Nmap Binary Path</span>
+                            <span class="status-dot" id="dot-NMAP_PATH"></span>
+                        </div>
+                        <p class="text-gray-500 text-xs mb-3">Absolute path to the nmap binary.</p>
+                        <div class="input-row">
+                            <input type="text" id="inp-NMAP_PATH" class="token-input" placeholder="/usr/bin/nmap">
+                            <button class="save-btn" onclick="saveToken('NMAP_PATH')"><i data-lucide="save" class="w-4 h-4"></i></button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-8 flex gap-3">
+                    <button onclick="saveCategory('tool_path')" class="action-btn-primary">
+                        <i data-lucide="save" class="w-4 h-4"></i>Save All
+                    </button>
+                    <button onclick="reloadTokens()" class="action-btn-secondary">
+                        <i data-lucide="refresh-cw" class="w-4 h-4"></i>Reload from .env
+                    </button>
+                </div>
+            </div>
+
+            <!-- ── TAB: OSINT APIs ─────────────────────────────────────────── -->
+            <div id="tab-api_key" class="tab-content hidden">
+                <h2 class="text-2xl font-bold mb-2">OSINT / Recon APIs</h2>
+                <p class="text-gray-400 mb-6">Third-party service credentials for intelligence gathering.</p>
+
+                <div class="space-y-5">
+                    <div class="token-card" data-key="OSINT_INDUSTRIES_API_KEY">
+                        <div class="flex items-start justify-between mb-2">
+                            <span class="text-white font-semibold text-sm">OSINT Industries API Key</span>
+                            <span class="status-dot" id="dot-OSINT_INDUSTRIES_API_KEY"></span>
+                        </div>
+                        <p class="text-gray-500 text-xs mb-3">API key for OSINT Industries search queries.</p>
+                        <div class="input-row">
+                            <input type="password" id="inp-OSINT_INDUSTRIES_API_KEY" class="token-input" placeholder="••••••••••••••••••••••••">
+                            <button class="toggle-btn" onclick="toggleVisibility('OSINT_INDUSTRIES_API_KEY')"><i data-lucide="eye" class="w-4 h-4"></i></button>
+                            <button class="save-btn" onclick="saveToken('OSINT_INDUSTRIES_API_KEY')"><i data-lucide="save" class="w-4 h-4"></i></button>
+                        </div>
+                        <a href="https://osint.industries" target="_blank" class="hint-link mt-2 inline-flex items-center gap-1">
+                            <i data-lucide="external-link" class="w-3 h-3"></i>osint.industries — account dashboard
+                        </a>
+                    </div>
+
+                    <div class="token-card" data-key="HACKER_TARGET_API_KEY">
+                        <div class="flex items-start justify-between mb-2">
+                            <span class="text-white font-semibold text-sm">HackerTarget API Key</span>
+                            <span class="status-dot" id="dot-HACKER_TARGET_API_KEY"></span>
+                        </div>
+                        <p class="text-gray-500 text-xs mb-3">API key for HackerTarget network recon tools.</p>
+                        <div class="input-row">
+                            <input type="password" id="inp-HACKER_TARGET_API_KEY" class="token-input" placeholder="••••••••••••••••••••••••">
+                            <button class="toggle-btn" onclick="toggleVisibility('HACKER_TARGET_API_KEY')"><i data-lucide="eye" class="w-4 h-4"></i></button>
+                            <button class="save-btn" onclick="saveToken('HACKER_TARGET_API_KEY')"><i data-lucide="save" class="w-4 h-4"></i></button>
+                        </div>
+                        <a href="https://hackertarget.com/account/" target="_blank" class="hint-link mt-2 inline-flex items-center gap-1">
+                            <i data-lucide="external-link" class="w-3 h-3"></i>hackertarget.com/account
+                        </a>
+                    </div>
+
+                    <div class="token-card" data-key="WHOIS_XML_API_KEY">
+                        <div class="flex items-start justify-between mb-2">
+                            <span class="text-white font-semibold text-sm">WhoisXML API Key</span>
+                            <span class="status-dot" id="dot-WHOIS_XML_API_KEY"></span>
+                        </div>
+                        <p class="text-gray-500 text-xs mb-3">API key for WHOIS, DNS, and IP intelligence lookups.</p>
+                        <div class="input-row">
+                            <input type="password" id="inp-WHOIS_XML_API_KEY" class="token-input" placeholder="••••••••••••••••••••••••">
+                            <button class="toggle-btn" onclick="toggleVisibility('WHOIS_XML_API_KEY')"><i data-lucide="eye" class="w-4 h-4"></i></button>
+                            <button class="save-btn" onclick="saveToken('WHOIS_XML_API_KEY')"><i data-lucide="save" class="w-4 h-4"></i></button>
+                        </div>
+                        <a href="https://user.whoisxmlapi.com/products" target="_blank" class="hint-link mt-2 inline-flex items-center gap-1">
+                            <i data-lucide="external-link" class="w-3 h-3"></i>user.whoisxmlapi.com/products
+                        </a>
+                    </div>
+
+                    <div class="token-card" data-key="SECURITYTRAILS_API_KEY">
+                        <div class="flex items-start justify-between mb-2">
+                            <span class="text-white font-semibold text-sm">SecurityTrails API Key</span>
+                            <span class="status-dot" id="dot-SECURITYTRAILS_API_KEY"></span>
+                        </div>
+                        <p class="text-gray-500 text-xs mb-3">API key for historical DNS and domain intel via SecurityTrails.</p>
+                        <div class="input-row">
+                            <input type="password" id="inp-SECURITYTRAILS_API_KEY" class="token-input" placeholder="••••••••••••••••••••••••">
+                            <button class="toggle-btn" onclick="toggleVisibility('SECURITYTRAILS_API_KEY')"><i data-lucide="eye" class="w-4 h-4"></i></button>
+                            <button class="save-btn" onclick="saveToken('SECURITYTRAILS_API_KEY')"><i data-lucide="save" class="w-4 h-4"></i></button>
+                        </div>
+                        <a href="https://securitytrails.com/app/account/apikey" target="_blank" class="hint-link mt-2 inline-flex items-center gap-1">
+                            <i data-lucide="external-link" class="w-3 h-3"></i>securitytrails.com — API key
+                        </a>
+                    </div>
+
+                    <div class="token-card" data-key="VIRUSTOTAL_API_KEY">
+                        <div class="flex items-start justify-between mb-2">
+                            <span class="text-white font-semibold text-sm">VirusTotal API Key</span>
+                            <span class="status-dot" id="dot-VIRUSTOTAL_API_KEY"></span>
+                        </div>
+                        <p class="text-gray-500 text-xs mb-3">API key for file, URL, domain, and IP reputation lookups.</p>
+                        <div class="input-row">
+                            <input type="password" id="inp-VIRUSTOTAL_API_KEY" class="token-input" placeholder="••••••••••••••••••••••••">
+                            <button class="toggle-btn" onclick="toggleVisibility('VIRUSTOTAL_API_KEY')"><i data-lucide="eye" class="w-4 h-4"></i></button>
+                            <button class="save-btn" onclick="saveToken('VIRUSTOTAL_API_KEY')"><i data-lucide="save" class="w-4 h-4"></i></button>
+                        </div>
+                        <a href="https://www.virustotal.com/gui/my-apikey" target="_blank" class="hint-link mt-2 inline-flex items-center gap-1">
+                            <i data-lucide="external-link" class="w-3 h-3"></i>virustotal.com — my API key
+                        </a>
+                    </div>
+                </div>
+
+                <div class="mt-8 flex gap-3">
+                    <button onclick="saveCategory('api_key')" class="action-btn-primary">
+                        <i data-lucide="save" class="w-4 h-4"></i>Save All
+                    </button>
+                    <button onclick="reloadTokens()" class="action-btn-secondary">
+                        <i data-lucide="refresh-cw" class="w-4 h-4"></i>Reload from .env
+                    </button>
+                </div>
+            </div>
+
+            <!-- ── TAB: Telegram ───────────────────────────────────────────── -->
+            <div id="tab-telegram" class="tab-content hidden">
+                <h2 class="text-2xl font-bold mb-2">Telegram</h2>
+                <p class="text-gray-400 mb-6">Credentials for Telegram client integration via Telethon.</p>
+
+                <div class="space-y-5">
+                    <div class="token-card" data-key="TELEGRAM_API_ID">
+                        <div class="flex items-start justify-between mb-2">
+                            <span class="text-white font-semibold text-sm">Telegram API ID</span>
+                            <span class="status-dot" id="dot-TELEGRAM_API_ID"></span>
+                        </div>
+                        <p class="text-gray-500 text-xs mb-3">Numeric API ID for Telegram client (Telethon). Integer value.</p>
+                        <div class="input-row">
+                            <input type="password" id="inp-TELEGRAM_API_ID" class="token-input" placeholder="12345678">
+                            <button class="toggle-btn" onclick="toggleVisibility('TELEGRAM_API_ID')"><i data-lucide="eye" class="w-4 h-4"></i></button>
+                            <button class="save-btn" onclick="saveToken('TELEGRAM_API_ID')"><i data-lucide="save" class="w-4 h-4"></i></button>
+                        </div>
+                        <a href="https://my.telegram.org/apps" target="_blank" class="hint-link mt-2 inline-flex items-center gap-1">
+                            <i data-lucide="external-link" class="w-3 h-3"></i>my.telegram.org/apps
+                        </a>
+                    </div>
+
+                    <div class="token-card" data-key="TELEGRAM_API_HASH">
+                        <div class="flex items-start justify-between mb-2">
+                            <span class="text-white font-semibold text-sm">Telegram API Hash</span>
+                            <span class="status-dot" id="dot-TELEGRAM_API_HASH"></span>
+                        </div>
+                        <p class="text-gray-500 text-xs mb-3">32-character hex string paired with your API ID.</p>
+                        <div class="input-row">
+                            <input type="password" id="inp-TELEGRAM_API_HASH" class="token-input" placeholder="a1b2c3d4e5f6...">
+                            <button class="toggle-btn" onclick="toggleVisibility('TELEGRAM_API_HASH')"><i data-lucide="eye" class="w-4 h-4"></i></button>
+                            <button class="save-btn" onclick="saveToken('TELEGRAM_API_HASH')"><i data-lucide="save" class="w-4 h-4"></i></button>
+                        </div>
+                        <a href="https://my.telegram.org/apps" target="_blank" class="hint-link mt-2 inline-flex items-center gap-1">
+                            <i data-lucide="external-link" class="w-3 h-3"></i>my.telegram.org/apps
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Telegram status note -->
+                <div class="mt-6 px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-xs text-gray-400 flex items-start gap-3">
+                    <i data-lucide="info" class="w-4 h-4 flex-shrink-0 mt-0.5 text-gray-500"></i>
+                    <span>After saving Telegram credentials, you may need to re-authenticate your session from the Telegram page if a session file already exists.</span>
+                </div>
+
+                <div class="mt-8 flex gap-3">
+                    <button onclick="saveCategory('telegram')" class="action-btn-primary">
+                        <i data-lucide="save" class="w-4 h-4"></i>Save All
+                    </button>
+                    <button onclick="reloadTokens()" class="action-btn-secondary">
+                        <i data-lucide="refresh-cw" class="w-4 h-4"></i>Reload from .env
+                    </button>
+                </div>
+            </div>
+
+        </div><!-- /main card -->
+    </div><!-- /container -->
+
+    <!-- Loading Overlay -->
+    <div id="loading-overlay"
+        class="hidden fixed inset-0 bg-black bg-opacity-75 backdrop-blur-sm flex items-center justify-center z-50">
+        <div class="bg-gray-900 border border-gray-700 rounded-lg p-8 text-center">
+            <div class="animate-spin rounded-full h-16 w-16 border-b-2 border-white mx-auto mb-4"></div>
+            <p class="text-white" id="loading-text">Processing...</p>
+        </div>
+    </div>
+
+    <style>
+        /* ── Tabs ─────────────────────────────────────────────────────── */
+        .tab-btn {
+            padding: .6rem 1.1rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: .8rem;
+            font-weight: 600;
+            color: #6b7280;
+            border-bottom: 2px solid transparent;
+            transition: all .2s;
+            white-space: nowrap;
+            background: transparent;
+            cursor: pointer;
+        }
+        .tab-btn:hover  { color: #d1d5db; }
+        .tab-btn.active { color: #fff; border-bottom-color: #fff; }
+
+        /* ── Token Cards ──────────────────────────────────────────────── */
+        .token-card {
+            background-color: #1f2937;
+            border: 1px solid #374151;
+            padding: 1rem 1.1rem;
+            border-radius: .5rem;
+            transition: border-color .2s;
+        }
+        .token-card:hover { border-color: #4b5563; }
+        .token-card.dirty { border-color: #ca8a04; }
+        .token-card.saved { border-color: #10B981; }
+
+        /* ── Input Row ────────────────────────────────────────────────── */
+        .input-row {
+            display: flex;
+            gap: .5rem;
+            align-items: center;
+        }
+        .token-input {
+            flex: 1;
+            padding: .6rem .9rem;
+            background-color: #111827;
+            border: 1px solid #374151;
+            color: #fff;
+            border-radius: .4rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: .8rem;
+            outline: none;
+            transition: border-color .2s;
+        }
+        .token-input:focus { border-color: #6b7280; }
+
+        /* ── Icon Buttons ─────────────────────────────────────────────── */
+        .toggle-btn, .save-btn {
+            padding: .55rem .7rem;
+            border-radius: .4rem;
+            border: 1px solid #374151;
+            color: #9ca3af;
+            background: #111827;
+            cursor: pointer;
+            transition: all .15s;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .toggle-btn:hover { color: #fff; border-color: #6b7280; }
+        .save-btn:hover   { color: #10B981; border-color: #10B981; }
+
+        /* ── Status Dot ───────────────────────────────────────────────── */
+        .status-dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            background-color: #374151;
+            flex-shrink: 0;
+            margin-top: 4px;
+            transition: background-color .3s;
+        }
+        .status-dot.set   { background-color: #10B981; }
+        .status-dot.unset { background-color: #374151; }
+
+        /* ── Badges ───────────────────────────────────────────────────── */
+        .required-badge {
+            font-size: .65rem;
+            padding: .15rem .45rem;
+            border-radius: .25rem;
+            background-color: #7f1d1d;
+            color: #fca5a5;
+            font-weight: 600;
+            letter-spacing: .03em;
+        }
+
+        /* ── Hint Link ────────────────────────────────────────────────── */
+        .hint-link {
+            font-size: .7rem;
+            color: #4b5563;
+            text-decoration: none;
+            transition: color .15s;
+        }
+        .hint-link:hover { color: #9ca3af; }
+
+        /* ── Action Buttons ───────────────────────────────────────────── */
+        .action-btn-primary {
+            display: inline-flex; align-items: center; gap: .5rem;
+            padding: .65rem 1.4rem;
+            background-color: #1f2937;
+            border: 1px solid #4b5563;
+            color: #fff;
+            border-radius: .5rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: .8rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all .2s;
+        }
+        .action-btn-primary:hover { background-color: #374151; border-color: #6b7280; }
+
+        .action-btn-secondary {
+            display: inline-flex; align-items: center; gap: .5rem;
+            padding: .65rem 1.4rem;
+            background-color: transparent;
+            border: 1px solid #374151;
+            color: #6b7280;
+            border-radius: .5rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: .8rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all .2s;
+        }
+        .action-btn-secondary:hover { border-color: #4b5563; color: #9ca3af; }
+    </style>
+
+    <script>
+        // ── Category → keys map (mirrors TOKEN_REGISTRY) ────────────────────
+        const CATEGORY_KEYS = {
+            app:       ['JWT_SECRET', 'ROOT_EMAIL', 'ROOT_PASSWORD'],
+            tool_path: ['GITFIVE_VENV_PATH', 'GITFIVE_SCRIPT_PATH', 'HTTPX_PATH', 'SUBFINDER_PATH', 'NMAP_PATH'],
+            api_key:   ['OSINT_INDUSTRIES_API_KEY', 'HACKER_TARGET_API_KEY', 'WHOIS_XML_API_KEY', 'SECURITYTRAILS_API_KEY', 'VIRUSTOTAL_API_KEY'],
+            telegram:  ['TELEGRAM_API_ID', 'TELEGRAM_API_HASH'],
+        };
+
+        let activeTab = 'app';
+
+        // ── Tab switching ─────────────────────────────────────────────────────
+        function switchTab(tab) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            document.getElementById(`tab-${tab}`).classList.remove('hidden');
+            document.querySelector(`[data-tab="${tab}"]`).classList.add('active');
+            activeTab = tab;
+        }
+
+        // ── Visibility toggle ─────────────────────────────────────────────────
+        function toggleVisibility(key) {
+            const inp = document.getElementById(`inp-${key}`);
+            if (!inp) return;
+            if (inp.type === 'password') {
+                inp.type = 'text';
+            } else {
+                inp.type = 'password';
+            }
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+
+        // ── Show / hide loading overlay ───────────────────────────────────────
+        function showLoading(show, text = 'Processing...') {
+            document.getElementById('loading-overlay').classList.toggle('hidden', !show);
+            document.getElementById('loading-text').textContent = text;
+        }
+
+        // ── Notification toast ────────────────────────────────────────────────
+        function showNotification(message, type = 'info') {
+            const colors = {
+                success: 'bg-green-600 border-green-600',
+                error:   'bg-red-600 border-red-600',
+                info:    'bg-gray-700 border-gray-600',
+                warning: 'bg-yellow-600 border-yellow-600',
+            };
+            const n = document.createElement('div');
+            n.className = `fixed top-4 right-4 ${colors[type]} border text-white px-6 py-3 rounded-lg shadow-lg z-50 font-mono text-sm`;
+            n.textContent = message;
+            document.body.appendChild(n);
+            setTimeout(() => n.remove(), 3000);
+        }
+
+        // ── Status bar ────────────────────────────────────────────────────────
+        function showStatus(message, type = 'info') {
+            const bar = document.getElementById('status-bar');
+            const msg = document.getElementById('status-message');
+            const colors = {
+                success: 'border-green-600 bg-green-600/10 text-green-300',
+                error:   'border-red-600 bg-red-600/10 text-red-300',
+                info:    'border-gray-600 bg-gray-800 text-gray-300',
+            };
+            bar.className = `mb-6 px-4 py-3 rounded-lg border text-sm flex items-center gap-3 ${colors[type]}`;
+            msg.textContent = message;
+            bar.classList.remove('hidden');
+            setTimeout(() => bar.classList.add('hidden'), 5000);
+        }
+
+        // ── Apply token state to UI ───────────────────────────────────────────
+        function applyTokenData(data) {
+            const missing = data.missing_required || [];
+
+            // Update each dot + pre-fill placeholder hint
+            for (const [key, info] of Object.entries(data.tokens)) {
+                const dot = document.getElementById(`dot-${key}`);
+                if (dot) {
+                    dot.classList.toggle('set',   info.set);
+                    dot.classList.toggle('unset', !info.set);
+                    dot.title = info.set ? 'Configured' : 'Not set';
+                }
+                // For non-sensitive (tool paths), show current value in input
+                const inp = document.getElementById(`inp-${key}`);
+                if (inp && !info.sensitive && info.value) {
+                    inp.value = info.value;
+                }
+            }
+
+            // Missing required banner
+            const banner = document.getElementById('missing-banner');
+            if (missing.length > 0) {
+                document.getElementById('missing-list').textContent = missing.join(', ');
+                banner.classList.remove('hidden');
+            } else {
+                banner.classList.add('hidden');
+            }
+        }
+
+        // ── Fetch token state from API ────────────────────────────────────────
+        async function loadTokens() {
+            try {
+                const res  = await fetch('/api/tokens/');
+                const data = await res.json();
+                applyTokenData(data);
+            } catch (err) {
+                showStatus('Could not load token state from server.', 'error');
+            }
+        }
+
+        // ── Save a single token ───────────────────────────────────────────────
+        async function saveToken(key) {
+            const inp = document.getElementById(`inp-${key}`);
+            if (!inp) return;
+            const value = inp.value.trim();
+
+            showLoading(true, `Saving ${key}...`);
+            try {
+                const res  = await fetch('/api/tokens/', {
+                    method:  'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body:    JSON.stringify({ updates: { [key]: value } }),
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Save failed');
+
+                if (data.changed.length > 0) {
+                    showNotification(`${key} saved.`, 'success');
+                    const card = inp.closest('.token-card');
+                    if (card) {
+                        card.classList.add('saved');
+                        setTimeout(() => card.classList.remove('saved'), 2000);
+                    }
+                } else {
+                    showNotification('No changes detected.', 'info');
+                }
+                await loadTokens();
+            } catch (err) {
+                showNotification(err.message, 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // ── Save all tokens in the active category ────────────────────────────
+        async function saveCategory(category) {
+            const keys    = CATEGORY_KEYS[category] || [];
+            const updates = {};
+            for (const key of keys) {
+                const inp = document.getElementById(`inp-${key}`);
+                if (inp && inp.value.trim() !== '') {
+                    updates[key] = inp.value.trim();
+                }
+            }
+            if (Object.keys(updates).length === 0) {
+                showNotification('No values entered to save.', 'info');
+                return;
+            }
+
+            showLoading(true, 'Saving...');
+            try {
+                const res  = await fetch('/api/tokens/', {
+                    method:  'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body:    JSON.stringify({ updates }),
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Save failed');
+
+                showStatus(data.message, 'success');
+                await loadTokens();
+            } catch (err) {
+                showStatus(err.message, 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // ── Reload token cache on server ──────────────────────────────────────
+        async function reloadTokens() {
+            showLoading(true, 'Reloading .env...');
+            try {
+                const res = await fetch('/api/tokens/reload', { method: 'POST' });
+                if (!res.ok) throw new Error('Reload failed');
+                showNotification('Token cache reloaded from .env.', 'success');
+                await loadTokens();
+            } catch (err) {
+                showNotification(err.message, 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // ── Boot ──────────────────────────────────────────────────────────────
+        document.addEventListener('DOMContentLoaded', () => {
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+            loadTokens();
+        });
+    </script>
+</body>
+</html>
+{% endblock %}

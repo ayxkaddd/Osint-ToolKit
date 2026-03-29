@@ -31,17 +31,24 @@
         <div class="max-w-5xl mx-auto">
             <nav class="px-6 py-4">
                 <div class="flex items-center justify-between">
+                    <!-- left -->
                     <div class="flex items-center space-x-8">
                         <a href="/dashboard" class="flex items-center space-x-3">
                             <i class="fas fa-shield-alt text-2xl text-purple-400"></i>
                             <span class="text-xl font-semibold text-white">OSINT Toolkit</span>
                         </a>
                     </div>
-                    <div class="flex items-center space-x-6">
+
+                    <!-- right (grouped) -->
+                    <div class="flex items-center space-x-4">
                         <button onclick="checkForUpdates()" class="flex items-center space-x-2 hover:text-purple-400 transition-colors">
                             <i class="fas fa-sync-alt text-lg"></i>
                             <span>Check Updates</span>
                         </button>
+                        <button onclick="location.href='/settings'" class="hover:text-purple-400 transition-colors">
+                            <i data-lucide="settings"></i>
+                        </button>
+
                     </div>
                 </div>
             </nav>

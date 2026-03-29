@@ -1,15 +1,13 @@
 import os
 import requests
-from dotenv import load_dotenv
+from config.token_manager import tokens
 from typing import List
-
-load_dotenv()
 
 class NsService:
     def __init__(self):
         self.domain = "api.hackertarget.com"
         self.uri = f"/findshareddns/"
-        self.api_key = os.getenv("HACKER_TARGET_API_KEY")
+        self.api_key = tokens.get("HACKER_TARGET_API_KEY")
 
     def get_domains_api(self, ns: str) -> List[str]:
         resp = requests.get(f"https://{self.domain}{self.uri}?q={ns}&apikey={self.api_key}")

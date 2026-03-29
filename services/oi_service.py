@@ -2,14 +2,11 @@ import os
 import uuid
 import aiohttp
 from fastapi.responses import JSONResponse
-
-from dotenv import load_dotenv
-
-load_dotenv()
+from config.token_manager import tokens
 
 class OiService:
     def __init__(self):
-        self.token = os.getenv("OSINT_INDUSTRIES_API_KEY")
+        self.token = tokens.get("OSINT_INDUSTRIES_API_KEY")
 
     async def query_oi_api(self, type: str, query: str) -> JSONResponse:
         async with aiohttp.ClientSession() as session:

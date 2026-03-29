@@ -1,7 +1,8 @@
 from datetime import datetime
-from typing import Optional, List, Any
+from typing import Dict, Optional, List, Any, Literal
 from pydantic import BaseModel, Field, ConfigDict
 
+# Base class to allow populating by name (snake_case) or alias (camelCase)
 class BaseSchema(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
@@ -26,6 +27,7 @@ class Paging(BaseSchema):
     page_size: int = Field(..., alias="pageSize")
     total_pages: int = Field(..., alias="totalPages")
 
+# User Models
 class ResolvedUser(BaseSchema):
     id: int
     username: Optional[str] = None
@@ -80,6 +82,16 @@ class UsrChatInfo(BaseSchema):
     is_admin: bool = Field(False, alias="isAdmin")
     is_left: bool = Field(False, alias="isLeft")
 
+class UserNamesHistory(BaseSchema):
+    name: str
+    date_time: datetime
+
+class CombinedUserHistory(BaseSchema):
+    value: str
+    type: Literal["name", "username"]
+    date_time: datetime
+
+
 class UCommonGroupInfo(BaseSchema):
     user_id: int
     common_groups: int
@@ -88,6 +100,7 @@ class UCommonGroupInfo(BaseSchema):
     username: Optional[str] = None
     is_user_active: bool
 
+# Group Models
 class GroupMember(BaseSchema):
     id: Optional[int] = None
     username: Optional[str] = None
@@ -101,6 +114,7 @@ class GroupMember(BaseSchema):
     has_photo: bool = False
     dc_id: Optional[int] = None
 
+# Sticker Models
 class StickerInfo(BaseSchema):
     sticker_set_id: int
     last_seen: datetime
@@ -110,6 +124,7 @@ class StickerInfo(BaseSchema):
     short_name: Optional[str] = None
     stickers_count: Optional[int] = None
 
+# Search Models
 class WhoWroteText(BaseSchema):
     message_id: Optional[int] = None
     user_id: Optional[int] = None
@@ -126,17 +141,41 @@ class UsernameUsageModel(BaseSchema):
     actual_groups_or_channels: Optional[List[ChatInfoExt]] = Field(None, alias="actualGroupsOrChannels")
     mention_by_channel_or_group_desc: Optional[List[ChatInfoExt]] = Field(None, alias="mentionByChannelOrGroupDesc")
 
+# Response Models
 class ApiResponse(BaseSchema):
     success: bool
     tech: TechInfo
+    # Fixed: 'any' is not valid, must be 'Any'
     data: Optional[Any] = None
 
 class PagedResponse(ApiResponse):
     paging: Paging
 
+# Media Thumbnail Model
 class MediaThumbnail(BaseSchema):
     message_id: int
     chat_id: int
     thumbnail_url: str
     media_type: str
+    generated_at: datetime
+
+class MessageContext(BaseSchema):
+    """Structured message context data"""
+    chat_id: str
+    target_message: Dict[str, Any]
+    previous_messages: List[Dict[str, Any]]
+    next_messages: List[Dict[str, Any]]
+    reply_chain: List[Dict[str, Any]]
+    context_size: int
+    total_messages: int
+
+class ThumbnailResult(BaseSchema):
+    """Structured thumbnail generation result"""
+    message_id: int
+    chat_identifier: str
+    media_type: str
+    thumbnail_path: str
+    thumbnail_url: str
+    file_size: int
+    cached: bool
     generated_at: datetime

@@ -1,23 +1,35 @@
 from fastapi import APIRouter, HTTPException
-from typing import Dict
-import os
-from pathlib import Path
-from dotenv import set_key, load_dotenv
+from config.token_manager import tokens
+from models.token_models import TokenUpdate, TokensResponse, TokenUpdateResponse
 
-router = APIRouter(prefix="/api/settings")
+router = APIRouter(prefix="/api/tokens", tags=["tokens"])
 
-@router.post("/update")
-async def update_settings(settings: Dict[str, str]):
+
+@router.get("/", response_model=TokensResponse)
+async def get_tokens():
+    """List all tokens (values are redacted)."""
+    return TokensResponse(
+        tokens=tokens.get_all(redact=True),
+        missing_required=tokens.missing_required(),
+    )
+
+
+@router.patch("/", response_model=TokenUpdateResponse)
+async def update_tokens(body: TokenUpdate):
+    """Update one or more tokens and persist to .env."""
     try:
-        env_path = Path(".env")
+        changed = tokens.update(body.updates)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
 
-        for key, value in settings.items():
-            set_key(str(env_path), key, value)
-            os.environ[key] = value
+    return TokenUpdateResponse(
+        changed=changed,
+        message=f"{len(changed)} token(s) updated." if changed else "No changes.",
+    )
 
-        # reload environment variables
-        load_dotenv(override=True)
 
-        return {"success": True}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+@router.post("/reload")
+async def reload_tokens():
+    """Force reload from .env (after a manual edit)."""
+    tokens.reload()
+    return {"message": "Token cache reloaded."}

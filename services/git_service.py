@@ -2,14 +2,13 @@ import subprocess
 import os
 from pathlib import Path
 from typing import Optional
-from dotenv import load_dotenv
+
+from config.token_manager import tokens
 
 class GitService:
     def __init__(self):
-        load_dotenv()
-
-        self.venv_path = os.getenv('GITFIVE_VENV_PATH', 'venv/bin/python')
-        self.gitfive_path = os.getenv('GITFIVE_SCRIPT_PATH', 'GitFive/main.py')
+        self.venv_path = tokens.get('GITFIVE_VENV_PATH', 'venv/bin/python')
+        self.gitfive_path = tokens.get('GITFIVE_SCRIPT_PATH', 'GitFive/main.py')
 
         self.assets_path = Path('./assets')
         self.assets_path.mkdir(exist_ok=True)

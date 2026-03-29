@@ -9,9 +9,8 @@ from models.dnsrecon_models import ReconResults
 import httpx
 import dns.resolver
 import whois
-import dotenv
 
-dotenv.load_dotenv()
+from config.token_manager import tokens
 
 class DNSReconService:
     def __init__(self):
@@ -19,11 +18,11 @@ class DNSReconService:
             timeout=30.0,
             follow_redirects=True
         )
-        self.SECURITY_TRAILS_API_KEY = os.getenv('SECURITYTRAILS_API_KEY', 'your-free-api-key-here')
-        self.VIRUSTOTAL_API_KEY = os.getenv('VIRUSTOTAL_API_KEY', 'your-free-api-key-here')
-        self.HTTPX_PATH = os.getenv('HTTPX_PATH', 'httpx-toolkit')
-        self.SUBFINDER_PATH = os.getenv('SUBFINDER_PATH', 'subfinder')
-        self.NMAP_PATH = os.getenv('NMAP_PATH', 'nmap')
+        self.SECURITY_TRAILS_API_KEY = tokens.get('SECURITYTRAILS_API_KEY')
+        self.VIRUSTOTAL_API_KEY = tokens.get('VIRUSTOTAL_API_KEY')
+        self.HTTPX_PATH = tokens.get('HTTPX_PATH')
+        self.SUBFINDER_PATH = tokens.get('SUBFINDER_PATH')
+        self.NMAP_PATH = tokens.get('NMAP_PATH')
 
     async def __aenter__(self):
         return self

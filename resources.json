@@ -7,7 +7,10 @@
             "icon": "github",
             "icon_color": "orange",
             "icon_type": "fab",
-            "tags": ["Github", "OSINT"],
+            "tags": [
+                "Github",
+                "OSINT"
+            ],
             "settings": {
                 "GITFIVE_VENV_PATH": {
                     "type": "text",
@@ -26,7 +29,10 @@
             "icon": "code",
             "icon_color": "green",
             "icon_type": "fas",
-            "tags": ["API", "OSINT"],
+            "tags": [
+                "API",
+                "OSINT"
+            ],
             "settings": {
                 "OSINT_INDUSTRIES_API_KEY": {
                     "type": "password",
@@ -41,7 +47,11 @@
             "icon": "user",
             "icon_color": "green",
             "icon_type": "fas",
-            "tags": ["API", "Username", "OSINT"]
+            "tags": [
+                "API",
+                "Username",
+                "OSINT"
+            ]
         },
         {
             "name": "Funstat Intelligence",
@@ -50,7 +60,11 @@
             "icon": "message",
             "icon_color": "blue",
             "icon_type": "fas",
-            "tags": ["API", "OSINT", "Telegram"],
+            "tags": [
+                "API",
+                "OSINT",
+                "Telegram"
+            ],
             "settings": {
                 "FUNSTAT_API_KEY": {
                     "type": "password",
@@ -84,7 +98,12 @@
             "icon": "shield-virus",
             "icon_color": "red",
             "icon_type": "fas",
-            "tags": ["API", "Breach", "Leaks", "OSINT"]
+            "tags": [
+                "API",
+                "Breach",
+                "Leaks",
+                "OSINT"
+            ]
         },
         {
             "name": "Breach.VIP API",
@@ -93,7 +112,12 @@
             "icon": "database",
             "icon_color": "pink",
             "icon_type": "fas",
-            "tags": ["API", "Breach", "Leaks", "OSINT"]
+            "tags": [
+                "API",
+                "Breach",
+                "Leaks",
+                "OSINT"
+            ]
         },
         {
             "name": "DoxBin Lookup",
@@ -102,7 +126,11 @@
             "icon": "user-secret",
             "icon_color": "purple",
             "icon_type": "fas",
-            "tags": ["Breach", "Leaks", "OSINT"]
+            "tags": [
+                "Breach",
+                "Leaks",
+                "OSINT"
+            ]
         },
         {
             "name": "Whois History",
@@ -111,7 +139,10 @@
             "icon": "globe",
             "icon_color": "blue",
             "icon_type": "fas",
-            "tags": ["Whois", "OSINT"],
+            "tags": [
+                "Whois",
+                "OSINT"
+            ],
             "settings": {
                 "WHOIS_XML_API_KEY": {
                     "type": "password",
@@ -126,7 +157,11 @@
             "icon": "network-wired",
             "icon_color": "blue",
             "icon_type": "fas",
-            "tags": ["DNS", "Network", "OSINT"],
+            "tags": [
+                "DNS",
+                "Network",
+                "OSINT"
+            ],
             "settings": {
                 "SECURITY_TRIALS_API_KEY": {
                     "type": "password",
@@ -157,7 +192,11 @@
             "icon": "network-wired",
             "icon_color": "blue",
             "icon_type": "fas",
-            "tags": ["DNS", "Network", "OSINT"],
+            "tags": [
+                "DNS",
+                "Network",
+                "OSINT"
+            ],
             "settings": {
                 "HACKER_TARGET_API_KEY": {
                     "type": "password",
@@ -185,13 +224,17 @@
             "icon": "vk",
             "icon_color": "blue",
             "icon_type": "fab",
-            "tags": ["VK", "TG Bot", "OSINT"],
+            "tags": [
+                "VK",
+                "TG Bot",
+                "OSINT"
+            ],
             "settings": {
-                "TG_API_ID": {
+                "TELEGRAM_API_ID": {
                     "type": "password",
                     "label": "Telegram API ID (https://my.telegram.org)"
                 },
-                "TG_API_HASH": {
+                "TELEGRAM_API_HASH": {
                     "type": "password",
                     "label": "Telegram API HASH (https://my.telegram.org)"
                 }

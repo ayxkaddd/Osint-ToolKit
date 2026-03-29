@@ -140,10 +140,300 @@
     .sensitive-message-card {
         border-left: 3px solid #f59e0b;
     }
+    .enriched-link-card {
+        background: linear-gradient(135deg, #1a1b26 0%, #16171f 100%);
+        border: 1px solid #2d2f3d;
+        transition: all 0.3s ease;
+    }
+    .enriched-link-card:hover {
+        border-color: #8b5cf6;
+        transform: translateY(-2px);
+    }
+    .platform-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 4px 10px;
+        border-radius: 9999px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: capitalize;
+    }
+    .platform-tiktok { background: rgba(0, 0, 0, 0.5); color: #ff0050; border: 1px solid #ff0050; }
+    .platform-instagram { background: rgba(225, 48, 108, 0.15); color: #e1306c; border: 1px solid #e1306c; }
+    .platform-discord { background: rgba(88, 101, 242, 0.15); color: #5865f2; border: 1px solid #5865f2; }
+    .platform-telegram { background: rgba(0, 136, 204, 0.15); color: #0088cc; border: 1px solid #0088cc; }
+    .platform-pinterest { background: rgba(230, 0, 35, 0.15); color: #e60023; border: 1px solid #e60023; }
+    .platform-chatgpt { background: rgba(16, 163, 127, 0.15); color: #10a37f; border: 1px solid #10a37f; }
+    .platform-perplexity { background: rgba(32, 178, 170, 0.15); color: #20b2aa; border: 1px solid #20b2aa; }
+    .platform-microsoft { background: rgba(0, 120, 212, 0.15); color: #0078d4; border: 1px solid #0078d4; }
+    .platform-substack { background: rgba(255, 102, 0, 0.15); color: #ff6600; border: 1px solid #ff6600; }
+    .platform-suno { background: rgba(139, 92, 246, 0.15); color: #8b5cf6; border: 1px solid #8b5cf6; }
+    .enriched-avatar {
+        width: 64px;
+        height: 64px;
+        border-radius: 50%;
+        object-fit: cover;
+        border: 2px solid #414868;
+    }
+    .enriched-stat {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 8px 12px;
+        background: rgba(139, 92, 246, 0.1);
+        border-radius: 8px;
+        min-width: 70px;
+    }
+    .enriched-stat-value {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: #a78bfa;
+    }
+    .enriched-stat-label {
+        font-size: 0.65rem;
+        color: #6b7280;
+        text-transform: uppercase;
+        margin-top: 2px;
+    }
+    .link-enrichment-section {
+        border-top: 1px solid #374151;
+        margin-top: 16px;
+        padding-top: 16px;
+    }
+    .enrichment-loading {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        padding: 24px;
+        color: #9ca3af;
+    }
+    .enrichment-loading .spinner {
+        width: 24px;
+        height: 24px;
+        border: 2px solid #374151;
+        border-top-color: #8b5cf6;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+
+    /* NEW STYLES - Toast notifications */
+    .toast-container {
+        position: fixed;
+        top: 1.5rem;
+        right: 1.5rem;
+        z-index: 9999;
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+        pointer-events: none;
+    }
+    .toast {
+        pointer-events: auto;
+        background: linear-gradient(135deg, #1a1b26 0%, #16171f 100%);
+        border: 1px solid;
+        border-radius: 0.75rem;
+        padding: 1rem 1.25rem;
+        min-width: 300px;
+        max-width: 400px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        animation: slideInRight 0.3s ease;
+    }
+    .toast-success {
+        border-color: rgba(34, 197, 94, 0.5);
+    }
+    .toast-error {
+        border-color: rgba(239, 68, 68, 0.5);
+    }
+    .toast-info {
+        border-color: rgba(59, 130, 246, 0.5);
+    }
+    @keyframes slideInRight {
+        from {
+            transform: translateX(400px);
+            opacity: 0;
+        }
+        to {
+            transform: translateX(0);
+            opacity: 1;
+        }
+    }
+    @keyframes slideOutRight {
+        from {
+            transform: translateX(0);
+            opacity: 1;
+        }
+        to {
+            transform: translateX(400px);
+            opacity: 0;
+        }
+    }
+    .toast.removing {
+        animation: slideOutRight 0.3s ease forwards;
+    }
+
+    /* NEW STYLES - Timeline for History Modal */
+    .timeline-container {
+        position: relative;
+        padding-left: 2rem;
+    }
+    .timeline-container::before {
+        content: '';
+        position: absolute;
+        left: 0.375rem;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background: linear-gradient(180deg, rgba(139, 92, 246, 0.5), rgba(59, 130, 246, 0.3));
+    }
+    .timeline-entry {
+        position: relative;
+        margin-bottom: 1.5rem;
+        padding: 1rem;
+        background: rgba(26, 27, 38, 0.5);
+        border: 1px solid rgba(65, 72, 104, 0.3);
+        border-radius: 0.75rem;
+        transition: all 0.3s ease;
+        animation: fadeInUp 0.4s ease backwards;
+    }
+    .timeline-entry:hover {
+        transform: translateX(4px);
+        border-color: rgba(139, 92, 246, 0.5);
+        box-shadow: 0 4px 16px rgba(139, 92, 246, 0.15);
+    }
+    .timeline-entry::before {
+        content: '';
+        position: absolute;
+        left: -2rem;
+        top: 1.5rem;
+        width: 12px;
+        height: 12px;
+        background: #8b5cf6;
+        border: 3px solid #1a1b26;
+        border-radius: 50%;
+        box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.2);
+        transition: all 0.3s ease;
+    }
+    .timeline-entry:hover::before {
+        box-shadow: 0 0 0 6px rgba(139, 92, 246, 0.3), 0 0 12px rgba(139, 92, 246, 0.5);
+    }
+    @keyframes fadeInUp {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    /* NEW STYLES - Inline Error Messages */
+    .inline-error {
+        color: #ef4444;
+        font-size: 0.875rem;
+        margin-top: 0.5rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        animation: shake 0.3s ease;
+    }
+    @keyframes shake {
+        0%, 100% { transform: translateX(0); }
+        25% { transform: translateX(-8px); }
+        75% { transform: translateX(8px); }
+    }
+
+    /* NEW STYLES - Button Loading Spinner */
+    .btn-spinner {
+        display: inline-block;
+        width: 14px;
+        height: 14px;
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        border-top-color: white;
+        border-radius: 50%;
+        animation: spin 0.6s linear infinite;
+    }
+
+    /* NEW STYLES - Copy Success Animation */
+    .copy-success {
+        display: inline-block;
+        color: #22c55e;
+        animation: popIn 0.3s ease;
+    }
+    @keyframes popIn {
+        0% {
+            transform: scale(0);
+            opacity: 0;
+        }
+        50% {
+            transform: scale(1.2);
+        }
+        100% {
+            transform: scale(1);
+            opacity: 1;
+        }
+    }
+
+    /* NEW STYLES - Fade-in for result cards */
+    .fade-in {
+        animation: fadeIn 0.5s ease;
+    }
+    @keyframes fadeIn {
+        from {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    /* NEW STYLES - History Badge Styles */
+    .history-badge-name {
+        background: rgba(139, 92, 246, 0.15);
+        border: 1px solid rgba(139, 92, 246, 0.4);
+        color: #a78bfa;
+        padding: 0.25rem 0.75rem;
+        border-radius: 9999px;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+    .history-badge-username {
+        background: rgba(59, 130, 246, 0.15);
+        border: 1px solid rgba(59, 130, 246, 0.4);
+        color: #60a5fa;
+        padding: 0.25rem 0.75rem;
+        border-radius: 9999px;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+
+    /* NEW STYLES - Empty State */
+    .empty-state {
+        text-align: center;
+        padding: 4rem 2rem;
+        color: #6b7280;
+    }
+    .empty-state i {
+        font-size: 4rem;
+        margin-bottom: 1.5rem;
+        color: #374151;
+    }
 </style>
 {% endblock %}
 
 {% block content %}
+<!-- Toast Container -->
+<div id="toastContainer" class="toast-container" role="status" aria-live="polite" aria-atomic="true"></div>
+
 <div class="container mx-auto p-6 max-w-7xl">
     <!-- Header Section -->
     <div class="mb-8">
@@ -210,6 +500,10 @@
                             <label class="block text-sm font-medium text-gray-400 mb-2">Enter value:</label>
                             <input type="text" id="userSearchInput" placeholder="e.g., 123456789 or @username"
                                 class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-purple-500">
+                            <div id="userSearchError" class="inline-error hidden">
+                                <i class="fas fa-exclamation-circle"></i>
+                                <span></span>
+                            </div>
                         </div>
 
                         <button onclick="searchUser()"
@@ -236,6 +530,11 @@
                                 <button onclick="getAllUserMessages()" id="getAllMessagesBtn" disabled
                                     class="w-full bg-gray-800 hover:bg-gray-700 text-white px-3 py-2 rounded-lg text-sm transition-all border border-gray-700 disabled:opacity-50 disabled:cursor-not-allowed">
                                     <i class="fas fa-download mr-2"></i>Get All Messages (Cost: 10)
+                                </button>
+                                <!-- NEW: Username/Name History button -->
+                                <button onclick="getUsernameHistory()" id="getUsernameHistoryBtn" disabled
+                                    class="w-full bg-gray-800 hover:bg-gray-700 text-white px-3 py-2 rounded-lg text-sm transition-all border border-gray-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                                    <i class="fas fa-history mr-2"></i>Get Username / Name History (Cost: 1)
                                 </button>
                             </div>
                         </div>
@@ -389,11 +688,51 @@
             </div>
         </div>
     </div>
+
+    <!-- NEW: History Modal -->
+    <div id="historyModal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div class="bg-gray-900 border border-gray-800 rounded-xl max-w-3xl w-full max-h-[85vh] overflow-hidden flex flex-col">
+            <!-- Modal Header -->
+            <div class="p-6 border-b border-gray-800">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-2xl font-bold flex items-center">
+                        <i class="fas fa-history text-purple-400 mr-3"></i>
+                        Username & Name History
+                    </h3>
+                    <button onclick="closeHistoryModal()" class="text-gray-400 hover:text-white transition-colors">
+                        <i class="fas fa-times text-xl"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Modal Body -->
+            <div id="historyModalContent" class="flex-1 overflow-y-auto custom-scrollbar p-6">
+                <!-- Content will be injected here -->
+            </div>
+        </div>
+    </div>
 </div>
 
 <script>
 // Set current service for result loading
 window.currentService = 'funstat';
+
+// Platform patterns for link detection
+const PLATFORM_PATTERNS = [
+    { pattern: /(vm\.tiktok\.com|vt\.tiktok\.com|tiktok\.com\/t)\/[A-Za-z0-9]+/, platform: 'tiktok' },
+    { pattern: /chatgpt\.com\/share\/[a-f0-9-]+/, platform: 'chatgpt' },
+    { pattern: /(discord\.com\/invite|discord\.gg)\/[a-zA-Z0-9]+/, platform: 'discord' },
+    { pattern: /instagram\.com\/(reel|p)\/[A-Za-z0-9_-]+/, platform: 'instagram' },
+    { pattern: /sharepoint\.com\/:[a-z]:\/g\/personal\/[^\/]+\//, platform: 'microsoft' },
+    { pattern: /perplexity\.ai\/search\/[A-Za-z0-9._-]+/, platform: 'perplexity' },
+    { pattern: /pin\.it\/[A-Za-z0-9]+/, platform: 'pinterest' },
+    { pattern: /substack\.com\/@[^\/]+\/note\//, platform: 'substack' },
+    { pattern: /suno\.com\/s\/[A-Za-z0-9]+/, platform: 'suno' },
+    { pattern: /t\.me\/joinchat\/[A-Za-z0-9_-]+/, platform: 'telegram' },
+];
+
+// Store enriched links data
+window.enrichedLinksData = [];
 
 let currentUserId = null;
 let currentGroupId = null;
@@ -408,7 +747,6 @@ window.allMessages = [];
 window.currentUserGroups = [];
 window.thumbnailCache = {};
 
-document.addEventListener('DOMContentLoaded', checkTelegramAuthorization);
 
 function switchTab(tab) {
     document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
@@ -446,10 +784,249 @@ function closeContextModal() {
     document.getElementById('contextModal').classList.add('hidden');
 }
 
+// NEW: Toast notification function
+function showToast(message, type = 'info') {
+    const container = document.getElementById('toastContainer');
+    const toast = document.createElement('div');
+    
+    const icons = {
+        success: 'fa-check-circle text-green-400',
+        error: 'fa-exclamation-circle text-red-400',
+        info: 'fa-info-circle text-blue-400'
+    };
+
+    toast.className = `toast toast-${type}`;
+    toast.innerHTML = `
+        <i class="fas ${icons[type]} text-xl"></i>
+        <div class="flex-1">
+            <p class="text-white font-medium">${message}</p>
+        </div>
+        <button onclick="this.parentElement.remove()" class="text-gray-400 hover:text-white transition-colors">
+            <i class="fas fa-times"></i>
+        </button>
+    `;
+
+    container.appendChild(toast);
+
+    // Auto-remove after 5 seconds
+    setTimeout(() => {
+        toast.classList.add('removing');
+        setTimeout(() => toast.remove(), 300);
+    }, 5000);
+}
+
+// NEW: Copy to clipboard function
+function copyToClipboard(text, sourceElement) {
+    navigator.clipboard.writeText(text).then(() => {
+        const icon = sourceElement.querySelector('i');
+        const originalClass = icon.className;
+        
+        icon.className = 'fas fa-check copy-success';
+        
+        setTimeout(() => {
+            icon.className = originalClass;
+        }, 2000);
+        
+        showToast('Copied to clipboard', 'success');
+    }).catch(() => {
+        showToast('Failed to copy', 'error');
+    });
+}
+
+// NEW: Close History Modal
+function closeHistoryModal() {
+    const modal = document.getElementById('historyModal');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+}
+
+// NEW: Get Username History
+async function getUsernameHistory() {
+    if (!currentUserId) return;
+
+    const btn = document.getElementById('getUsernameHistoryBtn');
+    const originalHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="btn-spinner"></span><span class="ml-2">Loading...</span>';
+
+    try {
+        const response = await fetch(`/funstat/users/${currentUserId}/user_names_history`);
+        const data = await response.json();
+        renderUserHistoryModal(data);
+        showToast('History loaded successfully', 'success');
+    } catch (error) {
+        console.error('Error fetching username history:', error);
+        showToast(error.message || 'Failed to fetch history', 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
+    }
+}
+
+// NEW: Render User History Modal
+function renderUserHistoryModal(data) {
+    const modal = document.getElementById('historyModal');
+    const content = document.getElementById('historyModalContent');
+
+    if (!data || data.length === 0) {
+        content.innerHTML = `
+            <div class="empty-state">
+                <i class="fas fa-user-slash"></i>
+                <p class="text-lg">No username or name history found.</p>
+            </div>
+        `;
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+        return;
+    }
+
+    // Sort by date (newest first)
+    const sorted = [...data].sort((a, b) => 
+        new Date(b.date_time) - new Date(a.date_time)
+    );
+
+    // Group by type
+    const names = sorted.filter(entry => entry.type === 'name');
+    const usernames = sorted.filter(entry => entry.type === 'username');
+
+    function formatDate(dateStr) {
+        const date = new Date(dateStr);
+        const formatted = date.toLocaleDateString('en-US', { 
+            month: 'short', 
+            day: 'numeric', 
+            year: 'numeric' 
+        });
+        
+        const now = new Date();
+        const diffMs = now - date;
+        const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+        
+        let relative;
+        if (diffDays === 0) relative = 'today';
+        else if (diffDays === 1) relative = 'yesterday';
+        else if (diffDays < 7) relative = `${diffDays} days ago`;
+        else if (diffDays < 30) relative = `${Math.floor(diffDays / 7)} weeks ago`;
+        else if (diffDays < 365) relative = `${Math.floor(diffDays / 30)} months ago`;
+        else relative = `${Math.floor(diffDays / 365)} years ago`;
+
+        return { formatted, relative };
+    }
+
+    function renderTimeline(entries, badgeClass, icon) {
+        if (entries.length === 0) return '';
+
+        return `
+            <div class="timeline-container">
+                ${entries.map((entry, index) => {
+                    const { formatted, relative } = formatDate(entry.date_time);
+                    return `
+                        <div class="timeline-entry" style="animation-delay: ${index * 0.1}s">
+                            <div class="flex items-start justify-between gap-4">
+                                <div class="flex-1">
+                                    <div class="flex items-center gap-3 mb-2">
+                                        <span class="text-xl font-bold text-white">${entry.value}</span>
+                                        <span class="${badgeClass}">
+                                            <i class="fas ${icon} mr-1"></i>${entry.type}
+                                        </span>
+                                    </div>
+                                    <div class="flex items-center gap-2 text-sm text-gray-400">
+                                        <i class="fas fa-calendar-alt"></i>
+                                        <span>${formatted}</span>
+                                        <span class="text-gray-600">•</span>
+                                        <span>${relative}</span>
+                                    </div>
+                                </div>
+                                <button
+                                    onclick="copyToClipboard('${entry.value.replace(/'/g, "\\'")}', this)"
+                                    class="text-gray-500 hover:text-purple-400 transition-colors p-2"
+                                    title="Copy to clipboard"
+                                >
+                                    <i class="fas fa-copy"></i>
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+        `;
+    }
+
+    content.innerHTML = `
+        ${names.length > 0 ? `
+            <div class="mb-8">
+                <h4 class="text-lg font-bold mb-4 flex items-center text-purple-300">
+                    <i class="fas fa-user mr-2"></i>
+                    Display Names (${names.length})
+                </h4>
+                ${renderTimeline(names, 'history-badge-name', 'fa-user')}
+            </div>
+        ` : ''}
+
+        ${usernames.length > 0 ? `
+            <div>
+                <h4 class="text-lg font-bold mb-4 flex items-center text-blue-300">
+                    <i class="fas fa-at mr-2"></i>
+                    Usernames (${usernames.length})
+                </h4>
+                ${renderTimeline(usernames, 'history-badge-username', 'fa-at')}
+            </div>
+        ` : ''}
+    `;
+
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+}
+
+// NEW: Add Enter key support for search input
+document.addEventListener('DOMContentLoaded', function() {
+    const searchInput = document.getElementById('userSearchInput');
+    if (searchInput) {
+        searchInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                searchUser();
+            }
+        });
+    }
+
+    const textSearchInput = document.getElementById('textSearchInput');
+    if (textSearchInput) {
+        textSearchInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                searchText();
+            }
+        });
+    }
+
+    const groupIdInput = document.getElementById('groupIdInput');
+    if (groupIdInput) {
+        groupIdInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                searchGroup();
+            }
+        });
+    }
+
+    // ESC key to close modals
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            closeHistoryModal();
+            closeContextModal();
+            closeMediaModal();
+        }
+    });
+
+    // Click outside modal to close
+    document.getElementById('historyModal')?.addEventListener('click', function(e) {
+        if (e.target.id === 'historyModal') {
+            closeHistoryModal();
+        }
+    });
+});
+
 async function getMessageContext(chatUsername, messageId, contextSize = 5) {
     // Only allow username-based lookups, not group IDs
     if (!chatUsername || chatUsername.trim() === '') {
-        alert('Cannot fetch context: Username is not available for this chat. Context can only be fetched for chats with a public username.');
+        showToast('Cannot fetch context: Username is not available for this chat', 'error');
         return;
     }
 
@@ -457,7 +1034,7 @@ async function getMessageContext(chatUsername, messageId, contextSize = 5) {
     const cleanUsername = chatUsername.replace('@', '').trim();
 
     if (!cleanUsername) {
-        alert('Cannot fetch context: Invalid username.');
+        showToast('Cannot fetch context: Invalid username', 'error');
         return;
     }
 
@@ -482,7 +1059,7 @@ async function getMessageContext(chatUsername, messageId, contextSize = 5) {
         displayContextModal(context, cleanUsername);
     } catch (error) {
         console.error('Error fetching message context:', error);
-        alert(`Error: ${error.message}`);
+        showToast(`Error: ${error.message}`, 'error');
     } finally {
         hideLoading();
     }
@@ -604,6 +1181,429 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
+// Extract matching links from messages
+function extractLinksFromMessages(messages) {
+    const links = new Set();
+    const urlRegex = /https?:\/\/[^\s<>"{}|\\^`\[\]]+/gi;
+
+    messages.forEach(msg => {
+        const text = msg.text || msg.message || '';
+        const matches = text.match(urlRegex) || [];
+
+        matches.forEach(url => {
+            for (const { pattern, platform } of PLATFORM_PATTERNS) {
+                if (pattern.test(url)) {
+                    links.add(url);
+                    break;
+                }
+            }
+        });
+    });
+
+    return Array.from(links);
+}
+
+// Enrich links via API
+async function enrichLinks(links) {
+    if (!links || links.length === 0) return [];
+
+    try {
+        const response = await fetch('/api/sharetrace/enrich_links', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(links)
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to enrich links: ${response.status}`);
+        }
+
+        const data = await response.json();
+        return data.results || [];
+    } catch (error) {
+        console.error('Error enriching links:', error);
+        return [];
+    }
+}
+
+// Format large numbers
+function formatNumber(num) {
+    if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+    if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+    return num?.toString() || '0';
+}
+
+// Display enriched links section
+function displayEnrichedLinks(results) {
+    window.enrichedLinksData = results;
+
+    if (!results || results.length === 0) {
+        return '';
+    }
+
+    // Group results by platform
+    const groupedByPlatform = {};
+    results.forEach(result => {
+        const platform = result.platform || 'unknown';
+        if (!groupedByPlatform[platform]) {
+            groupedByPlatform[platform] = [];
+        }
+        groupedByPlatform[platform].push(result);
+    });
+
+    let html = `
+        <div class="link-enrichment-section">
+            <h5 class="text-lg font-bold mb-4 flex items-center">
+                <i class="fas fa-link text-purple-400 mr-2"></i>
+                Enriched Links (${results.length})
+            </h5>
+            <div class="space-y-4">
+    `;
+
+    for (const [platform, platformResults] of Object.entries(groupedByPlatform)) {
+        html += `
+            <div class="mb-4">
+                <div class="flex items-center gap-2 mb-3">
+                    <span class="platform-badge platform-${platform}">
+                        <i class="${getPlatformIcon(platform)} mr-1"></i>${platform}
+                    </span>
+                    <span class="text-sm text-gray-500">(${platformResults.length} links)</span>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        `;
+
+        platformResults.forEach(result => {
+            html += renderEnrichedCard(result);
+        });
+
+        html += `
+                </div>
+            </div>
+        `;
+    }
+
+    html += `
+            </div>
+        </div>
+    `;
+
+    return html;
+}
+
+function getPlatformIcon(platform) {
+    const icons = {
+        'tiktok': 'fab fa-tiktok',
+        'instagram': 'fab fa-instagram',
+        'discord': 'fab fa-discord',
+        'telegram': 'fab fa-telegram',
+        'pinterest': 'fab fa-pinterest',
+        'chatgpt': 'fas fa-robot',
+        'perplexity': 'fas fa-brain',
+        'microsoft': 'fab fa-microsoft',
+        'substack': 'fas fa-newspaper',
+        'suno': 'fas fa-music'
+    };
+    return icons[platform] || 'fas fa-link';
+}
+
+function renderEnrichedCard(result) {
+    const data = result.data || {};
+    const platform = result.platform || 'unknown';
+
+    if (platform === 'tiktok') {
+        return renderTikTokCard(data);
+    } else if (platform === 'instagram') {
+        return renderInstagramCard(data);
+    } else if (platform === 'discord') {
+        return renderDiscordCard(data);
+    } else if (platform === 'telegram') {
+        return renderTelegramCard(data);
+    } else {
+        return renderGenericCard(data, platform);
+    }
+}
+
+function renderTikTokCard(data) {
+    return `
+        <div class="enriched-link-card rounded-xl p-4">
+            <div class="flex items-start gap-4">
+                ${data.avatar_url ? `
+                    <img src="${data.avatar_url}" alt="${data.username}" class="enriched-avatar" onerror="this.style.display='none'">
+                ` : `
+                    <div class="enriched-avatar bg-gradient-to-br from-pink-500 to-purple-600 flex items-center justify-center text-2xl">
+                        <i class="fab fa-tiktok"></i>
+                    </div>
+                `}
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2 mb-1">
+                        <h6 class="font-bold text-white truncate">${data.nickname || data.username || 'Unknown'}</h6>
+                        ${data.private_account ? '<i class="fas fa-lock text-gray-500 text-xs" title="Private Account"></i>' : ''}
+                    </div>
+                    <a href="${data.profile || '#'}" target="_blank" class="text-sm text-purple-400 hover:text-purple-300">
+                        @${data.username || 'unknown'}
+                    </a>
+                    ${data.country ? `
+                        <div class="flex items-center gap-1 mt-1 text-xs text-gray-500">
+                            <i class="fas fa-map-marker-alt"></i>
+                            <span>${data.country}</span>
+                        </div>
+                    ` : ''}
+                    ${data.signature ? `
+                        <p class="text-sm text-gray-400 mt-2 line-clamp-2">${escapeHtml(data.signature)}</p>
+                    ` : ''}
+                </div>
+            </div>
+            
+            <div class="flex flex-wrap gap-2 mt-4">
+                <div class="enriched-stat">
+                    <span class="enriched-stat-value">${formatNumber(data.follower_count)}</span>
+                    <span class="enriched-stat-label">Followers</span>
+                </div>
+                <div class="enriched-stat">
+                    <span class="enriched-stat-value">${formatNumber(data.following_count)}</span>
+                    <span class="enriched-stat-label">Following</span>
+                </div>
+                <div class="enriched-stat">
+                    <span class="enriched-stat-value">${formatNumber(data.heart_count)}</span>
+                    <span class="enriched-stat-label">Likes</span>
+                </div>
+                <div class="enriched-stat">
+                    <span class="enriched-stat-value">${formatNumber(data.video_count)}</span>
+                    <span class="enriched-stat-label">Videos</span>
+                </div>
+            </div>
+
+            ${data.device || data.share_method || data.shared_at ? `
+                <div class="mt-4 pt-3 border-t border-gray-700/50 flex flex-wrap gap-3 text-xs text-gray-500">
+                    ${data.device ? `<span><i class="fas fa-mobile-alt mr-1"></i>${data.device}</span>` : ''}
+                    ${data.share_method ? `<span><i class="fas fa-share mr-1"></i>${data.share_method}</span>` : ''}
+                    ${data.shared_at ? `<span><i class="fas fa-clock mr-1"></i>${new Date(data.shared_at).toLocaleString()}</span>` : ''}
+                </div>
+            ` : ''}
+            
+            ${data.dm_available !== undefined ? `
+                <div class="mt-2 text-xs">
+                    ${data.dm_available ? 
+                        '<span class="text-green-400"><i class="fas fa-envelope mr-1"></i>DMs Open</span>' : 
+                        '<span class="text-gray-500"><i class="fas fa-envelope-slash mr-1"></i>DMs Closed</span>'}
+                </div>
+            ` : ''}
+        </div>
+    `;
+}
+
+function renderInstagramCard(data) {
+    return `
+        <div class="enriched-link-card rounded-xl p-4">
+            <div class="flex items-start gap-4">
+                ${data.avatar_url || data.profile_pic_url ? `
+                    <img src="${data.avatar_url || data.profile_pic_url}" alt="${data.username}" class="enriched-avatar" onerror="this.style.display='none'">
+                ` : `
+                    <div class="enriched-avatar bg-gradient-to-br from-pink-500 via-red-500 to-yellow-500 flex items-center justify-center text-2xl">
+                        <i class="fab fa-instagram"></i>
+                    </div>
+                `}
+                <div class="flex-1 min-w-0">
+                    <h6 class="font-bold text-white truncate">${data.full_name || data.username || 'Unknown'}</h6>
+                    <a href="https://instagram.com/${data.username}" target="_blank" class="text-sm text-purple-400 hover:text-purple-300">
+                        @${data.username || 'unknown'}
+                    </a>
+                    ${data.biography || data.bio ? `
+                        <p class="text-sm text-gray-400 mt-2 line-clamp-2">${escapeHtml(data.biography || data.bio)}</p>
+                    ` : ''}
+                </div>
+            </div>
+            
+            <div class="flex flex-wrap gap-2 mt-4">
+                ${data.follower_count !== undefined ? `
+                    <div class="enriched-stat">
+                        <span class="enriched-stat-value">${formatNumber(data.follower_count)}</span>
+                        <span class="enriched-stat-label">Followers</span>
+                    </div>
+                ` : ''}
+                ${data.following_count !== undefined ? `
+                    <div class="enriched-stat">
+                        <span class="enriched-stat-value">${formatNumber(data.following_count)}</span>
+                        <span class="enriched-stat-label">Following</span>
+                    </div>
+                ` : ''}
+                ${data.media_count !== undefined ? `
+                    <div class="enriched-stat">
+                        <span class="enriched-stat-value">${formatNumber(data.media_count)}</span>
+                        <span class="enriched-stat-label">Posts</span>
+                    </div>
+                ` : ''}
+            </div>
+        </div>
+    `;
+}
+
+function renderDiscordCard(data) {
+    return `
+        <div class="enriched-link-card rounded-xl p-4">
+            <div class="flex items-start gap-4">
+                ${data.icon_url || data.avatar_url ? `
+                    <img src="${data.icon_url || data.avatar_url}" alt="${data.name}" class="enriched-avatar" onerror="this.style.display='none'">
+                ` : `
+                    <div class="enriched-avatar bg-[#5865f2] flex items-center justify-center text-2xl">
+                        <i class="fab fa-discord"></i>
+                    </div>
+                `}
+                <div class="flex-1 min-w-0">
+                    <h6 class="font-bold text-white truncate">${data.name || data.guild_name || 'Unknown Server'}</h6>
+                    ${data.description ? `
+                        <p class="text-sm text-gray-400 mt-2 line-clamp-2">${escapeHtml(data.description)}</p>
+                    ` : ''}
+                </div>
+            </div>
+            
+            <div class="flex flex-wrap gap-2 mt-4">
+                ${data.member_count !== undefined ? `
+                    <div class="enriched-stat">
+                        <span class="enriched-stat-value">${formatNumber(data.member_count)}</span>
+                        <span class="enriched-stat-label">Members</span>
+                    </div>
+                ` : ''}
+                ${data.online_count !== undefined ? `
+                    <div class="enriched-stat">
+                        <span class="enriched-stat-value">${formatNumber(data.online_count)}</span>
+                        <span class="enriched-stat-label">Online</span>
+                    </div>
+                ` : ''}
+            </div>
+        </div>
+    `;
+}
+
+function renderTelegramCard(data) {
+    return `
+        <div class="enriched-link-card rounded-xl p-4">
+            <div class="flex items-start gap-4">
+                ${data.avatar_url || data.photo_url ? `
+                    <img src="${data.avatar_url || data.photo_url}" alt="${data.title}" class="enriched-avatar" onerror="this.style.display='none'">
+                ` : `
+                    <div class="enriched-avatar bg-[#0088cc] flex items-center justify-center text-2xl">
+                        <i class="fab fa-telegram"></i>
+                    </div>
+                `}
+                <div class="flex-1 min-w-0">
+                    <h6 class="font-bold text-white truncate">${data.title || data.name || 'Unknown'}</h6>
+                    ${data.username ? `
+                        <a href="https://t.me/${data.username}" target="_blank" class="text-sm text-purple-400 hover:text-purple-300">
+                            @${data.username}
+                        </a>
+                    ` : ''}
+                    ${data.description || data.about ? `
+                        <p class="text-sm text-gray-400 mt-2 line-clamp-2">${escapeHtml(data.description || data.about)}</p>
+                    ` : ''}
+                </div>
+            </div>
+            
+            <div class="flex flex-wrap gap-2 mt-4">
+                ${data.member_count !== undefined ? `
+                    <div class="enriched-stat">
+                        <span class="enriched-stat-value">${formatNumber(data.member_count)}</span>
+                        <span class="enriched-stat-label">Members</span>
+                    </div>
+                ` : ''}
+            </div>
+        </div>
+    `;
+}
+
+function renderGenericCard(data, platform) {
+    const title = data.title || data.name || data.username || 'Unknown';
+    const description = data.description || data.bio || data.about || data.signature || '';
+    const url = data.url || data.profile || data.link || '#';
+
+    return `
+        <div class="enriched-link-card rounded-xl p-4">
+            <div class="flex items-start gap-4">
+                ${data.avatar_url || data.icon_url || data.image_url ? `
+                    <img src="${data.avatar_url || data.icon_url || data.image_url}" alt="${title}" class="enriched-avatar" onerror="this.style.display='none'">
+                ` : `
+                    <div class="enriched-avatar bg-gray-700 flex items-center justify-center text-2xl">
+                        <i class="${getPlatformIcon(platform)}"></i>
+                    </div>
+                `}
+                <div class="flex-1 min-w-0">
+                    <h6 class="font-bold text-white truncate">${escapeHtml(title)}</h6>
+                    ${url !== '#' ? `
+                        <a href="${url}" target="_blank" class="text-sm text-purple-400 hover:text-purple-300 truncate block">
+                            <i class="fas fa-external-link-alt mr-1"></i>View
+                        </a>
+                    ` : ''}
+                    ${description ? `
+                        <p class="text-sm text-gray-400 mt-2 line-clamp-2">${escapeHtml(description)}</p>
+                    ` : ''}
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// Show enrichment loading state
+function showEnrichmentLoading(containerId) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    const loadingDiv = document.createElement('div');
+    loadingDiv.id = 'enrichmentLoadingIndicator';
+    loadingDiv.className = 'link-enrichment-section';
+    loadingDiv.innerHTML = `
+        <div class="enrichment-loading">
+            <div class="spinner"></div>
+            <span>Analyzing and enriching links...</span>
+        </div>
+    `;
+
+    const lastCard = container.querySelector('.result-card:last-child');
+    if (lastCard) {
+        lastCard.appendChild(loadingDiv);
+    }
+}
+
+// Remove enrichment loading state
+function hideEnrichmentLoading() {
+    const loadingIndicator = document.getElementById('enrichmentLoadingIndicator');
+    if (loadingIndicator) {
+        loadingIndicator.remove();
+    }
+}
+
+// Process messages and enrich links automatically
+async function processAndEnrichLinks(messages, containerId) {
+    const links = extractLinksFromMessages(messages);
+
+    if (links.length === 0) {
+        console.log('No enrichable links found in messages');
+        return;
+    }
+
+    console.log(`Found ${links.length} enrichable links:`, links);
+    showEnrichmentLoading(containerId);
+
+    try {
+        const results = await enrichLinks(links);
+        hideEnrichmentLoading();
+
+        if (results && results.length > 0) {
+            const enrichedHtml = displayEnrichedLinks(results);
+            const container = document.getElementById(containerId);
+            const lastCard = container?.querySelector('.result-card:last-child');
+
+            if (lastCard && enrichedHtml) {
+                lastCard.insertAdjacentHTML('beforeend', enrichedHtml);
+            }
+        }
+    } catch (error) {
+        console.error('Error processing links:', error);
+        hideEnrichmentLoading();
+    }
+}
+
 function buildTelegramLink(chatId, messageId, username = null) {
     if (username) {
         return `https://t.me/${username}/${messageId}`;
@@ -626,12 +1626,25 @@ function buildTelegramChatLink(chatId, username = null) {
     return `https://t.me/${absId}`;
 }
 
+// NEW: Inline validation functions
+function showInlineError(errorId, message) {
+    const errorEl = document.getElementById(errorId);
+    errorEl.querySelector('span').textContent = message;
+    errorEl.classList.remove('hidden');
+}
+
+function hideInlineError(errorId) {
+    document.getElementById(errorId).classList.add('hidden');
+}
+
 async function searchUser() {
+    hideInlineError('userSearchError');
+    
     const searchType = document.getElementById('userSearchType').value;
     const searchValue = document.getElementById('userSearchInput').value.trim();
 
     if (!searchValue) {
-        alert('Please enter a search value');
+        showInlineError('userSearchError', 'Please enter a search value');
         return;
     }
 
@@ -659,12 +1672,15 @@ async function searchUser() {
             enableUserActions();
 
             getUserStatsMin();
+            showToast('User found successfully', 'success');
         } else {
             displayNoResults('userResults', 'User not found');
+            showToast('User not found', 'error');
         }
     } catch (error) {
         console.error('Error searching user:', error);
         displayError('userResults', error.message);
+        showToast(error.message || 'Error searching user', 'error');
     } finally {
         hideLoading();
     }
@@ -685,41 +1701,56 @@ async function getUserStatsMin() {
 async function getUserStats() {
     if (!currentUserId) return;
 
-    showLoading('Getting full user statistics...');
+    const btn = document.getElementById('getStatsBtn');
+    const originalHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="btn-spinner"></span><span class="ml-2">Loading...</span>';
 
     try {
         const response = await fetch(`/funstat/users/${currentUserId}/stats`);
         const stats = await response.json();
         displayUserStats(stats, true);
+        showToast('Stats loaded successfully', 'success');
     } catch (error) {
         console.error('Error getting user stats:', error);
         displayError('userResults', error.message);
+        showToast(error.message || 'Error loading stats', 'error');
     } finally {
-        hideLoading();
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
     }
 }
 
 async function getUserGroups() {
     if (!currentUserId) return;
 
-    showLoading('Getting user groups...');
+    const btn = document.getElementById('getGroupsBtn');
+    const originalHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="btn-spinner"></span><span class="ml-2">Loading...</span>';
 
     try {
         const response = await fetch(`/funstat/users/${currentUserId}/groups`);
         const groups = await response.json();
         displayUserGroups(groups);
+        showToast(`Found ${groups.length} groups`, 'success');
     } catch (error) {
         console.error('Error getting user groups:', error);
         displayError('userResults', error.message);
+        showToast(error.message || 'Error loading groups', 'error');
     } finally {
-        hideLoading();
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
     }
 }
 
 async function getUserMessages(page = 1) {
     if (!currentUserId) return;
 
-    showLoading(`Getting user messages (page ${page})...`);
+    const btn = document.getElementById('getMessagesBtn');
+    const originalHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="btn-spinner"></span><span class="ml-2">Loading...</span>';
 
     try {
         const response = await fetch(`/funstat/users/${currentUserId}/messages?page=${page}&pageSize=20`);
@@ -732,18 +1763,27 @@ async function getUserMessages(page = 1) {
         };
 
         displayUserMessages(data);
+
+        // Automatically enrich links after messages are loaded
+        await processAndEnrichLinks(data.messages || [], 'userResults');
+        showToast(`Loaded ${data.messages?.length || 0} messages`, 'success');
     } catch (error) {
         console.error('Error getting user messages:', error);
         displayError('userResults', error.message);
+        showToast(error.message || 'Error loading messages', 'error');
     } finally {
-        hideLoading();
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
     }
 }
 
 async function getAllUserMessages() {
     if (!currentUserId) return;
 
-    showLoading('Fetching all messages...');
+    const btn = document.getElementById('getAllMessagesBtn');
+    const originalHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="btn-spinner"></span><span class="ml-2">Fetching...</span>';
 
     try {
         const response = await fetch(`/funstat/users/${currentUserId}/messages/all`);
@@ -773,11 +1813,17 @@ async function getAllUserMessages() {
         }
 
         displayAllMessagesWithFilters(window.allMessages);
+
+        // Automatically enrich links after messages are loaded
+        await processAndEnrichLinks(window.allMessages, 'userResults');
+        showToast(`Loaded all ${window.allMessages.length} messages`, 'success');
     } catch (error) {
         console.error('Error getting all messages:', error);
         displayError('userResults', error.message);
+        showToast(error.message || 'Error loading all messages', 'error');
     } finally {
-        hideLoading();
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
     }
 }
 
@@ -828,7 +1874,7 @@ async function searchGroup() {
     const groupId = document.getElementById('groupIdInput').value.trim();
 
     if (!groupId) {
-        alert('Please enter a group ID');
+        showToast('Please enter a group ID', 'error');
         return;
     }
 
@@ -841,9 +1887,11 @@ async function searchGroup() {
         currentGroupId = groupId;
         displayGroupInfo(group);
         document.getElementById('getMembersBtn').disabled = false;
+        showToast('Group found successfully', 'success');
     } catch (error) {
         console.error('Error searching group:', error);
         displayError('groupResults', error.message);
+        showToast(error.message || 'Error searching group', 'error');
     } finally {
         hideLoading();
     }
@@ -858,9 +1906,11 @@ async function getGroupMembers() {
         const response = await fetch(`/funstat/groups/${currentGroupId}/members`);
         const members = await response.json();
         displayGroupMembers(members);
+        showToast(`Found ${members.length} members`, 'success');
     } catch (error) {
         console.error('Error getting group members:', error);
         displayError('groupResults', error.message);
+        showToast(error.message || 'Error loading members', 'error');
     } finally {
         hideLoading();
     }
@@ -870,7 +1920,7 @@ async function searchText() {
     const searchText = document.getElementById('textSearchInput').value.trim();
 
     if (!searchText) {
-        alert('Please enter text to search');
+        showToast('Please enter text to search', 'error');
         return;
     }
 
@@ -880,9 +1930,11 @@ async function searchText() {
         const response = await fetch(`/funstat/search/text?input=${encodeURIComponent(searchText)}&page=1&pageSize=50`);
         const data = await response.json();
         displayTextResults(data);
+        showToast(`Found ${data.total || data.results?.length || 0} results`, 'success');
     } catch (error) {
         console.error('Error searching text:', error);
         displayError('textResults', error.message);
+        showToast(error.message || 'Error searching text', 'error');
     } finally {
         hideLoading();
     }
@@ -892,7 +1944,7 @@ async function searchUsernameUsage() {
     const username = document.getElementById('usernameSearchInput').value.trim().replace('@', '');
 
     if (!username) {
-        alert('Please enter a username');
+        showToast('Please enter a username', 'error');
         return;
     }
 
@@ -902,9 +1954,11 @@ async function searchUsernameUsage() {
         const response = await fetch(`/funstat/users/username_usage?username=${username}`);
         const data = await response.json();
         displayUsernameResults(data);
+        showToast('Username lookup complete', 'success');
     } catch (error) {
         console.error('Error searching username:', error);
         displayError('usernameResults', error.message);
+        showToast(error.message || 'Error looking up username', 'error');
     } finally {
         hideLoading();
     }
@@ -915,11 +1969,12 @@ function enableUserActions() {
     document.getElementById('getGroupsBtn').disabled = false;
     document.getElementById('getMessagesBtn').disabled = false;
     document.getElementById('getAllMessagesBtn').disabled = false;
+    document.getElementById('getUsernameHistoryBtn').disabled = false; // NEW
 }
 
 function displayUserBasicInfo(user) {
     const html = `
-        <div class="result-card border border-gray-800 rounded-xl p-6 card-hover">
+        <div class="result-card border border-gray-800 rounded-xl p-6 card-hover fade-in">
             <div class="flex items-start justify-between mb-4">
                 <div class="flex items-center space-x-4">
                     <div class="bg-purple-600 rounded-full w-16 h-16 flex items-center justify-center text-2xl">
@@ -930,7 +1985,12 @@ function displayUserBasicInfo(user) {
                             ${user.first_name || ''} ${user.last_name || ''}
                         </h3>
                         ${user.username ? `<p class="text-purple-400">@${user.username}</p>` : ''}
-                        <p class="text-gray-500 text-sm">ID: ${user.id}</p>
+                        <div class="flex items-center gap-2 mt-1">
+                            <p class="text-gray-500 text-sm">ID: ${user.id}</p>
+                            <button onclick="copyToClipboard('${user.id}', this)" class="text-gray-500 hover:text-purple-400 transition-colors text-sm" title="Copy ID">
+                                <i class="fas fa-copy"></i>
+                            </button>
+                        </div>
                     </div>
                 </div>
                 <div class="flex flex-col gap-2">
@@ -949,7 +2009,7 @@ function displayUserStats(stats, full = false) {
     const existingCard = document.querySelector('#userResults .result-card');
 
     const statsHtml = `
-        <div class="result-card border border-gray-800 rounded-xl p-6 mt-6">
+        <div class="result-card border border-gray-800 rounded-xl p-6 mt-6 fade-in">
             <h4 class="text-xl font-bold mb-4 flex items-center">
                 <i class="fas fa-chart-bar text-purple-400 mr-2"></i>
                 ${full ? 'Full Statistics' : 'Basic Statistics'}
@@ -1005,7 +2065,7 @@ function displayUserStats(stats, full = false) {
 
 function displayUserGroups(groups) {
     const html = `
-        <div class="result-card border border-gray-800 rounded-xl p-6 mt-6">
+        <div class="result-card border border-gray-800 rounded-xl p-6 mt-6 fade-in">
             <h4 class="text-xl font-bold mb-4 flex items-center">
                 <i class="fas fa-users text-purple-400 mr-2"></i>
                 User Groups (${groups.length})

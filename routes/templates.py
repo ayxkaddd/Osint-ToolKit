@@ -76,6 +76,10 @@ async def get_report(filename: str):
     except (ValueError, OSError):
         return HTMLResponse("Invalid file path", status_code=400)
 
+@router.get("/settings")
+def settings_page(request: Request):
+    return templates.TemplateResponse(request=request, name="settings.html")
+
 
 @router.get("/funstat")
 def funstat_page(request: Request):

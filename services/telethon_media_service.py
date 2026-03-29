@@ -1,167 +1,280 @@
 from telethon import TelegramClient
-from telethon.tl.types import MessageMediaPhoto, MessageMediaDocument, PeerChannel, PeerUser, PeerChat
-from telethon.errors import SessionPasswordNeededError, PhoneCodeInvalidError
+from telethon.tl.types import (
+    MessageMediaPhoto, MessageMediaDocument,
+    PhotoSize, PhotoCachedSize
+)
 from PIL import Image
 import io
 import os
 import logging
-from typing import Dict, List, Optional, Tuple
-from datetime import datetime
+import asyncio
 import aiofiles
+import re
+from typing import Dict, List, Optional, Tuple, Any, Union
+from datetime import datetime
+from functools import lru_cache
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass, asdict
+from collections import OrderedDict
 from dotenv import load_dotenv
 
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
+
+@dataclass
+class MessageContext:
+    """Structured message context data"""
+    chat_id: str
+    target_message: Dict[str, Any]
+    previous_messages: List[Dict[str, Any]]
+    next_messages: List[Dict[str, Any]]
+    reply_chain: List[Dict[str, Any]]
+    context_size: int
+    total_messages: int
+
+from models.funstat_models import ThumbnailResult
+
+class LRUCache:
+    """Thread-safe LRU cache implementation"""
+
+    def __init__(self, max_size: int = 1000):
+        self.cache = OrderedDict()
+        self.max_size = max_size
+        self.lock = asyncio.Lock()
+
+    async def get(self, key: str) -> Optional[Any]:
+        async with self.lock:
+            if key in self.cache:
+                # Move to end (most recently used)
+                self.cache.move_to_end(key)
+                return self.cache[key]
+            return None
+
+    async def set(self, key: str, value: Any):
+        async with self.lock:
+            if key in self.cache:
+                self.cache.move_to_end(key)
+            else:
+                self.cache[key] = value
+                if len(self.cache) > self.max_size:
+                    # Remove oldest item
+                    self.cache.popitem(last=False)
+
+    async def clear(self):
+        async with self.lock:
+            self.cache.clear()
+
+
 class TelethonMediaService:
+    _instance: Optional['TelethonMediaService'] = None
+    _lock = asyncio.Lock()
+
     def __init__(
         self,
-        api_id: Optional[int] = None,
-        api_hash: Optional[str] = None,
-        session_name: str = "telegram_session"
+        api_id: int,
+        api_hash: str,
+        phone: str,
+        session_name: str = "telegram_session",
+        max_concurrent_requests: int = 10,
+        thumbnail_cache_size: int = 1000,
+        entity_cache_size: int = 500,
+        thread_pool_workers: int = 4
     ):
         load_dotenv()
-        self.api_id = os.environ.get("TG_API_ID", api_id)
-        self.api_hash = os.environ.get("TG_API_HASH", api_hash)
+
+        # Telegram client configuration
+        self.api_id = int(os.environ.get("TELEGRAM_API_ID", api_id))
+        self.api_hash = os.environ.get("TELEGRAM_API_HASH", api_hash)
+        self.phone = phone
         self.session_name = session_name
+
+        # Client instance (initialized in start())
         self.client: Optional[TelegramClient] = None
+        self._client_started = False
+        self._start_lock = asyncio.Lock()
+
+        # Directory configuration
         self.thumbnail_dir = "static/thumbnails"
-        self.entity_cache: Dict[str, any] = {}
-        self.is_authenticated = False
-        self.phone_code_hash = None
-        self.current_phone = None
         os.makedirs(self.thumbnail_dir, exist_ok=True)
 
-    def initialize_client(self):
-        """Initialize the Telegram client without starting it."""
-        if self.client is None:
-            if not self.api_id or not self.api_hash:
-                raise ValueError("API ID and API Hash must be provided before initializing client")
+        # Caching layers
+        self._entity_cache = LRUCache(max_size=entity_cache_size)
+        self._thumbnail_cache = LRUCache(max_size=thumbnail_cache_size)
+        self._message_cache = LRUCache(max_size=1000)  # Short-lived message cache
 
-            self.client = TelegramClient(
-                self.session_name,
-                int(self.api_id),
-                str(self.api_hash)
-            )
-            logger.info("Telethon client initialized (not authenticated yet)")
+        # Concurrency control
+        self._semaphore = asyncio.Semaphore(max_concurrent_requests)
+        self._entity_lock = asyncio.Lock()
 
-    async def connect(self):
-        """Just connect without authentication."""
-        if self.client is None:
-            self.initialize_client()
+        # Thread pool for CPU-bound operations
+        self._thread_pool = ThreadPoolExecutor(max_workers=thread_pool_workers)
 
-        if not self.client.is_connected():
-            await self.client.connect()
-            logger.info("Client connected")
+        logger.info(
+            f"TelethonMediaService initialized: "
+            f"max_concurrent={max_concurrent_requests}, "
+            f"thread_pool={thread_pool_workers}"
+        )
 
-        # Check if already authorized
-        if await self.client.is_user_authorized():
-            self.is_authenticated = True
-            logger.info("Client already authorized with existing session")
-            return True
-        else:
-            logger.info("Client connected but not authorized")
-            return False
+    @classmethod
+    async def get_instance(
+        cls,
+        api_id: int = None,
+        api_hash: str = None,
+        phone: str = None,
+        **kwargs
+    ) -> 'TelethonMediaService':
+        """
+        Get singleton instance of TelethonMediaService
 
-    async def send_code_request(self, phone: str) -> dict:
-        """Send verification code to phone number."""
-        try:
-            if self.client is None:
-                self.initialize_client()
+        Thread-safe singleton pattern ensuring single client instance
+        """
+        if cls._instance is None:
+            async with cls._lock:
+                if cls._instance is None:
+                    if not all([api_id, api_hash, phone]):
+                        raise ValueError(
+                            "First call to get_instance() requires "
+                            "api_id, api_hash, and phone"
+                        )
+                    cls._instance = cls(api_id, api_hash, phone, **kwargs)
+                    await cls._instance.start()
+        return cls._instance
 
-            if not self.client.is_connected():
-                await self.client.connect()
+    async def start(self):
+        async with self._start_lock:
+            if self._client_started:
+                return
 
-            self.current_phone = phone
-            sent_code = await self.client.send_code_request(phone)
-            self.phone_code_hash = sent_code.phone_code_hash
+            # Validate all required credentials before attempting connection
+            missing = []
+            if not self.api_id:
+                missing.append("TELEGRAM_API_ID")
+            if not self.api_hash:
+                missing.append("TELEGRAM_API_HASH")
+            if not self.phone:
+                missing.append("phone number")
 
-            logger.info(f"Verification code sent to {phone}")
-            return {
-                "status": "success",
-                "message": "Verification code sent to your phone"
-            }
-        except Exception as e:
-            logger.error(f"Error sending code: {str(e)}")
-            return {
-                "status": "error",
-                "message": str(e)
-            }
-
-    async def sign_in(self, phone: str, code: str, password: Optional[str] = None) -> dict:
-        """Sign in with phone code (and optionally 2FA password)."""
-        try:
-            if not self.phone_code_hash:
-                return {
-                    "status": "error",
-                    "message": "No verification code sent. Call send_code_request first."
-                }
+            if missing:
+                logger.warning(
+                    f"Telethon client not started — missing credentials: "
+                    f"{', '.join(missing)}. Telegram features will be unavailable."
+                )
+                return  # Graceful no-op, don't raise
 
             try:
-                await self.client.sign_in(
-                    phone=phone,
-                    code=code,
-                    phone_code_hash=self.phone_code_hash
+                self.client = TelegramClient(
+                    self.session_name,
+                    int(self.api_id),
+                    self.api_hash,
+                    flood_sleep_threshold=60
                 )
-                self.is_authenticated = True
-                logger.info("Successfully authenticated!")
-                return {
-                    "status": "success",
-                    "message": "Authentication successful"
-                }
-            except SessionPasswordNeededError:
-                if password:
-                    await self.client.sign_in(password=password)
-                    self.is_authenticated = True
-                    logger.info("Successfully authenticated with 2FA!")
-                    return {
-                        "status": "success",
-                        "message": "Authentication successful (2FA)"
-                    }
-                else:
-                    return {
-                        "status": "2fa_required",
-                        "message": "2FA password required"
-                    }
-        except PhoneCodeInvalidError:
-            return {
-                "status": "error",
-                "message": "Invalid verification code"
-            }
-        except Exception as e:
-            logger.error(f"Error signing in: {str(e)}")
-            return {
-                "status": "error",
-                "message": str(e)
-            }
-
-    def update_credentials(self, api_id: int, api_hash: str):
-        """Update API credentials after initialization."""
-        self.api_id = api_id
-        self.api_hash = api_hash
-
-        # Reset client to use new credentials
-        if self.client:
-            self.client = None
-            self.is_authenticated = False
-
-        logger.info("Credentials updated")
-
-    def _ensure_authenticated(self):
-        """Check if client is authenticated before operations."""
-        if not self.is_authenticated or self.client is None:
-            raise RuntimeError(
-                "Client is not authenticated. Please authenticate first."
-            )
-
+                await self.client.start(phone=self.phone)
+                self._client_started = True
+                logger.info("Telethon client started successfully")
+            except Exception as e:
+                logger.error(
+                    f"Telethon client failed to start: {e}. "
+                    f"Telegram features will be unavailable."
+                )
+                # Clean up partial client so it's not left in a broken state
+                if self.client:
+                    try:
+                        await self.client.disconnect()
+                    except Exception:
+                        pass
+                    self.client = None
+                    
     async def stop(self):
-        if self.client:
-            await self.client.disconnect()
-            self.is_authenticated = False
-        logger.info("Telethon client stopped")
+        """Stop the Telegram client and cleanup resources"""
+        async with self._start_lock:
+            if self.client and self._client_started:
+                await self.client.disconnect()
+                self._client_started = False
+                logger.info("Telethon client stopped")
+
+            # Cleanup thread pool
+            self._thread_pool.shutdown(wait=True)
+            logger.info("Thread pool shut down")
+
+    async def __aenter__(self):
+        """Context manager entry"""
+        await self.start()
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit"""
+        await self.stop()
+
+    @staticmethod
+    def _normalize_identifier(identifier: Union[int, str]) -> str:
+        if isinstance(identifier, int):
+            return f"id:{identifier}"
+
+        s = str(identifier).lower().strip()
+
+        # Strip common prefixes
+        s = re.sub(r'^(https?://)?(t\.me/|@)', '', s)
+        s = s.strip('/')
+
+        # Detect numeric IDs (including negative channel IDs)
+        if s.lstrip('-').isdigit():
+            return f"id:{s}"
+
+        return f"username:{s}"
+
+    async def resolve_entity_cached(self, identifier: Union[int, str]) -> Any:
+        if not self._client_started:
+            await self.start()
+
+        cache_key = self._normalize_identifier(identifier)
+
+        # Fast path: check cache
+        cached = await self._entity_cache.get(cache_key)
+        if cached is not None:
+            logger.debug(f"Entity cache hit: {cache_key}")
+            return cached
+
+        # Slow path: resolve and cache
+        async with self._entity_lock:
+            # Double-check after acquiring lock (avoid duplicate resolutions)
+            cached = await self._entity_cache.get(cache_key)
+            if cached is not None:
+                return cached
+
+            try:
+                # Direct resolution using Telethon's session cache
+                input_peer = await self.client.get_input_entity(identifier)
+                await self._entity_cache.set(cache_key, input_peer)
+                logger.info(f"Entity resolved and cached: {cache_key}")
+                return input_peer
+
+            except (ValueError, TypeError) as e:
+                logger.error(f"Entity resolution failed for '{identifier}': {e}")
+                raise ValueError(
+                    f"Cannot resolve entity '{identifier}'. "
+                    f"Ensure you have access to this chat/channel. "
+                    f"Error: {e}"
+                ) from e
+
+    async def invalidate_entity_cache(self, identifier: Union[int, str] = None):
+        if identifier is None:
+            await self._entity_cache.clear()
+            logger.info("Cleared entire entity cache")
+        else:
+            cache_key = self._normalize_identifier(identifier)
+            # Note: LRUCache doesn't have delete, so we just let it expire
+            logger.info(f"Invalidated entity cache for: {cache_key}")
 
     def _get_media_type(self, message) -> Optional[str]:
+        """Determine the type of media in a message"""
         if not message.media:
             return None
+
         if isinstance(message.media, MessageMediaPhoto):
             return "photo"
         elif isinstance(message.media, MessageMediaDocument):
@@ -174,217 +287,501 @@ class TelethonMediaService:
                 return "sticker"
             else:
                 return "document"
+
         return "other"
 
-    def _serialize_message(self, message) -> Dict:
-        sender_info = {}
-        if message.sender:
-            sender_info = {
+    def _serialize_message(
+        self,
+        message,
+        include_sender_details: bool = True,
+        include_media_details: bool = False
+    ) -> Dict[str, Any]:
+        logger.info(f"{message}")
+        result = {
+            "message_id": message.id,
+            "date": message.date.isoformat() if message.date else None,
+            "text": message.text or "",
+            "sender_id": message.sender_id,
+            "reply_to_message_id": (
+                message.reply_to.reply_to_msg_id
+                if message.reply_to else None
+            ),
+            "media_type": self._get_media_type(message),
+            "has_media": bool(message.media),
+        }
+
+        # Optional: detailed sender information (may require entity fetch)
+        if include_sender_details and message.sender:
+            result["sender"] = {
                 "id": message.sender.id,
                 "username": getattr(message.sender, 'username', None),
                 "first_name": getattr(message.sender, 'first_name', None),
                 "last_name": getattr(message.sender, 'last_name', None),
-                "is_bot": getattr(message.sender, 'bot', False)
+                "is_bot": getattr(message.sender, 'bot', False),
+                "is_verified": getattr(message.sender, 'verified', False)
             }
 
-        return {
-            "message_id": message.id,
-            "date": message.date,
-            "text": message.text or "",
-            "sender_id": message.sender_id,
-            "sender": sender_info,
-            "reply_to_message_id": message.reply_to.reply_to_msg_id if message.reply_to else None,
-            "media_type": self._get_media_type(message),
-            "has_media": bool(message.media),
-            "is_forwarded": bool(message.fwd_from),
-            "views": message.views,
-            "forwards": message.forwards,
-            "edit_date": message.edit_date
-        }
+        # Optional: detailed media metadata
+        if include_media_details and message.media:
+            result["media_details"] = {
+                "is_forwarded": bool(message.fwd_from),
+                "views": message.views,
+                "forwards": message.forwards,
+                "edit_date": message.edit_date.isoformat() if message.edit_date else None
+            }
+
+        return result
+
 
     async def get_message_context(
         self,
-        chat_identifier: any,
+        chat_identifier: Union[int, str],
         message_id: int,
         context_size: int = 5,
-        fetch_replies: bool = True
-    ) -> Dict[str, any]:
-        self._ensure_authenticated()
+        fetch_replies: bool = True,
+        include_sender_details: bool = True,
+        include_media_details: bool = False
+    ) -> Optional[MessageContext]:
+        async with self._semaphore:
+            if not self._client_started:
+                await self.start()
 
-        try:
-            entity = await self.resolve_entity_cached(chat_identifier)
+            try:
+                entity = await self.resolve_entity_cached(chat_identifier)
 
-            target_message = await self.client.get_messages(entity, ids=message_id)
+                # CRITICAL FIX: First, verify the target message exists
+                target_msg = await self.client.get_messages(entity, ids=message_id)
 
-            if not target_message:
-                logger.warning(f"Message {message_id} not found in chat {chat_identifier}")
-                return None
+                if not target_msg:
+                    logger.warning(
+                        f"Message {message_id} not found in chat {chat_identifier}"
+                    )
+                    return None
 
-            prev_start = max(1, message_id - context_size)
-            prev_ids = list(range(prev_start, message_id))
-            next_ids = list(range(message_id + 1, message_id + context_size + 1))
+                # Fetch messages before (reverse chronological)
+                previous_messages = []
+                if context_size > 0:
+                    async for msg in self.client.iter_messages(
+                        entity,
+                        offset_id=message_id,  # Start from target
+                        limit=context_size,
+                        reverse=False  # Get older messages
+                    ):
+                        if msg.id < message_id:
+                            previous_messages.append(msg)
 
-            previous_messages = []
-            if prev_ids:
-                prev_msgs = await self.client.get_messages(entity, ids=prev_ids)
-                previous_messages = [
-                    self._serialize_message(msg) for msg in prev_msgs
-                    if msg is not None
-                ]
-                previous_messages.sort(key=lambda x: x['message_id'])
+                # Fetch messages after (chronological)
+                next_messages = []
+                if context_size > 0:
+                    async for msg in self.client.iter_messages(
+                        entity,
+                        offset_id=message_id,  # Start from target
+                        limit=context_size + 1,  # +1 because it includes the offset
+                        reverse=True  # Get newer messages
+                    ):
+                        if msg.id > message_id:
+                            next_messages.append(msg)
 
-            next_messages = []
-            if next_ids:
-                next_msgs = await self.client.get_messages(entity, ids=next_ids)
-                next_messages = [
-                    self._serialize_message(msg) for msg in next_msgs
-                    if msg is not None
-                ]
-                next_messages.sort(key=lambda x: x['message_id'])
+                # Sort messages
+                previous_messages.sort(key=lambda m: m.id)
+                next_messages.sort(key=lambda m: m.id)
 
-            reply_chain = []
-            if fetch_replies and target_message.reply_to:
-                reply_chain = await self._fetch_reply_chain(
-                    entity,
-                    target_message.reply_to.reply_to_msg_id
+                # Fetch reply chain if requested
+                reply_chain = []
+                if fetch_replies and target_msg.reply_to:
+                    reply_chain = await self._fetch_reply_chain_optimized(
+                        entity,
+                        target_msg.reply_to.reply_to_msg_id,
+                        include_sender_details,
+                        include_media_details
+                    )
+
+                # Build result
+                result = MessageContext(
+                    chat_id=str(chat_identifier),
+                    target_message=self._serialize_message(
+                        target_msg,
+                        include_sender_details,
+                        include_media_details
+                    ),
+                    previous_messages=[
+                        self._serialize_message(m, include_sender_details, include_media_details)
+                        for m in previous_messages
+                    ],
+                    next_messages=[
+                        self._serialize_message(m, include_sender_details, include_media_details)
+                        for m in next_messages
+                    ],
+                    reply_chain=reply_chain,
+                    context_size=context_size,
+                    total_messages=(
+                        1 + len(previous_messages) +
+                        len(next_messages) + len(reply_chain)
+                    )
                 )
 
-            result = {
-                "chat_id": str(chat_identifier),
-                "target_message": self._serialize_message(target_message),
-                "previous_messages": previous_messages,
-                "next_messages": next_messages,
-                "reply_chain": reply_chain,
-                "context_size": context_size,
-                "total_messages": 1 + len(previous_messages) + len(next_messages) + len(reply_chain)
-            }
+                logger.info(
+                    f"Fetched context for message {message_id}: "
+                    f"{len(previous_messages)} prev, {len(next_messages)} next, "
+                    f"{len(reply_chain)} in reply chain"
+                )
 
-            logger.info(
-                f"Fetched context for message {message_id}: "
-                f"{len(previous_messages)} prev, {len(next_messages)} next, "
-                f"{len(reply_chain)} in reply chain"
-            )
+                return result
 
-            return result
+            except Exception as e:
+                logger.error(f"Error fetching message context: {e}", exc_info=True)
+                raise
 
-        except Exception as e:
-            logger.error(f"Error fetching message context: {str(e)}")
-            raise
-
-    async def _fetch_reply_chain(
+    async def _fetch_reply_chain_optimized(
         self,
-        entity: any,
+        entity: Any,
         reply_to_msg_id: int,
+        include_sender_details: bool = False,
+        include_media_details: bool = False,
         max_depth: int = 10
-    ) -> List[Dict]:
-        reply_chain = []
-        current_msg_id = reply_to_msg_id
-        depth = 0
+    ) -> List[Dict[str, Any]]:
+        reply_ids = []
+        current_id = reply_to_msg_id
+        seen = set()
 
-        while current_msg_id and depth < max_depth:
+        # Phase 1: Collect all reply IDs (minimal fetches)
+        while current_id and len(reply_ids) < max_depth:
+            if current_id in seen:
+                logger.warning(f"Circular reply detected at message {current_id}")
+                break
+
+            seen.add(current_id)
+            reply_ids.append(current_id)
+
+            # Check message cache first
+            cached = await self._message_cache.get(f"msg_{current_id}")
+            if cached and hasattr(cached, 'reply_to') and cached.reply_to:
+                current_id = cached.reply_to.reply_to_msg_id
+                continue
+
+            # Fetch message to get next reply_to
             try:
-                msg = await self.client.get_messages(entity, ids=current_msg_id)
+                msg = await self.client.get_messages(entity, ids=current_id)
 
-                if not msg:
-                    break
+                if msg:
+                    # Cache for future use
+                    await self._message_cache.set(f"msg_{current_id}", msg)
 
-                reply_chain.append(self._serialize_message(msg))
-
-                if msg.reply_to:
-                    current_msg_id = msg.reply_to.reply_to_msg_id
-                    depth += 1
+                    if msg.reply_to:
+                        current_id = msg.reply_to.reply_to_msg_id
+                    else:
+                        break
                 else:
                     break
 
             except Exception as e:
-                logger.warning(f"Error fetching reply message {current_msg_id}: {str(e)}")
+                logger.warning(f"Reply chain break at {current_id}: {e}")
                 break
 
-        return list(reversed(reply_chain))
+        # Phase 2: Batch fetch all reply messages
+        if not reply_ids:
+            return []
 
-    async def get_batch_message_contexts(
-        self,
-        chat_identifier: any,
-        message_ids: List[int],
-        context_size: int = 5,
-        fetch_replies: bool = True
-    ) -> List[Dict[str, any]]:
-        self._ensure_authenticated()
-        results = []
+        try:
+            reply_messages = await self.client.get_messages(entity, ids=reply_ids)
 
-        for msg_id in message_ids:
-            try:
-                context = await self.get_message_context(
-                    chat_identifier=chat_identifier,
-                    message_id=msg_id,
-                    context_size=context_size,
-                    fetch_replies=fetch_replies
-                )
-                if context:
-                    results.append(context)
-            except Exception as e:
-                logger.error(f"Failed to get context for message {msg_id}: {str(e)}")
-                continue
+            # Filter None and serialize
+            serialized = []
+            for msg in reply_messages:
+                if msg is not None:
+                    serialized.append(
+                        self._serialize_message(
+                            msg,
+                            include_sender_details,
+                            include_media_details
+                        )
+                    )
+                    # Update cache
+                    await self._message_cache.set(f"msg_{msg.id}", msg)
 
-        logger.info(f"Retrieved contexts for {len(results)}/{len(message_ids)} messages")
-        return results
+            # Reverse to show oldest first
+            return list(reversed(serialized))
+
+        except Exception as e:
+            logger.error(f"Batch reply fetch failed: {e}")
+            return []
 
     async def get_conversation_thread(
         self,
-        chat_identifier: any,
+        chat_identifier: Union[int, str],
         message_id: int,
         include_context: bool = True,
-        context_size: int = 5
-    ) -> Dict[str, any]:
-        self._ensure_authenticated()
+        context_size: int = 5,
+        include_sender_details: bool = False,
+        include_media_details: bool = False
+    ) -> Optional[Dict[str, Any]]:
+        context = await self.get_message_context(
+            chat_identifier=chat_identifier,
+            message_id=message_id,
+            context_size=context_size if include_context else 0,
+            fetch_replies=True,
+            include_sender_details=include_sender_details,
+            include_media_details=include_media_details
+        )
 
+        if not context:
+            return None
+
+        return asdict(context)
+
+    def _group_message_ids_into_ranges(
+        self,
+        sorted_ids: List[int],
+        context_size: int
+    ) -> List[Tuple[int, int, List[int]]]:
+        if not sorted_ids:
+            return []
+
+        ranges = []
+        current_range_start = sorted_ids[0] - context_size
+        current_range_end = sorted_ids[0] + context_size
+        current_ids = [sorted_ids[0]]
+
+        for msg_id in sorted_ids[1:]:
+            expanded_start = msg_id - context_size
+            expanded_end = msg_id + context_size
+
+            # Check if this message's range overlaps with current range
+            if expanded_start <= current_range_end + 1:
+                # Merge into current range
+                current_range_end = max(current_range_end, expanded_end)
+                current_ids.append(msg_id)
+            else:
+                # Start new range
+                ranges.append((
+                    max(1, current_range_start),
+                    current_range_end,
+                    current_ids
+                ))
+                current_range_start = expanded_start
+                current_range_end = expanded_end
+                current_ids = [msg_id]
+
+        # Add final range
+        ranges.append((
+            max(1, current_range_start),
+            current_range_end,
+            current_ids
+        ))
+
+        logger.debug(
+            f"Grouped {len(sorted_ids)} message IDs into {len(ranges)} ranges"
+        )
+
+        return ranges
+
+    async def get_batch_message_contexts(
+        self,
+        chat_identifier: Union[int, str],
+        message_ids: List[int],
+        context_size: int = 5,
+        fetch_replies: bool = True,
+        include_sender_details: bool = False,
+        include_media_details: bool = False,
+        max_concurrent: int = 3
+    ) -> List[Dict[str, Any]]:
+        if not message_ids:
+            return []
+
+        # Sort and group message IDs
+        sorted_ids = sorted(set(message_ids))
+        ranges = self._group_message_ids_into_ranges(sorted_ids, context_size)
+
+        entity = await self.resolve_entity_cached(chat_identifier)
+        all_contexts = []
+
+        # Process each range
+        for range_start, range_end, msg_ids_in_range in ranges:
+            try:
+                # Single API call for entire range
+                messages = await self.client.get_messages(
+                    entity,
+                    min_id=range_start - 1,
+                    limit=range_end - range_start + 1
+                )
+
+                # Build message map for fast lookup
+                message_map = {msg.id: msg for msg in messages if msg}
+
+                # Build contexts from cached messages
+                for msg_id in msg_ids_in_range:
+                    if msg_id not in message_map:
+                        logger.warning(f"Message {msg_id} not found in range")
+                        continue
+
+                    target_msg = message_map[msg_id]
+
+                    # Partition messages
+                    previous = [
+                        m for m in message_map.values()
+                        if m.id < msg_id
+                    ]
+                    next_msgs = [
+                        m for m in message_map.values()
+                        if m.id > msg_id
+                    ]
+
+                    # Sort
+                    previous.sort(key=lambda m: m.id)
+                    next_msgs.sort(key=lambda m: m.id)
+
+                    # Limit to context_size
+                    previous = previous[-context_size:]
+                    next_msgs = next_msgs[:context_size]
+
+                    # Fetch reply chain if needed
+                    reply_chain = []
+                    if fetch_replies and target_msg.reply_to:
+                        reply_chain = await self._fetch_reply_chain_optimized(
+                            entity,
+                            target_msg.reply_to.reply_to_msg_id,
+                            include_sender_details,
+                            include_media_details
+                        )
+
+                    context = {
+                        "chat_id": str(chat_identifier),
+                        "target_message": self._serialize_message(
+                            target_msg,
+                            include_sender_details,
+                            include_media_details
+                        ),
+                        "previous_messages": [
+                            self._serialize_message(m, include_sender_details, include_media_details)
+                            for m in previous
+                        ],
+                        "next_messages": [
+                            self._serialize_message(m, include_sender_details, include_media_details)
+                            for m in next_msgs
+                        ],
+                        "reply_chain": reply_chain,
+                        "context_size": context_size,
+                        "total_messages": 1 + len(previous) + len(next_msgs) + len(reply_chain)
+                    }
+
+                    all_contexts.append(context)
+
+            except Exception as e:
+                logger.error(
+                    f"Range fetch failed [{range_start}-{range_end}]: {e}",
+                    exc_info=True
+                )
+                continue
+
+        logger.info(
+            f"Retrieved {len(all_contexts)}/{len(message_ids)} message contexts"
+        )
+
+        return all_contexts
+
+    def _get_media_hash(self, message) -> Optional[str]:
+        if not message.media:
+            return None
+
+        if isinstance(message.media, MessageMediaPhoto):
+            return f"photo_{message.media.photo.id}"
+        elif isinstance(message.media, MessageMediaDocument):
+            return f"doc_{message.media.document.id}"
+
+        return None
+
+    async def _download_thumbnail_optimized(
+        self,
+        message,
+        preferred_size: int = 300
+    ) -> Optional[bytes]:
         try:
-            entity = await self.resolve_entity_cached(chat_identifier)
+            if isinstance(message.media, MessageMediaPhoto):
+                photo = message.media.photo
 
-            target_message = await self.client.get_messages(entity, ids=message_id)
+                # Find appropriate thumbnail size
+                suitable_sizes = [
+                    s for s in photo.sizes
+                    if isinstance(s, (PhotoSize, PhotoCachedSize))
+                    and hasattr(s, 'w')
+                    and s.w >= preferred_size * 0.5  # At least half desired size
+                ]
 
-            if not target_message:
+                if not suitable_sizes:
+                    # Fallback to any available size
+                    suitable_sizes = [
+                        s for s in photo.sizes
+                        if isinstance(s, (PhotoSize, PhotoCachedSize))
+                    ]
+
+                if not suitable_sizes:
+                    logger.warning("No suitable photo sizes found")
+                    return None
+
+                # Sort by size, prefer smallest that meets requirement
+                suitable_sizes.sort(key=lambda s: getattr(s, 'w', 0))
+                thumb_size = suitable_sizes[0]
+
+                # Download ONLY this thumbnail size
+                logger.debug(
+                    f"Downloading photo thumbnail: "
+                    f"{getattr(thumb_size, 'w', 0)}x{getattr(thumb_size, 'h', 0)}"
+                )
+
+                return await self.client.download_media(
+                    message.media,
+                    file=bytes,
+                    thumb=thumb_size.type
+                )
+
+            elif isinstance(message.media, MessageMediaDocument):
+                doc = message.media.document
+
+                # Check for document thumbnail
+                if hasattr(doc, 'thumbs') and doc.thumbs:
+                    suitable_thumbs = [
+                        t for t in doc.thumbs
+                        if isinstance(t, (PhotoSize, PhotoCachedSize))
+                    ]
+
+                    if suitable_thumbs:
+                        # Use largest available thumbnail
+                        suitable_thumbs.sort(
+                            key=lambda t: getattr(t, 'w', 0),
+                            reverse=True
+                        )
+
+                        logger.debug(
+                            f"Downloading document thumbnail: "
+                            f"{getattr(suitable_thumbs[0], 'w', 0)}x"
+                            f"{getattr(suitable_thumbs[0], 'h', 0)}"
+                        )
+
+                        return await self.client.download_media(
+                            message.media,
+                            file=bytes,
+                            thumb=suitable_thumbs[0].type
+                        )
+
+                logger.warning(
+                    f"No thumbnail available for document {doc.id}. "
+                    f"Consider implementing frame extraction for videos."
+                )
                 return None
 
-            thread = {
-                "chat_id": str(chat_identifier),
-                "target_message": self._serialize_message(target_message),
-                "reply_chain": [],
-                "context": {
-                    "previous": [],
-                    "next": []
-                }
-            }
-
-            if target_message.reply_to:
-                thread["reply_chain"] = await self._fetch_reply_chain(
-                    entity,
-                    target_message.reply_to.reply_to_msg_id
-                )
-
-            if include_context:
-                context = await self.get_message_context(
-                    chat_identifier=chat_identifier,
-                    message_id=message_id,
-                    context_size=context_size,
-                    fetch_replies=False
-                )
-                thread["context"]["previous"] = context["previous_messages"]
-                thread["context"]["next"] = context["next_messages"]
-
-            return thread
-
         except Exception as e:
-            logger.error(f"Error fetching conversation thread: {str(e)}")
-            raise
+            logger.error(f"Thumbnail download failed: {e}", exc_info=True)
+            return None
 
-    async def _create_thumbnail(
+    def _create_thumbnail_sync(
         self,
         image_bytes: bytes,
         size: Tuple[int, int] = (300, 300)
     ) -> bytes:
         try:
             image = Image.open(io.BytesIO(image_bytes))
+
+            # Handle transparency
             if image.mode in ('RGBA', 'LA', 'P'):
                 background = Image.new('RGB', image.size, (255, 255, 255))
                 if image.mode == 'P':
@@ -393,104 +790,180 @@ class TelethonMediaService:
                 image = background
             elif image.mode != 'RGB':
                 image = image.convert('RGB')
+
+            # Create thumbnail
             image.thumbnail(size, Image.Resampling.LANCZOS)
+
+            # Save to bytes
             output = io.BytesIO()
-            image.save(output, format='JPEG', quality=85)
+            image.save(output, format='JPEG', quality=85, optimize=True)
             return output.getvalue()
+
         except Exception as e:
-            logger.error(f"Error creating thumbnail: {str(e)}")
+            logger.error(f"Thumbnail creation failed: {e}", exc_info=True)
             raise
 
     async def download_and_create_thumbnail(
         self,
-        chat_identifier: any,
+        chat_identifier: Union[int, str],
         message_id: int,
-        save_original: bool = False
-    ) -> Optional[Dict[str, any]]:
-        self._ensure_authenticated()
+        size: Tuple[int, int] = (300, 300),
+        force_regenerate: bool = False
+    ) -> Optional[ThumbnailResult]:
+        async with self._semaphore:
+            if not self._client_started:
+                await self.start()
 
-        try:
-            entity = await self.resolve_entity_cached(chat_identifier)
-            message = await self.client.get_messages(entity, ids=message_id)
-            if not message or not message.media:
-                logger.warning(f"No media found in message {message_id} from chat {chat_identifier}")
-                return None
+            try:
+                entity = await self.resolve_entity_cached(chat_identifier)
+                message = await self.client.get_messages(entity, ids=message_id)
 
-            media_type = self._get_media_type(message)
-            if media_type not in ["photo", "video", "image"]:
-                logger.info(f"Media type {media_type} doesn't support thumbnails")
-                return None
-
-            media_bytes = await self.client.download_media(message.media, file=bytes)
-            if not media_bytes:
-                logger.warning(f"Failed to download media from message {message_id}")
-                return None
-
-            if media_type == "video":
-                temp_video_path = f"{self.thumbnail_dir}/temp_video_{message_id}.mp4"
-                async with aiofiles.open(temp_video_path, 'wb') as f:
-                    await f.write(media_bytes)
-
-                import subprocess
-                temp_frame_path = f"{self.thumbnail_dir}/temp_frame_{message_id}.jpg"
-                try:
-                    subprocess.run([
-                        'ffmpeg', '-i', temp_video_path,
-                        '-vframes', '1', '-f', 'image2',
-                        temp_frame_path
-                    ], check=True, capture_output=True)
-                    async with aiofiles.open(temp_frame_path, 'rb') as f:
-                        media_bytes = await f.read()
-
-                    os.remove(temp_video_path)
-                    os.remove(temp_frame_path)
-                except subprocess.CalledProcessError as e:
-                    logger.error(f"FFmpeg error: {e.stderr}")
-                    os.remove(temp_video_path)
+                if not message or not message.media:
+                    logger.warning(
+                        f"No media found in message {message_id} "
+                        f"from chat {chat_identifier}"
+                    )
                     return None
 
-            thumbnail_bytes = await self._create_thumbnail(media_bytes)
+                media_type = self._get_media_type(message)
+                if media_type not in ["photo", "video", "image"]:
+                    logger.info(
+                        f"Media type '{media_type}' doesn't support thumbnails"
+                    )
+                    return None
 
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            thumbnail_filename = f"thumb_{str(chat_identifier)}_{message_id}_{timestamp}.jpg"
-            thumbnail_path = os.path.join(self.thumbnail_dir, thumbnail_filename)
-            async with aiofiles.open(thumbnail_path, 'wb') as f:
-                await f.write(thumbnail_bytes)
+                # OPTIMIZATION: Check cache first
+                media_hash = self._get_media_hash(message)
+                if media_hash and not force_regenerate:
+                    cached_path = await self._thumbnail_cache.get(media_hash)
+                    if cached_path and os.path.exists(cached_path):
+                        logger.debug(f"Thumbnail cache hit: {media_hash}")
 
-            if save_original and media_type in ["photo", "image"]:
-                original_filename = f"orig_{str(chat_identifier)}_{message_id}_{timestamp}.jpg"
-                original_path = os.path.join(self.thumbnail_dir, original_filename)
-                async with aiofiles.open(original_path, 'wb') as f:
-                    await f.write(media_bytes)
-            else:
-                original_path = None
+                        # Get file size
+                        file_size = os.path.getsize(cached_path)
 
-            result = {
-                "message_id": message_id,
-                "chat_identifier": str(chat_identifier),
-                "media_type": media_type,
-                "thumbnail_path": thumbnail_path,
-                "thumbnail_url": f"/static/thumbnails/{thumbnail_filename}",
-                "original_path": original_path,
-                "generated_at": datetime.now(),
-                "file_size": len(thumbnail_bytes)
-            }
-            logger.info(f"Created thumbnail for message {message_id}: {thumbnail_filename}")
-            return result
-        except Exception as e:
-            logger.error(f"Error processing media from message {message_id}: {str(e)}")
-            raise
+                        return ThumbnailResult(
+                            message_id=message_id,
+                            chat_identifier=str(chat_identifier),
+                            media_type=media_type,
+                            thumbnail_path=cached_path,
+                            thumbnail_url=f"/static/thumbnails/{os.path.basename(cached_path)}",
+                            file_size=file_size,
+                            cached=True,
+                            generated_at=datetime.fromtimestamp(
+                                os.path.getmtime(cached_path)
+                            )
+                        )
+
+                # OPTIMIZATION: Download native thumbnail (not full media)
+                thumbnail_bytes = await self._download_thumbnail_optimized(
+                    message,
+                    preferred_size=size[0]
+                )
+
+                if not thumbnail_bytes:
+                    logger.warning(
+                        f"No thumbnail available for message {message_id}"
+                    )
+                    return None
+
+                # OPTIMIZATION: Process in thread pool (non-blocking)
+                processed_bytes = await asyncio.to_thread(
+                    self._create_thumbnail_sync,
+                    thumbnail_bytes,
+                    size
+                )
+
+                # Save to disk
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                filename = f"thumb_{media_hash}_{timestamp}.jpg"
+                filepath = os.path.join(self.thumbnail_dir, filename)
+
+                async with aiofiles.open(filepath, 'wb') as f:
+                    await f.write(processed_bytes)
+
+                # Update cache
+                if media_hash:
+                    await self._thumbnail_cache.set(media_hash, filepath)
+
+                result = ThumbnailResult(
+                    message_id=message_id,
+                    chat_identifier=str(chat_identifier),
+                    media_type=media_type,
+                    thumbnail_path=filepath,
+                    thumbnail_url=f"/static/thumbnails/{filename}",
+                    file_size=len(processed_bytes),
+                    cached=False,
+                    generated_at=datetime.now()
+                )
+
+                logger.info(
+                    f"Created thumbnail for message {message_id}: "
+                    f"{filename} ({len(processed_bytes)} bytes)"
+                )
+
+                print(result)
+
+                return result
+
+            except Exception as e:
+                logger.error(
+                    f"Error processing media from message {message_id}: {e}",
+                    exc_info=True
+                )
+                raise
+
+    async def batch_create_thumbnails(
+        self,
+        chat_identifier: Union[int, str],
+        message_ids: List[int],
+        size: Tuple[int, int] = (300, 300),
+        max_concurrent: int = 5
+    ) -> List[ThumbnailResult]:
+        semaphore = asyncio.Semaphore(max_concurrent)
+
+        async def process_one(msg_id: int) -> Optional[ThumbnailResult]:
+            async with semaphore:
+                try:
+                    return await self.download_and_create_thumbnail(
+                        chat_identifier,
+                        msg_id,
+                        size
+                    )
+                except Exception as e:
+                    logger.error(f"Thumbnail failed for message {msg_id}: {e}")
+                    return None
+
+        # Run concurrently
+        results = await asyncio.gather(
+            *[process_one(msg_id) for msg_id in message_ids],
+            return_exceptions=False
+        )
+
+        # Filter out None results
+        successful = [r for r in results if r is not None]
+
+        logger.info(
+            f"Created {len(successful)}/{len(message_ids)} thumbnails "
+            f"with concurrency={max_concurrent}"
+        )
+
+        return successful
 
     async def get_chat_media_messages(
         self,
-        chat_identifier: any,
+        chat_identifier: Union[int, str],
         limit: int = 100,
-        offset_id: int = 0
-    ) -> List[Dict[str, any]]:
-        self._ensure_authenticated()
+        offset_id: int = 0,
+        media_types: Optional[List[str]] = None
+    ) -> List[Dict[str, Any]]:
+        if not self._client_started:
+            await self.start()
+
+        entity = await self.resolve_entity_cached(chat_identifier)
         media_messages = []
+
         try:
-            entity = await self.resolve_entity_cached(chat_identifier)
             async for message in self.client.iter_messages(
                 entity,
                 limit=limit,
@@ -498,131 +971,69 @@ class TelethonMediaService:
             ):
                 if message.media:
                     media_type = self._get_media_type(message)
+
+                    # Filter by media type if specified
+                    if media_types and media_type not in media_types:
+                        continue
+
                     media_messages.append({
                         "message_id": message.id,
-                        "date": message.date,
+                        "date": message.date.isoformat() if message.date else None,
                         "media_type": media_type,
                         "has_text": bool(message.text),
-                        "text_preview": message.text[:100] if message.text else None
+                        "text_preview": message.text[:100] if message.text else None,
+                        "sender_id": message.sender_id,
                     })
-            logger.info(f"Found {len(media_messages)} media messages in chat {chat_identifier}")
+
+            logger.info(
+                f"Found {len(media_messages)} media messages in "
+                f"chat {chat_identifier}"
+            )
+
             return media_messages
+
         except Exception as e:
-            logger.error(f"Error getting media messages from chat {chat_identifier}: {str(e)}")
+            logger.error(
+                f"Error getting media messages from chat {chat_identifier}: {e}",
+                exc_info=True
+            )
             raise
 
-    async def batch_create_thumbnails(
-        self,
-        chat_identifier: any,
-        message_ids: List[int]
-    ) -> List[Dict[str, any]]:
-        self._ensure_authenticated()
-        results = []
-        for msg_id in message_ids:
-            try:
-                result = await self.download_and_create_thumbnail(chat_identifier, msg_id)
-                if result:
-                    results.append(result)
-            except Exception as e:
-                logger.error(f"Failed to process message {msg_id}: {str(e)}")
-                continue
-        logger.info(f"Created {len(results)} thumbnails out of {len(message_ids)} messages")
-        return results
+    async def get_chat_info(self, chat_identifier: Union[int, str]) -> Dict[str, Any]:
+        if not self._client_started:
+            await self.start()
 
-    async def encounter_entity(self, identifier):
-        self._ensure_authenticated()
+        entity = await self.resolve_entity_cached(chat_identifier)
+        full_entity = await self.client.get_entity(entity)
 
-        print(f"[*] Attempting to encounter entity: {identifier}")
-        try:
-            if isinstance(identifier, str):
-                clean_id = identifier.replace('https://t.me/', '').replace('t.me/', '').replace('@', '')
-                for variant in [clean_id, f'@{clean_id}', f't.me/{clean_id}', f'https://t.me/{clean_id}']:
-                    try:
-                        entity = await self.client.get_entity(variant)
-                        print(f"[+] Successfully encountered entity via direct resolution: {entity.id}")
-                        return entity
-                    except:
-                        continue
-        except Exception as e:
-            print(f"[*] Direct resolution failed: {e}")
+        info = {
+            "id": full_entity.id,
+            "title": getattr(full_entity, 'title', None),
+            "username": getattr(full_entity, 'username', None),
+            "type": full_entity.__class__.__name__,
+        }
 
-        print("[*] Getting dialogs to populate entity cache...")
-        try:
-            dialogs = await self.client.get_dialogs()
-            print(f"[+] Retrieved {len(dialogs)} dialogs")
-            if isinstance(identifier, str):
-                clean_id = identifier.replace('https://t.me/', '').replace('t.me/', '').replace('@', '')
-                for dialog in dialogs:
-                    entity = dialog.entity
-                    if hasattr(entity, 'username') and entity.username:
-                        if entity.username.lower() == clean_id.lower():
-                            print(f"[+] Found entity in dialogs by username: {entity.id}")
-                            return entity
-                    if hasattr(entity, 'title') and entity.title:
-                        if entity.title.lower() == clean_id.lower():
-                            print(f"[+] Found entity in dialogs by title: {entity.id}")
-                            return entity
-            elif isinstance(identifier, (int, str)) and str(identifier).lstrip('-').isdigit():
-                target_id = int(identifier)
-                if target_id > 0 and len(str(target_id)) > 10:
-                    target_id = int(f'-100{target_id}')
-                for dialog in dialogs:
-                    if dialog.entity.id == target_id:
-                        print(f"[+] Found entity in dialogs by ID: {dialog.entity.id}")
-                        return dialog.entity
-        except Exception as e:
-            print(f"[*] Dialog retrieval failed: {e}")
+        # Add additional fields if available
+        if hasattr(full_entity, 'participants_count'):
+            info["participants_count"] = full_entity.participants_count
 
-        if isinstance(identifier, (int, str)) and str(identifier).lstrip('-').isdigit():
-            entity_id = int(identifier)
-            if entity_id > 0 and len(str(entity_id)) > 10:
-                entity_id = int(f'-100{entity_id}')
-            for peer_type in [PeerChannel, PeerUser, PeerChat]:
-                try:
-                    entity = await self.client.get_entity(peer_type(entity_id))
-                    print(f"[+] Successfully encountered entity as {peer_type.__name__}: {entity.id}")
-                    return entity
-                except Exception:
-                    continue
+        if hasattr(full_entity, 'about'):
+            info["about"] = full_entity.about
 
-        if isinstance(identifier, str):
-            clean_id = identifier.replace('https://t.me/', '').replace('t.me/', '').replace('@', '')
-            try:
-                messages = await self.client.get_messages(clean_id, limit=1)
-                if messages:
-                    entity = messages[0].chat
-                    print(f"[+] Encountered entity through messages: {entity.id}")
-                    return entity
-            except Exception as e:
-                print(f"[*] Message retrieval failed: {e}")
+        return info
 
-        raise ValueError(f"Could not encounter entity: {identifier}. Make sure you have access to this chat/channel and it exists.")
+    async def clear_all_caches(self):
+        """Clear all internal caches"""
+        await self._entity_cache.clear()
+        await self._thumbnail_cache.clear()
+        await self._message_cache.clear()
+        logger.info("Cleared all caches")
 
-    async def resolve_entity_cached(self, identifier):
-        self._ensure_authenticated()
-
-        if isinstance(identifier, str):
-            cache_key = identifier.replace('https://t.me/', '').replace('t.me/', '').replace('@', '').lower()
-        else:
-            cache_key = str(identifier)
-
-        if cache_key in self.entity_cache:
-            print(f"[✓] Using cached entity for: {cache_key}")
-            return self.entity_cache[cache_key]
-
-        print(f"[*] Entity not in cache, resolving: {identifier}")
-        try:
-            input_entity = await self.client.get_input_entity(identifier)
-            self.entity_cache[cache_key] = input_entity
-            print(f"[+] Cached entity from Telethon session: {cache_key}")
-            return input_entity
-        except (ValueError, TypeError):
-            print(f"[*] Entity not in Telethon cache, encountering: {identifier}")
-            try:
-                entity = await self.encounter_entity(identifier)
-                input_entity = await self.client.get_input_entity(entity)
-                self.entity_cache[cache_key] = input_entity
-                print(f"[+] Cached newly encountered entity: {cache_key}")
-                return input_entity
-            except Exception as e:
-                raise ValueError(f"Failed to resolve entity {identifier}: {str(e)}")
+    def get_cache_stats(self) -> Dict[str, Any]:
+        """Get statistics about cache usage"""
+        return {
+            "entity_cache_size": len(self._entity_cache.cache),
+            "thumbnail_cache_size": len(self._thumbnail_cache.cache),
+            "message_cache_size": len(self._message_cache.cache),
+            "client_started": self._client_started
+        }

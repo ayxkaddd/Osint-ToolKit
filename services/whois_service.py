@@ -5,13 +5,15 @@ from typing import Dict
 import aiohttp
 from fastapi import HTTPException
 
+from config.token_manager import tokens
+
 class WhoisService:
     def __init__(self):
         self.domain = "78.46.239.70:8000"
         self.uri = "/api/whois"
         self.whois_history_domain = "whois-history.whoisxmlapi.com"
-        self.wx_api_key = os.getenv("WHOIS_XML_API_KEY")
-    
+        self.wx_api_key = tokens.get("WHOIS_XML_API_KEY")
+
     async def lookup_whois_history(self, domain: str):
         async with aiohttp.ClientSession() as session:
             params = {

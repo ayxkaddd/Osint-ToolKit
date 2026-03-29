@@ -5,10 +5,9 @@ import time
 from typing import List
 from telethon import TelegramClient
 import os
-from dotenv import load_dotenv
 import logging
 
-load_dotenv()
+from config.token_manager import tokens
 
 from models.telegram_models import VKProfileHistoryResponse, ProfileEntry
 
@@ -16,8 +15,8 @@ class TelegramService:
     def __init__(self):
         self.session_name = "telegram_session"
         self.logger = logging.getLogger(__name__)
-        self.api_id = os.getenv('TELEGRAM_API_ID')
-        self.api_hash = os.getenv('TELEGRAM_API_HASH')
+        self.api_id = tokens.get('TELEGRAM_API_ID')
+        self.api_hash = tokens.get('TELEGRAM_API_HASH')
 
         if not all([self.api_id, self.api_hash]):
             self.logger.error("Telegram API credentials not found in environment variables")
