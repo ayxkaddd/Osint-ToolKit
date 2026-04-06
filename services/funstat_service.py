@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 
 class FunstatService:
-    def __init__(self, api_key: str, base_url: str = "https://funstat.in"):
+    def __init__(self, api_key: str, base_url: str = "https://telelog.org"):
         self.api_key = api_key
         self.base_url = base_url
         self.headers = {

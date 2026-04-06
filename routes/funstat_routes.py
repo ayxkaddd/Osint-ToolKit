@@ -24,7 +24,7 @@ from config.token_manager import tokens
 
 funstat_service = FunstatService(
     api_key=tokens.get("FUNSTAT_API_KEY"),
-    base_url="https://funstat.in"
+    base_url="https://telelog.org"
 )
 
 telethon_service = TelethonMediaService(
