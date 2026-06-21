@@ -219,7 +219,7 @@
         },
         {
             "name": "VK.com Profile History",
-            "description": "Get profile history of a VK.com user (integrates @VKHistoryRobot)",
+            "description": "Get profile history of a VK.com user (integrates @VKInfoRobot)",
             "endpoint": "/vk",
             "icon": "vk",
             "icon_color": "blue",

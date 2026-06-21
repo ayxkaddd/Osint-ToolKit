@@ -72,7 +72,7 @@ class TelegramService:
             self.logger.info(f"Starting request for user_id: {user_id}")
             await self.ensure_client()
 
-            bot_username = 'VKHistoryRobot'
+            bot_username = 'VKInfoRobot'
             bot_entity = await self.client.get_entity(bot_username)
             response = VKProfileHistoryResponse()
 
