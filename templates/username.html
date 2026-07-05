@@ -3,120 +3,88 @@
 {% block title %}Username Search - OSINT Toolkit{% endblock %}
 
 {% block content %}
-<div class="container mx-auto p-4 max-w-4xl">
-    <!-- Header Section -->
-    <div class="text-center mb-12">
-        <h1 class="text-4xl font-bold mb-4">Username Search</h1>
-        <p class="text-gray-400 text-lg">Search for usernames across multiple platforms</p>
-    </div>
+<div class="username-page mx-auto w-full max-w-6xl px-4 py-6 md:px-6">
+    <div class="username-toolbar">
+        <div class="username-title">
+            <h1>Username Search</h1>
+            <span id="progressText">0 / 0</span>
+        </div>
 
-    <!-- Search Form -->
-    <div class="bg-[#1a1b26]/50 backdrop-blur-sm border border-[#24283b] rounded-xl p-6 mb-8 max-w-4xl mx-auto">
-        <form id="searchForm" class="flex flex-col md:flex-row gap-4">
-            <div class="flex-1">
-                <input type="text" id="username" name="username" placeholder="Enter username to search"
-                    class="w-full bg-gray-900/80 border border-gray-700 rounded-lg py-3 px-4 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 transition-colors"
-                    required>
-            </div>
-            <div class="flex gap-2">
-                <button type="submit" id="searchBtn"
-                    class="bg-purple-600 hover:bg-purple-700 px-6 py-3 rounded-lg font-medium transition-colors">
-                    <i class="fas fa-search mr-2"></i>Search Username
-                </button>
-                <button type="button" id="stopBtn"
-                    class="hidden bg-red-600 hover:bg-red-700 px-4 py-3 rounded-lg font-medium transition-colors">
-                    <i class="fas fa-stop mr-2"></i>Stop
-                </button>
-            </div>
+        <form id="searchForm" class="username-search-form" autocomplete="off">
+            <input
+                type="search"
+                id="usernameSearchInput"
+                name="osint-search-target"
+                placeholder="Enter username"
+                autocomplete="off"
+                autocapitalize="none"
+                autocorrect="off"
+                spellcheck="false"
+                aria-label="Username"
+                required>
+            <button type="submit" id="searchBtn">
+                <i class="fas fa-search"></i>
+                <span>Search</span>
+            </button>
+            <button type="button" id="stopBtn" class="hidden">
+                <i class="fas fa-stop"></i>
+            </button>
         </form>
     </div>
 
-    <!-- Stats -->
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8 max-w-4xl mx-auto" id="statsSection">
-        <div class="bg-[#1a1b26]/50 backdrop-blur-sm border border-[#24283b] rounded-xl p-4">
-            <div class="flex items-center justify-between mb-2">
-                <span class="text-gray-400 text-sm">Sources Scanned</span>
-                <div class="w-2 h-2 bg-blue-500 rounded-full"></div>
-            </div>
-            <div class="text-2xl font-bold" id="sourcesScanned">0</div>
+    <div class="username-status-row">
+        <div class="username-stat">
+            <span>Scanned</span>
+            <strong id="sourcesScanned">0</strong>
         </div>
-        <div class="bg-[#1a1b26]/50 backdrop-blur-sm border border-[#24283b] rounded-xl p-4">
-            <div class="flex items-center justify-between mb-2">
-                <span class="text-gray-400 text-sm">Usernames</span>
-                <div class="w-2 h-2 bg-green-500 rounded-full"></div>
-            </div>
-            <div class="text-2xl font-bold" id="usernamesFound">0</div>
+        <div class="username-stat">
+            <span>Found</span>
+            <strong id="usernamesFound">0</strong>
         </div>
-        <div class="bg-[#1a1b26]/50 backdrop-blur-sm border border-[#24283b] rounded-xl p-4">
-            <div class="flex items-center justify-between mb-2">
-                <span class="text-gray-400 text-sm">Total Accounts</span>
-                <div class="w-2 h-2 bg-purple-500 rounded-full"></div>
-            </div>
-            <div class="text-2xl font-bold" id="totalAccounts">0</div>
+        <div class="username-stat">
+            <span>Accounts</span>
+            <strong id="totalAccounts">0</strong>
         </div>
-        <div class="bg-[#1a1b26]/50 backdrop-blur-sm border border-[#24283b] rounded-xl p-4">
-            <div class="flex items-center justify-between mb-2">
-                <span class="text-gray-400 text-sm">Progress</span>
-                <div class="w-2 h-2 bg-yellow-500 rounded-full"></div>
-            </div>
-            <div class="text-2xl font-bold" id="progressPercent">0%</div>
+        <div class="username-stat">
+            <span>Progress</span>
+            <strong id="progressPercent">0%</strong>
         </div>
     </div>
 
-    <!-- Added category stats section -->
-    <div id="categoryStats" class="hidden mb-8 max-w-4xl mx-auto">
-        <div class="bg-[#1a1b26]/50 backdrop-blur-sm border border-[#24283b] rounded-xl p-4">
-            <h3 class="text-sm font-semibold text-gray-400 mb-3">Results by Category</h3>
-            <div id="categoryStatsGrid" class="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <!-- Category stats will be inserted here -->
+    <div id="progressSection" class="username-progress hidden">
+        <div id="progressBar" style="width: 0%"></div>
+    </div>
+
+    <div class="username-controls">
+        <div id="currentlyChecking" class="username-current hidden">
+            <span></span>
+            <strong id="currentSite"></strong>
+        </div>
+
+        <div id="filterSection" class="username-view-controls hidden">
+            <div class="username-segmented" aria-label="Result layout">
+                <button type="button" id="flatViewBtn" class="active" data-view="flat">
+                    <i class="fas fa-border-all"></i>
+                    <span>Flat</span>
+                </button>
+                <button type="button" id="groupedViewBtn" data-view="grouped">
+                    <i class="fas fa-layer-group"></i>
+                    <span>Grouped</span>
+                </button>
             </div>
+            <select id="categoryFilter" class="hidden">
+                <option value="all">All Categories</option>
+            </select>
         </div>
     </div>
 
-    <!-- Progress Bar -->
-    <div id="progressSection" class="hidden mb-8 max-w-4xl mx-auto">
-        <div class="bg-[#1a1b26]/50 backdrop-blur-sm border border-[#24283b] rounded-xl p-4">
-            <div class="flex items-center justify-between mb-2">
-                <span class="text-sm text-gray-400">Scanning progress</span>
-                <span id="progressText" class="text-sm text-gray-400">0 / 0</span>
-            </div>
-            <!-- Added shimmer animation to progress bar -->
-            <div class="w-full bg-gray-700 rounded-full h-2 overflow-hidden">
-                <div id="progressBar"
-                    class="bg-gradient-to-r from-purple-500 to-purple-600 h-2 rounded-full transition-all duration-300 shimmer"
-                    style="width: 0%"></div>
-            </div>
-        </div>
+    <div id="categoryStats" class="username-category-summary hidden">
+        <div id="categoryStatsGrid"></div>
     </div>
 
-    <!-- Currently Checking -->
-    <div id="currentlyChecking" class="hidden mb-6 max-w-4xl mx-auto">
-        <div class="bg-[#1a1b26]/50 backdrop-blur-sm border border-[#24283b] rounded-xl p-4">
-            <div class="flex items-center space-x-3">
-                <div class="animate-spin rounded-full h-4 w-4 border-2 border-purple-500 border-t-transparent">
-                </div>
-                <span class="text-gray-300">Checking:</span>
-                <span id="currentSite" class="text-white font-medium"></span>
-            </div>
-        </div>
-    </div>
-
-    <!-- Added category filter dropdown -->
-    <div id="filterSection" class="hidden mb-6 max-w-4xl mx-auto">
-        <div class="bg-[#1a1b26]/50 backdrop-blur-sm border border-[#24283b] rounded-xl p-4">
-            <div class="flex items-center justify-between">
-                <label for="categoryFilter" class="text-sm text-gray-400">Filter by Category:</label>
-                <select id="categoryFilter"
-                    class="bg-gray-900/80 border border-gray-700 rounded-lg py-2 px-4 text-white focus:outline-none focus:border-purple-500 transition-colors">
-                    <option value="all">All Categories</option>
-                </select>
-            </div>
-        </div>
-    </div>
-
-    <!-- Results Grid -->
-    <div id="resultsContainer">
-        <!-- Category sections will be inserted here -->
+    <div id="resultsContainer" class="username-results-shell">
+        <div id="resultsMasonry" class="username-masonry"></div>
+        <div id="groupedResults" class="username-grouped hidden"></div>
     </div>
 </div>
 

@@ -4,6 +4,8 @@ class OSINTSearch {
         this.searchActive = false;
         this.results = [];
         this.resultsByCategory = {};
+        this.viewMode = 'flat';
+        this.activeCategory = 'all';
         this.stats = {
             scanned: 0,
             total: 0,
@@ -29,10 +31,14 @@ class OSINTSearch {
             currentlyChecking: document.getElementById('currentlyChecking'),
             currentSite: document.getElementById('currentSite'),
             resultsContainer: document.getElementById('resultsContainer'),
+            resultsMasonry: document.getElementById('resultsMasonry'),
+            groupedResults: document.getElementById('groupedResults'),
             categoryStats: document.getElementById('categoryStats'),
             categoryStatsGrid: document.getElementById('categoryStatsGrid'),
             filterSection: document.getElementById('filterSection'),
-            categoryFilter: document.getElementById('categoryFilter')
+            categoryFilter: document.getElementById('categoryFilter'),
+            flatViewBtn: document.getElementById('flatViewBtn'),
+            groupedViewBtn: document.getElementById('groupedViewBtn')
         };
     }
 
@@ -53,6 +59,18 @@ class OSINTSearch {
         if (this.elements.categoryFilter) {
             this.elements.categoryFilter.addEventListener('change', (e) => {
                 this.filterByCategory(e.target.value);
+            });
+        }
+
+        if (this.elements.flatViewBtn) {
+            this.elements.flatViewBtn.addEventListener('click', () => {
+                this.switchView('flat');
+            });
+        }
+
+        if (this.elements.groupedViewBtn) {
+            this.elements.groupedViewBtn.addEventListener('click', () => {
+                this.switchView('grouped');
             });
         }
     }
@@ -103,7 +121,7 @@ class OSINTSearch {
     startSearch() {
         if (this.searchActive) return;
 
-        const username = document.getElementById('username').value.trim();
+        const username = document.getElementById('usernameSearchInput').value.trim();
         if (!username) return;
 
         this.resetResults();
@@ -152,6 +170,10 @@ class OSINTSearch {
                 }
                 break;
 
+            case 'profile_extracted':
+                this.handleProfileExtracted(event.data);
+                break;
+
             case 'search_completed':
                 this.handleSearchCompleted(event.data);
                 break;
@@ -187,60 +209,6 @@ class OSINTSearch {
         this.updateCategoryStats();
     }
 
-    getCategorySection(category) {
-        let section = document.getElementById(`category-${category}`);
-
-        if (!section) {
-            section = this.createCategorySection(category);
-            this.elements.resultsContainer.appendChild(section);
-
-            // Update filter dropdown
-            this.updateCategoryFilter();
-        }
-
-        return section.querySelector('.category-grid');
-    }
-
-    createCategorySection(category) {
-        const section = document.createElement('div');
-        section.id = `category-${category}`;
-        section.className = 'mb-8 fade-in';
-        section.dataset.category = category;
-
-        const categoryColor = this.getCategoryColor(category);
-
-        section.innerHTML = `
-            <div class="bg-[#1a1b26]/50 backdrop-blur-sm border border-[#24283b] rounded-xl overflow-hidden">
-                <button class="category-header w-full p-4 flex items-center justify-between hover:bg-[#24283b]/30 transition-colors" data-category="${category}">
-                    <div class="flex items-center space-x-3">
-                        <div class="w-3 h-3 rounded-full ${categoryColor}"></div>
-                        <h2 class="text-xl font-bold text-white capitalize">${category}</h2>
-                        <span class="category-count px-2 py-1 bg-gray-700 rounded-full text-xs text-gray-300">0</span>
-                    </div>
-                    <i class="fas fa-chevron-down text-gray-400 transition-transform"></i>
-                </button>
-                <div class="category-content p-4">
-                    <div class="category-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        <!-- Results will be inserted here -->
-                    </div>
-                </div>
-            </div>
-        `;
-
-        // Add toggle functionality
-        const header = section.querySelector('.category-header');
-        const content = section.querySelector('.category-content');
-        const icon = header.querySelector('i');
-
-        header.addEventListener('click', () => {
-            content.classList.toggle('collapsed');
-            icon.classList.toggle('fa-chevron-down');
-            icon.classList.toggle('fa-chevron-up');
-        });
-
-        return section;
-    }
-
     getCategoryColor(category) {
         const colors = {
             'social': 'bg-blue-500',
@@ -258,236 +226,122 @@ class OSINTSearch {
     }
 
     addResultCard(result) {
-        const categoryGrid = this.getCategorySection(result.category);
+        const card = this.createResultCard(result);
+
+        if (this.viewMode === 'grouped') {
+            const group = this.getGroupedCategory(result.category);
+            group.querySelector('.username-category-results').appendChild(card);
+            this.updateGroupedCategoryCount(result.category);
+            this.filterByCategory(this.activeCategory);
+        } else {
+            this.elements.resultsMasonry.appendChild(card);
+        }
+    }
+
+    replaceResultCard(result) {
+        const existingCard = this.findResultCard(result);
+        const newCard = this.createResultCard(result);
+        newCard.classList.remove('fade-in');
+
+        if (existingCard) {
+            existingCard.replaceWith(newCard);
+            return;
+        }
+
+        this.addResultCard(result);
+    }
+
+    findResultCard(result) {
+        const cards = this.elements.resultsContainer.querySelectorAll('.username-result-card');
+        return Array.from(cards).find(card =>
+            card.dataset.resultUrl === result.url &&
+            card.dataset.siteName === result.siteName
+        );
+    }
+
+    createResultCard(result) {
         const platformInfo = this.getPlatformIcon(result.siteName, result.category);
         const responseTime = result.responseTime ? Math.round(result.responseTime * 1000) : 0;
         const timeAgo = this.getTimeAgo(result.checkedAt);
-
         const keyInfo = this.extractKeyInfo(result.profileData);
         const hasProfileData = result.profileData && Object.keys(result.profileData).length > 0;
+        const metaRows = this.getCompactRows(keyInfo);
 
         const card = document.createElement('div');
-        card.className = 'result-card bg-[#1a1b26]/50 backdrop-blur-sm border border-[#24283b] rounded-xl p-6 hover:border-purple-500/50 transition-all fade-in';
+        card.className = 'result-card username-result-card fade-in';
+        card.dataset.resultUrl = result.url;
+        card.dataset.siteName = result.siteName;
+        card.dataset.category = result.category;
 
         card.innerHTML = `
-            <div class="flex items-start justify-between mb-4">
-                <div class="flex items-center space-x-3">
-                    ${keyInfo.profileImage ? `
-                        <img src="${keyInfo.profileImage}" alt="Profile" class="w-12 h-12 rounded-lg object-cover border border-gray-700">
-                    ` : `
-                        <div class="platform-icon ${platformInfo.class}">
-                            ${platformInfo.icon}
-                        </div>
-                    `}
-                    <div>
-                        <h3 class="font-semibold text-white">${result.siteName}</h3>
-                        ${keyInfo.username ? `
-                            <div class="flex items-center space-x-2">
-                                <div class="text-sm text-gray-400 font-mono">@${keyInfo.username}</div>
-                                <button class="copy-username-btn text-gray-500 hover:text-purple-400 transition-colors" data-username="${keyInfo.username}" title="Copy username">
-                                    <i class="fas fa-copy text-xs"></i>
-                                </button>
-                            </div>
-                        ` : ''}
+            <div class="username-card-header">
+                ${keyInfo.profileImage ? `
+                    <img src="${this.escapeHtml(keyInfo.profileImage)}" alt="" class="username-card-avatar">
+                ` : `
+                    <div class="platform-icon ${platformInfo.class}">
+                        ${platformInfo.icon}
                     </div>
-                </div>
-                <div class="text-right">
-                    <div class="text-xs text-gray-400">${timeAgo}</div>
-                    <div class="text-xs text-gray-500">${responseTime}ms</div>
+                `}
+                <div class="username-card-title">
+                    <h3 title="${this.escapeHtml(result.siteName)}">${this.escapeHtml(result.siteName)}</h3>
+                    <span>${this.escapeHtml(result.category || 'unknown')}</span>
                 </div>
             </div>
 
-            <div class="space-y-3">
-                ${keyInfo.fullName ? `
-                    <div class="flex justify-between">
-                        <span class="text-gray-400 text-sm">Full Name</span>
-                        <span class="text-white text-sm">${this.escapeHtml(keyInfo.fullName)}</span>
-                    </div>
-                ` : ''}
+            ${keyInfo.username ? `
+                <div class="username-handle-row">
+                    <span title="@${this.escapeHtml(String(keyInfo.username))}">@${this.escapeHtml(String(keyInfo.username))}</span>
+                    <button class="copy-username-btn" data-username="${this.escapeHtml(String(keyInfo.username))}" title="Copy username">
+                        <i class="fas fa-copy"></i>
+                    </button>
+                </div>
+            ` : ''}
 
+            <div class="username-card-content">
                 ${keyInfo.bio ? `
-                    <div>
-                        <span class="text-gray-400 text-sm block mb-1">Bio</span>
-                        <p class="text-white text-sm line-clamp-2">${this.escapeHtml(keyInfo.bio)}</p>
-                    </div>
+                    <p class="username-card-bio">${this.escapeHtml(String(keyInfo.bio))}</p>
                 ` : ''}
 
-                ${(keyInfo.followers !== null && keyInfo.followers > 0) || (keyInfo.following !== null && keyInfo.following > 0) ? `
-                    <div class="flex justify-between">
-                        ${keyInfo.followers !== null && keyInfo.followers > 0 ? `
-                            <div>
-                                <span class="text-gray-400 text-xs">Followers</span>
-                                <div class="text-white text-sm font-semibold">${this.formatNumber(keyInfo.followers)}</div>
-                            </div>
-                        ` : ''}
-                        ${keyInfo.following !== null && keyInfo.following > 0 ? `
-                            <div>
-                                <span class="text-gray-400 text-xs">Following</span>
-                                <div class="text-white text-sm font-semibold">${this.formatNumber(keyInfo.following)}</div>
-                            </div>
-                        ` : ''}
+                ${metaRows.map(row => `
+                    <div class="username-data-row">
+                        <strong>${this.escapeHtml(row.label)}</strong>
+                        <span title="${this.escapeHtml(String(row.value))}">${this.escapeHtml(String(row.value))}</span>
                     </div>
-                ` : ''}
+                `).join('')}
 
-                ${keyInfo.posts !== null && keyInfo.posts > 0 ? `
-                    <div class="flex justify-between">
-                        <span class="text-gray-400 text-sm">Posts</span>
-                        <span class="text-white text-sm font-semibold">${this.formatNumber(keyInfo.posts)}</span>
-                    </div>
-                ` : ''}
-
-                ${keyInfo.reputation !== null && keyInfo.reputation > 0 ? `
-                    <div class="flex justify-between">
-                        <span class="text-gray-400 text-sm">Reputation</span>
-                        <span class="text-white text-sm font-semibold">${this.formatNumber(keyInfo.reputation)}</span>
-                    </div>
-                ` : ''}
-
-                <!-- Display ALL numeric stats found in the profile data -->
                 ${keyInfo.numericStats && keyInfo.numericStats.length > 0 ? `
-                    <div class="grid grid-cols-2 gap-2">
-                        ${keyInfo.numericStats.slice(0, 8).map(stat => `
-                            <div class="bg-gray-800/30 rounded p-2">
-                                <span class="text-gray-400 text-xs block">${stat.key}</span>
-                                <span class="text-white text-sm font-semibold">${this.formatNumber(stat.value)}</span>
+                    <div class="username-mini-stats">
+                        ${keyInfo.numericStats.slice(0, 6).map(stat => `
+                            <div>
+                                <span>${this.escapeHtml(stat.key)}</span>
+                                <strong>${this.escapeHtml(this.formatFieldValue(stat.rawKey || stat.key, stat.value, { compactCounts: true }))}</strong>
                             </div>
                         `).join('')}
                     </div>
                 ` : ''}
 
-                ${keyInfo.country || keyInfo.gender ? `
-                    <div class="flex justify-between flex-wrap gap-2">
-                        ${keyInfo.country ? `
-                            <div class="flex items-center space-x-1">
-                                <i class="fas fa-map-marker-alt text-gray-400 text-xs"></i>
-                                <span class="text-white text-sm">${this.escapeHtml(keyInfo.country)}</span>
-                            </div>
-                        ` : ''}
-                        ${keyInfo.gender ? `
-                            <div class="flex items-center space-x-1">
-                                <i class="fas fa-user text-gray-400 text-xs"></i>
-                                <span class="text-white text-sm capitalize">${this.escapeHtml(keyInfo.gender)}</span>
-                            </div>
-                        ` : ''}
-                    </div>
-                ` : ''}
-
-                <!-- Display social media profile links -->
-                ${keyInfo.socialProfiles && Object.keys(keyInfo.socialProfiles).length > 0 ? `
-                    <div>
-                        <span class="text-gray-400 text-sm block mb-2">Social Profiles</span>
-                        <div class="flex flex-wrap gap-2">
-                            ${Object.entries(keyInfo.socialProfiles).map(([platform, handle]) => {
-            const icons = {
-                youtube: 'fab fa-youtube',
-                twitter: 'fab fa-twitter',
-                twitch: 'fab fa-twitch',
-                instagram: 'fab fa-instagram',
-                facebook: 'fab fa-facebook',
-                tiktok: 'fab fa-tiktok',
-                snapchat: 'fab fa-snapchat',
-                linkedin: 'fab fa-linkedin',
-                github: 'fab fa-github',
-                gitlab: 'fab fa-gitlab'
-            };
-            const icon = icons[platform] || 'fas fa-link';
-            return `
-                                    <a href="https://${platform}.com/${handle}" target="_blank"
-                                       class="flex items-center space-x-1 px-2 py-1 bg-gray-800/50 hover:bg-gray-700/50 rounded text-xs text-purple-400 hover:text-purple-300 transition-colors">
-                                        <i class="${icon}"></i>
-                                        <span>${this.escapeHtml(String(handle))}</span>
-                                    </a>
-                                `;
-        }).join('')}
-                        </div>
-                    </div>
-                ` : ''}
-
-                ${keyInfo.website ? `
-                    <div class="flex justify-between">
-                        <span class="text-gray-400 text-sm">Website</span>
-                        <a href="${keyInfo.website}" target="_blank" class="text-purple-400 hover:text-purple-300 text-sm truncate max-w-[200px]">${this.escapeHtml(keyInfo.website)}</a>
-                    </div>
-                ` : ''}
-
-                ${keyInfo.createdAt ? `
-                    <div class="flex justify-between">
-                        <span class="text-gray-400 text-sm">Joined</span>
-                        <span class="text-white text-sm">${keyInfo.createdAt}</span>
-                    </div>
-                ` : ''}
-
-                ${keyInfo.lastActive ? `
-                    <div class="flex justify-between">
-                        <span class="text-gray-400 text-sm">Last Active</span>
-                        <span class="text-white text-sm">${keyInfo.lastActive}</span>
-                    </div>
-                ` : ''}
-
-                ${keyInfo.verified ? `
-                    <div class="flex items-center space-x-2">
-                        <i class="fas fa-check-circle text-blue-400"></i>
-                        <span class="text-blue-400 text-sm">Verified Account</span>
-                    </div>
-                ` : ''}
-
-                ${keyInfo.genres && keyInfo.genres.length > 0 ? `
-                    <div>
-                        <span class="text-gray-400 text-sm block mb-1">Genres</span>
-                        <div class="flex flex-wrap gap-1">
-                            ${keyInfo.genres.map(g => `<span class="px-2 py-0.5 bg-purple-900/30 text-purple-300 text-xs rounded">${this.escapeHtml(g)}</span>`).join('')}
-                        </div>
-                    </div>
-                ` : ''}
-
-                ${keyInfo.skills && keyInfo.skills.length > 0 ? `
-                    <div>
-                        <span class="text-gray-400 text-sm block mb-1">Skills</span>
-                        <div class="flex flex-wrap gap-1">
-                            ${keyInfo.skills.map(s => `<span class="px-2 py-0.5 bg-blue-900/30 text-blue-300 text-xs rounded">${this.escapeHtml(s)}</span>`).join('')}
-                        </div>
-                    </div>
-                ` : ''}
-
                 ${keyInfo.socialLinks && keyInfo.socialLinks.length > 0 ? `
-                    <div>
-                        <span class="text-gray-400 text-sm block mb-1">Social Links</span>
-                        <div class="flex flex-wrap gap-2">
-                            ${keyInfo.socialLinks.map(link => `
-                                <a href="${link}" target="_blank" class="text-purple-400 hover:text-purple-300 text-xs">
-                                    <i class="fas fa-external-link-alt"></i>
-                                </a>
-                            `).join('')}
-                        </div>
+                    <div class="username-link-strip">
+                        ${keyInfo.socialLinks.slice(0, 5).map(link => `
+                            <a href="${this.escapeHtml(link)}" target="_blank" title="${this.escapeHtml(link)}">
+                                <i class="fas fa-link"></i>
+                            </a>
+                        `).join('')}
                     </div>
-                ` : ''}
-
-                <!-- Display other simple fields (strings, booleans) -->
-                ${keyInfo.otherFields && keyInfo.otherFields.length > 0 ? `
-                    ${keyInfo.otherFields.slice(0, 5).map(field => `
-                        <div class="flex justify-between">
-                            <span class="text-gray-400 text-sm">${field.key}</span>
-                            <span class="text-white text-sm">${typeof field.value === 'boolean' ? (field.value ? 'Yes' : 'No') : this.escapeHtml(String(field.value))}</span>
-                        </div>
-                    `).join('')}
                 ` : ''}
             </div>
 
-            ${hasProfileData ? `
-                <div class="mt-4 pt-4 border-t border-gray-700">
-                    <button class="expand-btn w-full text-purple-400 hover:text-purple-300 text-sm font-medium transition-colors flex items-center justify-center space-x-2">
-                        <span>Expand Result</span>
-                        <i class="fas fa-external-link-alt"></i>
-                    </button>
-                </div>
-            ` : ''}
-
-            <div class="flex justify-between items-center mt-4 pt-4 border-t border-gray-700">
-                <a href="${result.url}" target="_blank"
-                   class="text-purple-400 hover:text-purple-300 text-sm font-medium transition-colors flex items-center space-x-1">
+            <div class="username-card-actions">
+                <a href="${this.escapeHtml(result.url)}" target="_blank" title="${this.escapeHtml(result.url)}">
                     <i class="fas fa-external-link-alt"></i>
-                    <span>View Account</span>
+                    <span>View</span>
                 </a>
+                ${hasProfileData ? `
+                    <button class="expand-btn">
+                        <i class="fas fa-code"></i>
+                        <span>Data</span>
+                    </button>
+                ` : ''}
             </div>
         `;
 
@@ -507,10 +361,47 @@ class OSINTSearch {
             });
         }
 
-        categoryGrid.appendChild(card);
+        return card;
+    }
 
-        // Update category count
-        this.updateCategoryCount(result.category);
+    getCompactRows(keyInfo) {
+        const rows = [];
+        const add = (label, value) => {
+            if (value !== null && value !== undefined && value !== '') {
+                rows.push({ label, value });
+            }
+        };
+
+        add('Name', keyInfo.fullName);
+        add('Followers', keyInfo.followers ? this.formatNumber(keyInfo.followers) : null);
+        add('Following', keyInfo.following ? this.formatNumber(keyInfo.following) : null);
+        add('Posts', keyInfo.posts ? this.formatNumber(keyInfo.posts) : null);
+        add('Reputation', keyInfo.reputation ? this.formatNumber(keyInfo.reputation) : null);
+        add('Country', keyInfo.country);
+        add('Gender', keyInfo.gender);
+        add('Website', keyInfo.website);
+        add('Joined', keyInfo.createdAt);
+        add('Active', keyInfo.lastActive);
+
+        if (keyInfo.verified) add('Verified', 'Yes');
+        if (keyInfo.otherFields) {
+            keyInfo.otherFields.slice(0, Math.max(0, 6 - rows.length)).forEach(field => {
+                add(field.key, this.formatFieldValue(field.rawKey || field.key, field.value));
+            });
+        }
+
+        return rows.slice(0, 8);
+    }
+
+    handleProfileExtracted(data) {
+        const result = this.results.find(item =>
+            item.url === data.url && item.siteName === data.site_name
+        );
+
+        if (!result) return;
+
+        result.profileData = data.profile_data;
+        this.replaceResultCard(result);
     }
 
     copyToClipboard(text, button) {
@@ -529,7 +420,8 @@ class OSINTSearch {
     }
 
     updateCategoryCount(category) {
-        const section = document.getElementById(`category-${category}`);
+        const section = Array.from(this.elements.groupedResults.querySelectorAll('[data-category]'))
+            .find(item => item.dataset.category === category);
         if (section) {
             const count = this.resultsByCategory[category].length;
             const countElement = section.querySelector('.category-count');
@@ -537,6 +429,10 @@ class OSINTSearch {
                 countElement.textContent = count;
             }
         }
+    }
+
+    updateGroupedCategoryCount(category) {
+        this.updateCategoryCount(category);
     }
 
     updateCategoryStats() {
@@ -548,18 +444,22 @@ class OSINTSearch {
 
             this.elements.categoryStatsGrid.innerHTML = categories.map(category => {
                 const count = this.resultsByCategory[category].length;
-                const color = this.getCategoryColor(category);
-
                 return `
-                    <div class="flex items-center justify-between p-2 bg-gray-800/30 rounded">
-                        <div class="flex items-center space-x-2">
-                            <div class="w-2 h-2 rounded-full ${color}"></div>
-                            <span class="text-xs text-gray-400 capitalize">${category}</span>
-                        </div>
-                        <span class="text-sm font-semibold text-white">${count}</span>
-                    </div>
+                    <button type="button" class="username-category-pill" data-category="${this.escapeHtml(category)}">
+                        <span>${this.escapeHtml(category)}</span>
+                        <strong>${count}</strong>
+                    </button>
                 `;
             }).join('');
+
+            this.elements.categoryStatsGrid.querySelectorAll('.username-category-pill').forEach(button => {
+                button.addEventListener('click', () => {
+                    this.switchView('grouped');
+                    this.filterByCategory(button.dataset.category);
+                });
+            });
+
+            this.updateCategoryFilter();
         }
     }
 
@@ -574,7 +474,8 @@ class OSINTSearch {
     }
 
     filterByCategory(category) {
-        const sections = this.elements.resultsContainer.querySelectorAll('[data-category]');
+        this.activeCategory = category;
+        const sections = this.elements.groupedResults.querySelectorAll('[data-category]');
 
         sections.forEach(section => {
             if (category === 'all' || section.dataset.category === category) {
@@ -583,6 +484,63 @@ class OSINTSearch {
                 section.style.display = 'none';
             }
         });
+    }
+
+    switchView(viewMode) {
+        this.viewMode = viewMode;
+        this.elements.flatViewBtn.classList.toggle('active', viewMode === 'flat');
+        this.elements.groupedViewBtn.classList.toggle('active', viewMode === 'grouped');
+        this.elements.categoryFilter.classList.toggle('hidden', viewMode !== 'grouped');
+        this.elements.resultsMasonry.classList.toggle('hidden', viewMode !== 'flat');
+        this.elements.groupedResults.classList.toggle('hidden', viewMode !== 'grouped');
+        this.renderResults();
+    }
+
+    renderResults() {
+        if (!this.elements.resultsMasonry || !this.elements.groupedResults) return;
+
+        this.elements.resultsMasonry.innerHTML = '';
+        this.elements.groupedResults.innerHTML = '';
+
+        if (this.viewMode === 'grouped') {
+            Object.keys(this.resultsByCategory).sort().forEach(category => {
+                const section = this.createGroupedCategory(category);
+                const grid = section.querySelector('.username-category-results');
+                this.resultsByCategory[category].forEach(result => {
+                    grid.appendChild(this.createResultCard(result));
+                });
+                this.elements.groupedResults.appendChild(section);
+            });
+            this.filterByCategory(this.activeCategory);
+        } else {
+            this.results.forEach(result => {
+                this.elements.resultsMasonry.appendChild(this.createResultCard(result));
+            });
+        }
+    }
+
+    getGroupedCategory(category) {
+        let section = Array.from(this.elements.groupedResults.querySelectorAll('[data-category]'))
+            .find(item => item.dataset.category === category);
+        if (!section) {
+            section = this.createGroupedCategory(category);
+            this.elements.groupedResults.appendChild(section);
+        }
+        return section;
+    }
+
+    createGroupedCategory(category) {
+        const section = document.createElement('section');
+        section.className = 'username-category-section fade-in';
+        section.dataset.category = category;
+        section.innerHTML = `
+            <div class="username-category-heading">
+                <h2>${this.escapeHtml(category)}</h2>
+                <span class="category-count">${this.resultsByCategory[category]?.length || 0}</span>
+            </div>
+            <div class="username-category-results"></div>
+        `;
+        return section;
     }
 
     openModal(result) {
@@ -834,7 +792,7 @@ class OSINTSearch {
         }
 
         const dateFields = ['created_at', 'createdAt', 'createdOn', 'created',
-            'memberSince', 'member_since', 'createdDate', 'created_date',
+            'memberSince', 'member_since', 'createdDate', 'created_date', 'joined',
             'joinedAt', 'joined_at', 'registered', 'signup_date'];
         for (const field of dateFields) {
             if (profileData[field]) {
@@ -851,7 +809,8 @@ class OSINTSearch {
         }
 
         const lastActiveFields = ['last_active', 'lastActive', 'last_seen', 'lastSeen',
-            'updated_at', 'updatedAt', 'last_login', 'lastLogin'];
+            'updated_at', 'updatedAt', 'last_login', 'lastLogin', 'last_online',
+            'lastOnline', 'lastOnlineAt', 'online_at'];
         for (const field of lastActiveFields) {
             if (profileData[field]) {
                 const date = this.parseDate(profileData[field]);
@@ -916,33 +875,98 @@ class OSINTSearch {
             if (skipFields.includes(key) || typeof value === 'object') continue;
 
             if (typeof value === 'number' && !alreadyCaptured.includes(key)) {
-                const formattedKey = key
-                    .replace(/([A-Z])/g, ' $1')
-                    .replace(/_/g, ' ')
-                    .trim()
-                    .split(' ')
-                    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-                    .join(' ');
+                const formattedKey = this.formatFieldLabel(key);
 
-                info.numericStats.push({ key: formattedKey, value: value });
+                if (this.shouldCompactNumber(key)) {
+                    info.numericStats.push({ key: formattedKey, rawKey: key, value: value });
+                } else {
+                    info.otherFields.push({ key: formattedKey, rawKey: key, value: value });
+                }
             } else if ((typeof value === 'string' || typeof value === 'boolean') &&
                 !key.toLowerCase().includes('id') &&
                 !key.toLowerCase().includes('color') &&
                 !key.toLowerCase().includes('col') &&
                 value !== '' && value !== null) {
-                const formattedKey = key
-                    .replace(/([A-Z])/g, ' $1')
-                    .replace(/_/g, ' ')
-                    .trim()
-                    .split(' ')
-                    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-                    .join(' ');
-
-                info.otherFields.push({ key: formattedKey, value: value });
+                info.otherFields.push({ key: this.formatFieldLabel(key), rawKey: key, value: value });
             }
         }
 
         return info;
+    }
+
+    formatFieldLabel(key) {
+        return String(key)
+            .replace(/([A-Z])/g, ' $1')
+            .replace(/_/g, ' ')
+            .trim()
+            .split(' ')
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+            .join(' ');
+    }
+
+    normalizeFieldKey(key) {
+        return String(key)
+            .replace(/([a-z])([A-Z])/g, '$1_$2')
+            .replace(/[\s-]+/g, '_')
+            .toLowerCase();
+    }
+
+    isDateLikeField(key) {
+        const normalized = this.normalizeFieldKey(key);
+        return /(date|time|timestamp|created|joined|registered|updated|active|seen|online|login|last_online|member_since)/.test(normalized);
+    }
+
+    isIdentifierField(key) {
+        const normalized = this.normalizeFieldKey(key);
+        return /(^|_)(id|uid|uuid|guid|sid)$/.test(normalized) ||
+            /(user_id|userid|player_id|playerid|account_id|accountid|profile_id|profileid|steam_id|steamid|member_id|memberid)/.test(normalized);
+    }
+
+    shouldCompactNumber(key) {
+        const normalized = this.normalizeFieldKey(key);
+
+        if (this.isIdentifierField(normalized) || this.isDateLikeField(normalized)) return false;
+        if (/(rank|level|tier|xp|experience|year|age|percent|percentage|ratio)/.test(normalized)) return false;
+
+        return /(count|total|followers?|following|followees?|subscribers?|subscriptions?|fans?|posts?|statuses?|tweets?|updates?|contributions?|videos?|photos?|views?|likes?|comments?|reputation|karma|points|score|rating)/.test(normalized);
+    }
+
+    formatFieldValue(key, value, options = {}) {
+        if (value === null || value === undefined) return '';
+
+        if (typeof value === 'boolean') {
+            return value ? 'Yes' : 'No';
+        }
+
+        if (typeof value === 'number') {
+            if (this.isDateLikeField(key)) {
+                const date = this.parseDate(value);
+                if (date) return date;
+            }
+
+            if (options.compactCounts && this.shouldCompactNumber(key)) {
+                return this.formatNumber(value);
+            }
+
+            return this.formatPlainNumber(value);
+        }
+
+        if (typeof value === 'string') {
+            const trimmed = value.trim();
+            const numericValue = Number(trimmed);
+            const isNumericString = trimmed !== '' && Number.isFinite(numericValue);
+
+            if (isNumericString && this.isDateLikeField(key)) {
+                const date = this.parseDate(numericValue);
+                if (date) return date;
+            }
+
+            if (isNumericString && !this.isIdentifierField(key)) {
+                return this.formatPlainNumber(numericValue);
+            }
+        }
+
+        return String(value);
     }
 
     parseDate(value) {
@@ -970,6 +994,13 @@ class OSINTSearch {
         if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
         if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
         return num.toString();
+    }
+
+    formatPlainNumber(num) {
+        if (num === null || num === undefined) return '';
+        return new Intl.NumberFormat(undefined, {
+            maximumFractionDigits: Number.isInteger(num) ? 0 : 2
+        }).format(num);
     }
 
     renderFullProfileData(profileData) {
@@ -1088,6 +1119,7 @@ class OSINTSearch {
     }
 
     escapeHtml(text) {
+        text = String(text);
         const map = {
             '&': '&amp;',
             '<': '&lt;',
@@ -1135,10 +1167,18 @@ class OSINTSearch {
         this.results = [];
         this.resultsByCategory = {};
         this.stats = { scanned: 0, total: 0, found: 0 };
-        this.elements.resultsContainer.innerHTML = '';
+        this.viewMode = 'flat';
+        this.activeCategory = 'all';
+        this.elements.resultsMasonry.innerHTML = '';
+        this.elements.groupedResults.innerHTML = '';
+        this.elements.resultsMasonry.classList.remove('hidden');
+        this.elements.groupedResults.classList.add('hidden');
+        this.elements.flatViewBtn.classList.add('active');
+        this.elements.groupedViewBtn.classList.remove('active');
         this.elements.currentlyChecking.classList.add('hidden');
         this.elements.categoryStats.classList.add('hidden');
         this.elements.filterSection.classList.add('hidden');
+        this.elements.categoryFilter.classList.add('hidden');
         this.updateStats();
 
         this.elements.progressBar.style.width = '0%';

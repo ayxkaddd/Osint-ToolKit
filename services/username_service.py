@@ -46,6 +46,7 @@ class EventType(Enum):
     ERROR = "error"
     DUCKDUCKGO_STARTED = "duckduckgo_started"
     DUCKDUCKGO_RESULT = "duckduckgo_result"
+    PROFILE_EXTRACTED = "profile_extracted"
 
 
 def serialize_enum_dict(data: dict) -> dict:
@@ -112,6 +113,13 @@ class SiteResult:
         return data
 
 
+@dataclass
+class SiteCheckOutcome:
+    """Internal site check result plus response body for optional enrichment."""
+    result: SiteResult
+    response_text: Optional[str] = None
+
+
 class RateLimiter:
     """Rate limiter for API requests"""
     def __init__(self, max_requests: int = 100, time_window: int = 60):
@@ -175,7 +183,7 @@ class StreamingUsernameSearchService:
         self.base_headers = {
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
             "Accept-Language": "en-US,en;q=0.5",
-            "Accept-Encoding": "gzip, deflate, br",
+            "Accept-Encoding": "gzip, deflate",
             "DNT": "1",
             "Connection": "keep-alive",
             "Upgrade-Insecure-Requests": "1",
@@ -186,6 +194,20 @@ class StreamingUsernameSearchService:
 
         self._url_pattern = re.compile(r'\{account\}')
         self._regex_cache = {}
+        self._account_confirmation_sites = {
+            "Arch Linux GitLab",
+            "Fanslist (OnlyFans)",
+            "HackerOne",
+            "InkBunny",
+            "Mixi",
+            "PatientsLikeMe",
+            "Pinterest",
+            "prv.pl",
+            "ru_123rf",
+            "thegatewaypundit",
+            "Ubisoft",
+            "Zbiornik",
+        }
 
     @lru_cache(maxsize=1)
     def get_metadata(self) -> dict:
@@ -216,6 +238,62 @@ class StreamingUsernameSearchService:
             except re.error:
                 self._regex_cache[pattern] = None
         return self._regex_cache[pattern]
+
+    def _text_matches_pattern(self, text: str, pattern: Optional[str]) -> bool:
+        """
+        Match text against WMN pattern rules.
+        Empty pattern means "status-code-only" match in WMN data.
+        """
+        if pattern is None:
+            return False
+        if pattern == "":
+            return True
+        if pattern in text:
+            return True
+        compiled_pattern = self._get_compiled_regex(pattern)
+        return bool(compiled_pattern and compiled_pattern.search(text))
+
+    def _response_confirms_account(self, site: dict, username: str, text: str) -> bool:
+        """Extra guard for noisy WMN checks whose positive strings are generic."""
+        site_name = site.get("name")
+        if site_name not in self._account_confirmation_sites:
+            return True
+
+        username_folded = username.casefold()
+        text_folded = text.casefold()
+
+        if site_name == "Arch Linux GitLab":
+            try:
+                data = json.loads(text)
+            except json.JSONDecodeError:
+                return False
+            if not isinstance(data, list):
+                return False
+            for item in data:
+                if not isinstance(item, dict):
+                    continue
+                for field in ("username", "path", "name"):
+                    value = item.get(field)
+                    if isinstance(value, str) and value.casefold() == username_folded:
+                        return True
+            return False
+
+        if site_name == "Fanslist (OnlyFans)":
+            pattern = rf'data-username=["\']{re.escape(username)}["\']'
+            return bool(re.search(pattern, text, re.IGNORECASE))
+
+        if site_name == "HackerOne":
+            pattern = rf'"username"\s*:\s*"{re.escape(username)}"'
+            return bool(re.search(pattern, text, re.IGNORECASE))
+
+        if site_name == "Pinterest":
+            title_pattern = rf'\({re.escape(username)}\)\s*-\s*Profile\s*\|\s*Pinterest'
+            return bool(re.search(title_pattern, text, re.IGNORECASE))
+
+        if site_name == "thegatewaypundit":
+            return f"/author/{username_folded}/" in text_folded
+
+        return username_folded in text_folded
 
     def _try_parse_json(self, text: str) -> Optional[dict]:
         """Try to parse text as JSON, return dict or None"""
@@ -248,37 +326,23 @@ class StreamingUsernameSearchService:
     async def _check_response_match(self,
                                    response_status: int,
                                    text: str,
-                                   site: dict) -> tuple[bool, bool]:
+                                   site: dict,
+                                   redirect_statuses: Optional[List[int]] = None) -> tuple[bool, bool]:
         """Check if response matches expected patterns"""
-        if response_status == site.get("e_code"):
-            e_string = site.get("e_string", "")
-            if e_string:
-                if any(char in e_string for char in ['*', '+', '?', '[', ']', '(', ')', '|', '^', '$']):
-                    compiled_pattern = self._get_compiled_regex(e_string)
-                    if compiled_pattern:
-                        if compiled_pattern.search(text):
-                            return True, False
-                    else:
-                        if e_string in text:
-                            return True, False
-                else:
-                    if e_string in text:
-                        return True, False
+        redirect_statuses = redirect_statuses or []
 
-        if "m_code" in site and "m_string" in site:
-            if response_status == site["m_code"]:
-                m_string = site["m_string"]
-                if any(char in m_string for char in ['*', '+', '?', '[', ']', '(', ')', '|', '^', '$']):
-                    compiled_pattern = self._get_compiled_regex(m_string)
-                    if compiled_pattern:
-                        if compiled_pattern.search(text):
-                            return False, True
-                    else:
-                        if m_string in text:
-                            return False, True
-                else:
-                    if m_string in text:
-                        return False, True
+        if "m_code" in site and site["m_code"] in redirect_statuses:
+            return False, True
+
+        if "m_code" in site and response_status == site["m_code"]:
+            m_string = site.get("m_string")
+            if self._text_matches_pattern(text, m_string):
+                return False, True
+
+        if response_status == site.get("e_code"):
+            e_string = site.get("e_string")
+            if self._text_matches_pattern(text, e_string):
+                return True, False
 
         return False, False
 
@@ -286,7 +350,7 @@ class StreamingUsernameSearchService:
                                 session: aiohttp.ClientSession,
                                 site: dict,
                                 username: str,
-                                extract_profile: bool = False) -> SiteResult:
+                                extract_profile: bool = False) -> SiteCheckOutcome:
         """Check username on a single site (supports GET, JSON POST, and form POST)."""
         PLACEHOLDER = "{account}"
 
@@ -322,6 +386,16 @@ class StreamingUsernameSearchService:
             "category": site.get("cat", "unknown"),
         }
 
+        if site.get("name") == "Mixi" and not username.isdigit():
+            return SiteCheckOutcome(
+                result=SiteResult(
+                    **base_result,
+                    url=url,
+                    status=CheckStatus.NOT_FOUND,
+                    error_message="Mixi check requires a numeric community id"
+                )
+            )
+
         start_time = time.time()
 
         async with self.semaphore:
@@ -356,8 +430,15 @@ class StreamingUsernameSearchService:
                     response_time = time.time() - start_time
 
                     is_found, is_not_found = await self._check_response_match(
-                        response.status, text, site
+                        response.status,
+                        text,
+                        site,
+                        [history_response.status for history_response in response.history]
                     )
+
+                    if is_found and not self._response_confirms_account(site, username, text):
+                        is_found = False
+                        is_not_found = True
 
                     if is_found:
                         url = site.get("uri_pretty", site["uri_check"]).replace("{account}", username)
@@ -370,100 +451,119 @@ class StreamingUsernameSearchService:
                             response_time=response_time
                         )
 
-                        if extract_profile:
-                            profile_data = None
-                            if extract:
-                                try:
-                                    profile_data = extract(text)
-                                except Exception as e:
-                                    logger.debug(f"socid_extractor failed for {url}: {e}")
-
-                            if not profile_data:
-                                parsed_json = self._try_parse_json(text)
-                                if parsed_json:
-                                    profile_data = parsed_json
-
-                            if profile_data:
-                                result.profile_data = profile_data
-
-                        return result
+                        return SiteCheckOutcome(
+                            result=result,
+                            response_text=text if extract_profile else None
+                        )
 
                     elif is_not_found:
-                        return SiteResult(
-                            **base_result,
-                            url=url,
-                            status=CheckStatus.NOT_FOUND,
-                            status_code=response.status,
-                            response_time=response_time
+                        return SiteCheckOutcome(
+                            result=SiteResult(
+                                **base_result,
+                                url=url,
+                                status=CheckStatus.NOT_FOUND,
+                                status_code=response.status,
+                                response_time=response_time
+                            )
                         )
 
                     else:
-                        return SiteResult(
-                            **base_result,
-                            url=url,
-                            status=CheckStatus.ERROR,
-                            status_code=response.status,
-                            error_message="Response doesn't match expected patterns",
-                            response_time=response_time
+                        return SiteCheckOutcome(
+                            result=SiteResult(
+                                **base_result,
+                                url=url,
+                                status=CheckStatus.ERROR,
+                                status_code=response.status,
+                                error_message="Response doesn't match expected patterns",
+                                response_time=response_time
+                            )
                         )
 
             except asyncio.TimeoutError:
-                return SiteResult(
-                    **base_result,
-                    url=url,
-                    status=CheckStatus.ERROR,
-                    error_message="Timeout",
-                    response_time=time.time() - start_time
+                return SiteCheckOutcome(
+                    result=SiteResult(
+                        **base_result,
+                        url=url,
+                        status=CheckStatus.ERROR,
+                        error_message="Timeout",
+                        response_time=time.time() - start_time
+                    )
                 )
             except aiohttp.ClientError as e:
-                return SiteResult(
-                    **base_result,
-                    url=url,
-                    status=CheckStatus.ERROR,
-                    error_message=f"Client error: {e}",
-                    response_time=time.time() - start_time
+                return SiteCheckOutcome(
+                    result=SiteResult(
+                        **base_result,
+                        url=url,
+                        status=CheckStatus.ERROR,
+                        error_message=f"Client error: {e}",
+                        response_time=time.time() - start_time
+                    )
                 )
             except Exception as e:
-                return SiteResult(
-                    **base_result,
-                    url=url,
-                    status=CheckStatus.ERROR,
-                    error_message=str(e),
-                    response_time=time.time() - start_time
+                return SiteCheckOutcome(
+                    result=SiteResult(
+                        **base_result,
+                        url=url,
+                        status=CheckStatus.ERROR,
+                        error_message=str(e),
+                        response_time=time.time() - start_time
+                    )
                 )
 
     async def check_site_with_retry(self,
                                    session: aiohttp.ClientSession,
                                    site: dict,
                                    username: str,
-                                   extract_profile: bool = False) -> SiteResult:
-        """Check site with retry logic"""
+                                   extract_profile: bool = False) -> SiteCheckOutcome:
+        """Check site with retry logic and exponential backoff"""
         last_result = None
 
-        for attempt in range(self.max_retries):
-            result = await self.check_single_site(session, site, username, extract_profile)
+        for attempt in range(max(1, self.max_retries)):
+            outcome = await self.check_single_site(session, site, username, extract_profile)
+            result = outcome.result
+            if site["name"] == "Github":
+                logger.info(f"Github check result: {result.status}, error: {result.error_message}")
 
             if result.status in [CheckStatus.FOUND, CheckStatus.NOT_FOUND]:
-                return result
+                return outcome
 
-            last_result = result
+            last_result = outcome
 
+            # Only retry on timeout or rate limit errors
             if result.error_message and any(x in result.error_message.lower()
                                            for x in ['timeout', 'rate limit', 'too many']):
                 if attempt < self.max_retries - 1:
                     backoff_time = 0.2 * (2 ** attempt)
                     await asyncio.sleep(backoff_time)
             else:
+                # Don't retry other errors
                 break
 
         return last_result
 
+    async def extract_profile_data(self, text: str, url: str) -> Optional[dict]:
+        """Extract profile data without blocking the event loop."""
+        profile_data = None
+
+        if extract:
+            try:
+                profile_data = await asyncio.to_thread(extract, text)
+            except Exception as e:
+                logger.debug(f"socid_extractor failed for {url}: {e}")
+
+        if not profile_data:
+            parsed_json = self._try_parse_json(text)
+            if parsed_json:
+                profile_data = parsed_json
+
+        return profile_data
+
     async def stream_duckduckgo_search(self,
                                       session: aiohttp.ClientSession,
                                       username: str,
-                                      queue: asyncio.Queue):
+                                      queue_event):
         """Stream DuckDuckGo results"""
-        await queue.put(StreamEvent(
+        await queue_event(StreamEvent(
             event_type=EventType.DUCKDUCKGO_STARTED,
             data={"message": "Starting DuckDuckGo search"}
         ))
@@ -497,7 +597,7 @@ class StreamingUsernameSearchService:
                             if domain and domain not in seen_domains:
                                 seen_domains.add(domain)
 
-                                await queue.put(StreamEvent(
+                                await queue_event(StreamEvent(
                                     event_type=EventType.DUCKDUCKGO_RESULT,
                                     data={
                                         "url": real_url,
@@ -552,11 +652,32 @@ class StreamingUsernameSearchService:
         error_count = 0
         checked_count = 0
 
-        result_queue = asyncio.Queue()
+        result_queue = asyncio.PriorityQueue()
+        queue_sequence = 0
+
+        def event_priority(event: StreamEvent) -> int:
+            if event.event_type == EventType.PROFILE_EXTRACTED:
+                return 0
+            if (
+                event.event_type == EventType.SITE_RESULT
+                and event.data.get("status") == CheckStatus.FOUND.value
+            ):
+                return 1
+            if event.event_type == EventType.SITE_RESULT:
+                return 2
+            if event.event_type in [EventType.DUCKDUCKGO_RESULT, EventType.DUCKDUCKGO_STARTED]:
+                return 3
+            return 4
+
+        async def queue_event(event: StreamEvent):
+            nonlocal queue_sequence
+            sequence = queue_sequence
+            queue_sequence += 1
+            await result_queue.put((event_priority(event), sequence, event))
 
         async def process_site(site: dict):
             """Process a single site and add to queue"""
-            await result_queue.put(StreamEvent(
+            await queue_event(StreamEvent(
                 event_type=EventType.SITE_CHECKING,
                 data={
                     "site_name": site["name"],
@@ -565,14 +686,34 @@ class StreamingUsernameSearchService:
                 }
             ))
 
-            result = await self.check_site_with_retry(
+            outcome = await self.check_site_with_retry(
                 session, site, username, extract_profile
             )
+            result = outcome.result
 
-            await result_queue.put(StreamEvent(
+            await queue_event(StreamEvent(
                 event_type=EventType.SITE_RESULT,
                 data=result.to_dict()
             ))
+
+            if (
+                extract_profile
+                and result.status == CheckStatus.FOUND
+                and outcome.response_text
+            ):
+                profile_data = await self.extract_profile_data(outcome.response_text, result.url)
+                if profile_data:
+                    result.profile_data = profile_data
+                    await queue_event(StreamEvent(
+                        event_type=EventType.PROFILE_EXTRACTED,
+                        data={
+                            "site_name": result.site_name,
+                            "category": result.category,
+                            "url": result.url,
+                            "profile_data": profile_data,
+                            "checked_at": result.checked_at
+                        }
+                    ))
 
         connector = TCPConnector(
             limit=self.max_concurrent_requests,
@@ -594,16 +735,13 @@ class StreamingUsernameSearchService:
 
             if include_duckduckgo:
                 ddg_task = asyncio.create_task(
-                    self.stream_duckduckgo_search(session, username, result_queue)
+                    self.stream_duckduckgo_search(session, username, queue_event)
                 )
                 tasks.append(ddg_task)
 
-            sites_to_process = len(sites) * 2
-            events_processed = 0
-
-            while events_processed < sites_to_process or not result_queue.empty():
+            while any(not task.done() for task in tasks) or not result_queue.empty():
                 try:
-                    event = await asyncio.wait_for(
+                    _, _, event = await asyncio.wait_for(
                         result_queue.get(),
                         timeout=1.0
                     )
@@ -630,10 +768,8 @@ class StreamingUsernameSearchService:
 
                     yield event
 
-                    await asyncio.sleep(self.stream_delay)
-
-                    if event.event_type in [EventType.SITE_CHECKING, EventType.SITE_RESULT]:
-                        events_processed += 1
+                    if event.event_type == EventType.DUCKDUCKGO_RESULT and self.stream_delay > 0:
+                        await asyncio.sleep(self.stream_delay)
 
                 except asyncio.TimeoutError:
                     if all(task.done() for task in tasks):
@@ -643,7 +779,7 @@ class StreamingUsernameSearchService:
             await asyncio.gather(*tasks, return_exceptions=True)
 
             while not result_queue.empty():
-                event = await result_queue.get()
+                _, _, event = await result_queue.get()
 
                 if event.event_type == EventType.SITE_RESULT:
                     checked_count += 1
@@ -666,7 +802,8 @@ class StreamingUsernameSearchService:
                     }
 
                 yield event
-                await asyncio.sleep(self.stream_delay)
+                if event.event_type == EventType.DUCKDUCKGO_RESULT and self.stream_delay > 0:
+                    await asyncio.sleep(self.stream_delay)
 
         # Yield completion event
         elapsed_time = time.time() - start_time
