@@ -266,26 +266,51 @@ class OSINTSearch {
         const keyInfo = this.extractKeyInfo(result.profileData);
         const hasProfileData = result.profileData && Object.keys(result.profileData).length > 0;
         const metaRows = this.getCompactRows(keyInfo);
+        const domain = this.getDomainFromUrl(result.url);
+        const faviconUrl = domain ? this.getFaviconUrl(domain) : '';
+        const profileImageUrl = keyInfo.profileImage ? this.getAbsoluteUrl(keyInfo.profileImage) : '';
+        const reverseSearchLinks = profileImageUrl ? this.getReverseImageSearchLinks(profileImageUrl) : [];
 
         const card = document.createElement('div');
-        card.className = 'result-card username-result-card fade-in';
+        card.className = `result-card username-result-card fade-in${profileImageUrl ? ' has-profile-image' : ''}`;
         card.dataset.resultUrl = result.url;
         card.dataset.siteName = result.siteName;
         card.dataset.category = result.category;
 
         card.innerHTML = `
             <div class="username-card-header">
-                ${keyInfo.profileImage ? `
-                    <img src="${this.escapeHtml(keyInfo.profileImage)}" alt="" class="username-card-avatar">
-                ` : `
-                    <div class="platform-icon ${platformInfo.class}">
-                        ${platformInfo.icon}
+                <div class="username-card-heading">
+                    <div class="username-site-mark">
+                        ${faviconUrl ? `
+                            <img src="${this.escapeHtml(faviconUrl)}" alt="" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                            <div class="platform-icon ${platformInfo.class} username-site-mark-fallback">
+                                ${this.escapeHtml(platformInfo.icon)}
+                            </div>
+                        ` : `
+                            <div class="platform-icon ${platformInfo.class}">
+                                ${this.escapeHtml(platformInfo.icon)}
+                            </div>
+                        `}
                     </div>
-                `}
-                <div class="username-card-title">
-                    <h3 title="${this.escapeHtml(result.siteName)}">${this.escapeHtml(result.siteName)}</h3>
-                    <span>${this.escapeHtml(result.category || 'unknown')}</span>
+                    <div class="username-card-title">
+                        <h3 title="${this.escapeHtml(result.siteName)}">${this.escapeHtml(result.siteName)}</h3>
+                        <span>${this.escapeHtml(result.category || 'unknown')}</span>
+                    </div>
                 </div>
+                ${profileImageUrl ? `
+                    <div class="username-card-media">
+                        <button type="button" class="username-avatar-preview-btn" data-image-url="${this.escapeHtml(profileImageUrl)}" data-site-name="${this.escapeHtml(result.siteName)}" title="Preview profile picture">
+                            <img src="${this.escapeHtml(keyInfo.profileImage)}" alt="" class="username-card-avatar" onerror="this.closest('.username-result-card').classList.remove('has-profile-image'); this.closest('.username-card-media').style.display='none';">
+                        </button>
+                        <div class="username-reverse-search" aria-label="Reverse image search">
+                            ${reverseSearchLinks.map(link => `
+                                <a href="${this.escapeHtml(link.url)}" target="_blank" rel="noopener noreferrer" title="${this.escapeHtml(link.label)} reverse image search">
+                                    <i class="${this.escapeHtml(link.icon)}"></i>
+                                </a>
+                            `).join('')}
+                        </div>
+                    </div>
+                ` : ''}
             </div>
 
             ${keyInfo.username ? `
@@ -361,7 +386,97 @@ class OSINTSearch {
             });
         }
 
+        const avatarPreviewBtn = card.querySelector('.username-avatar-preview-btn');
+        if (avatarPreviewBtn) {
+            avatarPreviewBtn.addEventListener('click', () => {
+                this.openImagePreview(avatarPreviewBtn.dataset.imageUrl, avatarPreviewBtn.dataset.siteName);
+            });
+        }
+
         return card;
+    }
+
+    getDomainFromUrl(url) {
+        try {
+            return new URL(url, window.location.origin).hostname.replace(/^www\./, '');
+        } catch (error) {
+            return '';
+        }
+    }
+
+    getFaviconUrl(domain) {
+        return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=128`;
+    }
+
+    getAbsoluteUrl(url) {
+        try {
+            return new URL(url, window.location.href).href;
+        } catch (error) {
+            return url;
+        }
+    }
+
+    getReverseImageSearchLinks(imageUrl) {
+        const encodedUrl = encodeURIComponent(imageUrl);
+        return [
+            {
+                label: 'Google',
+                icon: 'fab fa-google',
+                url: `https://lens.google.com/uploadbyurl?url=${encodedUrl}`
+            },
+            {
+                label: 'Yandex',
+                icon: 'fas fa-search',
+                url: `https://yandex.com/images/search?rpt=imageview&url=${encodedUrl}`
+            }
+        ];
+    }
+
+    openImagePreview(imageUrl, siteName) {
+        if (!imageUrl) return;
+
+        const modal = document.createElement('div');
+        modal.className = 'modal-overlay username-image-preview-overlay';
+        modal.innerHTML = `
+            <div class="username-image-preview-card">
+                <div class="username-image-preview-header">
+                    <div>
+                        <h2>${this.escapeHtml(siteName || 'Profile picture')}</h2>
+                        <p>Profile picture preview</p>
+                    </div>
+                    <button type="button" class="close-modal" title="Close preview">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="username-image-preview-body">
+                    <img src="${this.escapeHtml(imageUrl)}" alt="" onerror="this.closest('.username-image-preview-body').innerHTML='<span>Image could not be loaded.</span>';">
+                </div>
+            </div>
+        `;
+
+        const closeModal = () => {
+            if (modal.parentNode) {
+                document.body.removeChild(modal);
+            }
+            document.removeEventListener('keydown', escapeHandler);
+        };
+
+        const escapeHandler = (e) => {
+            if (e.key === 'Escape') {
+                closeModal();
+            }
+        };
+
+        document.body.appendChild(modal);
+        document.addEventListener('keydown', escapeHandler);
+
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                closeModal();
+            }
+        });
+
+        modal.querySelector('.close-modal').addEventListener('click', closeModal);
     }
 
     getCompactRows(keyInfo) {
