@@ -28,9 +28,9 @@ funstat_service = FunstatService(
 )
 
 telethon_service = TelethonMediaService(
-    api_id=int(tokens.get("TELEGRAM_API_ID", 123)),
-    api_hash=tokens.get("TELEGRAM_API_HASH", "your_api_hash"),
-    phone=tokens.get("TELEGRAM_PHONE_NUMBER", "your_phone_number")
+    api_id=tokens.get_int("TELEGRAM_API_ID"),
+    api_hash=tokens.get("TELEGRAM_API_HASH") or None,
+    phone=tokens.get("TELEGRAM_PHONE_NUMBER") or None,
 )
 
 user_router = APIRouter(prefix="/funstat/users", tags=["Users"])

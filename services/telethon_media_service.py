@@ -74,11 +74,20 @@ class TelethonMediaService:
     _instance: Optional['TelethonMediaService'] = None
     _lock = asyncio.Lock()
 
+    @staticmethod
+    def _parse_api_id(value: Any) -> Optional[int]:
+        if value is None or value == "":
+            return None
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
+
     def __init__(
         self,
-        api_id: int,
-        api_hash: str,
-        phone: str,
+        api_id: Optional[int] = None,
+        api_hash: Optional[str] = None,
+        phone: Optional[str] = None,
         session_name: str = "telegram_session",
         max_concurrent_requests: int = 10,
         thumbnail_cache_size: int = 1000,
@@ -87,9 +96,11 @@ class TelethonMediaService:
     ):
         load_dotenv()
 
-        # Telegram client configuration
-        self.api_id = int(os.environ.get("TELEGRAM_API_ID", api_id))
-        self.api_hash = os.environ.get("TELEGRAM_API_HASH", api_hash)
+        # Telegram client configuration — tolerate missing/placeholder .env values
+        env_api_id = os.environ.get("TELEGRAM_API_ID")
+        self.api_id = self._parse_api_id(env_api_id if env_api_id not in (None, "") else api_id)
+        env_api_hash = os.environ.get("TELEGRAM_API_HASH")
+        self.api_hash = env_api_hash if env_api_hash not in (None, "") else api_hash
         self.phone = phone
         self.session_name = session_name
 

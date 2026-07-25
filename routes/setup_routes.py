@@ -1,6 +1,6 @@
 import re
 from fastapi import APIRouter, Request, Form, HTTPException
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, EmailStr, validator
 import bcrypt
@@ -506,12 +506,11 @@ def setup_gitfive_guide() -> Dict[str, Any]:
 
 @router.get("/setup", response_class=HTMLResponse)
 async def setup_page(request: Request):
+    """Main setup page"""
     try:
-        """Main setup page"""
-        # if check_setup_complete():
-            # return RedirectResponse(url="/setup/complete")
+        if check_setup_complete():
+            return RedirectResponse(url="/")
 
-        print("Setup page")
         state = get_setup_state()
 
         # Get comprehensive system status
@@ -539,9 +538,9 @@ async def setup_page(request: Request):
                 pass
 
         return templates.TemplateResponse(
-            "setup.html",
-            {
-                "request": request,
+            request=request,
+            name="setup.html",
+            context={
                 "step": state.step,
                 "system_status": system_status,
                 "state": state.dict()
@@ -827,14 +826,7 @@ async def complete_setup():
 @router.get("/setup/complete", response_class=HTMLResponse)
 async def setup_complete_page(request: Request):
     """Setup completion page"""
-    state = get_setup_state()
-    return templates.TemplateResponse(
-        "setup_complete.html",
-        {
-            "request": request,
-            "state": state.dict()
-        }
-    )
+    return RedirectResponse(url="/")
 
 
 @router.get("/setup/status")

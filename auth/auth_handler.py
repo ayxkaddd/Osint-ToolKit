@@ -58,17 +58,35 @@ class AuthHandler:
 class TelegramAuthHandler:
     def __init__(self):
         load_dotenv()
-        self.api_id = int(os.getenv("TELEGRAM_API_ID", 123))
-        self.api_hash = os.getenv("TELEGRAM_API_HASH", "invalid")
+        raw_id = os.getenv("TELEGRAM_API_ID", "").strip()
+        try:
+            self.api_id = int(raw_id) if raw_id else None
+        except ValueError:
+            self.api_id = None
+        self.api_hash = os.getenv("TELEGRAM_API_HASH") or None
         self.session_name = "telegram_session"
-        self.client = TelegramClient(self.session_name, self.api_id, self.api_hash)
+        self.client: Optional[TelegramClient] = None
+        if self.api_id and self.api_hash:
+            self.client = TelegramClient(self.session_name, self.api_id, self.api_hash)
         self.phone_code_hash = None
 
+    def _require_client(self):
+        if not self.client:
+            return {
+                "status": "error",
+                "message": "Telegram API credentials not configured. Set TELEGRAM_API_ID and TELEGRAM_API_HASH in .env",
+            }
+        return None
+
     async def connect(self):
+        if not self.client:
+            return False
         await self.client.connect()
         return await self.client.is_user_authorized()
 
     async def send_verification_code(self, phone_number: str):
+        if err := self._require_client():
+            return err
         try:
             sent_code = await self.client.send_code_request(phone_number)
             self.phone_code_hash = sent_code.phone_code_hash
@@ -79,6 +97,8 @@ class TelegramAuthHandler:
             return {"status": "error", "message": str(e)}
 
     async def verify_code(self, phone_number: str, code: str):
+        if err := self._require_client():
+            return err
         if not self.phone_code_hash:
             return {"status": "error", "message": "No active verification session"}
 

@@ -174,6 +174,16 @@ class TokenManager:
         """Get a token value. Used by every service."""
         return self._cache.get(key, default)
 
+    def get_int(self, key: str, default: Optional[int] = None) -> Optional[int]:
+        """Parse a token as int. Returns default for missing/placeholder/invalid values."""
+        value = self.get(key, "").strip()
+        if not value:
+            return default
+        try:
+            return int(value)
+        except ValueError:
+            return default
+
     def get_all(self, redact: bool = True) -> dict[str, dict]:
         result = {}
         for key, meta in TOKEN_REGISTRY.items():
