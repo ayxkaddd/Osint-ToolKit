@@ -4,7 +4,7 @@ A self-hosted web workspace for OSINT investigations. Built with FastAPI and Tai
 
 ## Preview
 
-![image](https://github.com/user-attachments/assets/faf405e4-f0c8-43ba-95cf-bcea0469bcfc)
+<img width="1000" height="594" alt="demo" src="https://github.com/user-attachments/assets/6eeb8b56-9fca-47f5-9549-c27360f8d869" />
 
 
 ## Features
