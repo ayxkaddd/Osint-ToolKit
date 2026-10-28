@@ -3,7 +3,23 @@ __pycache__
 reports/*.pdf
 .env
 venv/
-*.session
-.setup*
-.env*
+telegram_session.session
+telegram_session.session-journal
+
+# local scratch / runtime output
+scratch/
+static/thumbnails/
 .vscode/
+node_modules/
+
+# investigation data (local case data - never commit)
+investigation_results/
+media/
+
+# secrets and local state (never publish)
+.env.*
+!.env.example
+*.session
+*.session-journal
+.setup_complete
+.setup_state.json

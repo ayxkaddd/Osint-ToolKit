@@ -1,117 +1,66 @@
 {% extends "base.html" %}
 
-{% block title %}Shared NS Domain Lookup{% endblock %}
+{% block title %}Shared NS Lookup - OSINT Toolkit{% endblock %}
 
 {% block content %}
-<!DOCTYPE html>
-<html lang="en" class="dark">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Shared NS Domain Lookup</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    fontFamily: {
-                        mono: ['JetBrains Mono', 'monospace'],
-                    },
-                }
-            }
-        }
-    </script>
-    <script src="https://unpkg.com/lucide@latest"></script>
-</head>
-<body class="bg-black text-white font-mono min-h-screen">
-    <div class="container mx-auto px-4 py-8 max-w-4xl">
-        <!-- Updated Search Section -->
-        <div class="flex flex-col items-center justify-center min-h-[50vh]">
-            <div class="flex items-center gap-3 mb-8">
-                <h1 class="text-4xl font-bold">Shared NS Domain Lookup</h1>
-            </div>
-            <p class="text-gray-400 text-lg mb-8 flex items-center gap-2">
-                Find domains sharing nameservers
-            </p>
+<div class="page">
+    <h1 class="page-title">Shared NS Domain Lookup</h1>
+    <p class="page-lead">Domains on the same name server pair, then WHOIS and a web fingerprint of each to find the ones
+        run by the same person or group.</p>
 
-            <div class="w-full max-w-xl space-y-4">
-                <div class="relative flex gap-4">
-                    <div class="relative flex-1">
-                        <input type="text" 
-                            id="ns1Input" 
-                            class="w-full bg-gray-900 border border-gray-700 rounded-lg py-3 pl-12 pr-4 text-white placeholder-gray-500 focus:outline-none focus:border-gray-500 transition-colors"
-                            placeholder="Enter first nameserver">
-                        <div class="absolute inset-y-0 left-4 flex items-center pointer-events-none">
-                            <i data-lucide="server" class="w-5 h-5 text-gray-500"></i>
-                        </div>
-                    </div>
+    <form id="nsForm" class="flex flex-col md:flex-row gap-3">
+        <div class="relative flex-1">
+            <input type="text" id="ns1Input" autocomplete="off" placeholder="First name server"
+                class="field pl-11">
+            <div class="field-icon"><i data-lucide="server" class="w-4 h-4"></i></div>
+        </div>
+        <div class="relative flex-1">
+            <input type="text" id="ns2Input" autocomplete="off" placeholder="Second name server"
+                class="field pl-11">
+            <div class="field-icon"><i data-lucide="server" class="w-4 h-4"></i></div>
+        </div>
+        <button type="submit" id="submitQuery" class="btn-primary">Search</button>
+    </form>
 
-                    <div class="relative flex-1">
-                        <input type="text" 
-                            id="ns2Input" 
-                            class="w-full bg-gray-900 border border-gray-700 rounded-lg py-3 pl-12 pr-4 text-white placeholder-gray-500 focus:outline-none focus:border-gray-500 transition-colors"
-                            placeholder="Enter second nameserver">
-                        <div class="absolute inset-y-0 left-4 flex items-center pointer-events-none">
-                            <i data-lucide="server" class="w-5 h-5 text-gray-500"></i>
-                        </div>
-                    </div>
+    <div id="loading" class="hidden loading-line"><i class="fas fa-spinner fa-spin mr-2"></i>Searching…</div>
 
-                    <button id="submitQuery" 
-                        class="bg-gray-800 hover:bg-gray-700 text-white px-4 py-1 rounded-md transition-colors flex items-center gap-2">
-                        <i data-lucide="search" class="w-4 h-4"></i>
-                        Search
-                    </button>
+    <div id="result" class="hidden mt-6 space-y-4">
+        <section class="card">
+            <div class="flex items-center justify-between gap-3 flex-wrap">
+                <div>
+                    <div class="text-lg font-semibold"><span id="domainCount">0</span> domains on this name server pair</div>
+                    <div class="text-xs text-gray-500">Run both analyses - together they show who runs what.</div>
+                </div>
+                <div class="flex gap-2 flex-wrap">
+                    <button type="button" id="analyzeWhois" class="px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 disabled:opacity-50 text-sm font-medium">
+                        <i class="fas fa-id-card mr-1"></i>WHOIS</button>
+                    <button type="button" id="runFingerprint" class="px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 disabled:opacity-50 text-sm font-medium" title="httpx-toolkit: active requests to every site">
+                        <i class="fas fa-fingerprint mr-1"></i>Fingerprint websites</button>
                 </div>
             </div>
-        </div>
+            <div id="analysisProgress" class="hidden mt-3 text-sm text-gray-400"><i class="fas fa-spinner fa-spin mr-2"></i><span></span></div>
+        </section>
 
-        <!-- Loading indicator -->
-        <div id="loading" class="hidden flex justify-center my-8">
-            <div class="animate-spin rounded-full h-8 w-8 border-t-2 border-white"></div>
-        </div>
+        <details open class="recon-section hidden" id="clustersSection"><summary><i class="fas fa-users"></i>Likely same owner <span id="clustersCount" class="count"></span></summary>
+            <div id="clusters" class="recon-body"></div></details>
 
-        <!-- Results Section with updated icons -->
-        <div id="result" class="bg-gray-900 rounded-lg p-6 mt-4 hidden">
-            <div class="flex justify-between items-center mb-4">
-                <h2 class="text-xl font-bold flex items-center gap-2">
-                    <i data-lucide="globe" class="w-6 h-6 text-blue-500"></i>
-                    Shared Domains
-                </h2>
-                <span id="domainCount" class="text-sm text-gray-400 bg-gray-800 px-3 py-1 rounded-lg flex items-center gap-1">
-                    <i data-lucide="hash" class="w-4 h-4"></i>
-                    <span>0 domains</span>
-                </span>
-            </div>
-            <div class="text-center mb-6 hidden" id="analyzeSection">
-                <button id="analyzeWhois" 
-                    class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-lg transition-colors flex items-center gap-2 mx-auto">
-                    Analyze WHOIS Records
-                </button>
-                <div id="analysisProgress" class="mt-2 text-sm text-gray-400 flex items-center justify-center gap-2 hidden">
-                    <i data-lucide="loader-2" class="w-4 h-4"></i>
-                    <span></span>
+        <details class="recon-section hidden" id="signalsSection"><summary><i class="fas fa-link"></i>All shared signals <span id="signalsCount" class="count"></span></summary>
+            <div id="signals" class="recon-body"></div></details>
+
+        <details open class="recon-section"><summary><i class="fas fa-globe"></i>Domains</summary>
+            <div class="recon-body">
+                <div class="flex flex-wrap gap-2 mb-3">
+                    <input type="search" id="domainFilter" placeholder="Filter by domain, registrar, title, tech, IP…"
+                        class="flex-1 min-w-[12rem] bg-gray-900 border border-gray-700 rounded-lg py-2 px-3 text-white text-sm focus:outline-none focus:border-purple-500">
                 </div>
-            </div>
-            <div id="domainList" class="max-h-96 overflow-y-auto space-y-2 scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-gray-800">
-                <!-- Domains will be inserted here -->
-            </div>
-        </div>
-
-        <!-- WHOIS Analysis Section with updated icons -->
-        <div id="whoisAnalysis" class="bg-gray-900 rounded-lg p-6 mt-4 hidden">
-            <h2 class="text-xl font-bold mb-6 flex items-center gap-2">
-                <i data-lucide="database" class="w-6 h-6 text-blue-500"></i>
-                WHOIS Analysis
-            </h2>
-            <div id="similarGroups" class="space-y-6">
-                <!-- Similar domain groups will go here -->
-            </div>
-        </div>
+                <div id="domainList" class="space-y-1.5"></div>
+                <div class="text-center mt-3"><button type="button" id="domainsMore" class="hidden text-sm text-purple-300 hover:text-white">Show all</button></div>
+            </div></details>
     </div>
+</div>
+{% endblock %}
 
-    <script src="/static/js/ns_lookup.js"></script>
-</body>
-</html>
+{% block scripts %}
+<script src="/static/js/services/ns_attribution.js"></script>
+<script src="/static/js/services/ns_lookup.js"></script>
 {% endblock %}

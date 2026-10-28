@@ -1,35 +1,67 @@
+import json
+from pathlib import Path
+from typing import Dict, Set
+
 from fastapi import APIRouter, HTTPException
-from config.token_manager import tokens
-from models.token_models import TokenUpdate, TokensResponse, TokenUpdateResponse
 
-router = APIRouter(prefix="/api/tokens", tags=["tokens"])
+from utils.config import get_setting, update_env
 
+router = APIRouter(prefix="/api/settings")
 
-@router.get("/", response_model=TokensResponse)
-async def get_tokens():
-    """List all tokens (values are redacted)."""
-    return TokensResponse(
-        tokens=tokens.get_all(redact=True),
-        missing_required=tokens.missing_required(),
-    )
+RESOURCES_PATH = Path("resources.json")
 
 
-@router.patch("/", response_model=TokenUpdateResponse)
-async def update_tokens(body: TokenUpdate):
-    """Update one or more tokens and persist to .env."""
+def allowed_setting_keys() -> Set[str]:
+    """Only keys that a module declares in resources.json can be edited here
+    (never ROOT_PASSWORD, JWT_SECRET, ...)."""
     try:
-        changed = tokens.update(body.updates)
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e))
-
-    return TokenUpdateResponse(
-        changed=changed,
-        message=f"{len(changed)} token(s) updated." if changed else "No changes.",
-    )
+        modules = json.loads(RESOURCES_PATH.read_text()).get("modules", [])
+    except (OSError, json.JSONDecodeError):
+        return set()
+    return {key.upper() for module in modules for key in (module.get("settings") or {})}
 
 
-@router.post("/reload")
-async def reload_tokens():
-    """Force reload from .env (after a manual edit)."""
-    tokens.reload()
-    return {"message": "Token cache reloaded."}
+@router.post("/update")
+async def update_settings(settings: Dict[str, str]):
+    allowed = allowed_setting_keys()
+    rejected = sorted(key for key in settings if key.upper() not in allowed)
+    if rejected:
+        raise HTTPException(status_code=400, detail=f"Not an editable setting: {', '.join(rejected)}")
+
+    # A blank field means "keep the current value", not "erase the key"
+    updates = {key.upper(): value.strip() for key, value in settings.items() if value and value.strip()}
+    if updates:
+        update_env(updates)
+    return {"success": True, "updated": sorted(updates)}
+
+
+def _mask(value: str) -> str:
+    """Never send stored secrets back: just enough to recognise which key it is."""
+    if not value:
+        return ""
+    return "••••" + value[-4:] if len(value) > 8 else "••••"
+
+
+@router.get("")
+async def list_settings():
+    """Editable settings per module with whether each is configured (values masked)."""
+    try:
+        modules = json.loads(RESOURCES_PATH.read_text()).get("modules", [])
+    except (OSError, json.JSONDecodeError):
+        modules = []
+    out = []
+    for module in modules:
+        fields = []
+        for key, config in (module.get("settings") or {}).items():
+            value = get_setting(key.upper()) or ""
+            secret = config.get("type") == "password"
+            fields.append({
+                "key": key.upper(),
+                "label": config.get("label", key),
+                "type": config.get("type", "text"),
+                "configured": bool(value),
+                "display": _mask(value) if secret else value,
+            })
+        if fields:
+            out.append({"module": module.get("name"), "endpoint": module.get("endpoint"), "fields": fields})
+    return {"modules": out}

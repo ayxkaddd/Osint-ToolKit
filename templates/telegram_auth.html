@@ -1,61 +1,47 @@
 {% extends "base.html" %}
 
-{% block title %}Telegram Authentication{% endblock %}
+{% block title %}Telegram Login - OSINT Toolkit{% endblock %}
 
 {% block content %}
-<div class="container mx-auto p-4 max-w-4xl">
-    <div class="flex flex-col items-center justify-center min-h-[70vh]">
-        <h1 class="text-4xl font-bold mb-8">Telegram Authentication</h1>
+<div class="page max-w-2xl">
+    <h1 class="page-title">Telegram Login</h1>
+    <p class="page-lead">Log in with the Telegram account the toolkit uses for VK profile history and Funstat media. The session stays on this server.</p>
 
-        <div id="status" class="hidden mb-6 bg-gray-800 text-white px-6 py-3 rounded-lg w-full max-w-md text-center"></div>
-
-        <form id="phoneForm" class="hidden w-full max-w-xl">
-            <div class="w-full relative mb-4">
-                <input
-                    type="tel"
-                    id="phone"
-                    placeholder="Phone number (e.g., +1234567890)"
-                    class="w-full bg-gray-900 border border-gray-700 rounded-lg py-3 pl-12 pr-4 text-white placeholder-gray-500 focus:outline-none focus:border-gray-500 transition-colors"
-                    required
-                >
-                <div class="absolute inset-y-0 left-4 flex items-center pointer-events-none">
-                    <i data-lucide="phone" class="w-5 h-5 text-gray-500"></i>
+    <section class="card space-y-4">
+        <div id="status" class="hidden text-sm text-gray-200 rounded-lg px-4 py-2"></div>
+        <form id="phoneForm" class="hidden">
+            <div class="flex gap-3">
+                <div class="relative flex-1">
+                    <input type="tel" id="phone" placeholder="Phone number, e.g. +1234567890" class="field pl-11" required>
+                    <div class="field-icon"><i data-lucide="phone" class="w-4 h-4"></i></div>
                 </div>
-                <button
-                    type="submit"
-                    class="absolute right-2 top-1/2 transform -translate-y-1/2 bg-gray-800 hover:bg-gray-700 text-white px-4 py-1 rounded-md transition-colors"
-                >
-                    Send Code
-                </button>
+                <button type="submit" class="btn-primary">Send code</button>
             </div>
         </form>
-
-        <form id="codeForm" class="hidden w-full max-w-xl">
-            <div class="w-full relative">
-                <input
-                    type="text"
-                    id="code"
-                    placeholder="Verification code"
-                    class="w-full bg-gray-900 border border-gray-700 rounded-lg py-3 pl-12 pr-4 text-white placeholder-gray-500 focus:outline-none focus:border-gray-500 transition-colors"
-                    required
-                >
-                <div class="absolute inset-y-0 left-4 flex items-center pointer-events-none">
-                    <i data-lucide="lock" class="w-5 h-5 text-gray-500"></i>
+        <form id="codeForm" class="hidden">
+            <div class="flex gap-3">
+                <div class="relative flex-1">
+                    <input type="text" id="code" placeholder="Code from Telegram" class="field pl-11" required autocomplete="one-time-code">
+                    <div class="field-icon"><i data-lucide="lock" class="w-4 h-4"></i></div>
                 </div>
-                <button
-                    type="submit"
-                    class="absolute right-2 top-1/2 transform -translate-y-1/2 bg-gray-800 hover:bg-gray-700 text-white px-4 py-1 rounded-md transition-colors"
-                >
-                    Verify
-                </button>
+                <button type="submit" class="btn-primary">Verify</button>
             </div>
         </form>
-
-        <div id="error" class="hidden mt-4 text-red-400 text-sm"></div>
-    </div>
+        <form id="passwordForm" class="hidden">
+            <p class="text-sm text-gray-400 mb-2">This account has two-step verification enabled.</p>
+            <div class="flex gap-3">
+                <div class="relative flex-1">
+                    <input type="password" id="tgPassword" placeholder="Two-step verification password" class="field pl-11" required autocomplete="current-password">
+                    <div class="field-icon"><i data-lucide="key-round" class="w-4 h-4"></i></div>
+                </div>
+                <button type="submit" class="btn-primary">Sign in</button>
+            </div>
+        </form>
+        <div id="error" class="hidden text-red-400 text-sm"></div>
+    </section>
 </div>
 {% endblock %}
 
 {% block extra_scripts %}
-<script src="/static/js/telegram_auth.js"></script>
+<script src="/static/js/services/telegram_auth.js"></script>
 {% endblock %}

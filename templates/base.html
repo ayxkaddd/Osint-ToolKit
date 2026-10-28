@@ -1,54 +1,118 @@
 <!DOCTYPE html>
 <html lang="en" class="dark">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}OSINT Toolkit{% endblock %}</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/base.css">
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    fontFamily: {
-                        mono: ['JetBrains Mono', 'monospace'],
-                    },
-                }
-            }
-        }
-    </script>
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="stylesheet" href="/static/css/tailwind.css">
+    <link rel="stylesheet" href="/static/css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/marked@15.0.12/marked.min.js" async></script>
+    <script src="/static/lucide.js"></script>
     {% block extra_head %}{% endblock %}
 </head>
-<body class="bg-black text-white font-mono min-h-screen flex flex-col bg-[linear-gradient(rgba(0,0,0,.9),rgba(0,0,0,.9)),repeating-linear-gradient(0deg,transparent,transparent 39px,rgba(71,85,105,.1) 40px),repeating-linear-gradient(90deg,transparent,transparent 39px,rgba(71,85,105,.1) 40px)]">
-<div class="m_2ce0de02" style="z-index:-1; height:100%; background-repeat:repeat-y; background-image:url('/static/pattern.png'); position:fixed; width:100%; top:0; left:0;" class="opacity-90"></div>
+
+<body
+    class="bg-black text-white font-mono min-h-screen flex flex-col bg-[linear-gradient(rgba(0,0,0,.9),rgba(0,0,0,.9)),repeating-linear-gradient(0deg,transparent,transparent 39px,rgba(71,85,105,.1) 40px),repeating-linear-gradient(90deg,transparent,transparent 39px,rgba(71,85,105,.1) 40px)]">
+    <div class="m_2ce0de02 page-pattern" aria-hidden="true"></div>
 
     <!-- Header -->
-    <header class="bg-[#1a1b26]/30 backdrop-blur-md border-b border-[#24283b] sticky top-0 z-40">
-        <div class="max-w-5xl mx-auto">
-            <nav class="px-6 py-4">
-                <div class="flex items-center justify-between">
-                    <!-- left -->
-                    <div class="flex items-center space-x-8">
-                        <a href="/dashboard" class="flex items-center space-x-3">
+    <header class="bg-[#0f1017] border-b border-[#24283b] sticky top-0 z-40">
+        <div class="max-w-6xl mx-auto">
+            <nav class="px-6 py-3">
+                <div class="flex items-center justify-between gap-4">
+                    <div class="flex items-center gap-5 min-w-0 flex-1">
+                        <a href="/dashboard" class="flex items-center space-x-3 shrink-0">
                             <i class="fas fa-shield-alt text-2xl text-purple-400"></i>
-                            <span class="text-xl font-semibold text-white">OSINT Toolkit</span>
+                            <span class="text-xl font-semibold text-white hidden md:inline">OSINT Toolkit</span>
                         </a>
+                        <!-- Universal lookup: paste any identifier -->
+                        <form id="globalLookupForm" action="/lookup" method="get" class="relative flex-1 max-w-md" role="search">
+                            <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm"></i>
+                            <input id="globalLookupInput" name="q" type="search" autocomplete="off"
+                                placeholder="Look up an email, phone, @user, domain, IP…  ( / )"
+                                class="w-full bg-gray-900 border border-gray-700 rounded-lg py-2 pl-9 pr-3 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-purple-500">
+                        </form>
                     </div>
+                    <div class="flex items-center gap-5 shrink-0">
+                        <!-- Investigations Dropdown -->
+                        <div class="relative">
+                            <button id="investigationsDropdown" type="button" onclick="toggleInvestigationsDropdown()"
+                                class="flex items-center space-x-2 hover:text-purple-400 transition-colors bg-gray-800/50 px-3 py-2 rounded-lg max-w-xs">
+                                <span class="rec-indicator" aria-hidden="true"></span>
+                                <i class="fas fa-folder-open text-lg"></i>
+                                <span id="currentInvestigationName" class="truncate">No investigation</span>
+                                <i class="fas fa-chevron-down text-sm transition-transform duration-200"
+                                    id="dropdownIcon"></i>
+                            </button>
 
-                    <!-- right (grouped) -->
-                    <div class="flex items-center space-x-4">
-                        <button onclick="checkForUpdates()" class="flex items-center space-x-2 hover:text-purple-400 transition-colors">
+                            <!-- Dropdown Menu -->
+                            <div id="investigationsDropdownMenu"
+                                class="absolute right-0 mt-2 w-80 bg-gray-900 border border-gray-700 rounded-lg shadow-xl hidden z-50">
+                                <div class="p-3 border-b border-gray-700">
+                                    <button onclick="openCreateInvestigationModal()"
+                                        class="w-full flex items-center space-x-2 text-left hover:bg-gray-800 px-3 py-2 rounded-lg transition-colors text-green-400">
+                                        <i class="fas fa-plus"></i>
+                                        <span>Create New Investigation</span>
+                                    </button>
+                                </div>
+
+                                <div class="max-h-72 overflow-y-auto custom-scrollbar" id="investigationsList">
+                                    <div class="p-3 text-center text-gray-500 text-sm">
+                                        <i class="fas fa-spinner fa-spin"></i>
+                                        <span class="ml-2">Loading investigations...</span>
+                                    </div>
+                                </div>
+                                <a href="/investigations"
+                                    class="block border-t border-gray-700 px-4 py-2.5 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded-b-lg">
+                                    <i class="fas fa-th-large mr-2"></i>Manage investigations
+                                </a>
+                            </div>
+                        </div>
+
+                        <!-- Background lookups -->
+                        <div class="relative">
+                            <button id="jobsTrayButton" type="button" title="Background lookups"
+                                class="relative flex items-center hover:text-purple-400 transition-colors">
+                                <i class="fas fa-tasks text-lg"></i>
+                                <span id="jobsTrayCount" class="history-count hidden">0</span>
+                            </button>
+                            <div id="jobsTrayMenu"
+                                class="absolute right-0 mt-3 w-96 bg-gray-900 border border-gray-700 rounded-lg shadow-xl hidden z-50">
+                                <div class="px-4 py-2.5 border-b border-gray-700 text-sm font-semibold flex justify-between">
+                                    <span>Background lookups</span>
+                                    <a href="/lookup" class="text-purple-300 hover:text-white font-normal">New lookup</a>
+                                </div>
+                                <div id="jobsTrayList" class="max-h-96 overflow-y-auto custom-scrollbar text-sm">
+                                    <div class="p-4 text-center text-gray-500">No lookups yet</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Added quick notes button -->
+                        <button onclick="toggleNoteSidebar()" title="Quick notes (Ctrl+K)"
+                            class="flex items-center space-x-2 hover:text-purple-400 transition-colors">
+                            <i class="fas fa-sticky-note text-lg"></i>
+                            <span class="hidden lg:inline">Notes</span>
+                        </button>
+
+                        <a href="/settings" title="Settings &amp; API keys" class="flex items-center hover:text-purple-400 transition-colors">
+                            <i class="fas fa-cog text-lg"></i>
+                        </a>
+
+                        <button onclick="checkForUpdates()" type="button" title="Check for updates"
+                            class="flex items-center hover:text-purple-400 transition-colors">
                             <i class="fas fa-sync-alt text-lg"></i>
-                            <span>Check Updates</span>
-                        </button>
-                        <button onclick="location.href='/settings'" class="hover:text-purple-400 transition-colors">
-                            <i data-lucide="settings"></i>
                         </button>
 
+                        <button onclick="logout()" type="button" title="Log out"
+                            class="flex items-center hover:text-red-400 transition-colors">
+                            <i class="fas fa-sign-out-alt text-lg"></i>
+                        </button>
                     </div>
                 </div>
             </nav>
@@ -60,9 +124,140 @@
         {% block content %}{% endblock %}
     </main>
 
+    <!-- Notes Sidebar with blur backdrop -->
+    <div id="noteSidebarBackdrop" 
+         class="fixed inset-0 bg-black/50 hidden z-40 transition-all duration-300 opacity-0"
+         onclick="closeNoteSidebar()">
+    </div>
+
+    <div id="noteSidebar"
+        class="fixed top-0 right-0 h-full w-full md:w-[500px] bg-[#1a1b26] border-l border-[#24283b] shadow-2xl z-50 transform translate-x-full transition-transform duration-300">
+        <div class="h-full flex flex-col">
+            <!-- Sidebar Header -->
+            <div class="flex items-center justify-between p-4 border-b border-[#24283b]">
+                <div class="flex items-center space-x-3">
+                    <i class="fas fa-sticky-note text-purple-400 text-xl"></i>
+                    <h2 class="text-xl font-bold">Quick Notes</h2>
+                </div>
+                <button onclick="closeNoteSidebar()" 
+                        class="text-gray-400 hover:text-white transition-colors p-2">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+
+            <!-- Note Editor -->
+            <div class="flex-1 flex flex-col overflow-hidden">
+                <!-- Editor Tabs -->
+                <div class="flex border-b border-[#24283b] bg-gray-900/30">
+                    <button id="writeTab" onclick="switchNoteTab('write')"
+                        class="flex-1 px-4 py-3 text-sm font-medium border-b-2 border-purple-500 text-purple-400">
+                        <i class="fas fa-edit mr-2"></i>Write
+                    </button>
+                    <button id="previewTab" onclick="switchNoteTab('preview')"
+                        class="flex-1 px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-white transition-colors">
+                        <i class="fas fa-eye mr-2"></i>Preview
+                    </button>
+                </div>
+
+                <!-- Write View -->
+                <div id="noteWriteView" class="flex-1 flex flex-col overflow-hidden">
+                    <textarea id="noteEditor"
+                        class="flex-1 w-full bg-[#1a1b26] text-white p-4 resize-none focus:outline-none custom-scrollbar font-mono text-sm"
+                        placeholder="# Quick Note&#10;&#10;Start typing your markdown note here...&#10;&#10;## Features&#10;- Markdown support&#10;- **Bold** and *italic*&#10;- Code blocks&#10;- Lists&#10;"></textarea>
+                </div>
+
+                <!-- Preview View -->
+                <div id="notePreviewView" class="flex-1 overflow-auto p-4 hidden custom-scrollbar">
+                    <div id="notePreview" class="prose prose-invert max-w-none markdown-preview"></div>
+                </div>
+
+                <!-- Saved Notes List -->
+                <div class="border-t border-[#24283b] bg-gray-900/50">
+                    <div class="p-3">
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="text-sm font-medium text-gray-400">
+                                <i class="fas fa-bookmark mr-2"></i>Saved Notes
+                            </span>
+                            <button onclick="clearAllNotes()" 
+                                    class="text-xs text-red-400 hover:text-red-300 transition-colors">
+                                <i class="fas fa-trash mr-1"></i>Clear All
+                            </button>
+                        </div>
+                        <div id="savedNotesList" class="space-y-2 max-h-48 overflow-auto custom-scrollbar">
+                            <div class="text-xs text-gray-500 text-center py-2">No saved notes yet</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="p-4 border-t border-[#24283b] bg-gray-900/30">
+                    <div class="flex space-x-3">
+                        <button onclick="saveNote()"
+                            class="flex-1 bg-purple-600 hover:bg-purple-500 text-white px-4 py-3 rounded-lg font-medium transition-all shadow-lg">
+                            <i class="fas fa-save mr-2"></i>Save Note
+                        </button>
+                        <button onclick="clearNoteEditor()"
+                            class="bg-gray-800 hover:bg-gray-700 text-white px-4 py-3 rounded-lg font-medium transition-all border border-gray-700">
+                            <i class="fas fa-file mr-1"></i>New
+                        </button>
+                    </div>
+                    <div class="mt-2 text-xs text-gray-500 text-center">
+                        <i class="fas fa-keyboard mr-1"></i>Markdown supported
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Investigation Modal -->
+    <div id="createInvestigationModal"
+        class="modal fixed inset-0 bg-black/70 hidden items-center justify-center z-50"
+        onclick="if (event.target === this) closeCreateInvestigationModal()">
+        <div class="modal-panel bg-gray-900 border border-gray-700 rounded-xl p-6 max-w-md w-full mx-4">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold">Create New Investigation</h2>
+                <button onclick="closeCreateInvestigationModal()"
+                    class="text-gray-400 hover:text-white transition-colors">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form id="createInvestigationForm" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-400 mb-2">Investigation Name</label>
+                    <input type="text" id="investigationName" required maxlength="120"
+                        class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:border-purple-500"
+                        placeholder="Enter investigation name">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-400 mb-2">Description</label>
+                    <textarea id="investigationDescription"
+                        class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:border-purple-500 h-24"
+                        placeholder="Describe your investigation purpose"></textarea>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-400 mb-2">Picture (Optional)</label>
+                    <input type="file" id="investigationPicture" accept="image/*"
+                        class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:border-purple-500">
+                </div>
+                <div class="flex justify-end space-x-3 mt-6">
+                    <button type="button" onclick="closeCreateInvestigationModal()"
+                        class="px-4 py-2 bg-gray-700 text-white rounded hover:bg-gray-600 transition-colors">
+                        Cancel
+                    </button>
+                    <button type="submit"
+                        class="px-4 py-2 bg-purple-500 text-white rounded hover:bg-purple-600 transition-colors">
+                        Create Investigation
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- Update Modal -->
-    <div id="updateModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50 backdrop-blur-sm transition-all duration-300 opacity-0">
-        <div class="bg-gray-900 rounded-xl p-6 max-w-md w-full mx-4 transform transition-all duration-300 scale-95 opacity-0">
+    <div id="updateModal"
+        class="modal fixed inset-0 bg-black/70 hidden items-center justify-center z-50"
+        onclick="if (event.target === this) closeUpdateModal()">
+        <div class="modal-panel bg-gray-900 border border-gray-700 rounded-xl p-6 max-w-md w-full mx-4">
             <div class="flex justify-between items-center mb-4">
                 <h2 class="text-xl font-bold">Update Available!</h2>
                 <button onclick="closeUpdateModal()" class="text-gray-400 hover:text-white transition-colors">
@@ -71,7 +266,7 @@
             </div>
             <div class="space-y-4">
                 <div class="flex items-center space-x-4">
-                    <img id="updateAuthorAvatar" class="w-12 h-12 rounded-full" src="" alt="Author avatar">
+                    <img id="updateAuthorAvatar" class="w-12 h-12 rounded-full" src="/static/avatar_placeholder.png" alt="Author avatar">
                     <div>
                         <h3 id="updateAuthorName" class="font-semibold"></h3>
                         <p id="updateDate" class="text-sm text-gray-400"></p>
@@ -108,7 +303,8 @@
                                 </span>
                                 <div class="flex-1 mx-2">
                                     <div class="h-2 rounded-full bg-gray-700">
-                                        <div id="updateAdditionsBar" class="h-2 rounded-full bg-green-400 transition-all duration-500"></div>
+                                        <div id="updateAdditionsBar"
+                                            class="h-2 rounded-full bg-green-400 transition-all duration-500"></div>
                                     </div>
                                 </div>
                                 <span id="updateAdditions" class="text-green-400 w-10 text-right"></span>
@@ -119,7 +315,8 @@
                                 </span>
                                 <div class="flex-1 mx-2">
                                     <div class="h-2 rounded-full bg-gray-700">
-                                        <div id="updateDeletionsBar" class="h-2 rounded-full bg-red-400 transition-all duration-500"></div>
+                                        <div id="updateDeletionsBar"
+                                            class="h-2 rounded-full bg-red-400 transition-all duration-500"></div>
                                     </div>
                                 </div>
                                 <span id="updateDeletions" class="text-red-400 w-10 text-right"></span>
@@ -131,9 +328,11 @@
         </div>
     </div>
 
-    <script src="/static/js/base.js"></script>
-
+    <script src="/static/js/main.js"></script>
+    <!-- Added notes functionality script -->
+    <script src="/static/js/notes.js"></script>
+    {% block scripts %}{% endblock %}
     {% block extra_scripts %}{% endblock %}
 </body>
-</html>
 
+</html>

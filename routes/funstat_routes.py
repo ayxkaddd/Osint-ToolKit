@@ -1,6 +1,8 @@
-from ast import Dict
+import logging
+import re
 import os
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import FileResponse
 from typing import List, Optional
 from services.funstat_service import FunstatService
 from models.funstat_models import (
@@ -18,19 +20,22 @@ from models.funstat_models import (
     GroupMember,
     ChatInfoExt
 )
-from services.telethon_media_service import TelethonMediaService
+from services.telethon_media_service import FULL_MEDIA_DIR, THUMBNAIL_DIR, MediaUnavailable, TelethonMediaService
+from utils.telegram_client import TelegramNotAuthorized
+from services import tme_service
 
-from config.token_manager import tokens
+from dotenv import load_dotenv
+from utils.investigation_decorator import save_investigation
 
-funstat_service = FunstatService(
-    api_key=tokens.get("FUNSTAT_API_KEY"),
-    base_url="https://telelog.org"
-)
+load_dotenv()
+logger = logging.getLogger(__name__)
+
+funstat_service = FunstatService()
 
 telethon_service = TelethonMediaService(
-    api_id=tokens.get_int("TELEGRAM_API_ID"),
-    api_hash=tokens.get("TELEGRAM_API_HASH") or None,
-    phone=tokens.get("TELEGRAM_PHONE_NUMBER") or None,
+    api_id=int(os.getenv("TG_API_ID", 123)),
+    api_hash=os.getenv("TG_API_HASH", "your_api_hash"),
+    phone=os.getenv("TG_PHONE_NUMBER", "your_phone_number")
 )
 
 user_router = APIRouter(prefix="/funstat/users", tags=["Users"])
@@ -39,9 +44,18 @@ search_router = APIRouter(prefix="/funstat/search", tags=["Search"])
 media_router = APIRouter(prefix="/funstat/media", tags=["Media"])
 bot_router = APIRouter(prefix="/funstat/bot", tags=["Bot"])
 
+
+@bot_router.get("/balance")
+async def funstat_balance():
+    """Balance from the latest Funstat response (null until a request is made)."""
+    from services.funstat_service import last_tech
+    return {"balance": last_tech.get("balance"), "last_cost": last_tech.get("last_cost"),
+            "endpoint": last_tech.get("endpoint")}
+
 # ==================== USER ROUTES ====================
 
 @user_router.get("/basic_info_by_id")
+@save_investigation(service_name="funstat", method_name="lookup_user", skip_if=lambda users: not users)
 async def get_user_basic_info_by_id(
     id: List[int] = Query(...)
 ) -> List[ResolvedUser]:
@@ -49,23 +63,36 @@ async def get_user_basic_info_by_id(
     return await funstat_service.get_user_basic_info_by_id(id)
 
 @user_router.get("/resolve_username")
+@save_investigation(service_name="funstat", method_name="lookup_user", skip_if=lambda users: not users)
 async def resolve_username(
     name: List[str] = Query(...)
 ) -> List[ResolvedUser]:
     """Resolve username to user info. Cost 0.10 per success"""
     return await funstat_service.resolve_username(name)
 
+@user_router.get("/tme_profile")
+@save_investigation(service_name="funstat", method_name="tme_profile")
+async def get_tme_profile(username: str = Query(..., description="Telegram username or t.me link")):
+    """Public name, bio and avatar from the t.me preview page (free, no login)."""
+    try:
+        return await tme_service.fetch_profile(username)
+    except tme_service.TmeError as e:
+        raise HTTPException(status_code=400 if "valid" in str(e) else 502, detail=str(e))
+
 @user_router.get("/{user_id}/stats_min")
+@save_investigation(service_name="funstat", method_name="stats_min")
 async def get_user_stats_min(user_id: int) -> UserStatsMin:
     """Get basic user stats (FREE)"""
     return await funstat_service.get_user_stats_min(user_id)
 
 @user_router.get("/{user_id}/stats")
+@save_investigation(service_name="funstat", method_name="stats")
 async def get_user_stats(user_id: int) -> UserStats:
     """Get full user stats (COST: 1)"""
     return await funstat_service.get_user_stats(user_id)
 
 @user_router.get("/{user_id}/groups")
+@save_investigation(service_name="funstat", method_name="groups")
 async def get_user_groups(user_id: int) -> List[UsrChatInfo]:
     """Get user's groups (COST: 5)"""
     return await funstat_service.get_user_groups(user_id)
@@ -84,6 +111,7 @@ async def get_user_messages_count(user_id: int) -> int:
     return await funstat_service.get_user_messages_count(user_id)
 
 @user_router.get("/{user_id}/messages")
+@save_investigation(service_name="funstat", method_name="messages")
 async def get_user_messages(
     user_id: int,
     page: int = Query(1, ge=1),
@@ -106,6 +134,7 @@ async def get_user_messages(
     )
 
 @user_router.get("/{user_id}/messages/all")
+@save_investigation(service_name="funstat", method_name="all_messages")
 async def get_all_user_messages(
     user_id: int,
     group_id: Optional[int] = None,
@@ -126,11 +155,13 @@ async def get_all_user_messages(
     )
 
 @user_router.get("/{user_id}/names")
+@save_investigation(service_name="funstat", method_name="names_history")
 async def get_user_names_history(user_id: int) -> List[UserNamesHistory]:
     """Get user's name history (COST: 3)"""
     return await funstat_service.get_user_names_history(user_id)
 
 @user_router.get("/{user_id}/user_names_history")
+@save_investigation(service_name="funstat", method_name="names_and_usernames_history")
 async def get_user_names_and_usernames_history(
     user_id: int,
 ) -> List[CombinedUserHistory]:
@@ -158,16 +189,19 @@ async def get_user_names_and_usernames_history(
     return sorted(combined_history, key=lambda x: x.date_time)
 
 @user_router.get("/{user_id}/usernames")
+@save_investigation(service_name="funstat", method_name="usernames_history")
 async def get_user_usernames_history(user_id: int) -> List[UserNamesHistory]:
     """Get user's @username history (COST: 3)"""
     return await funstat_service.get_user_usernames_history(user_id)
 
 @user_router.get("/{user_id}/common_groups_stat")
+@save_investigation(service_name="funstat", method_name="common_groups_stat")
 async def get_user_common_groups_stat(user_id: int) -> List[UCommonGroupInfo]:
     """Get users who share common groups (COST: 5)"""
     return await funstat_service.get_user_common_groups_stat(user_id)
 
 @user_router.get("/reputation")
+@save_investigation(service_name="funstat", method_name="reputation")
 async def get_user_reputation(id: int = Query(...)) -> dict:
     """Get user reputation information (FREE)"""
     return await funstat_service.get_user_reputation(id)
@@ -178,32 +212,39 @@ async def get_user_stickers(user_id: int) -> List[StickerInfo]:
     return await funstat_service.get_user_stickers(user_id)
 
 @user_router.get("/username_usage")
+@save_investigation(service_name="funstat", method_name="username_usage")
 async def search_username_usage(username: str = Query(...)) -> UsernameUsageModel:
     """Search username usage across users and groups (COST: 0.1)"""
     return await funstat_service.search_username_usage(username)
 
 # ==================== GROUP ROUTES ====================
 
-@group_router.get("/{group_id}")
-async def get_group_info(group_id: int) -> dict:
-    """Get group basic info, links and today stats (COST: 0.01)"""
-    return await funstat_service.get_group_info(group_id)
-
-@group_router.get("/{group_id}/members")
-async def get_group_members(group_id: int) -> List[GroupMember]:
-    """Get group members (COST: 15)"""
-    return await funstat_service.get_group_members(group_id)
-
+# Static paths must be registered before the /{group_id} catch-all so they
+# are not shadowed by the dynamic segment.
 @group_router.get("/common_groups")
+@save_investigation(service_name="funstat", method_name="common_groups")
 async def get_common_groups(
     id: List[int] = Query(...)
 ) -> List[ChatInfoExt]:
     """Get common groups for specified users (COST: 0.5)"""
     return await funstat_service.get_common_groups(id)
 
+@group_router.get("/{group_id}")
+@save_investigation(service_name="funstat", method_name="lookup_group")
+async def get_group_info(group_id: int) -> dict:
+    """Get group basic info, links and today stats (COST: 0.01)"""
+    return await funstat_service.get_group_info(group_id)
+
+@group_router.get("/{group_id}/members")
+@save_investigation(service_name="funstat", method_name="group_members")
+async def get_group_members(group_id: int) -> List[GroupMember]:
+    """Get group members (COST: 15)"""
+    return await funstat_service.get_group_members(group_id)
+
 # ==================== SEARCH ROUTES ====================
 
 @search_router.get("/text")
+@save_investigation(service_name="funstat", method_name="search_text")
 async def search_text(
     input: str = Query(...),
     page: int = Query(1, ge=1),
@@ -216,13 +257,63 @@ async def search_text(
 
 @media_router.on_event("startup")
 async def startup_telethon():
-    """Start Telethon client on application startup"""
-    await telethon_service.start()
+    """Connect Telethon on startup. Failure (no session, locked session file,
+    no network) must not stop the whole app - media endpoints retry lazily."""
+    try:
+        await telethon_service.start()
+    except Exception as e:
+        logging.getLogger(__name__).warning("Telegram media client not started: %s", e)
 
 @media_router.on_event("shutdown")
 async def shutdown_telethon():
     """Stop Telethon client on application shutdown"""
     await telethon_service.stop()
+
+@media_router.get("/thumbnails/{filename}")
+async def get_thumbnail(filename: str):
+    """Serve a generated thumbnail (behind login, unlike /static)."""
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+\.jpg", filename):
+        raise HTTPException(status_code=404, detail="Not found")
+    path = os.path.join(THUMBNAIL_DIR, filename)
+    if not os.path.isfile(path):
+        raise HTTPException(status_code=404, detail="Not found")
+    return FileResponse(path, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=86400"})
+
+@media_router.get("/full")
+async def get_full_media(
+    chat_identifier: str = Query(..., description="Chat username (without @) or chat ID"),
+    message_id: int = Query(...)
+) -> dict:
+    """Download a message's original photo or video through the Telegram session."""
+    try:
+        return await telethon_service.download_full_media(chat_identifier, message_id)
+    except MediaUnavailable as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except TelegramNotAuthorized as e:
+        raise HTTPException(status_code=401, detail=str(e))
+    except Exception as e:
+        logger.exception("Full media download failed for %s/%s", chat_identifier, message_id)
+        raise HTTPException(status_code=502, detail=f"Telegram download failed: {e}")
+
+@media_router.get("/avatars/{filename}")
+async def get_avatar(filename: str):
+    """Serve a saved t.me avatar (behind login)."""
+    if not re.fullmatch(r"[a-z0-9_]+_[0-9a-f]{16}\.jpg", filename):
+        raise HTTPException(status_code=404, detail="Not found")
+    path = os.path.join(tme_service.AVATAR_DIR, filename)
+    if not os.path.isfile(path):
+        raise HTTPException(status_code=404, detail="Not found")
+    return FileResponse(path, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=86400"})
+
+@media_router.get("/files/{filename}")
+async def get_media_file(filename: str):
+    """Serve a downloaded original (behind login; supports range requests for video)."""
+    if not re.fullmatch(r"[A-Za-z0-9_-]+\.(jpg|png|webp|gif|mp4|webm|mov)", filename):
+        raise HTTPException(status_code=404, detail="Not found")
+    path = os.path.join(FULL_MEDIA_DIR, filename)
+    if not os.path.isfile(path):
+        raise HTTPException(status_code=404, detail="Not found")
+    return FileResponse(path, headers={"Cache-Control": "private, max-age=86400"})
 
 @media_router.post("/thumbnail/create")
 async def create_thumbnail(
@@ -377,7 +468,7 @@ async def get_complete_user_profile(user_id: int, fetch_all_messages: bool = Fal
             )
             if thumbnail:
                 thumbnails.append(thumbnail)
-        except:
+        except Exception:
             continue
 
     return {
@@ -389,6 +480,9 @@ async def get_complete_user_profile(user_id: int, fetch_all_messages: bool = Fal
         "media_messages_count": len(media_messages),
         "recent_thumbnails": thumbnails
     }
+
+
+# Add these new endpoints to your media_router in routes/funstat_routes.py
 
 @media_router.get("/context/message")
 async def get_message_context(
@@ -532,4 +626,53 @@ async def get_user_messages_with_context(
         "enriched_count": len([m for m in enriched_messages if m.get("context")]),
         "paging": messages_data.get("paging"),
         "tech": messages_data.get("tech")
+    }
+
+
+# Example usage endpoint that demonstrates the feature
+@media_router.get("/context/example")
+async def context_example() -> dict:
+    """
+    Example demonstrating how to use the context API
+
+    This shows what you'd get for a message in a group
+    """
+    return {
+        "description": "Conversation context scraper for Telegram messages",
+        "endpoints": {
+            "/context/message": {
+                "description": "Get context around a single message",
+                "example": {
+                    "chat_identifier": "group123",
+                    "message_id": 123,
+                    "context_size": 5,
+                    "fetch_replies": True
+                },
+                "returns": {
+                    "target_message": "Message 123",
+                    "previous_messages": "Messages 118-122",
+                    "next_messages": "Messages 124-128",
+                    "reply_chain": "Messages that 123 replies to (if any)"
+                }
+            },
+            "/context/batch": {
+                "description": "Get contexts for multiple messages",
+                "use_case": "Analyze multiple conversations at once"
+            },
+            "/context/thread": {
+                "description": "Get complete conversation thread",
+                "use_case": "Deep dive into a specific discussion"
+            },
+            "/context/user_messages_with_context": {
+                "description": "Combine Funstat user messages with conversation context",
+                "use_case": "Analyze user behavior in conversations"
+            }
+        },
+        "features": [
+            "Fetches N messages before and after target",
+            "Recursively fetches reply chains",
+            "Handles reply-to relationships",
+            "Supports batch processing",
+            "Works with usernames or chat IDs"
+        ]
     }

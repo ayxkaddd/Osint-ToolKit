@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+
+{% block title %}Investigation - OSINT Toolkit{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="/static/css/investigation_results.css">
+{% endblock %}
+
+{% block content %}
+<div class="page max-w-6xl">
+    <div class="mb-8">
+        <a href="/investigations" class="text-gray-400 hover:text-white mb-4 inline-flex items-center text-sm">
+            <i data-lucide="arrow-left" class="w-4 h-4 mr-2"></i>
+            All investigations
+        </a>
+
+        <div id="investigationHeader" class="bg-[#14151f] border border-[#24283b] rounded-xl p-6 mt-3 hidden"></div>
+        <div id="headerSkeleton" class="bg-[#14151f] border border-[#24283b] rounded-xl p-6 mt-3 animate-pulse">
+            <div class="flex items-start space-x-6">
+                <div class="w-20 h-20 bg-gray-800 rounded-2xl"></div>
+                <div class="flex-1">
+                    <div class="h-7 bg-gray-800 rounded w-1/3 mb-4"></div>
+                    <div class="h-4 bg-gray-800 rounded w-1/2 mb-2"></div>
+                    <div class="h-4 bg-gray-800 rounded w-1/4"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="flex gap-1 border-b border-gray-800 mb-5" role="tablist">
+        <button type="button" data-tab="timeline" class="inv-tab active">
+            <i class="fas fa-stream mr-2"></i>Timeline <span id="resultsCountBadge" class="ml-1 text-xs text-gray-400"></span>
+        </button>
+        <button type="button" data-tab="entities" class="inv-tab">
+            <i class="fas fa-fingerprint mr-2"></i>Identifiers <span id="entitiesCountBadge" class="ml-1 text-xs text-gray-400"></span>
+        </button>
+    </div>
+
+    <div id="timelinePanel" class="space-y-3">
+        <div class="flex flex-col md:flex-row items-start md:items-center justify-end gap-2 mb-2">
+            <div class="flex items-center gap-2 w-full md:w-auto flex-wrap">
+                <div class="relative flex-1 md:w-64">
+                    <input type="search" id="timelineSearchInput" placeholder="Filter by target, module, summary..."
+                        class="w-full bg-gray-900 border border-gray-700 rounded-lg py-2 pl-9 pr-3 text-white text-sm placeholder-gray-500 focus:outline-none focus:border-purple-500">
+                    <div class="absolute inset-y-0 left-3 flex items-center pointer-events-none text-gray-500">
+                        <i data-lucide="search" class="w-4 h-4"></i>
+                    </div>
+                </div>
+                <select id="moduleFilterSelect" class="bg-gray-900 border border-gray-700 rounded-lg py-2 px-3 text-white text-sm focus:outline-none focus:border-purple-500">
+                    <option value="all">All modules</option>
+                </select>
+                <select id="triageFilterSelect" class="bg-gray-900 border border-gray-700 rounded-lg py-2 px-3 text-white text-sm focus:outline-none focus:border-purple-500">
+                    <option value="all">Any assessment</option>
+                    <option value="marked">Confirmed or important</option>
+                    <option value="confirmed">Confirmed</option>
+                    <option value="important">Important</option>
+                    <option value="untriaged">Not assessed</option>
+                    <option value="hide_fp">Hide false positives</option>
+                </select>
+                <select id="sortSelect" class="bg-gray-900 border border-gray-700 rounded-lg py-2 px-3 text-white text-sm focus:outline-none focus:border-purple-500">
+                    <option value="newest">Newest first</option>
+                    <option value="oldest">Oldest first</option>
+                </select>
+            </div>
+        </div>
+
+        <div id="resultsContainer" class="space-y-2"></div>
+
+        <div id="loadingResults" class="text-center py-12">
+            <i data-lucide="loader-2" class="w-8 h-8 text-purple-500 animate-spin mx-auto mb-4"></i>
+            <p class="text-gray-400">Loading results...</p>
+        </div>
+
+        <div id="noResults" class="text-center py-12 bg-[#14151f] border border-[#24283b] rounded-xl hidden">
+            <div class="w-16 h-16 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
+                <i data-lucide="search" class="w-8 h-8 text-gray-500"></i>
+            </div>
+            <h3 id="noResultsTitle" class="text-xl font-bold text-white mb-2">No results recorded yet</h3>
+            <p class="text-gray-400 text-sm max-w-md mx-auto mb-4">While this investigation is selected (red dot in the header), every module lookup is saved here automatically.</p>
+            <a href="/lookup" class="inline-flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-sm font-medium">
+                <i data-lucide="search" class="w-4 h-4"></i> Start a lookup
+            </a>
+        </div>
+    </div>
+
+    <div id="entitiesPanel" class="hidden">
+        <p class="text-sm text-gray-400 mb-4">Every identifier looked up or found in this case. Click one to look it up with another module;
+            mark what matters - confirmed and important identifiers lead the report.</p>
+        <div class="flex flex-wrap gap-2 mb-3" id="entityTypeFacets"></div>
+        <div class="flex flex-wrap gap-2 mb-4">
+            <input type="search" id="entitySearchInput" placeholder="Filter identifiers or notes…"
+                class="flex-1 min-w-[12rem] bg-gray-900 border border-gray-700 rounded-lg py-2 px-3 text-white text-sm focus:outline-none focus:border-purple-500">
+            <select id="entityStatusSelect" class="bg-gray-900 border border-gray-700 rounded-lg py-2 px-3 text-white text-sm">
+                <option value="">Any assessment</option>
+                <option value="confirmed">Confirmed</option>
+                <option value="important">Important</option>
+                <option value="untriaged">Not assessed</option>
+                <option value="false_positive">False positives</option>
+            </select>
+        </div>
+        <div id="entitiesList" class="space-y-1.5"></div>
+        <div class="text-center mt-4"><button type="button" id="entitiesMore" class="hidden text-sm text-purple-300 hover:text-white">Show more</button></div>
+    </div>
+</div>
+
+<!-- Edit Modal -->
+<div id="editInvestigationModal" class="modal fixed inset-0 bg-black/70 hidden items-center justify-center z-50"
+    onclick="if (event.target === this) closeEditModal()">
+    <div class="modal-panel bg-gray-900 rounded-xl p-6 max-w-lg w-full mx-4 border border-gray-800 shadow-2xl">
+        <div class="flex justify-between items-center mb-6">
+            <h2 class="text-xl font-bold text-white flex items-center gap-2">
+                <i data-lucide="pencil" class="w-5 h-5 text-purple-400"></i> Edit investigation
+            </h2>
+            <button type="button" onclick="closeEditModal()" class="text-gray-400 hover:text-white">
+                <i data-lucide="x" class="w-6 h-6"></i>
+            </button>
+        </div>
+        <form id="editInvForm" onsubmit="submitEditModal(event)" class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-300 mb-1" for="editModalName">Name</label>
+                <input type="text" id="editModalName" required maxlength="120"
+                    class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-purple-500">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-300 mb-1" for="editModalDescription">Description</label>
+                <textarea id="editModalDescription" rows="3"
+                    class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-purple-500"></textarea>
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-1" for="editModalStatus">Status</label>
+                    <select id="editModalStatus"
+                        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-purple-500">
+                        <option value="active">Active</option>
+                        <option value="completed">Completed</option>
+                        <option value="archived">Archived</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-1" for="editModalPicture">Picture</label>
+                    <input type="file" id="editModalPicture" accept="image/*"
+                        class="w-full text-sm text-gray-400 file:mr-2 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-gray-700 file:text-white">
+                    <label class="flex items-center gap-2 text-xs text-gray-400 mt-2">
+                        <input type="checkbox" id="editModalRemovePicture" class="rounded bg-gray-800 border-gray-600"> Remove current picture
+                    </label>
+                </div>
+            </div>
+            <div class="flex justify-end gap-3 pt-4 border-t border-gray-800">
+                <button type="button" onclick="closeEditModal()"
+                    class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg">Cancel</button>
+                <button type="submit"
+                    class="px-5 py-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-medium rounded-lg">Save changes</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const investigationId = "{{ investigation_id }}";
+</script>
+<script src="/static/js/investigation_results.js"></script>
+{% endblock %}

@@ -28,3 +28,7 @@ class ProfileEntry(BaseModel):
 class VKProfileHistoryResponse(BaseModel):
     entries: List[ProfileEntry] = []
     photos: List[str] = []
+    # False when the bot didn't finish before the timeout (partial data)
+    complete: bool = True
+    # Other bot replies (limits, "not found", errors) - shown to the user
+    notices: List[str] = []

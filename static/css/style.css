@@ -1,0 +1,311 @@
+.m_2ce0de02 {
+  background-size: cover;
+  background-position: 50%;
+  display: block;
+  width: 100%;
+  border: 0;
+  text-decoration: none;
+  border-radius: var(--bi-radius, 0);
+}
+
+/* Custom Scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #1f2937;
+  border-radius: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #4b5563;
+  border-radius: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #6b7280;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.2s ease-out forwards;
+}
+
+/* Added markdown preview styles */
+/* Markdown Preview Styles */
+.markdown-preview {
+  color: #e5e7eb;
+  line-height: 1.6;
+}
+
+.markdown-preview h1 {
+  font-size: 2em;
+  font-weight: 700;
+  margin-top: 0;
+  margin-bottom: 1rem;
+  color: #a78bfa;
+  border-bottom: 2px solid #4c1d95;
+  padding-bottom: 0.5rem;
+}
+
+.markdown-preview h2 {
+  font-size: 1.5em;
+  font-weight: 600;
+  margin-top: 1.5rem;
+  margin-bottom: 0.75rem;
+  color: #c4b5fd;
+}
+
+.markdown-preview h3 {
+  font-size: 1.25em;
+  font-weight: 600;
+  margin-top: 1.25rem;
+  margin-bottom: 0.5rem;
+  color: #ddd6fe;
+}
+
+.markdown-preview p {
+  margin-bottom: 1rem;
+}
+
+.markdown-preview ul,
+.markdown-preview ol {
+  margin-bottom: 1rem;
+  padding-left: 2rem;
+}
+
+.markdown-preview li {
+  margin-bottom: 0.5rem;
+}
+
+.markdown-preview code {
+  background-color: #1f2937;
+  color: #a78bfa;
+  padding: 0.2em 0.4em;
+  border-radius: 0.25rem;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.9em;
+}
+
+.markdown-preview pre {
+  background-color: #111827;
+  border: 1px solid #374151;
+  border-radius: 0.5rem;
+  padding: 1rem;
+  overflow-x: auto;
+  margin-bottom: 1rem;
+}
+
+.markdown-preview pre code {
+  background-color: transparent;
+  padding: 0;
+  color: #e5e7eb;
+}
+
+.markdown-preview blockquote {
+  border-left: 4px solid #a78bfa;
+  padding-left: 1rem;
+  margin-left: 0;
+  margin-bottom: 1rem;
+  color: #9ca3af;
+  font-style: italic;
+}
+
+.markdown-preview a {
+  color: #a78bfa;
+  text-decoration: underline;
+}
+
+.markdown-preview a:hover {
+  color: #c4b5fd;
+}
+
+.markdown-preview strong {
+  font-weight: 700;
+  color: #fff;
+}
+
+.markdown-preview em {
+  font-style: italic;
+  color: #d1d5db;
+}
+
+.markdown-preview hr {
+  border: none;
+  border-top: 1px solid #374151;
+  margin: 1.5rem 0;
+}
+
+.markdown-preview table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 1rem;
+}
+
+.markdown-preview th,
+.markdown-preview td {
+  border: 1px solid #374151;
+  padding: 0.5rem;
+  text-align: left;
+}
+
+.markdown-preview th {
+  background-color: #1f2937;
+  font-weight: 600;
+  color: #a78bfa;
+}
+
+.markdown-preview img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.5rem;
+  margin: 1rem 0;
+}
+
+/* ------------------------------------------------------------------ */
+/* Layout                                                              */
+/* ------------------------------------------------------------------ */
+.page-pattern {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-image: url('/static/pattern.png');
+  background-repeat: repeat-y;
+  opacity: 0.9;
+  pointer-events: none;
+}
+
+/* Recording indicator on the investigation selector */
+.rec-indicator {
+  display: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  background: #ef4444;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2);
+}
+#investigationsDropdown.recording .rec-indicator { display: inline-block; }
+#investigationsDropdown.recording { border: 1px solid rgba(168, 85, 247, 0.35); }
+.rec-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background: #ef4444;
+  flex-shrink: 0;
+}
+
+/* Modals: toggled with .modal-open (opacity only - cheap to animate) */
+.modal { opacity: 0; transition: opacity 0.15s ease; }
+.modal.modal-open { opacity: 1; }
+.modal .modal-panel { transform: translateY(6px); transition: transform 0.15s ease; }
+.modal.modal-open .modal-panel { transform: none; }
+
+/* Toasts */
+.toast { opacity: 0; transform: translateY(8px); transition: opacity 0.2s ease, transform 0.2s ease; }
+.toast.toast-visible { opacity: 1; transform: none; }
+
+.slide-in { animation: slideIn 0.18s ease-out; }
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Saved-results button badge */
+#persistentHistoryBtn { position: fixed; }
+.history-count {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 9999px;
+  background: #7c3aed;
+  color: #fff;
+  font-size: 10px;
+  line-height: 18px;
+  text-align: center;
+}
+
+/* Investigation timeline: let the browser skip rendering off-screen cards.
+   Scoped to its own class - on multi-column/streaming layouts the placeholder
+   height makes content jump while scrolling. */
+.inv-result-card { content-visibility: auto; contain-intrinsic-size: auto 88px; }
+
+/* Identifier chip that opens the pivot menu */
+.pivot-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  max-width: 100%;
+  padding: 0.15rem 0.5rem;
+  border-radius: 0.375rem;
+  background: rgba(76, 29, 149, 0.25);
+  border: 1px solid rgba(139, 92, 246, 0.35);
+  color: #ddd6fe;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.75rem;
+  text-align: left;
+  word-break: break-all;
+}
+.pivot-chip:hover { background: rgba(109, 40, 217, 0.45); color: #fff; }
+.pivot-chip i { font-size: 0.6rem; opacity: 0.7; flex-shrink: 0; }
+
+/* Investigation tabs and identifier facets */
+.inv-tab { padding: 0.6rem 1rem; color: #9ca3af; border-bottom: 2px solid transparent; margin-bottom: -1px; font-size: 0.9rem; }
+.inv-tab:hover { color: #fff; }
+.inv-tab.active { color: #fff; border-bottom-color: #a855f7; }
+.facet { padding: 0.25rem 0.65rem; border-radius: 9999px; background: #111827; border: 1px solid #374151; color: #d1d5db; font-size: 0.75rem; }
+.facet span { color: #6b7280; margin-left: 0.25rem; }
+.facet:hover { border-color: #6b7280; }
+.facet.active { background: rgba(109, 40, 217, 0.35); border-color: #8b5cf6; color: #fff; }
+
+/* Collapsible result sections (.panel; .recon-section is the same) */
+.panel,
+.recon-section {
+  background: #14151f;
+  border: 1px solid #24283b;
+  border-radius: 0.75rem;
+}
+.panel > summary,
+.recon-section > summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 1rem 1.25rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  user-select: none;
+}
+.panel > summary::-webkit-details-marker,
+.recon-section > summary::-webkit-details-marker { display: none; }
+.panel > summary::after,
+.recon-section > summary::after {
+  content: "\f078";
+  font-family: "Font Awesome 6 Free", "Font Awesome 5 Free";
+  font-weight: 900;
+  font-size: 0.7rem;
+  margin-left: auto;
+  color: #6b7280;
+  transition: transform 0.15s ease;
+}
+.panel[open] > summary::after,
+.recon-section[open] > summary::after { transform: rotate(180deg); }
+.panel > summary > i,
+.recon-section > summary > i { color: #a78bfa; width: 1rem; text-align: center; }
+.panel > summary .count,
+.recon-section > summary .count { font-size: 0.75rem; color: #6b7280; font-weight: 400; }
+.panel > .panel-body,
+.recon-section > .recon-body { padding: 0 1.25rem 1.25rem; }

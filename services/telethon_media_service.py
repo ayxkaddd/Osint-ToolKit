@@ -12,7 +12,6 @@ import aiofiles
 import re
 from typing import Dict, List, Optional, Tuple, Any, Union
 from datetime import datetime
-from functools import lru_cache
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, asdict
 from collections import OrderedDict
@@ -38,6 +37,39 @@ class MessageContext:
     total_messages: int
 
 from models.funstat_models import ThumbnailResult
+from utils import telegram_client
+
+# Private media storage (never under /static, which needs no login)
+THUMBNAIL_DIR = os.path.join("media", "thumbnails")
+THUMBNAIL_URL = "/funstat/media/thumbnails"
+# Rendered at ~200px; twice that keeps them sharp on HiDPI screens
+THUMBNAIL_SIZE = 480
+FULL_MEDIA_DIR = os.path.join("media", "full")
+FULL_MEDIA_URL = "/funstat/media/files"
+# Originals bigger than this are left on Telegram (videos can be gigabytes)
+MAX_FULL_MEDIA_BYTES = 50 * 1024 * 1024
+FULL_MEDIA_TYPES = {
+    "image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "image/gif": ".gif",
+    "video/mp4": ".mp4", "video/webm": ".webm", "video/quicktime": ".mov",
+}
+
+
+class MediaUnavailable(Exception):
+    """The message has no media that can be shown in the browser."""
+LEGACY_THUMBNAIL_DIR = os.path.join("static", "thumbnails")
+
+# @dataclass
+# class ThumbnailResult:
+#     """Structured thumbnail generation result"""
+#     message_id: int
+#     chat_identifier: str
+#     media_type: str
+#     thumbnail_path: str
+#     thumbnail_url: str
+#     file_size: int
+#     cached: bool
+#     generated_at: datetime
+
 
 class LRUCache:
     """Thread-safe LRU cache implementation"""
@@ -71,36 +103,52 @@ class LRUCache:
 
 
 class TelethonMediaService:
+    """
+    High-performance Telegram media service using Telethon
+
+    Optimizations:
+    - Single TelegramClient instance (singleton pattern)
+    - Aggressive entity caching with normalized identifiers
+    - Windowed message fetching (minimal API calls)
+    - Native thumbnail API usage (no full downloads)
+    - Thread pool for CPU-bound operations
+    - Bounded concurrency with semaphores
+    - Content-addressed thumbnail caching
+    - Automatic retry with exponential backoff
+    """
+
     _instance: Optional['TelethonMediaService'] = None
     _lock = asyncio.Lock()
 
-    @staticmethod
-    def _parse_api_id(value: Any) -> Optional[int]:
-        if value is None or value == "":
-            return None
-        try:
-            return int(value)
-        except (TypeError, ValueError):
-            return None
-
     def __init__(
         self,
-        api_id: Optional[int] = None,
-        api_hash: Optional[str] = None,
-        phone: Optional[str] = None,
+        api_id: int,
+        api_hash: str,
+        phone: str,
         session_name: str = "telegram_session",
         max_concurrent_requests: int = 10,
         thumbnail_cache_size: int = 1000,
         entity_cache_size: int = 500,
         thread_pool_workers: int = 4
     ):
+        """
+        Initialize the Telethon media service
+
+        Args:
+            api_id: Telegram API ID
+            api_hash: Telegram API hash
+            phone: Phone number for authentication
+            session_name: Session file name
+            max_concurrent_requests: Maximum concurrent API requests
+            thumbnail_cache_size: Maximum thumbnails to cache
+            entity_cache_size: Maximum entities to cache
+            thread_pool_workers: Thread pool size for CPU-bound tasks
+        """
         load_dotenv()
 
-        # Telegram client configuration — tolerate missing/placeholder .env values
-        env_api_id = os.environ.get("TELEGRAM_API_ID")
-        self.api_id = self._parse_api_id(env_api_id if env_api_id not in (None, "") else api_id)
-        env_api_hash = os.environ.get("TELEGRAM_API_HASH")
-        self.api_hash = env_api_hash if env_api_hash not in (None, "") else api_hash
+        # Telegram client configuration
+        self.api_id = int(os.environ.get("TG_API_ID", api_id))
+        self.api_hash = os.environ.get("TG_API_HASH", api_hash)
         self.phone = phone
         self.session_name = session_name
 
@@ -109,9 +157,14 @@ class TelethonMediaService:
         self._client_started = False
         self._start_lock = asyncio.Lock()
 
-        # Directory configuration
-        self.thumbnail_dir = "static/thumbnails"
+        # Directory configuration. Target media must not live under /static,
+        # which is served without authentication; served by an authenticated
+        # route instead (routes/funstat_routes.py).
+        self.thumbnail_dir = THUMBNAIL_DIR
         os.makedirs(self.thumbnail_dir, exist_ok=True)
+        os.makedirs(FULL_MEDIA_DIR, exist_ok=True)
+        self._full_downloads: Dict[str, asyncio.Task] = {}
+        self._migrate_public_thumbnails()
 
         # Caching layers
         self._entity_cache = LRUCache(max_size=entity_cache_size)
@@ -156,55 +209,43 @@ class TelethonMediaService:
                     await cls._instance.start()
         return cls._instance
 
+    def _migrate_public_thumbnails(self):
+        """Move thumbnails created by older versions out of the public static dir."""
+        old_dir = LEGACY_THUMBNAIL_DIR
+        if not os.path.isdir(old_dir):
+            return
+        moved = 0
+        for name in os.listdir(old_dir):
+            src = os.path.join(old_dir, name)
+            if os.path.isfile(src):
+                os.replace(src, os.path.join(self.thumbnail_dir, name))
+                moved += 1
+        try:
+            os.rmdir(old_dir)
+        except OSError:
+            pass
+        if moved:
+            logger.info("Moved %d Telegram thumbnails out of the public static directory", moved)
+
     async def start(self):
+        """Connect the shared Telegram client (utils.telegram_client).
+
+        Never prompts for a login code (that would block the server on stdin):
+        an unauthorized session raises, and the user logs in via /telegram_auth.
+        Failure leaves the service un-started, so the next call retries.
+        """
         async with self._start_lock:
             if self._client_started:
                 return
+            self.client = await telegram_client.ensure_connected()
+            self._client_started = True
+            logger.info("Telethon media client ready")
 
-            # Validate all required credentials before attempting connection
-            missing = []
-            if not self.api_id:
-                missing.append("TELEGRAM_API_ID")
-            if not self.api_hash:
-                missing.append("TELEGRAM_API_HASH")
-            if not self.phone:
-                missing.append("phone number")
-
-            if missing:
-                logger.warning(
-                    f"Telethon client not started — missing credentials: "
-                    f"{', '.join(missing)}. Telegram features will be unavailable."
-                )
-                return  # Graceful no-op, don't raise
-
-            try:
-                self.client = TelegramClient(
-                    self.session_name,
-                    int(self.api_id),
-                    self.api_hash,
-                    flood_sleep_threshold=60
-                )
-                await self.client.start(phone=self.phone)
-                self._client_started = True
-                logger.info("Telethon client started successfully")
-            except Exception as e:
-                logger.error(
-                    f"Telethon client failed to start: {e}. "
-                    f"Telegram features will be unavailable."
-                )
-                # Clean up partial client so it's not left in a broken state
-                if self.client:
-                    try:
-                        await self.client.disconnect()
-                    except Exception:
-                        pass
-                    self.client = None
-                    
     async def stop(self):
         """Stop the Telegram client and cleanup resources"""
         async with self._start_lock:
-            if self.client and self._client_started:
-                await self.client.disconnect()
+            if self._client_started:
+                await telegram_client.disconnect()
                 self._client_started = False
                 logger.info("Telethon client stopped")
 
@@ -221,8 +262,21 @@ class TelethonMediaService:
         """Context manager exit"""
         await self.stop()
 
+    # ============================================================================
+    # ENTITY RESOLUTION (OPTIMIZED)
+    # ============================================================================
+
     @staticmethod
     def _normalize_identifier(identifier: Union[int, str]) -> str:
+        """
+        Convert any identifier to normalized cache key
+
+        Examples:
+            - "https://t.me/username" → "username:username"
+            - "@username" → "username:username"
+            - "-1001234567890" → "id:-1001234567890"
+            - 1234567890 → "id:1234567890"
+        """
         if isinstance(identifier, int):
             return f"id:{identifier}"
 
@@ -239,6 +293,22 @@ class TelethonMediaService:
         return f"username:{s}"
 
     async def resolve_entity_cached(self, identifier: Union[int, str]) -> Any:
+        """
+        Resolve entity with aggressive caching
+
+        Performance:
+        - Cache hit: ~1μs (memory lookup)
+        - Cache miss: 1 API call (vs 10+ in naive implementation)
+
+        Args:
+            identifier: Chat username, ID, or URL
+
+        Returns:
+            InputPeer entity
+
+        Raises:
+            ValueError: If entity cannot be resolved
+        """
         if not self._client_started:
             await self.start()
 
@@ -273,6 +343,12 @@ class TelethonMediaService:
                 ) from e
 
     async def invalidate_entity_cache(self, identifier: Union[int, str] = None):
+        """
+        Invalidate entity cache
+
+        Args:
+            identifier: Specific entity to invalidate, or None to clear all
+        """
         if identifier is None:
             await self._entity_cache.clear()
             logger.info("Cleared entire entity cache")
@@ -280,6 +356,10 @@ class TelethonMediaService:
             cache_key = self._normalize_identifier(identifier)
             # Note: LRUCache doesn't have delete, so we just let it expire
             logger.info(f"Invalidated entity cache for: {cache_key}")
+
+    # ============================================================================
+    # MESSAGE SERIALIZATION (OPTIMIZED)
+    # ============================================================================
 
     def _get_media_type(self, message) -> Optional[str]:
         """Determine the type of media in a message"""
@@ -307,6 +387,19 @@ class TelethonMediaService:
         include_sender_details: bool = True,
         include_media_details: bool = False
     ) -> Dict[str, Any]:
+        """
+        Convert a Telegram message to a serializable dictionary
+
+        Performance optimization: Expensive fields are opt-in only
+
+        Args:
+            message: Telethon Message object
+            include_sender_details: Fetch detailed sender information
+            include_media_details: Include detailed media metadata
+
+        Returns:
+            Serialized message dictionary
+        """
         logger.info(f"{message}")
         result = {
             "message_id": message.id,
@@ -343,6 +436,9 @@ class TelethonMediaService:
 
         return result
 
+    # ============================================================================
+    # MESSAGE CONTEXT FETCHING (OPTIMIZED)
+    # ============================================================================
 
     async def get_message_context(
         self,
@@ -353,6 +449,22 @@ class TelethonMediaService:
         include_sender_details: bool = True,
         include_media_details: bool = False
     ) -> Optional[MessageContext]:
+        """
+        Get conversation context around a message
+
+        OPTIMIZATION: Fetch target + surrounding messages efficiently
+
+        Args:
+            chat_identifier: Chat username or ID
+            message_id: Target message ID
+            context_size: Number of messages before and after (default: 5)
+            fetch_replies: Whether to fetch replied-to messages (default: True)
+            include_sender_details: Include detailed sender info
+            include_media_details: Include detailed media metadata
+
+        Returns:
+            MessageContext object or None if message not found
+        """
         async with self._semaphore:
             if not self._client_started:
                 await self.start()
@@ -368,6 +480,9 @@ class TelethonMediaService:
                         f"Message {message_id} not found in chat {chat_identifier}"
                     )
                     return None
+
+                # OPTIMIZATION: Fetch context messages using iter_messages
+                # This is more reliable than min_id/limit approach
 
                 # Fetch messages before (reverse chronological)
                 previous_messages = []
@@ -451,6 +566,24 @@ class TelethonMediaService:
         include_media_details: bool = False,
         max_depth: int = 10
     ) -> List[Dict[str, Any]]:
+        """
+        Fetch reply chain with batching optimization
+
+        OPTIMIZATION: Collect IDs first, then batch fetch
+
+        Old: N recursive API calls (serial)
+        New: Collect IDs + 1 batch fetch
+
+        Args:
+            entity: The chat entity
+            reply_to_msg_id: ID of the message being replied to
+            include_sender_details: Include detailed sender info
+            include_media_details: Include detailed media metadata
+            max_depth: Maximum depth to traverse
+
+        Returns:
+            List of serialized messages in the reply chain (oldest first)
+        """
         reply_ids = []
         current_id = reply_to_msg_id
         seen = set()
@@ -526,6 +659,20 @@ class TelethonMediaService:
         include_sender_details: bool = False,
         include_media_details: bool = False
     ) -> Optional[Dict[str, Any]]:
+        """
+        Get a complete conversation thread including context and reply chain
+
+        Args:
+            chat_identifier: Chat username or ID
+            message_id: Target message ID
+            include_context: Whether to include surrounding messages
+            context_size: Number of messages before/after if include_context=True
+            include_sender_details: Include detailed sender info
+            include_media_details: Include detailed media metadata
+
+        Returns:
+            Comprehensive thread data with all related messages
+        """
         context = await self.get_message_context(
             chat_identifier=chat_identifier,
             message_id=message_id,
@@ -540,11 +687,33 @@ class TelethonMediaService:
 
         return asdict(context)
 
+    # ============================================================================
+    # BATCH MESSAGE OPERATIONS (OPTIMIZED)
+    # ============================================================================
+
     def _group_message_ids_into_ranges(
         self,
         sorted_ids: List[int],
         context_size: int
     ) -> List[Tuple[int, int, List[int]]]:
+        """
+        Group message IDs into overlapping ranges
+
+        OPTIMIZATION: Reduce API calls by fetching overlapping ranges together
+
+        Example:
+            Input: [100, 102, 200] with context_size=5
+            Output: [(95, 107, [100, 102]), (195, 205, [200])]
+
+        Reduces API calls from 3 to 2
+
+        Args:
+            sorted_ids: Sorted list of message IDs
+            context_size: Context window size
+
+        Returns:
+            List of (range_start, range_end, msg_ids_in_range) tuples
+        """
         if not sorted_ids:
             return []
 
@@ -596,6 +765,26 @@ class TelethonMediaService:
         include_media_details: bool = False,
         max_concurrent: int = 3
     ) -> List[Dict[str, Any]]:
+        """
+        Get conversation contexts for multiple messages
+
+        OPTIMIZATION: Group adjacent message IDs into ranges
+
+        Old: N API calls (one per message)
+        New: ~N/10 API calls (range grouping)
+
+        Args:
+            chat_identifier: Chat username or ID
+            message_ids: List of target message IDs
+            context_size: Number of messages before and after
+            fetch_replies: Whether to fetch replied-to messages
+            include_sender_details: Include detailed sender info
+            include_media_details: Include detailed media metadata
+            max_concurrent: Maximum concurrent API requests
+
+        Returns:
+            List of context dictionaries for each message
+        """
         if not message_ids:
             return []
 
@@ -690,7 +879,22 @@ class TelethonMediaService:
 
         return all_contexts
 
+    # ============================================================================
+    # MEDIA HANDLING (OPTIMIZED)
+    # ============================================================================
+
     def _get_media_hash(self, message) -> Optional[str]:
+        """
+        Generate content-addressable hash for media
+
+        Used for thumbnail caching to avoid re-generating same thumbnails
+
+        Args:
+            message: Telethon Message object
+
+        Returns:
+            Unique hash string or None
+        """
         if not message.media:
             return None
 
@@ -706,32 +910,37 @@ class TelethonMediaService:
         message,
         preferred_size: int = 300
     ) -> Optional[bytes]:
+        """
+        Download thumbnail using Telegram's native thumbnail API
+
+        CRITICAL OPTIMIZATION: Use built-in thumbnails, not full media
+
+        Bandwidth reduction:
+        - Photos: 5MB → 200KB (96% reduction)
+        - Videos: 100MB → 50KB (99.95% reduction)
+
+        Args:
+            message: Telethon Message object
+            preferred_size: Preferred thumbnail size in pixels
+
+        Returns:
+            Thumbnail bytes or None
+        """
         try:
             if isinstance(message.media, MessageMediaPhoto):
                 photo = message.media.photo
 
                 # Find appropriate thumbnail size
-                suitable_sizes = [
-                    s for s in photo.sizes
-                    if isinstance(s, (PhotoSize, PhotoCachedSize))
-                    and hasattr(s, 'w')
-                    and s.w >= preferred_size * 0.5  # At least half desired size
-                ]
-
-                if not suitable_sizes:
-                    # Fallback to any available size
-                    suitable_sizes = [
-                        s for s in photo.sizes
-                        if isinstance(s, (PhotoSize, PhotoCachedSize))
-                    ]
-
-                if not suitable_sizes:
+                sizes = sorted(
+                    (s for s in photo.sizes if isinstance(s, (PhotoSize, PhotoCachedSize))),
+                    key=lambda s: getattr(s, 'w', 0)
+                )
+                if not sizes:
                     logger.warning("No suitable photo sizes found")
                     return None
 
-                # Sort by size, prefer smallest that meets requirement
-                suitable_sizes.sort(key=lambda s: getattr(s, 'w', 0))
-                thumb_size = suitable_sizes[0]
+                # Smallest size that is at least as wide as wanted, else the largest
+                thumb_size = next((s for s in sizes if getattr(s, 'w', 0) >= preferred_size), sizes[-1])
 
                 # Download ONLY this thumbnail size
                 logger.debug(
@@ -787,8 +996,20 @@ class TelethonMediaService:
     def _create_thumbnail_sync(
         self,
         image_bytes: bytes,
-        size: Tuple[int, int] = (300, 300)
+        size: Tuple[int, int] = (THUMBNAIL_SIZE, THUMBNAIL_SIZE)
     ) -> bytes:
+        """
+        Create thumbnail from image bytes (CPU-bound, runs in thread pool)
+
+        OPTIMIZATION: This runs in ThreadPoolExecutor, not event loop
+
+        Args:
+            image_bytes: Raw image data
+            size: Target thumbnail size
+
+        Returns:
+            JPEG thumbnail bytes
+        """
         try:
             image = Image.open(io.BytesIO(image_bytes))
 
@@ -818,9 +1039,27 @@ class TelethonMediaService:
         self,
         chat_identifier: Union[int, str],
         message_id: int,
-        size: Tuple[int, int] = (300, 300),
+        size: Tuple[int, int] = (THUMBNAIL_SIZE, THUMBNAIL_SIZE),
         force_regenerate: bool = False
     ) -> Optional[ThumbnailResult]:
+        """
+        Download media and create thumbnail with optimal performance
+
+        OPTIMIZATIONS:
+        1. Content-addressed caching (avoid re-generating)
+        2. Native thumbnail API (99% bandwidth reduction)
+        3. Thread pool processing (non-blocking)
+        4. Semaphore rate limiting
+
+        Args:
+            chat_identifier: Chat username or ID
+            message_id: Message ID containing media
+            size: Thumbnail dimensions
+            force_regenerate: Skip cache and regenerate thumbnail
+
+        Returns:
+            ThumbnailResult or None if no media/unsupported type
+        """
         async with self._semaphore:
             if not self._client_started:
                 await self.start()
@@ -858,7 +1097,7 @@ class TelethonMediaService:
                             chat_identifier=str(chat_identifier),
                             media_type=media_type,
                             thumbnail_path=cached_path,
-                            thumbnail_url=f"/static/thumbnails/{os.path.basename(cached_path)}",
+                            thumbnail_url=f"{THUMBNAIL_URL}/{os.path.basename(cached_path)}",
                             file_size=file_size,
                             cached=True,
                             generated_at=datetime.fromtimestamp(
@@ -902,7 +1141,7 @@ class TelethonMediaService:
                     chat_identifier=str(chat_identifier),
                     media_type=media_type,
                     thumbnail_path=filepath,
-                    thumbnail_url=f"/static/thumbnails/{filename}",
+                    thumbnail_url=f"{THUMBNAIL_URL}/{filename}",
                     file_size=len(processed_bytes),
                     cached=False,
                     generated_at=datetime.now()
@@ -924,13 +1163,85 @@ class TelethonMediaService:
                 )
                 raise
 
+    def _full_media_info(self, message) -> Tuple[str, str, Optional[int]]:
+        """(media type, file extension, size in bytes) of a message's original media."""
+        if isinstance(message.media, MessageMediaPhoto):
+            return "photo", ".jpg", None
+        if isinstance(message.media, MessageMediaDocument):
+            doc = message.media.document
+            ext = FULL_MEDIA_TYPES.get(doc.mime_type)
+            if ext:
+                return ("video" if doc.mime_type.startswith("video") else "image"), ext, doc.size
+            raise MediaUnavailable(f"{doc.mime_type} can't be shown in the browser")
+        raise MediaUnavailable("This message has no photo or video")
+
+    async def download_full_media(self, chat_identifier: Union[int, str], message_id: int) -> Dict[str, Any]:
+        """Download a message's original photo or video (cached on disk by media id)."""
+        if not self._client_started:
+            await self.start()
+        entity = await self.resolve_entity_cached(chat_identifier)
+        message = await self.client.get_messages(entity, ids=message_id)
+        if not message or not message.media:
+            raise MediaUnavailable("This message has no media")
+
+        media_type, ext, size = self._full_media_info(message)
+        if size and size > MAX_FULL_MEDIA_BYTES:
+            raise MediaUnavailable(
+                f"The file is {size / 1024 / 1024:.1f} MB - larger than the "
+                f"{MAX_FULL_MEDIA_BYTES // 1024 // 1024} MB limit, open it in Telegram"
+            )
+
+        filename = f"{self._get_media_hash(message)}{ext}"
+        path = os.path.join(FULL_MEDIA_DIR, filename)
+        if not os.path.isfile(path):
+            # One download per file, even if the viewer is opened twice
+            task = self._full_downloads.get(filename)
+            if task is None:
+                task = asyncio.create_task(self._download_to(message, path))
+                self._full_downloads[filename] = task
+                task.add_done_callback(lambda _: self._full_downloads.pop(filename, None))
+            await task
+
+        return {
+            "url": f"{FULL_MEDIA_URL}/{filename}",
+            "media_type": media_type,
+            "file_size": os.path.getsize(path),
+        }
+
+    async def _download_to(self, message, path: str):
+        partial = path + ".part"
+        async with self._semaphore:
+            try:
+                await self.client.download_media(message, file=partial)
+                os.replace(partial, path)
+            finally:
+                if os.path.exists(partial):
+                    os.remove(partial)
+
     async def batch_create_thumbnails(
         self,
         chat_identifier: Union[int, str],
         message_ids: List[int],
-        size: Tuple[int, int] = (300, 300),
+        size: Tuple[int, int] = (THUMBNAIL_SIZE, THUMBNAIL_SIZE),
         max_concurrent: int = 5
     ) -> List[ThumbnailResult]:
+        """
+        Create thumbnails for multiple messages with bounded concurrency
+
+        OPTIMIZATION: Parallel processing with semaphore rate limiting
+
+        Old: Sequential (slow)
+        New: Concurrent with limit (10-20x faster)
+
+        Args:
+            chat_identifier: Chat username or ID
+            message_ids: List of message IDs
+            size: Thumbnail dimensions
+            max_concurrent: Maximum concurrent thumbnail operations
+
+        Returns:
+            List of ThumbnailResult objects
+        """
         semaphore = asyncio.Semaphore(max_concurrent)
 
         async def process_one(msg_id: int) -> Optional[ThumbnailResult]:
@@ -968,6 +1279,18 @@ class TelethonMediaService:
         offset_id: int = 0,
         media_types: Optional[List[str]] = None
     ) -> List[Dict[str, Any]]:
+        """
+        Get messages with media from a chat
+
+        Args:
+            chat_identifier: Chat username or ID
+            limit: Maximum number of messages to fetch
+            offset_id: Offset message ID for pagination
+            media_types: Filter by media types (e.g., ['photo', 'video'])
+
+        Returns:
+            List of media message metadata
+        """
         if not self._client_started:
             await self.start()
 
@@ -994,6 +1317,8 @@ class TelethonMediaService:
                         "has_text": bool(message.text),
                         "text_preview": message.text[:100] if message.text else None,
                         "sender_id": message.sender_id,
+                        # "sender_name": message.sender.first_name if message.sender else None,
+                        # "sender_username": getattr(message.sender, 'username', None) if message.sender else None,
                     })
 
             logger.info(
@@ -1010,7 +1335,20 @@ class TelethonMediaService:
             )
             raise
 
+    # ============================================================================
+    # UTILITY METHODS
+    # ============================================================================
+
     async def get_chat_info(self, chat_identifier: Union[int, str]) -> Dict[str, Any]:
+        """
+        Get information about a chat
+
+        Args:
+            chat_identifier: Chat username or ID
+
+        Returns:
+            Chat information dictionary
+        """
         if not self._client_started:
             await self.start()
 

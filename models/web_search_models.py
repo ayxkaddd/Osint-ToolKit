@@ -119,6 +119,8 @@ class SearchResponse(BaseModel):
     query: SearchQuery = Field(..., description="Query information")
     total_results: int = Field(..., description="Total number of unique results")
     results: List[SearchResultItem] = Field(..., description="Search results")
+    dorks_executed: int = Field(0, description="Number of dork queries run")
+    errors: List[dict] = Field(default_factory=list, description="Dorks that failed, with the reason")
 
 
 class DorksResponse(BaseModel):

@@ -1,54 +1,35 @@
 {% extends "base.html" %}
 
-{% block title %}VK Profile History{% endblock %}
+{% block title %}VK Profile History - OSINT Toolkit{% endblock %}
 
 {% block content %}
-<div class="container mx-auto p-4 max-w-4xl">
-    <div class="flex flex-col items-center justify-center min-h-[50vh]">
-        <h1 class="text-4xl font-bold mb-8">VK Profile History</h1>
-        <div class="w-full max-w-xl relative">
-            <input
-                type="text"
-                id="user-id"
-                placeholder="Enter VK User ID"
-                class="w-full bg-gray-900 border border-gray-700 rounded-lg py-3 pl-12 pr-4 text-white placeholder-gray-500 focus:outline-none focus:border-gray-500 transition-colors"
-            >
-            <div class="absolute inset-y-0 left-4 flex items-center pointer-events-none">
-                <i data-lucide="user" class="w-5 h-5 text-gray-500"></i>
-            </div>
-            <button
-                onclick="searchProfile()"
-                class="absolute right-2 top-1/2 transform -translate-y-1/2 bg-gray-800 hover:bg-gray-700 text-white px-4 py-1 rounded-md transition-colors"
-            >
-                Search
-            </button>
+<div class="page">
+    <h1 class="page-title">VK Profile History</h1>
+    <p class="page-lead">Earlier names, photos and details of a VK profile from @VKHistoryRobot (uses your Telegram account).</p>
+
+    <div class="flex gap-3">
+        <div class="relative flex-1">
+            <input type="text" id="user-id" autocomplete="off" placeholder="VK id, @name or vk.com link" class="field pl-11">
+            <div class="field-icon"><i data-lucide="user" class="w-4 h-4"></i></div>
         </div>
+        <button type="button" onclick="searchProfile()" class="btn-primary">Search</button>
     </div>
 
-    <div id="loadingIndicator" class="hidden flex justify-center my-8">
-        <div class="animate-spin rounded-full h-8 w-8 border-t-2 border-white"></div>
-    </div>
+    <div id="loadingIndicator" class="hidden loading-line"><i class="fas fa-spinner fa-spin mr-2"></i>Asking the bot - this can take a minute…</div>
 
-    <div id="results" class="hidden space-y-6 mt-8">
-        <div class="bg-gray-900 rounded-lg p-6">
-            <div class="flex items-center space-x-4 mb-6">
-                <i data-lucide="history" class="w-8 h-8"></i>
-                <h2 class="text-2xl font-bold">Profile History</h2>
-            </div>
-            <div id="profile-entries" class="space-y-4"></div>
-        </div>
-
-        <div class="bg-gray-900 rounded-lg p-6">
-            <div class="flex items-center space-x-4 mb-6">
-                <i data-lucide="image" class="w-8 h-8"></i>
-                <h2 class="text-2xl font-bold">Related Photos</h2>
-            </div>
+    <div id="results" class="hidden space-y-4 mt-6">
+        <section class="card">
+            <h2 class="card-title"><i class="fas fa-history"></i>Profile history</h2>
+            <div id="profile-entries" class="space-y-3"></div>
+        </section>
+        <section class="card">
+            <h2 class="card-title"><i class="fas fa-images"></i>Related photos</h2>
             <div id="photos" class="grid grid-cols-2 md:grid-cols-3 gap-4"></div>
-        </div>
+        </section>
     </div>
 </div>
 {% endblock %}
 
 {% block extra_scripts %}
-<script src="/static/js/telegram.js"></script>
+<script src="/static/js/services/telegram.js"></script>
 {% endblock %}

@@ -1,82 +1,49 @@
 {% extends "base.html" %}
 
-{% block title %}OSINT Industries API Query{% endblock %}
+{% block title %}OSINT Industries - OSINT Toolkit{% endblock %}
 
 {% block content %}
-<!DOCTYPE html>
-<html lang="en" class="dark">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OSINT Industries API Query</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    fontFamily: {
-                        mono: ['JetBrains Mono', 'monospace'],
-                    },
-                }
-            }
-        }
-    </script>
-    <script src="https://unpkg.com/lucide@latest"></script>
-</head>
-<body class="bg-black text-white font-mono min-h-screen">
-    <div class="container mx-auto px-4 py-8 max-w-4xl">
-        <div class="flex flex-col items-center justify-center min-h-[50vh]">
-            <h1 class="text-4xl font-bold mb-8">OSINT Industries API</h1>
-            <p id="credits" class="text-gray-400 text-lg mb-8">Loading credits...</p>
+<div class="page">
+    <h1 class="page-title">OSINT Industries</h1>
+    <p class="page-lead">Accounts registered to an email, phone number or username across hundreds of sites.
+        <span id="credits" class="text-gray-300">Loading credits…</span></p>
 
-            <div class="w-full max-w-xl">
-                <div class="flex gap-4 mb-4">
-                    <div class="flex gap-2">
-                        <button class="query-type-btn bg-gray-800 p-2 rounded-lg hover:bg-gray-700 transition-colors" data-type="email">
-                            <i data-lucide="mail" class="w-5 h-5"></i>
-                        </button>
-                        <button class="query-type-btn bg-gray-800 p-2 rounded-lg hover:bg-gray-700 transition-colors" data-type="phone">
-                            <i data-lucide="phone" class="w-5 h-5"></i>
-                        </button>
-                        <button class="query-type-btn bg-gray-800 p-2 rounded-lg hover:bg-gray-700 transition-colors" data-type="username">
-                            <i data-lucide="user" class="w-5 h-5"></i>
-                        </button>
-                    </div>
-                    <div class="flex-grow relative">
-                        <input type="text" id="queryInput"
-                            class="w-full bg-gray-900 border border-gray-700 rounded-lg py-3 px-4 text-white placeholder-gray-500 focus:outline-none focus:border-gray-500 transition-colors"
-                            placeholder="Enter email, phone, or username">
-                        <button id="submitQuery"
-                            class="absolute right-2 top-1/2 transform -translate-y-1/2 bg-gray-800 hover:bg-gray-700 text-white px-4 py-1 rounded-md transition-colors">
-                            Search
-                        </button>
-                    </div>
-                </div>
-                <input type="hidden" id="queryType" value="email">
-            </div>
+    <div class="flex flex-col md:flex-row gap-3">
+        <div class="segmented shrink-0">
+            <button type="button" class="query-type-btn" data-type="email" title="Email"><i data-lucide="mail" class="w-4 h-4"></i>Email</button>
+            <button type="button" class="query-type-btn" data-type="phone" title="Phone"><i data-lucide="phone" class="w-4 h-4"></i>Phone</button>
+            <button type="button" class="query-type-btn" data-type="username" title="Username"><i data-lucide="user" class="w-4 h-4"></i>Username</button>
         </div>
-
-        <div id="loading" class="hidden mt-4 text-center">
-            <div class="flex items-center justify-center space-x-2">
-                <div class="w-4 h-4 bg-blue-600 rounded-full animate-pulse"></div>
-                <div class="w-4 h-4 bg-blue-600 rounded-full animate-pulse delay-75"></div>
-                <div class="w-4 h-4 bg-blue-600 rounded-full animate-pulse delay-150"></div>
-            </div>
-        </div>
-
-        <div id="result" class="bg-gray-900 rounded-lg p-6 mt-4 hidden">
-            <pre id="resultContent" class="whitespace-pre-wrap text-sm font-mono"></pre>
-            <div id="pdfDownload" class="mt-4 hidden text-center">
-                <a id="pdfLink" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded inline-block">
-                    Download PDF Report
-                </a>
-            </div>
-        </div>
+        <input type="text" id="queryInput" autocomplete="off" class="field flex-1" placeholder="Enter email, phone, or username">
+        <button type="button" id="submitQuery" class="btn-primary">Search</button>
     </div>
+    <div class="flex flex-wrap items-center gap-x-6 gap-y-2 mt-3 text-sm text-gray-300">
+        <div id="searchMode" class="segmented">
+            <button type="button" class="search-mode-btn" data-mode="standard">Standard</button>
+            <button type="button" class="search-mode-btn" data-mode="premium">With premium</button>
+            <button type="button" class="search-mode-btn" data-mode="premium_only">Only premium</button>
+        </div>
+        <label class="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" id="pdfFormat" class="rounded bg-gray-800 border-gray-600">
+            PDF report instead of results on the page
+        </label>
+    </div>
+    <input type="hidden" id="queryType" value="email">
+    <input type="hidden" id="searchModeValue" value="standard">
 
-    <script src="/static/js/use_api.js"></script>
-</body>
-</html>
+    <div id="loading" class="hidden loading-line"><i class="fas fa-spinner fa-spin mr-2"></i>Searching - usually under a minute…</div>
+
+    <section id="result" class="card mt-6 hidden">
+        <div id="oiCards" class="hidden"></div>
+        <pre id="resultContent" class="whitespace-pre-wrap text-sm font-mono text-gray-300"></pre>
+        <div id="pdfDownload" class="mt-4 hidden flex flex-wrap items-center justify-center gap-3">
+            <a id="pdfLink" target="_blank" class="btn-primary">Download PDF report</a>
+            <button type="button" id="runPremiumOnly" class="hidden btn-secondary">Run only premium modules</button>
+        </div>
+    </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/services/use_api.js"></script>
 {% endblock %}

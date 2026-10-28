@@ -1,9 +1,10 @@
-import json
+import asyncio
 import re
 import httpx
 from typing import List, Optional, Dict, Any
 from fastapi import HTTPException
 import logging
+from utils.config import get_setting
 from models.funstat_models import (
     TechInfo,
     ResolvedUser,
@@ -24,14 +25,28 @@ from models.funstat_models import (
 logger = logging.getLogger(__name__)
 
 
+# requestCost / currentBalance from the latest response: every call reports
+# them, so the balance is known without spending anything
+last_tech: Dict[str, Any] = {}
+
+
 class FunstatService:
-    def __init__(self, api_key: str, base_url: str = "https://telelog.org"):
-        self.api_key = api_key
-        self.base_url = base_url
-        self.headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
-        }
+    def __init__(self, api_key: Optional[str] = None, base_url: Optional[str] = None):
+        self._api_key = api_key
+        self._base_url = base_url
+
+    # Read per call so a key saved in Settings applies without a restart
+    @property
+    def api_key(self) -> str:
+        return self._api_key or get_setting("FUNSTAT_API_KEY", "") or ""
+
+    @property
+    def base_url(self) -> str:
+        return self._base_url or get_setting("FUNSTAT_BASE_URL", "") or "https://telelog.org"
+
+    @property
+    def headers(self) -> Dict[str, str]:
+        return {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
 
     async def _make_request(
         self,
@@ -45,6 +60,9 @@ class FunstatService:
             async with httpx.AsyncClient(timeout=30.0) as client:
                 url = f"{self.base_url}{endpoint}"
 
+                # Never log self.headers: it carries the API bearer token
+                logger.debug("Funstat %s %s params=%s", method, endpoint, params)
+
                 response = await client.request(
                     method=method,
                     url=url,
@@ -54,7 +72,12 @@ class FunstatService:
                 )
 
                 response.raise_for_status()
-                return response.json()
+                data = response.json()
+                tech = data.get("tech") if isinstance(data, dict) else None
+                if isinstance(tech, dict) and "currentBalance" in tech:
+                    last_tech.update(balance=tech.get("currentBalance"), last_cost=tech.get("requestCost"),
+                                     endpoint=endpoint.split("?")[0])
+                return data
 
         except httpx.HTTPStatusError as e:
             logger.error(f"HTTP error: {e.response.status_code} - {e.response.text}")
@@ -163,6 +186,7 @@ class FunstatService:
             params=params
         )
 
+
         return {
             "messages": [UserMessage(**msg) for msg in response.get("data", [])],
             "paging": Paging(**response.get("paging", {})),
@@ -220,10 +244,12 @@ class FunstatService:
 
             page += 1
 
+        # Regex-heavy analysis of every message: keep it off the event loop
         message_analyzer = MessageAnalyzer()
-        message_analysis_result = message_analyzer.analyze_conversation(
+        message_analysis_result = await asyncio.to_thread(
+            message_analyzer.analyze_conversation,
             messages=[msg.model_dump(by_alias=True) if hasattr(msg, 'model_dump') else msg.dict(by_alias=True) for msg in all_messages],
-            include_message_analysis=True
+            include_message_analysis=True,
         )
 
         return {
@@ -247,7 +273,6 @@ class FunstatService:
             "GET",
             f"/api/v1/users/{user_id}/usernames"
         )
-        print(response)
         return [UserNamesHistory(**item) for item in response.get("data", [])]
 
     async def get_user_common_groups_stat(self, user_id: int) -> List[UCommonGroupInfo]:
@@ -351,8 +376,7 @@ class FunstatService:
         )
         return response
 
-import re
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 
 class MessageAnalyzer:
@@ -911,7 +935,6 @@ class MessageAnalyzer:
         Returns:
             True only if strong context indicators suggest it's an age
         """
-        num = int(number)
 
         # Telegram-specific age context patterns
         AGE_INDICATORS = {

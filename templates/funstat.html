@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Funstat Intelligence - OSINT Toolkit{% endblock %}
+{% block title %}Funstat - OSINT Toolkit{% endblock %}
 
 {% block extra_head %}
 <style>
@@ -39,9 +39,14 @@
     .loading-pulse {
         animation: pulse-glow 2s infinite;
     }
+    #mediaImage.zoomed {
+        max-width: none;
+        max-height: none;
+        cursor: zoom-out;
+    }
     .media-thumbnail {
-        max-width: 200px;
-        max-height: 200px;
+        max-width: 240px;
+        max-height: 240px;
         border-radius: 8px;
         object-fit: cover;
         cursor: pointer;
@@ -344,6 +349,7 @@
         gap: 0.5rem;
         animation: shake 0.3s ease;
     }
+    .inline-error.hidden { display: none; }
     @keyframes shake {
         0%, 100% { transform: translateX(0); }
         25% { transform: translateX(-8px); }
@@ -434,45 +440,23 @@
 <!-- Toast Container -->
 <div id="toastContainer" class="toast-container" role="status" aria-live="polite" aria-atomic="true"></div>
 
-<div class="container mx-auto p-6 max-w-7xl">
-    <!-- Header Section -->
-    <div class="mb-8">
-        <div class="flex items-center justify-between">
-            <div>
-                <h1 class="text-4xl font-bold mb-2 bg-gradient-to-r from-purple-400 to-blue-400 bg-clip-text text-transparent">
-                    Funstat Intelligence
-                </h1>
-                <p class="text-gray-400">Advanced Telegram user and group analysis</p>
-            </div>
-            <!-- <div class="flex items-center space-x-4">
-                <div class="stat-badge px-4 py-2 rounded-lg">
-                    <span class="text-sm text-gray-400">API Balance:</span>
-                    <span id="apiBalance" class="ml-2 font-bold text-purple-400">--</span>
-                </div>
-            </div> -->
+<div class="page max-w-7xl">
+    <div class="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+            <h1 class="page-title">Funstat</h1>
+            <p class="page-lead">Telegram users and groups: name and username history, groups, messages, members and who wrote a text.</p>
+        </div>
+        <div class="card !py-2 !px-4 text-sm" title="Reported by Funstat with every response">
+            <span class="text-gray-400">Balance:</span>
+            <span id="apiBalance" class="ml-1 font-bold text-purple-300">--</span>
+            <span id="apiLastCost" class="ml-2 text-xs text-gray-500"></span>
         </div>
     </div>
 
-    <!-- Search Tabs -->
-    <div class="bg-gray-900/50 backdrop-blur-md border border-gray-800 rounded-xl p-2 mb-6">
-        <div class="flex space-x-2">
-            <button onclick="switchTab('user')" id="userTab"
-                class="flex-1 px-4 py-3 rounded-lg font-medium transition-all bg-purple-600 text-white">
-                <i class="fas fa-user mr-2"></i>User Search
-            </button>
-            <button onclick="switchTab('group')" id="groupTab"
-                class="flex-1 px-4 py-3 rounded-lg font-medium transition-all text-gray-400 hover:bg-gray-800">
-                <i class="fas fa-users mr-2"></i>Group Search
-            </button>
-            <button onclick="switchTab('text')" id="textTab"
-                class="flex-1 px-4 py-3 rounded-lg font-medium transition-all text-gray-400 hover:bg-gray-800">
-                <i class="fas fa-search mr-2"></i>Text Search
-            </button>
-            <!-- <button onclick="switchTab('username')" id="usernameTab"
-                class="flex-1 px-4 py-3 rounded-lg font-medium transition-all text-gray-400 hover:bg-gray-800">
-                <i class="fas fa-at mr-2"></i>Username Lookup
-            </button> -->
-        </div>
+    <div class="segmented mb-6">
+        <button type="button" onclick="switchTab('user')" id="userTab" class="funstat-tab active"><i class="fas fa-user"></i>User</button>
+        <button type="button" onclick="switchTab('group')" id="groupTab" class="funstat-tab"><i class="fas fa-users"></i>Group</button>
+        <button type="button" onclick="switchTab('text')" id="textTab" class="funstat-tab"><i class="fas fa-search"></i>Text</button>
     </div>
 
     <!-- User Search Tab -->
@@ -480,8 +464,8 @@
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <!-- Search Panel -->
             <div class="lg:col-span-1">
-                <div class="bg-gray-900/80 backdrop-blur-md border border-gray-800 rounded-xl p-6 sticky top-24">
-                    <h3 class="text-xl font-bold mb-4 flex items-center">
+                <div class="card sticky top-24">
+                    <h3 class="card-title">
                         <i class="fas fa-search text-purple-400 mr-2"></i>
                         User Lookup
                     </h3>
@@ -490,7 +474,7 @@
                         <div>
                             <label class="block text-sm font-medium text-gray-400 mb-2">Search by:</label>
                             <select id="userSearchType"
-                                class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-purple-500">
+                                class="field field-sm">
                                 <option value="id">User ID</option>
                                 <option value="username">Username</option>
                             </select>
@@ -499,7 +483,7 @@
                         <div>
                             <label class="block text-sm font-medium text-gray-400 mb-2">Enter value:</label>
                             <input type="text" id="userSearchInput" placeholder="e.g., 123456789 or @username"
-                                class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-purple-500">
+                                class="field field-sm">
                             <div id="userSearchError" class="inline-error hidden">
                                 <i class="fas fa-exclamation-circle"></i>
                                 <span></span>
@@ -507,7 +491,7 @@
                         </div>
 
                         <button onclick="searchUser()"
-                            class="w-full bg-purple-600 hover:bg-purple-500 text-white px-4 py-3 rounded-lg font-semibold transition-all shadow-lg">
+                            class="btn-primary w-full">
                             <i class="fas fa-search mr-2"></i>Search User
                         </button>
 
@@ -515,25 +499,25 @@
                             <h4 class="text-sm font-medium text-gray-400 mb-3">Quick Actions:</h4>
                             <div class="space-y-2">
                                 <button onclick="getUserStats()" id="getStatsBtn" disabled
-                                    class="w-full bg-gray-800 hover:bg-gray-700 text-white px-3 py-2 rounded-lg text-sm transition-all border border-gray-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                                    class="btn-secondary w-full !justify-start">
                                     <i class="fas fa-chart-bar mr-2"></i>Get Full Stats (Cost: 1)
                                 </button>
                                 <button onclick="getUserGroups()" id="getGroupsBtn" disabled
-                                    class="w-full bg-gray-800 hover:bg-gray-700 text-white px-3 py-2 rounded-lg text-sm transition-all border border-gray-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                                    class="btn-secondary w-full !justify-start">
                                     <i class="fas fa-users mr-2"></i>Get Groups (Cost: 5)
                                 </button>
                                 <button onclick="getUserMessages()" id="getMessagesBtn" disabled
-                                    class="w-full bg-gray-800 hover:bg-gray-700 text-white px-3 py-2 rounded-lg text-sm transition-all border border-gray-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                                    class="btn-secondary w-full !justify-start">
                                     <i class="fas fa-comments mr-2"></i>Get Messages (Cost: 10)
                                 </button>
                                 <!-- Added Get All Messages button -->
                                 <button onclick="getAllUserMessages()" id="getAllMessagesBtn" disabled
-                                    class="w-full bg-gray-800 hover:bg-gray-700 text-white px-3 py-2 rounded-lg text-sm transition-all border border-gray-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                                    class="btn-secondary w-full !justify-start">
                                     <i class="fas fa-download mr-2"></i>Get All Messages (Cost: 10)
                                 </button>
                                 <!-- NEW: Username/Name History button -->
                                 <button onclick="getUsernameHistory()" id="getUsernameHistoryBtn" disabled
-                                    class="w-full bg-gray-800 hover:bg-gray-700 text-white px-3 py-2 rounded-lg text-sm transition-all border border-gray-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                                    class="btn-secondary w-full !justify-start">
                                     <i class="fas fa-history mr-2"></i>Get Username / Name History (Cost: 1)
                                 </button>
                             </div>
@@ -545,7 +529,7 @@
             <!-- Results Panel -->
             <div class="lg:col-span-2">
                 <div id="userResults" class="space-y-6">
-                    <div class="bg-gray-900/50 backdrop-blur-md border border-gray-800 rounded-xl p-12 text-center">
+                    <div class="card !p-12 text-center">
                         <i class="fas fa-user-circle text-6xl text-gray-700 mb-4"></i>
                         <p class="text-gray-500">Search for a user to view results</p>
                     </div>
@@ -559,8 +543,8 @@
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <!-- Search Panel -->
             <div class="lg:col-span-1">
-                <div class="bg-gray-900/80 backdrop-blur-md border border-gray-800 rounded-xl p-6 sticky top-24">
-                    <h3 class="text-xl font-bold mb-4 flex items-center">
+                <div class="card sticky top-24">
+                    <h3 class="card-title">
                         <i class="fas fa-users text-purple-400 mr-2"></i>
                         Group Lookup
                     </h3>
@@ -569,17 +553,17 @@
                         <div>
                             <label class="block text-sm font-medium text-gray-400 mb-2">Group ID:</label>
                             <input type="text" id="groupIdInput" placeholder="e.g., -1001234567890"
-                                class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-purple-500">
+                                class="field field-sm">
                         </div>
 
                         <button onclick="searchGroup()"
-                            class="w-full bg-purple-600 hover:bg-purple-500 text-white px-4 py-3 rounded-lg font-semibold transition-all shadow-lg">
+                            class="btn-primary w-full">
                             <i class="fas fa-search mr-2"></i>Search Group
                         </button>
 
                         <div class="border-t border-gray-800 pt-4 mt-4">
                             <button onclick="getGroupMembers()" id="getMembersBtn" disabled
-                                class="w-full bg-gray-800 hover:bg-gray-700 text-white px-3 py-2 rounded-lg text-sm transition-all border border-gray-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                                class="btn-secondary w-full !justify-start">
                                 <i class="fas fa-user-friends mr-2"></i>Get Members (Cost: 15)
                             </button>
                         </div>
@@ -590,7 +574,7 @@
             <!-- Results Panel -->
             <div class="lg:col-span-2">
                 <div id="groupResults" class="space-y-6">
-                    <div class="bg-gray-900/50 backdrop-blur-md border border-gray-800 rounded-xl p-12 text-center">
+                    <div class="card !p-12 text-center">
                         <i class="fas fa-users text-6xl text-gray-700 mb-4"></i>
                         <p class="text-gray-500">Search for a group to view results</p>
                     </div>
@@ -601,17 +585,17 @@
 
     <!-- Text Search Tab -->
     <div id="textSearchTab" class="tab-content hidden">
-        <div class="bg-gray-900/80 backdrop-blur-md border border-gray-800 rounded-xl p-6 mb-6">
-            <h3 class="text-xl font-bold mb-4 flex items-center">
+        <div class="card mb-6">
+            <h3 class="card-title">
                 <i class="fas fa-search text-purple-400 mr-2"></i>
                 Text Search
             </h3>
 
             <div class="flex gap-4">
                 <input type="text" id="textSearchInput" placeholder="Enter text to search..."
-                    class="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-purple-500">
+                    class="field field-sm flex-1">
                 <button onclick="searchText()"
-                    class="bg-purple-600 hover:bg-purple-500 text-white px-6 py-2 rounded-lg font-semibold transition-all shadow-lg">
+                    class="btn-primary !py-2">
                     <i class="fas fa-search mr-2"></i>Search
                 </button>
             </div>
@@ -619,7 +603,7 @@
         </div>
 
         <div id="textResults" class="space-y-6">
-            <div class="bg-gray-900/50 backdrop-blur-md border border-gray-800 rounded-xl p-12 text-center">
+            <div class="card !p-12 text-center">
                 <i class="fas fa-file-alt text-6xl text-gray-700 mb-4"></i>
                 <p class="text-gray-500">Search for text to view results</p>
             </div>
@@ -628,17 +612,17 @@
 
     <!-- Username Lookup Tab -->
     <div id="usernameTab" class="tab-content hidden">
-        <div class="bg-gray-900/80 backdrop-blur-md border border-gray-800 rounded-xl p-6 mb-6">
-            <h3 class="text-xl font-bold mb-4 flex items-center">
+        <div class="card mb-6">
+            <h3 class="card-title">
                 <i class="fas fa-at text-purple-400 mr-2"></i>
                 Username Usage Lookup
             </h3>
 
             <div class="flex gap-4">
                 <input type="text" id="usernameSearchInput" placeholder="Enter username (without @)..."
-                    class="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-purple-500">
+                    class="field field-sm flex-1">
                 <button onclick="searchUsernameUsage()"
-                    class="bg-purple-600 hover:bg-purple-500 text-white px-6 py-2 rounded-lg font-semibold transition-all shadow-lg">
+                    class="btn-primary !py-2">
                     <i class="fas fa-search mr-2"></i>Lookup
                 </button>
             </div>
@@ -646,7 +630,7 @@
         </div>
 
         <div id="usernameResults" class="space-y-6">
-            <div class="bg-gray-900/50 backdrop-blur-md border border-gray-800 rounded-xl p-12 text-center">
+            <div class="card !p-12 text-center">
                 <i class="fas fa-at text-6xl text-gray-700 mb-4"></i>
                 <p class="text-gray-500">Lookup a username to view usage history</p>
             </div>
@@ -654,7 +638,7 @@
     </div>
 
     <!-- Loading Indicator -->
-    <div id="loadingIndicator" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50">
+    <div id="loadingIndicator" class="hidden fixed inset-0 bg-black/80 flex items-center justify-center z-50">
         <div class="bg-gray-900 border border-purple-500 rounded-xl p-8 text-center loading-pulse">
             <div class="animate-spin rounded-full h-16 w-16 border-t-2 border-purple-500 border-r-2 mx-auto mb-4"></div>
             <p id="loadingText" class="text-gray-400 font-medium">Processing request...</p>
@@ -662,17 +646,21 @@
     </div>
 
     <!-- Media Modal -->
-    <div id="mediaModal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50">
-        <div class="relative max-w-2xl">
-            <button onclick="closeMediaModal()" class="absolute -top-10 right-0 text-white hover:text-purple-400">
-                <i class="fas fa-times text-2xl"></i>
-            </button>
-            <img id="mediaImage" src="/placeholder.svg" alt="Media" class="max-w-full max-h-96 rounded-lg">
+    <div id="mediaModal" class="hidden fixed inset-0 bg-black/90 z-[60] flex flex-col">
+        <div class="flex items-center gap-3 px-4 py-3 border-b border-gray-800 bg-gray-950/80 text-sm">
+            <span id="mediaStatus" class="text-gray-400 flex-1 min-w-0 truncate"></span>
+            <a id="mediaDownload" class="hidden text-gray-300 hover:text-white" download title="Save the original"><i class="fas fa-download mr-1"></i>Save</a>
+            <a id="mediaTelegramLink" class="text-gray-300 hover:text-white" target="_blank" rel="noopener noreferrer"><i class="fab fa-telegram mr-1"></i>Telegram</a>
+            <button type="button" onclick="closeMediaModal()" class="text-gray-300 hover:text-white" title="Close (Esc)"><i class="fas fa-times text-xl"></i></button>
+        </div>
+        <div id="mediaStage" class="flex-1 min-h-0 overflow-auto flex p-4">
+            <img id="mediaImage" alt="Media" class="hidden m-auto max-w-full max-h-full object-contain rounded-lg cursor-zoom-in">
+            <video id="mediaVideo" controls playsinline class="hidden m-auto max-w-full max-h-full rounded-lg"></video>
         </div>
     </div>
 
     <!-- Conversation Context Modal -->
-    <div id="contextModal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <div id="contextModal" class="hidden fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
         <div class="context-modal bg-gray-900 border border-gray-700 rounded-xl w-full custom-scrollbar">
             <div class="sticky top-0 bg-gray-900 border-b border-gray-700 p-4 flex justify-between items-center">
                 <h3 class="text-xl font-bold flex items-center">
@@ -690,7 +678,7 @@
     </div>
 
     <!-- NEW: History Modal -->
-    <div id="historyModal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <div id="nameHistoryModal" class="hidden fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
         <div class="bg-gray-900 border border-gray-800 rounded-xl max-w-3xl w-full max-h-[85vh] overflow-hidden flex flex-col">
             <!-- Modal Header -->
             <div class="p-6 border-b border-gray-800">
@@ -714,8 +702,74 @@
 </div>
 
 <script>
+    // Balance badge: refreshed after every Funstat call (the API reports it in each response)
+    (function () {
+        const nativeFetch = window.fetch.bind(window);
+        async function refreshBalance() {
+            try {
+                const t = await nativeFetch('/funstat/bot/balance').then(r => r.json());
+                if (t.balance === null || t.balance === undefined) return;
+                document.getElementById('apiBalance').textContent = Number(t.balance).toLocaleString(undefined, { maximumFractionDigits: 2 });
+                document.getElementById('apiLastCost').textContent = t.last_cost ? `last request: ${t.last_cost}` : '';
+            } catch (e) { /* badge is informational */ }
+        }
+        window.fetch = async (...args) => {
+            const response = await nativeFetch(...args);
+            const url = String(args[0] && args[0].url || args[0]);
+            if (url.includes('/funstat/') && !url.includes('/balance') && !url.includes('/media')) refreshBalance();
+            return response;
+        };
+        refreshBalance();
+    })();
+</script>
+<script>
 // Set current service for result loading
 window.currentService = 'funstat';
+
+// Re-open a saved Funstat lookup (from the module history panel), including
+// the follow-up data that was fetched for it.
+window.loadResultIntoView = function (data, record) {
+    const method = record ? record.method_name : null;
+    const children = (record && record.children) || [];
+    const child = (name) => children.filter(c => c.method_name === name).pop();
+
+    if (method === 'lookup_user' && Array.isArray(data) && data.length) {
+        switchTab('user');
+        currentUserId = data[0].id;
+        funstatUserResultId = record.result_id;
+        displayUserBasicInfo(data[0]);
+        enableUserActions();
+        const stats = child('stats') || child('stats_min');
+        if (stats) displayUserStats(stats.result, stats.method_name === 'stats');
+        const groups = child('groups');
+        if (groups) displayUserGroups(groups.result);
+        const all = child('all_messages');
+        const page = child('messages');
+        if (all) {
+            window.allMessages = all.result.messages || [];
+            window.messagesAnalysis = all.result.messages_analysis || null;
+            if (window.messagesAnalysis) displayMessagesAnalysis(window.messagesAnalysis);
+            displayAllMessagesWithFilters(window.allMessages);
+        } else if (page) {
+            displayUserMessages(page.result);
+        }
+        const history = child('names_and_usernames_history');
+        if (history) renderUserHistoryModal(history.result);
+    } else if (method === 'lookup_group') {
+        switchTab('group');
+        currentGroupId = (record.parameters.kwargs || {}).group_id;
+        funstatGroupResultId = record.result_id;
+        displayGroupInfo(data);
+        document.getElementById('getMembersBtn').disabled = false;
+        const members = child('group_members');
+        if (members) displayGroupMembers(members.result);
+    } else if (method === 'search_text') {
+        switchTab('text');
+        displayTextResults(data);
+    } else {
+        showToast('This saved lookup can be viewed on the investigation page', 'info');
+    }
+};
 
 // Platform patterns for link detection
 const PLATFORM_PATTERNS = [
@@ -736,6 +790,25 @@ window.enrichedLinksData = [];
 
 let currentUserId = null;
 let currentGroupId = null;
+
+// Saved-result ids of the current user / group lookup. Follow-up lookups send
+// them as X-Parent-Result-ID so the investigation keeps one group per target.
+let funstatUserResultId = null;
+let funstatGroupResultId = null;
+
+function funstatFetch(url, parentId) {
+    return fetch(url, parentId ? { headers: { 'X-Parent-Result-ID': parentId } } : undefined);
+}
+
+async function funstatJson(response) {
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+        // FastAPI validation errors carry a list; proxied API errors can be long
+        const detail = Array.isArray(data.detail) ? data.detail.map(d => d.msg).join('; ') : data.detail;
+        throw new Error(detail ? String(detail).slice(0, 300) : `Request failed (HTTP ${response.status})`);
+    }
+    return data;
+}
 let messagesPaginationState = {
     page: 1,
     pageSize: 20,
@@ -750,16 +823,8 @@ window.thumbnailCache = {};
 
 function switchTab(tab) {
     document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
-    document.querySelectorAll('[id$="Tab"]').forEach(btn => {
-        btn.classList.remove('bg-purple-600', 'text-white');
-        btn.classList.add('text-gray-400', 'hover:bg-gray-800');
-    });
-
     document.getElementById(`${tab}SearchTab`).classList.remove('hidden');
-
-    const activeBtn = document.getElementById(`${tab}Tab`);
-    activeBtn.classList.add('bg-purple-600', 'text-white');
-    activeBtn.classList.remove('text-gray-400', 'hover:bg-gray-800');
+    document.querySelectorAll('.funstat-tab').forEach(btn => btn.classList.toggle('active', btn.id === `${tab}Tab`));
 }
 
 function showLoading(text = 'Processing request...') {
@@ -771,14 +836,82 @@ function hideLoading() {
     document.getElementById('loadingIndicator').classList.add('hidden');
 }
 
-function openMediaModal(src) {
-    document.getElementById('mediaImage').src = src;
+// Media viewer: shows the thumbnail at once, then the original photo or video,
+// downloaded by the server through the Telegram session.
+let mediaViewToken = 0;
+
+async function openMediaModal({ preview = '', chat, id, link }) {
+    const token = ++mediaViewToken;
+    const img = document.getElementById('mediaImage');
+    const video = document.getElementById('mediaVideo');
+    const status = document.getElementById('mediaStatus');
+    const download = document.getElementById('mediaDownload');
+    document.getElementById('mediaTelegramLink').href = link || `https://t.me/${encodeURIComponent(chat)}/${encodeURIComponent(id)}`;
+    download.classList.add('hidden');
+    video.pause();
+    video.classList.add('hidden');
+    video.removeAttribute('src');
+    img.classList.remove('zoomed');
+    img.classList.toggle('hidden', !preview);
+    if (preview) img.src = preview;
+    status.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Loading the original…';
     document.getElementById('mediaModal').classList.remove('hidden');
+    if (!chat) {
+        status.textContent = 'Profile photo from t.me';
+        download.href = preview;
+        download.classList.remove('hidden');
+        return;
+    }
+
+    try {
+        const response = await fetch(`/funstat/media/full?chat_identifier=${encodeURIComponent(chat)}&message_id=${encodeURIComponent(id)}`);
+        const media = await funstatJson(response);
+        if (token !== mediaViewToken) return;
+        if (media.media_type === 'video') {
+            img.classList.add('hidden');
+            video.src = media.url;
+            video.classList.remove('hidden');
+        } else {
+            await new Promise((resolve, reject) => {
+                const full = new Image();
+                full.onload = resolve;
+                full.onerror = () => reject(new Error('The image could not be displayed'));
+                full.src = media.url;
+            });
+            if (token !== mediaViewToken) return;
+            img.src = media.url;
+            img.classList.remove('hidden');
+        }
+        download.href = media.url;
+        download.classList.remove('hidden');
+        status.textContent = `Original · ${(media.file_size / 1024 / 1024).toFixed(media.file_size < 1048576 ? 2 : 1)} MB`;
+    } catch (error) {
+        if (token !== mediaViewToken) return;
+        status.innerHTML = `<span class="text-amber-300"><i class="fas fa-exclamation-triangle mr-1"></i>${escapeHtml(error.message)}</span>${preview ? ' <span class="text-gray-500">- showing the thumbnail</span>' : ''}`;
+    }
 }
 
 function closeMediaModal() {
+    mediaViewToken++;
+    const video = document.getElementById('mediaVideo');
+    video.pause();
+    video.removeAttribute('src');
     document.getElementById('mediaModal').classList.add('hidden');
 }
+
+// Media buttons/thumbnails anywhere on the page carry data-media-chat + data-media-id
+document.addEventListener('click', (event) => {
+    const el = event.target.closest('[data-media-chat], [data-media-link]');
+    if (el) {
+        event.preventDefault();
+        openMediaModal({ preview: el.dataset.mediaPreview || '', chat: el.dataset.mediaChat, id: el.dataset.mediaId, link: el.dataset.mediaLink });
+        return;
+    }
+    const modal = document.getElementById('mediaModal');
+    if (modal.classList.contains('hidden')) return;
+    if (event.target.id === 'mediaImage') event.target.classList.toggle('zoomed');
+    else if (event.target.id === 'mediaStage') closeMediaModal();
+});
 
 function closeContextModal() {
     document.getElementById('contextModal').classList.add('hidden');
@@ -799,7 +932,7 @@ function showToast(message, type = 'info') {
     toast.innerHTML = `
         <i class="fas ${icons[type]} text-xl"></i>
         <div class="flex-1">
-            <p class="text-white font-medium">${message}</p>
+            <p class="text-white font-medium">${escapeHtml(message)}</p>
         </div>
         <button onclick="this.parentElement.remove()" class="text-gray-400 hover:text-white transition-colors">
             <i class="fas fa-times"></i>
@@ -835,14 +968,21 @@ function copyToClipboard(text, sourceElement) {
 
 // NEW: Close History Modal
 function closeHistoryModal() {
-    const modal = document.getElementById('historyModal');
+    const modal = document.getElementById('nameHistoryModal');
     modal.classList.add('hidden');
     modal.classList.remove('flex');
 }
 
 // NEW: Get Username History
+// Name history per user id, so reopening the modal doesn't refetch it
+const nameHistoryCache = new Map();
+
 async function getUsernameHistory() {
     if (!currentUserId) return;
+    if (nameHistoryCache.has(currentUserId)) {
+        renderUserHistoryModal(nameHistoryCache.get(currentUserId));
+        return;
+    }
 
     const btn = document.getElementById('getUsernameHistoryBtn');
     const originalHtml = btn.innerHTML;
@@ -850,8 +990,9 @@ async function getUsernameHistory() {
     btn.innerHTML = '<span class="btn-spinner"></span><span class="ml-2">Loading...</span>';
 
     try {
-        const response = await fetch(`/funstat/users/${currentUserId}/user_names_history`);
-        const data = await response.json();
+        const response = await funstatFetch(`/funstat/users/${currentUserId}/user_names_history`, funstatUserResultId);
+        const data = await funstatJson(response);
+        nameHistoryCache.set(currentUserId, data);
         renderUserHistoryModal(data);
         showToast('History loaded successfully', 'success');
     } catch (error) {
@@ -865,7 +1006,7 @@ async function getUsernameHistory() {
 
 // NEW: Render User History Modal
 function renderUserHistoryModal(data) {
-    const modal = document.getElementById('historyModal');
+    const modal = document.getElementById('nameHistoryModal');
     const content = document.getElementById('historyModalContent');
 
     if (!data || data.length === 0) {
@@ -924,9 +1065,9 @@ function renderUserHistoryModal(data) {
                             <div class="flex items-start justify-between gap-4">
                                 <div class="flex-1">
                                     <div class="flex items-center gap-3 mb-2">
-                                        <span class="text-xl font-bold text-white">${entry.value}</span>
+                                        <span class="text-xl font-bold text-white">${escapeHtml(entry.value)}</span>
                                         <span class="${badgeClass}">
-                                            <i class="fas ${icon} mr-1"></i>${entry.type}
+                                            <i class="fas ${icon} mr-1"></i>${escapeHtml(entry.type)}
                                         </span>
                                     </div>
                                     <div class="flex items-center gap-2 text-sm text-gray-400">
@@ -937,7 +1078,7 @@ function renderUserHistoryModal(data) {
                                     </div>
                                 </div>
                                 <button
-                                    onclick="copyToClipboard('${entry.value.replace(/'/g, "\\'")}', this)"
+                                    onclick="copyToClipboard('${escapeAttr(entry.value.replace(/'/g, "\\'"))}', this)"
                                     class="text-gray-500 hover:text-purple-400 transition-colors p-2"
                                     title="Copy to clipboard"
                                 >
@@ -1016,8 +1157,8 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // Click outside modal to close
-    document.getElementById('historyModal')?.addEventListener('click', function(e) {
-        if (e.target.id === 'historyModal') {
+    document.getElementById('nameHistoryModal')?.addEventListener('click', function(e) {
+        if (e.target.id === 'nameHistoryModal') {
             closeHistoryModal();
         }
     });
@@ -1078,7 +1219,7 @@ function displayContextModal(context, chatUsername) {
         const text = msg.text || msg.message || '';
         const hasMedia = msg.media_type || msg.media;
         const messageId = msg.message_id || msg.id;
-        const messageLink = `https://t.me/${chatUsername}/${messageId}`;
+        const messageLink = `https://t.me/${escapeHtml(chatUsername)}/${messageId}`;
 
         let typeClass = '';
         let typeLabel = '';
@@ -1094,8 +1235,8 @@ function displayContextModal(context, chatUsername) {
             <div class="context-message ${typeClass} p-3 rounded-r-lg">
                 <div class="flex justify-between items-start mb-1">
                     <div class="flex items-center gap-2">
-                        <span class="font-medium text-purple-400">${senderName}</span>
-                        ${senderUsername ? `<span class="text-gray-500 text-sm">@${senderUsername}</span>` : ''}
+                        <span class="font-medium text-purple-400">${escapeHtml(senderName)}</span>
+                        ${senderUsername ? `<span class="text-gray-500 text-sm">@${escapeHtml(senderUsername)}</span>` : ''}
                         ${typeLabel}
                     </div>
                     <span class="text-xs text-gray-500">${date}</span>
@@ -1104,8 +1245,9 @@ function displayContextModal(context, chatUsername) {
                 ${hasMedia ? `
                     <div class="flex items-center gap-2 mb-2">
                         <span class="text-xs bg-blue-900/50 text-blue-400 px-2 py-1 rounded">
-                            <i class="fas fa-paperclip mr-1"></i>${msg.media_type || 'Media'}
+                            <i class="fas fa-paperclip mr-1"></i>${escapeHtml(msg.media_type || 'Media')}
                         </span>
+                        ${chatUsername && messageId ? viewMediaButton(chatUsername, messageId) : ''}
                     </div>
                 ` : ''}
                 <a href="${messageLink}" target="_blank" class="text-xs text-purple-400 hover:text-purple-300">
@@ -1120,12 +1262,12 @@ function displayContextModal(context, chatUsername) {
             <div class="flex items-center justify-between">
                 <div>
                     <span class="text-gray-400 text-sm">Chat:</span>
-                    <a href="https://t.me/${chatUsername}" target="_blank" class="ml-2 text-purple-400 hover:text-purple-300 font-medium">
-                        @${chatUsername}
+                    <a href="https://t.me/${escapeAttr(chatUsername)}" target="_blank" class="ml-2 text-purple-400 hover:text-purple-300 font-medium">
+                        @${escapeHtml(chatUsername)}
                     </a>
                 </div>
                 <div class="text-sm text-gray-500">
-                    ${context.total_messages || 0} messages in context
+                    ${escapeHtml(context.total_messages || 0)} messages in context
                 </div>
             </div>
         </div>
@@ -1133,7 +1275,7 @@ function displayContextModal(context, chatUsername) {
 
     // Reply chain section (if any)
     if (context.reply_chain && context.reply_chain.length > 0) {
-        html += `<div class="context-section-header"><i class="fas fa-reply mr-1"></i> Reply Chain (${context.reply_chain.length})</div>`;
+        html += `<div class="context-section-header"><i class="fas fa-reply mr-1"></i> Reply Chain (${escapeHtml(context.reply_chain.length)})</div>`;
         context.reply_chain.forEach(msg => {
             html += formatContextMessage(msg, 'reply');
         });
@@ -1141,7 +1283,7 @@ function displayContextModal(context, chatUsername) {
 
     // Previous messages
     if (context.previous_messages && context.previous_messages.length > 0) {
-        html += `<div class="context-section-header"><i class="fas fa-arrow-up mr-1"></i> Previous Messages (${context.previous_messages.length})</div>`;
+        html += `<div class="context-section-header"><i class="fas fa-arrow-up mr-1"></i> Previous Messages (${escapeHtml(context.previous_messages.length)})</div>`;
         context.previous_messages.forEach(msg => {
             html += formatContextMessage(msg);
         });
@@ -1155,7 +1297,7 @@ function displayContextModal(context, chatUsername) {
 
     // Next messages
     if (context.next_messages && context.next_messages.length > 0) {
-        html += `<div class="context-section-header"><i class="fas fa-arrow-down mr-1"></i> Following Messages (${context.next_messages.length})</div>`;
+        html += `<div class="context-section-header"><i class="fas fa-arrow-down mr-1"></i> Following Messages (${escapeHtml(context.next_messages.length)})</div>`;
         context.next_messages.forEach(msg => {
             html += formatContextMessage(msg);
         });
@@ -1173,12 +1315,6 @@ function displayContextModal(context, chatUsername) {
 
     content.innerHTML = html;
     modal.classList.remove('hidden');
-}
-
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
 }
 
 // Extract matching links from messages
@@ -1208,11 +1344,12 @@ async function enrichLinks(links) {
     if (!links || links.length === 0) return [];
 
     try {
+        // Group the enrichment under the Funstat user it came from
+        const headers = { 'Content-Type': 'application/json' };
+        if (funstatUserResultId) headers['X-Parent-Result-ID'] = funstatUserResultId;
         const response = await fetch('/api/sharetrace/enrich_links', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
+            headers,
             body: JSON.stringify(links)
         });
 
@@ -1330,7 +1467,7 @@ function renderTikTokCard(data) {
         <div class="enriched-link-card rounded-xl p-4">
             <div class="flex items-start gap-4">
                 ${data.avatar_url ? `
-                    <img src="${data.avatar_url}" alt="${data.username}" class="enriched-avatar" onerror="this.style.display='none'">
+                    <img src="${escapeAttr(safeUrl(data.avatar_url))}" alt="${escapeAttr(data.username)}" class="enriched-avatar" onerror="this.style.display='none'">
                 ` : `
                     <div class="enriched-avatar bg-gradient-to-br from-pink-500 to-purple-600 flex items-center justify-center text-2xl">
                         <i class="fab fa-tiktok"></i>
@@ -1338,16 +1475,16 @@ function renderTikTokCard(data) {
                 `}
                 <div class="flex-1 min-w-0">
                     <div class="flex items-center gap-2 mb-1">
-                        <h6 class="font-bold text-white truncate">${data.nickname || data.username || 'Unknown'}</h6>
+                        <h6 class="font-bold text-white truncate">${escapeHtml(data.nickname || data.username || 'Unknown')}</h6>
                         ${data.private_account ? '<i class="fas fa-lock text-gray-500 text-xs" title="Private Account"></i>' : ''}
                     </div>
-                    <a href="${data.profile || '#'}" target="_blank" class="text-sm text-purple-400 hover:text-purple-300">
-                        @${data.username || 'unknown'}
+                    <a href="${escapeAttr(safeUrl(data.profile || '#'))}" target="_blank" class="text-sm text-purple-400 hover:text-purple-300">
+                        @${escapeHtml(data.username || 'unknown')}
                     </a>
                     ${data.country ? `
                         <div class="flex items-center gap-1 mt-1 text-xs text-gray-500">
                             <i class="fas fa-map-marker-alt"></i>
-                            <span>${data.country}</span>
+                            <span>${escapeHtml(data.country)}</span>
                         </div>
                     ` : ''}
                     ${data.signature ? `
@@ -1377,8 +1514,8 @@ function renderTikTokCard(data) {
 
             ${data.device || data.share_method || data.shared_at ? `
                 <div class="mt-4 pt-3 border-t border-gray-700/50 flex flex-wrap gap-3 text-xs text-gray-500">
-                    ${data.device ? `<span><i class="fas fa-mobile-alt mr-1"></i>${data.device}</span>` : ''}
-                    ${data.share_method ? `<span><i class="fas fa-share mr-1"></i>${data.share_method}</span>` : ''}
+                    ${data.device ? `<span><i class="fas fa-mobile-alt mr-1"></i>${escapeHtml(data.device)}</span>` : ''}
+                    ${data.share_method ? `<span><i class="fas fa-share mr-1"></i>${escapeHtml(data.share_method)}</span>` : ''}
                     ${data.shared_at ? `<span><i class="fas fa-clock mr-1"></i>${new Date(data.shared_at).toLocaleString()}</span>` : ''}
                 </div>
             ` : ''}
@@ -1399,16 +1536,16 @@ function renderInstagramCard(data) {
         <div class="enriched-link-card rounded-xl p-4">
             <div class="flex items-start gap-4">
                 ${data.avatar_url || data.profile_pic_url ? `
-                    <img src="${data.avatar_url || data.profile_pic_url}" alt="${data.username}" class="enriched-avatar" onerror="this.style.display='none'">
+                    <img src="${escapeAttr(safeUrl(data.avatar_url || data.profile_pic_url))}" alt="${escapeAttr(data.username)}" class="enriched-avatar" onerror="this.style.display='none'">
                 ` : `
                     <div class="enriched-avatar bg-gradient-to-br from-pink-500 via-red-500 to-yellow-500 flex items-center justify-center text-2xl">
                         <i class="fab fa-instagram"></i>
                     </div>
                 `}
                 <div class="flex-1 min-w-0">
-                    <h6 class="font-bold text-white truncate">${data.full_name || data.username || 'Unknown'}</h6>
-                    <a href="https://instagram.com/${data.username}" target="_blank" class="text-sm text-purple-400 hover:text-purple-300">
-                        @${data.username || 'unknown'}
+                    <h6 class="font-bold text-white truncate">${escapeHtml(data.full_name || data.username || 'Unknown')}</h6>
+                    <a href="https://instagram.com/${escapeAttr(data.username)}" target="_blank" class="text-sm text-purple-400 hover:text-purple-300">
+                        @${escapeHtml(data.username || 'unknown')}
                     </a>
                     ${data.biography || data.bio ? `
                         <p class="text-sm text-gray-400 mt-2 line-clamp-2">${escapeHtml(data.biography || data.bio)}</p>
@@ -1445,14 +1582,14 @@ function renderDiscordCard(data) {
         <div class="enriched-link-card rounded-xl p-4">
             <div class="flex items-start gap-4">
                 ${data.icon_url || data.avatar_url ? `
-                    <img src="${data.icon_url || data.avatar_url}" alt="${data.name}" class="enriched-avatar" onerror="this.style.display='none'">
+                    <img src="${escapeAttr(safeUrl(data.icon_url || data.avatar_url))}" alt="${escapeAttr(data.name)}" class="enriched-avatar" onerror="this.style.display='none'">
                 ` : `
                     <div class="enriched-avatar bg-[#5865f2] flex items-center justify-center text-2xl">
                         <i class="fab fa-discord"></i>
                     </div>
                 `}
                 <div class="flex-1 min-w-0">
-                    <h6 class="font-bold text-white truncate">${data.name || data.guild_name || 'Unknown Server'}</h6>
+                    <h6 class="font-bold text-white truncate">${escapeHtml(data.name || data.guild_name || 'Unknown Server')}</h6>
                     ${data.description ? `
                         <p class="text-sm text-gray-400 mt-2 line-clamp-2">${escapeHtml(data.description)}</p>
                     ` : ''}
@@ -1482,17 +1619,17 @@ function renderTelegramCard(data) {
         <div class="enriched-link-card rounded-xl p-4">
             <div class="flex items-start gap-4">
                 ${data.avatar_url || data.photo_url ? `
-                    <img src="${data.avatar_url || data.photo_url}" alt="${data.title}" class="enriched-avatar" onerror="this.style.display='none'">
+                    <img src="${escapeAttr(safeUrl(data.avatar_url || data.photo_url))}" alt="${escapeAttr(data.title)}" class="enriched-avatar" onerror="this.style.display='none'">
                 ` : `
                     <div class="enriched-avatar bg-[#0088cc] flex items-center justify-center text-2xl">
                         <i class="fab fa-telegram"></i>
                     </div>
                 `}
                 <div class="flex-1 min-w-0">
-                    <h6 class="font-bold text-white truncate">${data.title || data.name || 'Unknown'}</h6>
+                    <h6 class="font-bold text-white truncate">${escapeHtml(data.title || data.name || 'Unknown')}</h6>
                     ${data.username ? `
-                        <a href="https://t.me/${data.username}" target="_blank" class="text-sm text-purple-400 hover:text-purple-300">
-                            @${data.username}
+                        <a href="https://t.me/${escapeAttr(data.username)}" target="_blank" class="text-sm text-purple-400 hover:text-purple-300">
+                            @${escapeHtml(data.username)}
                         </a>
                     ` : ''}
                     ${data.description || data.about ? `
@@ -1522,7 +1659,7 @@ function renderGenericCard(data, platform) {
         <div class="enriched-link-card rounded-xl p-4">
             <div class="flex items-start gap-4">
                 ${data.avatar_url || data.icon_url || data.image_url ? `
-                    <img src="${data.avatar_url || data.icon_url || data.image_url}" alt="${title}" class="enriched-avatar" onerror="this.style.display='none'">
+                    <img src="${escapeAttr(safeUrl(data.avatar_url || data.icon_url || data.image_url))}" alt="${escapeAttr(title)}" class="enriched-avatar" onerror="this.style.display='none'">
                 ` : `
                     <div class="enriched-avatar bg-gray-700 flex items-center justify-center text-2xl">
                         <i class="${getPlatformIcon(platform)}"></i>
@@ -1531,7 +1668,7 @@ function renderGenericCard(data, platform) {
                 <div class="flex-1 min-w-0">
                     <h6 class="font-bold text-white truncate">${escapeHtml(title)}</h6>
                     ${url !== '#' ? `
-                        <a href="${url}" target="_blank" class="text-sm text-purple-400 hover:text-purple-300 truncate block">
+                        <a href="${escapeAttr(safeUrl(url))}" target="_blank" class="text-sm text-purple-400 hover:text-purple-300 truncate block">
                             <i class="fas fa-external-link-alt mr-1"></i>View
                         </a>
                     ` : ''}
@@ -1606,7 +1743,7 @@ async function processAndEnrichLinks(messages, containerId) {
 
 function buildTelegramLink(chatId, messageId, username = null) {
     if (username) {
-        return `https://t.me/${username}/${messageId}`;
+        return `https://t.me/${encodeURIComponent(username)}/${messageId}`;
     }
     const absId = Math.abs(parseInt(chatId));
     if (String(absId).startsWith('100')) {
@@ -1617,7 +1754,7 @@ function buildTelegramLink(chatId, messageId, username = null) {
 
 function buildTelegramChatLink(chatId, username = null) {
     if (username) {
-        return `https://t.me/${username}`;
+        return `https://t.me/${encodeURIComponent(username)}`;
     }
     const absId = Math.abs(parseInt(chatId));
     if (String(absId).startsWith('100')) {
@@ -1656,18 +1793,19 @@ async function searchUser() {
 
         if (searchType === 'id') {
             endpoint = '/funstat/users/basic_info_by_id';
-            params = `id=${searchValue}`;
+            params = `id=${encodeURIComponent(searchValue)}`;
         } else {
             const username = searchValue.replace('@', '');
             endpoint = '/funstat/users/resolve_username';
-            params = `name=${username}`;
+            params = `name=${encodeURIComponent(username)}`;
         }
 
         const response = await fetch(`${endpoint}?${params}`);
-        const users = await response.json();
+        const users = await funstatJson(response);
 
         if (users && users.length > 0) {
             currentUserId = users[0].id;
+            funstatUserResultId = window.savedResultId(response);
             displayUserBasicInfo(users[0]);
             enableUserActions();
 
@@ -1690,8 +1828,8 @@ async function getUserStatsMin() {
     if (!currentUserId) return;
 
     try {
-        const response = await fetch(`/funstat/users/${currentUserId}/stats_min`);
-        const stats = await response.json();
+        const response = await funstatFetch(`/funstat/users/${currentUserId}/stats_min`, funstatUserResultId);
+        const stats = await funstatJson(response);
         displayUserStats(stats);
     } catch (error) {
         console.error('Error getting user stats:', error);
@@ -1707,8 +1845,8 @@ async function getUserStats() {
     btn.innerHTML = '<span class="btn-spinner"></span><span class="ml-2">Loading...</span>';
 
     try {
-        const response = await fetch(`/funstat/users/${currentUserId}/stats`);
-        const stats = await response.json();
+        const response = await funstatFetch(`/funstat/users/${currentUserId}/stats`, funstatUserResultId);
+        const stats = await funstatJson(response);
         displayUserStats(stats, true);
         showToast('Stats loaded successfully', 'success');
     } catch (error) {
@@ -1730,8 +1868,8 @@ async function getUserGroups() {
     btn.innerHTML = '<span class="btn-spinner"></span><span class="ml-2">Loading...</span>';
 
     try {
-        const response = await fetch(`/funstat/users/${currentUserId}/groups`);
-        const groups = await response.json();
+        const response = await funstatFetch(`/funstat/users/${currentUserId}/groups`, funstatUserResultId);
+        const groups = await funstatJson(response);
         displayUserGroups(groups);
         showToast(`Found ${groups.length} groups`, 'success');
     } catch (error) {
@@ -1753,13 +1891,13 @@ async function getUserMessages(page = 1) {
     btn.innerHTML = '<span class="btn-spinner"></span><span class="ml-2">Loading...</span>';
 
     try {
-        const response = await fetch(`/funstat/users/${currentUserId}/messages?page=${page}&pageSize=20`);
-        const data = await response.json();
+        const response = await funstatFetch(`/funstat/users/${currentUserId}/messages?page=${page}&pageSize=20`, funstatUserResultId);
+        const data = await funstatJson(response);
 
         messagesPaginationState = {
             page: page,
             pageSize: 20,
-            totalPages: Math.ceil(data.paging.total / 20) || 1
+            totalPages: data.paging?.totalPages || Math.ceil((data.paging?.total || 0) / 20) || 1
         };
 
         displayUserMessages(data);
@@ -1786,8 +1924,8 @@ async function getAllUserMessages() {
     btn.innerHTML = '<span class="btn-spinner"></span><span class="ml-2">Fetching...</span>';
 
     try {
-        const response = await fetch(`/funstat/users/${currentUserId}/messages/all`);
-        const data = await response.json();
+        const response = await funstatFetch(`/funstat/users/${currentUserId}/messages/all`, funstatUserResultId);
+        const data = await funstatJson(response);
 
         // Store all messages globally for filtering
         window.allMessages = data.messages || [];
@@ -1803,9 +1941,6 @@ async function getAllUserMessages() {
             }
         });
         window.currentUserGroups = Array.from(groupMap.values());
-
-        // Batch create thumbnails for messages with media
-        await createThumbnailsForMessages(window.allMessages);
 
         // Display the analysis section if available
         if (window.messagesAnalysis) {
@@ -1827,49 +1962,6 @@ async function getAllUserMessages() {
     }
 }
 
-async function createThumbnailsForMessages(messages) {
-    // Group messages by chat username for batch thumbnail creation
-    // Only process messages from groups that have usernames
-    const mediaMessagesByChat = {};
-
-    messages.forEach(msg => {
-        if (msg.mediaCode !== null && msg.mediaCode !== undefined && msg.group.username) {
-            const chatIdentifier = msg.group.username;
-            if (!mediaMessagesByChat[chatIdentifier]) {
-                mediaMessagesByChat[chatIdentifier] = [];
-            }
-            mediaMessagesByChat[chatIdentifier].push(msg.messageId);
-        }
-    });
-
-    // Batch create thumbnails for each chat
-    const thumbnailPromises = [];
-    for (const [chatIdentifier, messageIds] of Object.entries(mediaMessagesByChat)) {
-        if (messageIds.length > 0) {
-            const promise = fetch(`/funstat/media/thumbnail/batch?chat_identifier=${encodeURIComponent(chatIdentifier)}&${messageIds.map(id => `message_ids=${id}`).join('&')}`, {
-                method: 'POST'
-            })
-            .then(res => res.json())
-            .catch(err => {
-                console.error(`Failed to create thumbnails for chat ${chatIdentifier}:`, err);
-                return [];
-            });
-            thumbnailPromises.push(promise);
-        }
-    }
-
-    // Wait for all thumbnail batches to complete
-    const results = await Promise.all(thumbnailPromises);
-
-    // Store thumbnail URLs in a map for quick lookup
-    window.thumbnailCache = {};
-    results.flat().forEach(result => {
-        if (result && result.message_id && result.thumbnail_url) {
-            window.thumbnailCache[result.message_id] = result.thumbnail_url;
-        }
-    });
-}
-
 async function searchGroup() {
     const groupId = document.getElementById('groupIdInput').value.trim();
 
@@ -1881,10 +1973,11 @@ async function searchGroup() {
     showLoading('Searching group...');
 
     try {
-        const response = await fetch(`/funstat/groups/${groupId}`);
-        const group = await response.json();
+        const response = await fetch(`/funstat/groups/${encodeURIComponent(groupId)}`);
+        const group = await funstatJson(response);
 
         currentGroupId = groupId;
+        funstatGroupResultId = window.savedResultId(response);
         displayGroupInfo(group);
         document.getElementById('getMembersBtn').disabled = false;
         showToast('Group found successfully', 'success');
@@ -1903,8 +1996,8 @@ async function getGroupMembers() {
     showLoading('Getting group members...');
 
     try {
-        const response = await fetch(`/funstat/groups/${currentGroupId}/members`);
-        const members = await response.json();
+        const response = await funstatFetch(`/funstat/groups/${currentGroupId}/members`, funstatGroupResultId);
+        const members = await funstatJson(response);
         displayGroupMembers(members);
         showToast(`Found ${members.length} members`, 'success');
     } catch (error) {
@@ -1928,7 +2021,7 @@ async function searchText() {
 
     try {
         const response = await fetch(`/funstat/search/text?input=${encodeURIComponent(searchText)}&page=1&pageSize=50`);
-        const data = await response.json();
+        const data = await funstatJson(response);
         displayTextResults(data);
         showToast(`Found ${data.total || data.results?.length || 0} results`, 'success');
     } catch (error) {
@@ -1951,8 +2044,8 @@ async function searchUsernameUsage() {
     showLoading('Looking up username...');
 
     try {
-        const response = await fetch(`/funstat/users/username_usage?username=${username}`);
-        const data = await response.json();
+        const response = await fetch(`/funstat/users/username_usage?username=${encodeURIComponent(username)}`);
+        const data = await funstatJson(response);
         displayUsernameResults(data);
         showToast('Username lookup complete', 'success');
     } catch (error) {
@@ -1977,17 +2070,18 @@ function displayUserBasicInfo(user) {
         <div class="result-card border border-gray-800 rounded-xl p-6 card-hover fade-in">
             <div class="flex items-start justify-between mb-4">
                 <div class="flex items-center space-x-4">
-                    <div class="bg-purple-600 rounded-full w-16 h-16 flex items-center justify-center text-2xl">
-                        ${user.is_bot ? '🤖' : '👤'}
+                    <div id="tmeAvatar" class="bg-purple-600 rounded-full w-16 h-16 shrink-0 overflow-hidden flex items-center justify-center text-2xl">
+                        ${escapeHtml(user.is_bot ? '🤖' : '👤')}
                     </div>
                     <div>
                         <h3 class="text-2xl font-bold text-white">
-                            ${user.first_name || ''} ${user.last_name || ''}
+                            ${escapeHtml(user.first_name || '')} ${escapeHtml(user.last_name || '')}
                         </h3>
-                        ${user.username ? `<p class="text-purple-400">@${user.username}</p>` : ''}
+                        ${user.username ? `<p class="text-purple-400">@${escapeHtml(user.username)}</p>` : ''}
+                        <div id="tmeProfile" class="text-sm"></div>
                         <div class="flex items-center gap-2 mt-1">
-                            <p class="text-gray-500 text-sm">ID: ${user.id}</p>
-                            <button onclick="copyToClipboard('${user.id}', this)" class="text-gray-500 hover:text-purple-400 transition-colors text-sm" title="Copy ID">
+                            <p class="text-gray-500 text-sm">ID: ${escapeHtml(user.id)}</p>
+                            <button onclick="copyToClipboard('${escapeAttr(user.id)}', this)" class="text-gray-500 hover:text-purple-400 transition-colors text-sm" title="Copy ID">
                                 <i class="fas fa-copy"></i>
                             </button>
                         </div>
@@ -2003,6 +2097,32 @@ function displayUserBasicInfo(user) {
     `;
 
     document.getElementById('userResults').innerHTML = html;
+    if (user.username) loadTmeProfile(user.username);
+}
+
+// Public profile from t.me/<username>: current avatar, display name and bio
+async function loadTmeProfile(username) {
+    const box = document.getElementById('tmeProfile');
+    box.innerHTML = '<span class="text-gray-500"><i class="fas fa-spinner fa-spin mr-1"></i>t.me profile…</span>';
+    try {
+        const response = await funstatFetch(`/funstat/users/tme_profile?username=${encodeURIComponent(username)}`, funstatUserResultId);
+        const profile = await funstatJson(response);
+        if (!document.body.contains(box)) return;  // another user was searched meanwhile
+        if (!profile.exists) {
+            box.innerHTML = '<span class="text-gray-500">t.me: no public profile for this username</span>';
+            return;
+        }
+        if (profile.avatar_url) {
+            document.getElementById('tmeAvatar').innerHTML = `<img src="${escapeAttr(profile.avatar_url)}" alt="Avatar"
+                class="w-full h-full object-cover cursor-zoom-in" title="Open the avatar"
+                data-media-preview="${escapeAttr(profile.avatar_url)}" data-media-link="${escapeAttr(profile.link)}">`;
+        }
+        box.innerHTML = `
+            <div class="text-gray-300 mt-1"><span class="text-gray-500">t.me name:</span> ${escapeHtml(profile.name || '')}</div>
+            ${profile.bio ? `<div class="text-gray-300 whitespace-pre-wrap break-words max-w-xl"><span class="text-gray-500">Bio:</span> ${escapeHtml(profile.bio)}</div>` : ''}`;
+    } catch (error) {
+        if (document.body.contains(box)) box.innerHTML = `<span class="text-gray-500">t.me profile unavailable: ${escapeHtml(error.message)}</span>`;
+    }
 }
 
 function displayUserStats(stats, full = false) {
@@ -2017,19 +2137,19 @@ function displayUserStats(stats, full = false) {
 
             <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div class="stat-badge p-4 rounded-lg text-center">
-                    <div class="text-3xl font-bold text-purple-400">${stats.total_msg_count || 0}</div>
+                    <div class="text-3xl font-bold text-purple-400">${escapeHtml(stats.total_msg_count || 0)}</div>
                     <div class="text-xs text-gray-400 mt-1">Total Messages</div>
                 </div>
                 <div class="stat-badge p-4 rounded-lg text-center">
-                    <div class="text-3xl font-bold text-blue-400">${stats.total_groups || 0}</div>
+                    <div class="text-3xl font-bold text-blue-400">${escapeHtml(stats.total_groups || 0)}</div>
                     <div class="text-xs text-gray-400 mt-1">Total Groups</div>
                 </div>
                 <div class="stat-badge p-4 rounded-lg text-center">
-                    <div class="text-3xl font-bold text-green-400">${stats.adm_in_groups || 0}</div>
+                    <div class="text-3xl font-bold text-green-400">${escapeHtml(stats.adm_in_groups || 0)}</div>
                     <div class="text-xs text-gray-400 mt-1">Admin Groups</div>
                 </div>
                 <div class="stat-badge p-4 rounded-lg text-center">
-                    <div class="text-3xl font-bold text-yellow-400">${stats.usernames_count || 0}</div>
+                    <div class="text-3xl font-bold text-yellow-400">${escapeHtml(stats.usernames_count || 0)}</div>
                     <div class="text-xs text-gray-400 mt-1">Usernames Used</div>
                 </div>
             </div>
@@ -2037,7 +2157,7 @@ function displayUserStats(stats, full = false) {
             ${full && stats.favorite_chat ? `
                 <div class="mt-6 p-4 bg-gray-800/50 rounded-lg">
                     <p class="text-sm text-gray-400 mb-2">Favorite Chat:</p>
-                    <p class="text-white font-medium">${stats.favorite_chat.title}</p>
+                    <p class="text-white font-medium">${escapeHtml(stats.favorite_chat.title)}</p>
                 </div>
             ` : ''}
 
@@ -2076,15 +2196,15 @@ function displayUserGroups(groups) {
                     <div class="bg-gray-800/50 p-4 rounded-lg hover:bg-gray-800 transition-all">
                         <div class="flex justify-between items-start">
                             <div class="flex-1">
-                                <p class="font-semibold text-white">${g.chat.title}</p>
+                                <p class="font-semibold text-white">${escapeHtml(g.chat.title)}</p>
                                 ${g.chat.username ? `
-                                    <a href="https://t.me/${g.chat.username}" target="_blank" class="text-sm text-purple-400 hover:text-purple-300">
-                                        @${g.chat.username}
+                                    <a href="https://t.me/${escapeAttr(g.chat.username)}" target="_blank" class="text-sm text-purple-400 hover:text-purple-300">
+                                        @${escapeHtml(g.chat.username)}
                                     </a>
                                 ` : ''}
-                                <p class="text-xs text-gray-500">ID: ${g.chat.id}</p>
+                                <p class="text-xs text-gray-500">ID: ${escapeHtml(g.chat.id)}</p>
                                 <div class="flex items-center gap-4 mt-2 text-xs text-gray-400">
-                                    <span><i class="fas fa-comments mr-1"></i>${g.messages_count || 0} messages</span>
+                                    <span><i class="fas fa-comments mr-1"></i>${escapeHtml(g.messages_count || 0)} messages</span>
                                     ${g.is_admin ? '<span class="text-green-400"><i class="fas fa-crown mr-1"></i>Admin</span>' : ''}
                                     ${g.is_left ? '<span class="text-red-400"><i class="fas fa-door-open mr-1"></i>Left</span>' : ''}
                                 </div>
@@ -2096,69 +2216,23 @@ function displayUserGroups(groups) {
         </div>
     `;
 
-    const existingStats = document.querySelector('#userResults .result-card:last-child');
-    existingStats.insertAdjacentHTML('afterend', html);
+    appendResultCard('userResults', html);
 }
 
 function displayUserMessages(data) {
     const messages = data.messages || [];
     const paging = data.paging || {};
-    const totalPages = Math.ceil(paging.total / paging.pageSize) || 1;
+    const totalPages = paging.totalPages || Math.ceil((paging.total || 0) / (paging.pageSize || 20)) || 1;
 
     const html = `
-        <div class="result-card border border-gray-800 rounded-xl p-6 mt-6">
+        <div id="pagedMessagesCard" class="result-card border border-gray-800 rounded-xl p-6 mt-6">
             <h4 class="text-xl font-bold mb-4 flex items-center">
                 <i class="fas fa-comments text-purple-400 mr-2"></i>
                 Messages (${paging.total || messages.length})
             </h4>
 
             <div class="space-y-3 max-h-96 overflow-y-auto custom-scrollbar">
-                ${messages.map(msg => {
-                    const isMedia = msg.media_code !== null;
-                    const messageLink = buildTelegramLink(msg.group.id, msg.messageId, msg.group.username);
-                    const chatLink = buildTelegramChatLink(msg.group.id, msg.group.username);
-
-                    return `
-                        <div class="bg-gray-800/50 p-4 rounded-lg hover:bg-gray-800 transition-all">
-                            <div class="flex justify-between items-start mb-2">
-                                <div class="flex-1">
-                                    <a href="${chatLink}" target="_blank" class="text-sm font-medium text-purple-400 hover:text-purple-300">
-                                        ${msg.group.title}
-                                    </a>
-                                    <p class="text-xs text-gray-500">ID: ${msg.group.id}</p>
-                                </div>
-                                <span class="text-xs text-gray-500">${new Date(msg.date).toLocaleString()}</span>
-                            </div>
-
-                            <p class="text-white mb-2">${msg.text || '<i class="text-gray-500">No text</i>'}</p>
-
-                            ${isMedia ? `
-                                <div class="flex items-center gap-2 mb-2">
-                                    <span class="text-xs bg-blue-900/30 text-blue-400 px-2 py-1 rounded">
-                                        <i class="fas fa-image mr-1"></i>Media
-                                    </span>
-                                    ${msg.media_name ? `<span class="text-xs text-gray-400">${msg.media_name}</span>` : ''}
-                                </div>
-                            ` : ''}
-
-                            <div class="flex items-center gap-3">
-                                <a href="${messageLink}" target="_blank" class="text-xs text-purple-400 hover:text-purple-300">
-                                    <i class="fas fa-external-link-alt mr-1"></i>Open in Telegram
-                                </a>
-                                ${msg.group.username ? `
-                                    <button onclick="getMessageContext('${msg.group.username}', ${msg.messageId})"
-                                        class="context-btn text-xs text-blue-400 hover:text-blue-300 bg-blue-900/30 px-2 py-1 rounded">
-                                        <i class="fas fa-comments mr-1"></i>Get Context
-                                    </button>
-                                ` : `
-                                    <span class="text-xs text-gray-600" title="Context unavailable - no public username">
-                                        <i class="fas fa-comments mr-1"></i>No context
-                                    </span>
-                                `}
-                            </div>
-                        </div>
-                    `;
-                }).join('')}
+                ${messages.map(messageRowHtml).join('') || '<p class="text-gray-500">No messages</p>'}
             </div>
 
             ${totalPages > 1 ? `
@@ -2179,62 +2253,285 @@ function displayUserMessages(data) {
         </div>
     `;
 
-    const existingStats = document.querySelector('#userResults .result-card:last-child');
-    existingStats.insertAdjacentHTML('afterend', html);
+    document.getElementById('pagedMessagesCard')?.remove();
+    appendResultCard('userResults', html);
+    const card = document.getElementById('pagedMessagesCard');
+    card.addEventListener('click', (event) => {
+        const contextBtn = event.target.closest('[data-context-chat]');
+        if (contextBtn) getMessageContext(contextBtn.dataset.contextChat, Number(contextBtn.dataset.contextId));
+    });
+    card.querySelectorAll('[data-thumb-chat][data-thumb-id]').forEach(queueThumbnail);
+}
+
+// ==================== ALL MESSAGES LIST ====================
+// A user can have thousands of messages. Rendering them as one HTML string
+// froze the page, so: filter on the data, render rows in chunks as the list
+// scrolls, and fetch media thumbnails only for rows that become visible.
+const MESSAGE_CHUNK = 60;
+const messageList = { all: [], filtered: [], rendered: 0, query: '', listObserver: null, thumbObserver: null };
+const messageSearchText = new WeakMap();
+const messageDateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'short', timeStyle: 'short' });
+const thumbQueue = new Map();   // chat username -> Set(message ids)
+let thumbFlushTimer = null;
+
+function formatMessageDate(value) {
+    const date = new Date(value);
+    return isNaN(date) ? '' : messageDateFormat.format(date);
+}
+
+function thumbKey(chat, messageId) {
+    return `${chat}:${messageId}`;
+}
+
+function highlightText(text, query) {
+    if (!query) return escapeHtml(text);
+    const re = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+    let out = '', last = 0, match;
+    while ((match = re.exec(text))) {
+        out += escapeHtml(text.slice(last, match.index)) +
+            `<mark class="bg-yellow-600/40 text-yellow-100 rounded px-0.5">${escapeHtml(match[0])}</mark>`;
+        last = match.index + match[0].length;
+        if (!match[0].length) re.lastIndex++;
+    }
+    return out + escapeHtml(text.slice(last));
+}
+
+function thumbnailImg(url, chat, id) {
+    return `<img src="${escapeAttr(url)}" alt="Media preview" loading="lazy" class="media-thumbnail cursor-pointer" title="Open the original"
+        data-media-preview="${escapeAttr(url)}" data-media-chat="${escapeAttr(chat)}" data-media-id="${escapeAttr(id)}">`;
+}
+
+function viewMediaButton(chat, id) {
+    return `<button type="button" class="text-xs text-blue-400 hover:text-blue-300 ml-auto" data-media-chat="${escapeAttr(chat)}" data-media-id="${escapeAttr(id)}"><i class="fas fa-expand mr-1"></i>View</button>`;
+}
+
+function messageRowHtml(msg) {
+    const group = msg.group || {};
+    const hasMedia = msg.mediaCode !== null && msg.mediaCode !== undefined;
+    const messageLink = buildTelegramLink(group.id, msg.messageId, group.username);
+    const chatLink = buildTelegramChatLink(group.id, group.username);
+
+    let media = '';
+    if (hasMedia) {
+        const cached = group.username && window.thumbnailCache[thumbKey(group.username, msg.messageId)];
+        const label = `<i class="fas fa-image text-blue-400"></i><span class="text-sm text-gray-400">${escapeHtml(msg.mediaName || 'Media')}</span>`;
+        if (cached) {
+            media = `<div class="mb-3">${thumbnailImg(cached, group.username, msg.messageId)}</div>`;
+        } else if (group.username) {
+            media = `<div class="mb-3"><div class="bg-gray-900/50 p-3 rounded-lg flex items-center gap-2" data-thumb-chat="${escapeAttr(group.username)}" data-thumb-id="${escapeAttr(msg.messageId)}">${label}</div></div>`;
+        } else {
+            media = `<div class="mb-3"><div class="bg-gray-900/50 p-3 rounded-lg flex items-center gap-2">${label}</div></div>`;
+        }
+    }
+
+    return `
+        <div class="bg-gray-800/50 p-4 rounded-lg hover:bg-gray-800">
+            <div class="flex justify-between items-start gap-3 mb-2">
+                <div class="min-w-0">
+                    <a href="${escapeAttr(chatLink)}" target="_blank" rel="noopener noreferrer" class="text-sm font-medium text-purple-400 hover:text-purple-300 break-words">${escapeHtml(group.title || 'Unknown chat')}</a>
+                    <p class="text-xs text-gray-500">ID: ${escapeHtml(group.id)}</p>
+                </div>
+                <span class="text-xs text-gray-500 shrink-0">${escapeHtml(formatMessageDate(msg.date))}</span>
+            </div>
+            ${media}
+            ${msg.text ? `<p class="text-white mb-2 whitespace-pre-wrap break-words">${highlightText(msg.text, messageList.query)}</p>` : ''}
+            <div class="flex items-center gap-3">
+                <a href="${escapeAttr(messageLink)}" target="_blank" rel="noopener noreferrer" class="text-xs text-purple-400 hover:text-purple-300">
+                    <i class="fas fa-external-link-alt mr-1"></i>Open in Telegram
+                </a>
+                ${group.username ? `
+                    <button type="button" data-context-chat="${escapeAttr(group.username)}" data-context-id="${escapeAttr(msg.messageId)}"
+                        class="context-btn text-xs text-blue-400 hover:text-blue-300 bg-blue-900/30 px-2 py-1 rounded">
+                        <i class="fas fa-comments mr-1"></i>Get Context
+                    </button>
+                ` : `
+                    <span class="text-xs text-gray-600" title="Context unavailable - no public username">
+                        <i class="fas fa-comments mr-1"></i>No context
+                    </span>
+                `}
+            </div>
+        </div>`;
+}
+
+function renderMessageChunk() {
+    const list = document.getElementById('messageList');
+    if (!list || messageList.rendered >= messageList.filtered.length) return;
+
+    const end = Math.min(messageList.rendered + MESSAGE_CHUNK, messageList.filtered.length);
+    let html = '';
+    for (let i = messageList.rendered; i < end; i++) html += messageRowHtml(messageList.filtered[i]);
+
+    const template = document.createElement('template');
+    template.innerHTML = html;
+    const placeholders = template.content.querySelectorAll('[data-thumb-id]');
+    list.appendChild(template.content);
+    placeholders.forEach(el => messageList.thumbObserver.observe(el));
+    messageList.rendered = end;
+
+    // IntersectionObserver only reports changes: if the sentinel is still in
+    // view after this chunk, re-observing it fires again and loads the next one.
+    const sentinel = document.getElementById('messageListSentinel');
+    if (messageList.listObserver && sentinel) {
+        messageList.listObserver.unobserve(sentinel);
+        messageList.listObserver.observe(sentinel);
+    }
+}
+
+function applyMessageFilters() {
+    const list = document.getElementById('messageList');
+    if (!list) return;
+    const query = (document.getElementById('messageKeywordSearch').value || '').trim();
+    const needle = query.toLowerCase();
+    const groupId = document.getElementById('messageGroupFilter').value;
+    const mediaType = document.getElementById('messageMediaFilter').value;
+
+    messageList.query = query;
+    messageList.filtered = messageList.all.filter(msg => {
+        if (groupId && String(msg.group && msg.group.id) !== groupId) return false;
+        const hasMedia = msg.mediaCode !== null && msg.mediaCode !== undefined;
+        if (mediaType === 'no-media' && hasMedia) return false;
+        if (mediaType && mediaType !== 'no-media' && String(msg.mediaCode) !== mediaType) return false;
+        return !needle || messageSearchText.get(msg).includes(needle);
+    });
+
+    messageList.rendered = 0;
+    list.innerHTML = '';
+    document.getElementById('filteredMessagesContainer').scrollTop = 0;
+    document.getElementById('messageListCount').textContent =
+        messageList.filtered.length === messageList.all.length
+            ? `${messageList.all.length.toLocaleString()} messages`
+            : `${messageList.filtered.length.toLocaleString()} of ${messageList.all.length.toLocaleString()} messages`;
+
+    if (messageList.filtered.length) renderMessageChunk();
+    else list.innerHTML = '<p class="text-center text-gray-500 py-8">No messages match the filters</p>';
+}
+
+function queueThumbnail(el) {
+    messageList.thumbObserver?.unobserve(el);
+    const chat = el.dataset.thumbChat;
+    const id = el.dataset.thumbId;
+    if (!thumbQueue.has(chat)) thumbQueue.set(chat, new Set());
+    thumbQueue.get(chat).add(id);
+    el.classList.add('animate-pulse');
+    clearTimeout(thumbFlushTimer);
+    thumbFlushTimer = setTimeout(flushThumbnails, 250);
+}
+
+// Thumbnails are produced by the server downloading Telegram media, so only
+// request what is on screen, in small sequential batches (flood limits).
+async function flushThumbnails() {
+    const batches = Array.from(thumbQueue.entries());
+    thumbQueue.clear();
+    for (const [chat, idSet] of batches) {
+        const ids = Array.from(idSet);
+        for (let i = 0; i < ids.length; i += 20) {
+            const chunk = ids.slice(i, i + 20);
+            let results = [];
+            try {
+                const response = await fetch(`/funstat/media/thumbnail/batch?chat_identifier=${encodeURIComponent(chat)}&${chunk.map(id => `message_ids=${encodeURIComponent(id)}`).join('&')}`, { method: 'POST' });
+                if (response.ok) results = await response.json();
+            } catch (err) {
+                console.error(`Thumbnail batch failed for ${chat}:`, err);
+            }
+            const found = new Map((Array.isArray(results) ? results : []).filter(r => r && r.thumbnail_url).map(r => [String(r.message_id), r.thumbnail_url]));
+            chunk.forEach(id => {
+                const url = found.get(String(id));
+                if (url) window.thumbnailCache[thumbKey(chat, id)] = url;
+                document.querySelectorAll(`[data-thumb-chat="${CSS.escape(chat)}"][data-thumb-id="${CSS.escape(String(id))}"]`).forEach(el => {
+                    if (url) {
+                        el.outerHTML = thumbnailImg(url, chat, id);
+                    } else {
+                        // No preview (e.g. a video without one) - the original may still open
+                        el.classList.remove('animate-pulse');
+                        el.removeAttribute('data-thumb-id');
+                        el.insertAdjacentHTML('beforeend', `<span class="text-xs text-gray-600">no preview</span>${viewMediaButton(chat, id)}`);
+                    }
+                });
+            });
+        }
+    }
 }
 
 function displayAllMessagesWithFilters(messages) {
-    const groups = window.currentUserGroups;
+    messageList.all = messages || [];
+    messageList.all.forEach(msg => {
+        const group = msg.group || {};
+        messageSearchText.set(msg, `${msg.text || ''}\n${group.title || ''}\n${group.username || ''}\n${msg.mediaName || ''}`.toLowerCase());
+    });
+    const groups = window.currentUserGroups || [];
 
     const html = `
-        <div class="result-card border border-gray-800 rounded-xl p-6 mt-6">
-            <h4 class="text-xl font-bold mb-4 flex items-center">
-                <i class="fas fa-comments text-purple-400 mr-2"></i>
-                All Messages (${messages.length})
+        <div id="allMessagesCard" class="result-card border border-gray-800 rounded-xl p-6 mt-6">
+            <h4 class="text-xl font-bold mb-4 flex items-center justify-between gap-3">
+                <span><i class="fas fa-comments text-purple-400 mr-2"></i>All Messages</span>
+                <span id="messageListCount" class="text-sm font-normal text-gray-400"></span>
             </h4>
 
-            <!-- Filtering UI - only shows when messages are loaded -->
-            <div class="mb-6 space-y-4 border-b border-gray-700 pb-4">
+            <div class="mb-4 border-b border-gray-700 pb-4">
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
-                        <label class="block text-sm font-medium text-gray-400 mb-2">Keyword Search:</label>
-                        <input type="text" id="messageKeywordSearch" placeholder="Search in messages..."
+                        <label class="block text-sm font-medium text-gray-400 mb-2" for="messageKeywordSearch">Search</label>
+                        <input type="search" id="messageKeywordSearch" placeholder="Text, chat name, @username..." autocomplete="off"
                             class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-purple-500">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-400 mb-2">Filter by Group:</label>
+                        <label class="block text-sm font-medium text-gray-400 mb-2" for="messageGroupFilter">Group</label>
                         <select id="messageGroupFilter"
                             class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-purple-500">
-                            <option value="">All Groups</option>
-                            ${groups.map(g => `<option value="${g.id}">${g.title}</option>`).join('')}
+                            <option value="">All groups</option>
+                            ${groups.slice().sort((a, b) => String(a.title || '').localeCompare(String(b.title || ''))).map(g => `<option value="${escapeAttr(g.id)}">${escapeHtml(g.title)}</option>`).join('')}
                         </select>
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-400 mb-2">Media Type:</label>
+                        <label class="block text-sm font-medium text-gray-400 mb-2" for="messageMediaFilter">Media type</label>
                         <select id="messageMediaFilter"
                             class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-purple-500">
-                            <option value="">All Types</option>
-                            <option value="4">Images (4)</option>
-                            <option value="1">Videos (1)</option>
-                            <option value="8">GIFs (8)</option>
-                            <option value="10">Stickers (10)</option>
-                            <option value="no-media">Text Only</option>
+                            <option value="">All types</option>
+                            <option value="4">Images</option>
+                            <option value="1">Videos</option>
+                            <option value="8">GIFs</option>
+                            <option value="10">Stickers</option>
+                            <option value="no-media">Text only</option>
                         </select>
                     </div>
                 </div>
-                <button onclick="applyMessageFilters()" class="w-full bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded-lg font-semibold transition-all">
-                    <i class="fas fa-filter mr-2"></i>Apply Filters
-                </button>
             </div>
 
-            <div id="filteredMessagesContainer" class="space-y-3 max-h-[600px] overflow-y-auto custom-scrollbar">
-                ${renderMessages(messages)}
+            <div id="filteredMessagesContainer" class="max-h-[70vh] overflow-y-auto custom-scrollbar pr-1">
+                <div id="messageList" class="space-y-3"></div>
+                <div id="messageListSentinel" class="h-px"></div>
             </div>
         </div>
     `;
 
-    const existingStats = document.querySelector('#userResults .result-card:last-child');
-    existingStats.insertAdjacentHTML('afterend', html);
+    document.getElementById('allMessagesCard')?.remove();
+    if (messageList.listObserver) messageList.listObserver.disconnect();
+    if (messageList.thumbObserver) messageList.thumbObserver.disconnect();
+
+    appendResultCard('userResults', html);
+
+    const container = document.getElementById('filteredMessagesContainer');
+    messageList.listObserver = new IntersectionObserver(entries => {
+        if (entries[0].isIntersecting) renderMessageChunk();
+    }, { root: container, rootMargin: '400px' });
+    messageList.listObserver.observe(document.getElementById('messageListSentinel'));
+    messageList.thumbObserver = new IntersectionObserver(entries => {
+        entries.forEach(entry => { if (entry.isIntersecting) queueThumbnail(entry.target); });
+    }, { root: container, rootMargin: '200px' });
+
+    let searchTimer = null;
+    document.getElementById('messageKeywordSearch').addEventListener('input', () => {
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(applyMessageFilters, 150);
+    });
+    document.getElementById('messageGroupFilter').addEventListener('change', applyMessageFilters);
+    document.getElementById('messageMediaFilter').addEventListener('change', applyMessageFilters);
+    container.addEventListener('click', (event) => {
+        const contextBtn = event.target.closest('[data-context-chat]');
+        if (contextBtn) return getMessageContext(contextBtn.dataset.contextChat, Number(contextBtn.dataset.contextId));
+    });
+
+    applyMessageFilters();
 }
 
 function displayMessagesAnalysis(analysis) {
@@ -2345,7 +2642,7 @@ function displayMessagesAnalysis(analysis) {
                                 <div class="text-xs text-gray-400 mb-2 font-semibold uppercase">${formatDataType(type)} (${values.length})</div>
                                 <div class="flex flex-wrap gap-1">
                                     ${values.slice(0, 10).map(v => `
-                                        <span class="text-xs bg-gray-700 px-2 py-1 rounded text-gray-300">${v}</span>
+                                        <span class="text-xs bg-gray-700 px-2 py-1 rounded text-gray-300">${escapeHtml(v)}</span>
                                     `).join('')}
                                     ${values.length > 10 ? `<span class="text-xs text-gray-500">+${values.length - 10} more</span>` : ''}
                                 </div>
@@ -2371,17 +2668,17 @@ function displayMessagesAnalysis(analysis) {
                                     <div class="flex justify-between items-start mb-2">
                                         <div class="flex-1">
                                             <a href="${chatLink}" target="_blank" class="text-sm font-medium text-purple-400 hover:text-purple-300">
-                                                ${msg.group?.title || 'Unknown Group'}
+                                                ${escapeHtml(msg.group?.title || 'Unknown Group')}
                                             </a>
                                             <div class="flex items-center gap-2 mt-1">
                                                 <span class="px-2 py-0.5 rounded text-xs ${getRiskBadgeClass(msg.risk_level)}">
-                                                    ${msg.risk_level?.toUpperCase() || 'LOW'} (Score: ${msg.risk_score || 0})
+                                                    ${escapeHtml(msg.risk_level?.toUpperCase() || 'LOW')} (Score: ${escapeHtml(msg.risk_score || 0)})
                                                 </span>
                                             </div>
                                         </div>
-                                        <span class="text-xs text-gray-500">${msg.date ? new Date(msg.date).toLocaleString() : ''}</span>
+                                        <span class="text-xs text-gray-500">${escapeHtml(msg.date ? new Date(msg.date).toLocaleString() : '')}</span>
                                     </div>
-                                    <p class="text-sm text-white mb-2 line-clamp-2">${msg.text || '<i class="text-gray-500">No text</i>'}</p>
+                                    <p class="text-sm text-white mb-2 line-clamp-2">${msg.text ? escapeHtml(msg.text) : '<i class="text-gray-500">No text</i>'}</p>
                                     <div class="flex flex-wrap gap-1 mb-2">
                                         ${(msg.data_types_found || []).map(t => `
                                             <span class="text-xs bg-purple-900/30 text-purple-300 px-2 py-0.5 rounded">${formatDataType(t)}</span>
@@ -2402,95 +2699,7 @@ function displayMessagesAnalysis(analysis) {
         </div>
     `;
 
-    const existingStats = document.querySelector('#userResults .result-card:last-child');
-    existingStats.insertAdjacentHTML('afterend', html);
-}
-
-function renderMessages(messages) {
-    if (messages.length === 0) {
-        return '<p class="text-center text-gray-500 py-8">No messages match the filters</p>';
-    }
-
-    return messages.map(msg => {
-        const hasMedia = msg.mediaCode !== null && msg.mediaCode !== undefined;
-        const messageLink = buildTelegramLink(msg.group.id, msg.messageId, msg.group.username);
-        const chatLink = buildTelegramChatLink(msg.group.id, msg.group.username);
-        const thumbnailUrl = window.thumbnailCache && window.thumbnailCache[msg.messageId];
-
-        return `
-            <div class="bg-gray-800/50 p-4 rounded-lg hover:bg-gray-800 transition-all">
-                <div class="flex justify-between items-start mb-2">
-                    <div class="flex-1">
-                        <a href="${chatLink}" target="_blank" class="text-sm font-medium text-purple-400 hover:text-purple-300">
-                            ${msg.group.title}
-                        </a>
-                        <p class="text-xs text-gray-500">ID: ${msg.group.id}</p>
-                    </div>
-                    <span class="text-xs text-gray-500">${new Date(msg.date).toLocaleString()}</span>
-                </div>
-
-                ${hasMedia ? `
-                    <div class="mb-3">
-                        ${thumbnailUrl ? `
-                            <img src="${thumbnailUrl}" alt="Thumbnail" class="media-thumbnail" onclick="openMediaModal('${thumbnailUrl}')">
-                        ` : `
-                            <div class="bg-gray-900/50 p-3 rounded-lg flex items-center gap-2">
-                                <i class="fas fa-image text-blue-400"></i>
-                                <span class="text-sm text-gray-400">${msg.mediaName || 'Media'} (Code: ${msg.mediaCode})</span>
-                            </div>
-                        `}
-                    </div>
-                ` : ''}
-
-                ${msg.text ? `<p class="text-white mb-2">${msg.text}</p>` : ''}
-
-                <div class="flex items-center gap-3">
-                    <a href="${messageLink}" target="_blank" class="text-xs text-purple-400 hover:text-purple-300">
-                        <i class="fas fa-external-link-alt mr-1"></i>Open in Telegram
-                    </a>
-                    ${msg.group.username ? `
-                        <button onclick="getMessageContext('${msg.group.username}', ${msg.messageId})"
-                            class="context-btn text-xs text-blue-400 hover:text-blue-300 bg-blue-900/30 px-2 py-1 rounded">
-                            <i class="fas fa-comments mr-1"></i>Get Context
-                        </button>
-                    ` : `
-                        <span class="text-xs text-gray-600" title="Context unavailable - no public username">
-                            <i class="fas fa-comments mr-1"></i>No context
-                        </span>
-                    `}
-                </div>
-            </div>
-        `;
-    }).join('');
-}
-
-function applyMessageFilters() {
-    const keyword = document.getElementById('messageKeywordSearch').value.toLowerCase();
-    const groupId = document.getElementById('messageGroupFilter').value;
-    const mediaType = document.getElementById('messageMediaFilter').value;
-
-    let filtered = window.allMessages;
-
-    // Apply keyword filter
-    if (keyword) {
-        filtered = filtered.filter(msg =>
-            (msg.text && msg.text.toLowerCase().includes(keyword))
-        );
-    }
-
-    // Apply group filter
-    if (groupId) {
-        filtered = filtered.filter(msg => msg.group.id == groupId);
-    }
-
-    // Apply media type filter
-    if (mediaType === 'no-media') {
-        filtered = filtered.filter(msg => msg.mediaCode === null || msg.mediaCode === undefined);
-    } else if (mediaType) {
-        filtered = filtered.filter(msg => msg.mediaCode == mediaType);
-    }
-
-    document.getElementById('filteredMessagesContainer').innerHTML = renderMessages(filtered);
+    appendResultCard('userResults', html);
 }
 
 function displayGroupInfo(group) {
@@ -2504,10 +2713,10 @@ function displayGroupInfo(group) {
                         👥
                     </div>
                     <div>
-                        <h3 class="text-2xl font-bold text-white">${data.title || 'Unknown Group'}</h3>
+                        <h3 class="text-2xl font-bold text-white">${escapeHtml(data.title || 'Unknown Group')}</h3>
                         ${data.username ? `
-                            <a href="https://t.me/${data.username}" target="_blank" class="text-blue-400 hover:text-blue-300">
-                                @${data.username}
+                            <a href="https://t.me/${escapeAttr(data.username)}" target="_blank" class="text-blue-400 hover:text-blue-300">
+                                @${escapeHtml(data.username)}
                             </a>
                         ` : ''}
                         <p class="text-gray-500 text-sm">ID: ${currentGroupId}</p>
@@ -2517,22 +2726,22 @@ function displayGroupInfo(group) {
 
             ${data.description ? `
                 <div class="mt-4 p-4 bg-gray-800/50 rounded-lg">
-                    <p class="text-sm text-gray-300">${data.description}</p>
+                    <p class="text-sm text-gray-300">${escapeHtml(data.description)}</p>
                 </div>
             ` : ''}
 
             ${data.stats ? `
                 <div class="mt-4 grid grid-cols-3 gap-4">
                     <div class="stat-badge p-3 rounded-lg text-center">
-                        <div class="text-2xl font-bold text-purple-400">${data.stats.members || 0}</div>
+                        <div class="text-2xl font-bold text-purple-400">${escapeHtml(data.stats.members || 0)}</div>
                         <div class="text-xs text-gray-400">Members</div>
                     </div>
                     <div class="stat-badge p-3 rounded-lg text-center">
-                        <div class="text-2xl font-bold text-blue-400">${data.stats.today_messages || 0}</div>
+                        <div class="text-2xl font-bold text-blue-400">${escapeHtml(data.stats.today_messages || 0)}</div>
                         <div class="text-xs text-gray-400">Today's Messages</div>
                     </div>
                     <div class="stat-badge p-3 rounded-lg text-center">
-                        <div class="text-2xl font-bold text-green-400">${data.stats.active_members || 0}</div>
+                        <div class="text-2xl font-bold text-green-400">${escapeHtml(data.stats.active_members || 0)}</div>
                         <div class="text-xs text-gray-400">Active Members</div>
                     </div>
                 </div>
@@ -2556,15 +2765,15 @@ function displayGroupMembers(members) {
                     <div class="bg-gray-800/50 p-3 rounded-lg hover:bg-gray-800 transition-all flex justify-between items-center">
                         <div class="flex items-center space-x-3">
                             <div class="w-10 h-10 bg-purple-600 rounded-full flex items-center justify-center">
-                                ${member.is_admin ? '👑' : '👤'}
+                                ${escapeHtml(member.is_admin ? '👑' : '👤')}
                             </div>
                             <div>
                                 <p class="font-medium text-white">
-                                    ${member.first_name || ''} ${member.last_name || ''}
+                                    ${escapeHtml(member.first_name || '')} ${escapeHtml(member.last_name || '')}
                                 </p>
                                 ${member.username ? `
-                                    <a href="https://t.me/${member.username}" target="_blank" class="text-sm text-purple-400 hover:text-purple-300">
-                                        @${member.username}
+                                    <a href="https://t.me/${escapeAttr(member.username)}" target="_blank" class="text-sm text-purple-400 hover:text-purple-300">
+                                        @${escapeHtml(member.username)}
                                     </a>
                                 ` : ''}
                             </div>
@@ -2572,7 +2781,7 @@ function displayGroupMembers(members) {
                         <div class="flex items-center gap-2">
                             ${member.is_admin ? '<span class="stat-badge px-2 py-1 rounded text-xs text-yellow-400">Admin</span>' : ''}
                             ${member.has_prem ? '<span class="stat-badge px-2 py-1 rounded text-xs text-blue-400">Premium</span>' : ''}
-                            <span class="text-xs text-gray-400">${member.today_msg || 0} msgs today</span>
+                            <span class="text-xs text-gray-400">${escapeHtml(member.today_msg || 0)} msgs today</span>
                         </div>
                     </div>
                 `).join('')}
@@ -2580,8 +2789,7 @@ function displayGroupMembers(members) {
         </div>
     `;
 
-    const existingCard = document.querySelector('#groupResults .result-card');
-    existingCard.insertAdjacentHTML('afterend', html);
+    appendResultCard('groupResults', html);
 }
 
 function displayTextResults(data) {
@@ -2591,7 +2799,7 @@ function displayTextResults(data) {
         <div class="result-card border border-gray-800 rounded-xl p-6">
             <h4 class="text-xl font-bold mb-4 flex items-center">
                 <i class="fas fa-file-alt text-purple-400 mr-2"></i>
-                Search Results (${data.total || results.length})
+                Search Results (${escapeHtml(data.total || results.length)})
             </h4>
 
             <div class="space-y-3 max-h-[600px] overflow-y-auto custom-scrollbar">
@@ -2603,22 +2811,22 @@ function displayTextResults(data) {
                         <div class="bg-gray-800/50 p-4 rounded-lg hover:bg-gray-800 transition-all">
                             <div class="flex justify-between items-start mb-2">
                                 <div class="flex items-center gap-2">
-                                    ${result.username ? `<span class="text-purple-400">@${result.username}</span>` : ''}
-                                    ${result.name ? `<span class="text-white">${result.name}</span>` : ''}
+                                    ${result.username ? `<span class="text-purple-400">@${escapeHtml(result.username)}</span>` : ''}
+                                    ${result.name ? `<span class="text-white">${escapeHtml(result.name)}</span>` : ''}
                                 </div>
-                                <span class="text-xs text-gray-500">${result.date ? new Date(result.date).toLocaleString() : ''}</span>
+                                <span class="text-xs text-gray-500">${escapeHtml(result.date ? new Date(result.date).toLocaleString() : '')}</span>
                             </div>
 
                             ${result.group ? `
                                 <p class="text-sm text-gray-400 mb-2">
                                     <i class="fas fa-users mr-1"></i>
                                     <a href="${chatLink}" target="_blank" class="hover:text-purple-400">
-                                        ${result.group.title}
+                                        ${escapeHtml(result.group.title)}
                                     </a>
                                 </p>
                             ` : ''}
 
-                            <p class="text-white bg-gray-900/50 p-3 rounded mb-2">${result.text || ''}</p>
+                            <p class="text-white bg-gray-900/50 p-3 rounded mb-2">${escapeHtml(result.text || '')}</p>
 
                             ${result.group ? `
                                 <div class="flex items-center gap-3">
@@ -2626,7 +2834,7 @@ function displayTextResults(data) {
                                         <i class="fas fa-external-link-alt mr-1"></i>Open in Telegram
                                     </a>
                                     ${result.group.username ? `
-                                        <button onclick="getMessageContext('${result.group.username}', ${result.message_id})"
+                                        <button onclick="getMessageContext('${escapeAttr(result.group.username)}', ${escapeHtml(result.message_id)})"
                                             class="context-btn text-xs text-blue-400 hover:text-blue-300 bg-blue-900/30 px-2 py-1 rounded">
                                             <i class="fas fa-comments mr-1"></i>Get Context
                                         </button>
@@ -2644,11 +2852,11 @@ function displayTextResults(data) {
 
             ${data.totalPages > 1 ? `
                 <div class="mt-4 flex justify-center items-center gap-2">
-                    <button class="pagination-btn" ${data.currentPage === 1 ? 'disabled' : ''}>
+                    <button class="pagination-btn" ${escapeHtml(data.currentPage === 1 ? 'disabled' : '')}>
                         <i class="fas fa-chevron-left mr-1"></i>Previous
                     </button>
-                    <span class="text-sm text-gray-400">Page ${data.currentPage} of ${data.totalPages}</span>
-                    <button class="pagination-btn" ${data.isLastPage ? 'disabled' : ''}>
+                    <span class="text-sm text-gray-400">Page ${escapeHtml(data.currentPage)} of ${escapeHtml(data.totalPages)}</span>
+                    <button class="pagination-btn" ${escapeHtml(data.isLastPage ? 'disabled' : '')}>
                         Next<i class="fas fa-chevron-right ml-1"></i>
                     </button>
                 </div>
@@ -2674,8 +2882,8 @@ function displayUsernameResults(data) {
                         ${data.actual_users.map(user => `
                             <div class="bg-gray-800/50 p-3 rounded-lg flex justify-between items-center">
                                 <div>
-                                    <p class="font-medium text-white">${user.first_name || ''} ${user.last_name || ''}</p>
-                                    <p class="text-sm text-gray-400">ID: ${user.id}</p>
+                                    <p class="font-medium text-white">${escapeHtml(user.first_name || '')} ${escapeHtml(user.last_name || '')}</p>
+                                    <p class="text-sm text-gray-400">ID: ${escapeHtml(user.id)}</p>
                                 </div>
                                 ${user.is_active ? '<span class="stat-badge px-2 py-1 rounded text-xs text-green-400">Active</span>' : ''}
                             </div>
@@ -2690,8 +2898,8 @@ function displayUsernameResults(data) {
                     <div class="space-y-2">
                         ${data.usage_by_users_in_the_past.map(user => `
                             <div class="bg-gray-800/50 p-3 rounded-lg">
-                                <p class="font-medium text-white">${user.first_name || ''} ${user.last_name || ''}</p>
-                                <p class="text-sm text-gray-400">ID: ${user.id}</p>
+                                <p class="font-medium text-white">${escapeHtml(user.first_name || '')} ${escapeHtml(user.last_name || '')}</p>
+                                <p class="text-sm text-gray-400">ID: ${escapeHtml(user.id)}</p>
                             </div>
                         `).join('')}
                     </div>
@@ -2704,10 +2912,10 @@ function displayUsernameResults(data) {
                     <div class="space-y-2">
                         ${data.actual_groups_or_channels.map(group => `
                             <div class="bg-gray-800/50 p-3 rounded-lg">
-                                <a href="https://t.me/${group.username}" target="_blank" class="font-medium text-white hover:text-purple-400">
-                                    ${group.title}
+                                <a href="https://t.me/${escapeAttr(group.username)}" target="_blank" class="font-medium text-white hover:text-purple-400">
+                                    ${escapeHtml(group.title)}
                                 </a>
-                                ${group.username ? `<p class="text-sm text-purple-400">@${group.username}</p>` : ''}
+                                ${group.username ? `<p class="text-sm text-purple-400">@${escapeHtml(group.username)}</p>` : ''}
                             </div>
                         `).join('')}
                     </div>
@@ -2725,18 +2933,26 @@ function displayUsernameResults(data) {
 
 function displayNoResults(containerId, message) {
     document.getElementById(containerId).innerHTML = `
-        <div class="bg-gray-900/50 backdrop-blur-md border border-gray-800 rounded-xl p-12 text-center">
+        <div class="card !p-12 text-center">
             <i class="fas fa-search text-6xl text-gray-700 mb-4"></i>
-            <p class="text-gray-500">${message}</p>
+            <p class="text-gray-500">${escapeHtml(message)}</p>
         </div>
     `;
+}
+
+// Add a card after the last result card, or into the empty panel (an earlier error may have cleared it)
+function appendResultCard(containerId, html) {
+    const container = document.getElementById(containerId);
+    const lastCard = container.querySelector('.result-card:last-child');
+    if (lastCard) lastCard.insertAdjacentHTML('afterend', html);
+    else container.insertAdjacentHTML('beforeend', html);
 }
 
 function displayError(containerId, message) {
     document.getElementById(containerId).innerHTML = `
         <div class="bg-red-900/20 border border-red-800 rounded-xl p-12 text-center">
             <i class="fas fa-exclamation-triangle text-6xl text-red-400 mb-4"></i>
-            <p class="text-red-400">${message}</p>
+            <p class="text-red-400 break-words">${escapeHtml(message)}</p>
         </div>
     `;
 }
