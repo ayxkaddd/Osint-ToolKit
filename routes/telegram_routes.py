@@ -3,6 +3,7 @@ from auth.auth_handler import TelegramAuthHandler
 from fastapi.responses import JSONResponse
 from models.telegram_models import VKProfileHistoryResponse
 from services.telegram_service import TelegramService
+from utils.investigation_decorator import save_investigation
 
 auth_router = APIRouter(prefix="/auth/tg")
 bot_router = APIRouter(prefix="/api/telegram")
@@ -37,6 +38,18 @@ async def verify_code(request: Request):
 
     return JSONResponse(content=result)
 
+@auth_router.post("/verify-password")
+async def verify_password(request: Request):
+    data = await request.json()
+    password = data.get("password")
+    if not password:
+        raise HTTPException(status_code=400, detail="Password required")
+
+    result = await auth_handler.verify_password(password)
+    if result["status"] == "error":
+        raise HTTPException(status_code=400, detail=result["message"])
+    return JSONResponse(content=result)
+
 @auth_router.get("/status")
 async def auth_status():
     status = await auth_handler.connect()
@@ -45,6 +58,7 @@ async def auth_status():
 telegram_service = TelegramService()
 
 @bot_router.get("/search")
+@save_investigation(service_name="vk_profile", method_name="lookup_vk_profile")
 async def search_vk_profile(user_id: str) -> VKProfileHistoryResponse:
     try:
         result = await telegram_service.send_request(user_id)

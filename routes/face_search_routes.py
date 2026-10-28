@@ -1,14 +1,17 @@
 from fastapi import APIRouter, File, UploadFile
-from services.face_search_service import FaceSearch, SearchResult, DetectFacesResponse
-from typing import List
+from services.face_search_service import FaceSearch, FaceSearchResponse, DetectFacesResponse
+from utils.investigation_decorator import save_investigation
 
 router = APIRouter(prefix="/api/face-search")
 face_search = FaceSearch()
 
 @router.post("/detect-faces")
 async def detect_faces(image: UploadFile = File(...)) -> DetectFacesResponse:
-    return await face_search.detect_faces(image)
+    response = await face_search.detect_faces(image)
+    return response
 
 @router.post("/search")
-async def search(image: UploadFile = File(...)) -> List[SearchResult]:
-    return await face_search.search(image)
+@save_investigation(service_name="face_search", method_name="search_faces")
+async def search(image: UploadFile = File(...)) -> FaceSearchResponse:
+    response = await face_search.search(image)
+    return response

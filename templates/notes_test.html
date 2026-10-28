@@ -1,0 +1,220 @@
+{% extends "base.html" %}
+
+{% block title %}Notes - OSINT Toolkit{% endblock %}
+
+{% block content %}
+<div class="page">
+    <a href="/investigation/{{ investigation_id }}" class="text-gray-400 hover:text-white mb-4 inline-flex items-center text-sm">
+        <i class="fas fa-arrow-left mr-2"></i>Back to the investigation
+    </a>
+    <h1 class="page-title">Notes</h1>
+    <p class="page-lead" id="investigationInfo">Loading investigation…</p>
+
+    <section class="card mb-4">
+        <h2 class="card-title"><i class="fas fa-plus"></i>New note</h2>
+        <form id="createNoteForm" class="space-y-3">
+            <input type="text" id="noteTitle" required placeholder="Title" class="field">
+            <textarea id="noteContent" rows="6" required placeholder="What did you find?" class="field"></textarea>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <select id="noteType" class="field">
+                    <option value="manual">Note</option>
+                    <option value="finding">Finding</option>
+                    <option value="hypothesis">Hypothesis</option>
+                    <option value="timeline">Timeline</option>
+                </select>
+                <input type="text" id="noteTags" placeholder="Tags, comma-separated (important, email, domain)" class="field">
+            </div>
+            <button type="submit" class="btn-primary"><i class="fas fa-plus"></i>Add note</button>
+        </form>
+    </section>
+
+    <div class="flex flex-wrap gap-3 items-center mb-4">
+        <select id="filterType" class="field field-sm w-auto">
+            <option value="">All types</option>
+            <option value="manual">Note</option>
+            <option value="auto">Auto-generated</option>
+            <option value="finding">Finding</option>
+            <option value="hypothesis">Hypothesis</option>
+            <option value="timeline">Timeline</option>
+        </select>
+        <input type="text" id="filterTags" placeholder="Filter by tags…" class="field field-sm w-auto flex-1 min-w-[12rem]">
+        <button type="button" id="applyFilters" class="btn-secondary">Filter</button>
+        <button type="button" id="clearFilters" class="btn-secondary">Clear</button>
+    </div>
+
+    <div id="notesList" class="space-y-3"></div>
+</div>
+
+<div id="editModal" class="hidden fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+    <div class="card max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="text-lg font-semibold">Edit note</h2>
+            <button type="button" id="closeModal" class="text-gray-400 hover:text-white"><i class="fas fa-times"></i></button>
+        </div>
+        <form id="editNoteForm" class="space-y-3">
+            <input type="hidden" id="editNoteId">
+            <input type="text" id="editNoteTitle" required class="field">
+            <textarea id="editNoteContent" rows="8" required class="field"></textarea>
+            <input type="text" id="editNoteTags" placeholder="Tags, comma-separated" class="field">
+            <div class="flex gap-2">
+                <button type="submit" class="btn-primary !py-2">Save</button>
+                <button type="button" id="cancelEdit" class="btn-secondary">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Own scope: notes.js (on every page) already has globals with these names
+(function () {
+    const notesInvestigationId = "{{ investigation_id }}";
+    const api = `/api/investigations/${notesInvestigationId}`;
+    const $ = (id) => document.getElementById(id);
+    const TYPE_STYLES = {
+        manual: ['Note', 'bg-blue-900/50 text-blue-200'],
+        auto: ['Auto', 'bg-purple-900/50 text-purple-200'],
+        finding: ['Finding', 'bg-emerald-900/50 text-emerald-200'],
+        hypothesis: ['Hypothesis', 'bg-yellow-900/50 text-yellow-200'],
+        timeline: ['Timeline', 'bg-red-900/40 text-red-200'],
+    };
+    let currentNotes = [];
+    let currentFilters = {};
+    const splitTags = (text) => text ? text.split(',').map(t => t.trim()).filter(Boolean) : [];
+
+    async function loadInvestigationInfo() {
+        try {
+            const data = await fetch(`${api}/info`).then(r => r.json());
+            if (data.status === 'success') {
+                $('investigationInfo').textContent = `${data.investigation.name} · ${data.investigation.notes_count} note${data.investigation.notes_count === 1 ? '' : 's'}`;
+            }
+        } catch (error) {
+            $('investigationInfo').textContent = '';
+        }
+    }
+
+    async function loadNotes(filters = currentFilters) {
+        currentFilters = filters;
+        $('notesList').innerHTML = '<p class="text-gray-400"><i class="fas fa-spinner fa-spin mr-2"></i>Loading notes…</p>';
+        try {
+            const params = new URLSearchParams();
+            if (filters.type) params.append('note_type', filters.type);
+            if (filters.tags) params.append('tags', filters.tags);
+            const data = await fetch(`${api}/notes${params.toString() ? `?${params}` : ''}`).then(r => r.json());
+            if (data.status === 'success') {
+                currentNotes = data.notes;
+                renderNotes(data.notes);
+            }
+        } catch (error) {
+            $('notesList').innerHTML = '<p class="text-red-400">Could not load notes.</p>';
+        }
+    }
+
+    function renderNotes(notes) {
+        if (!notes.length) {
+            $('notesList').innerHTML = '<div class="card text-center text-gray-400"><i class="fas fa-sticky-note text-2xl mb-2"></i><p>No notes yet</p></div>';
+            return;
+        }
+        $('notesList').innerHTML = notes.map(note => {
+            const [label, cls] = TYPE_STYLES[note.note_type] || [note.note_type, 'bg-gray-800 text-gray-300'];
+            return `
+                <article class="card">
+                    <div class="flex justify-between items-start gap-3 mb-2">
+                        <div class="min-w-0">
+                            <h3 class="text-lg font-semibold break-words">${escapeHtml(note.title)}</h3>
+                            <div class="flex flex-wrap gap-1.5 mt-1">
+                                <span class="text-[11px] px-1.5 py-0.5 rounded ${cls}">${escapeHtml(label)}</span>
+                                ${(note.tags || []).map(tag => `<span class="text-[11px] px-1.5 py-0.5 rounded bg-gray-800 text-gray-300">#${escapeHtml(tag)}</span>`).join('')}
+                            </div>
+                        </div>
+                        <div class="flex gap-3 shrink-0">
+                            <button type="button" data-edit-note="${escapeAttr(note.note_id)}" class="text-gray-400 hover:text-white" title="Edit"><i class="fas fa-edit"></i></button>
+                            <button type="button" data-delete-note="${escapeAttr(note.note_id)}" class="text-gray-400 hover:text-red-300" title="Delete"><i class="fas fa-trash"></i></button>
+                        </div>
+                    </div>
+                    <div class="text-gray-300 whitespace-pre-wrap break-words">${escapeHtml(note.content)}</div>
+                    <div class="text-xs text-gray-500 mt-3">
+                        ${escapeHtml(new Date(note.created_at).toLocaleString())}
+                        ${note.updated_at !== note.created_at ? ` · edited ${escapeHtml(new Date(note.updated_at).toLocaleString())}` : ''}
+                    </div>
+                </article>`;
+        }).join('');
+    }
+
+    async function send(url, method, body) {
+        const response = await fetch(url, {
+            method, headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined,
+        });
+        const data = await response.json().catch(() => ({}));
+        if (data.status !== 'success') throw new Error(data.message || data.detail || `HTTP ${response.status}`);
+        return data;
+    }
+
+    $('createNoteForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        try {
+            await send(`${api}/notes`, 'POST', {
+                title: $('noteTitle').value, content: $('noteContent').value,
+                note_type: $('noteType').value, tags: splitTags($('noteTags').value),
+            });
+            $('createNoteForm').reset();
+            loadNotes();
+            loadInvestigationInfo();
+        } catch (error) {
+            showTemporaryNotification(`Could not add the note: ${error.message}`, 'error');
+        }
+    });
+
+    const closeEditor = () => $('editModal').classList.add('hidden');
+    $('closeModal').addEventListener('click', closeEditor);
+    $('cancelEdit').addEventListener('click', closeEditor);
+
+    $('editNoteForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        try {
+            await send(`${api}/notes/${encodeURIComponent($('editNoteId').value)}`, 'PUT', {
+                title: $('editNoteTitle').value, content: $('editNoteContent').value, tags: splitTags($('editNoteTags').value),
+            });
+            closeEditor();
+            loadNotes();
+        } catch (error) {
+            showTemporaryNotification(`Could not save the note: ${error.message}`, 'error');
+        }
+    });
+
+    $('notesList').addEventListener('click', async (e) => {
+        const edit = e.target.closest('[data-edit-note]');
+        const del = e.target.closest('[data-delete-note]');
+        if (edit) {
+            const note = currentNotes.find(n => n.note_id === edit.dataset.editNote);
+            if (!note) return;
+            $('editNoteId').value = note.note_id;
+            $('editNoteTitle').value = note.title;
+            $('editNoteContent').value = note.content;
+            $('editNoteTags').value = (note.tags || []).join(', ');
+            $('editModal').classList.remove('hidden');
+        } else if (del) {
+            if (!confirm('Delete this note?')) return;
+            try {
+                await send(`${api}/notes/${encodeURIComponent(del.dataset.deleteNote)}`, 'DELETE');
+                loadNotes();
+                loadInvestigationInfo();
+            } catch (error) {
+                showTemporaryNotification(`Could not delete the note: ${error.message}`, 'error');
+            }
+        }
+    });
+
+    $('applyFilters').addEventListener('click', () => loadNotes({ type: $('filterType').value, tags: $('filterTags').value }));
+    $('clearFilters').addEventListener('click', () => {
+        $('filterType').value = '';
+        $('filterTags').value = '';
+        loadNotes({});
+    });
+
+    loadInvestigationInfo();
+    loadNotes();
+})();
+</script>
+{% endblock %}

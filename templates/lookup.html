@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{% block title %}Lookup - OSINT Toolkit{% endblock %}
+
+{% block content %}
+<div class="page">
+    <h1 class="page-title">Lookup</h1>
+    <p class="page-lead">Paste anything - an email, phone number, @username, domain, IP, Telegram or VK id, Gaia ID, BSSID, wallet address.
+        Pick the modules to run; they work in the background and save into the current investigation.</p>
+
+    <form id="lookupForm" class="flex gap-3 mb-4">
+        <input id="lookupQuery" type="text" autocomplete="off" autofocus
+            class="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-white text-lg focus:outline-none focus:border-purple-500"
+            placeholder="john.doe@gmail.com, +380 50 123 4567, @durov, example.com…">
+        <button type="submit" class="btn-primary">Analyze</button>
+    </form>
+
+    <div id="lookupInvestigation" class="mb-6 text-sm"></div>
+    <div id="lookupCandidates" class="space-y-6"></div>
+
+    <div id="lookupRunBar" class="hidden sticky bottom-4 mt-6">
+        <div class="bg-gray-900 border border-purple-500/40 rounded-xl px-5 py-3 flex items-center justify-between shadow-2xl">
+            <span id="lookupRunSummary" class="text-sm text-gray-300"></span>
+            <button id="lookupRunButton" type="button" class="bg-purple-600 hover:bg-purple-500 disabled:opacity-40 px-5 py-2 rounded-lg font-semibold">Run</button>
+        </div>
+    </div>
+
+    <div id="lookupJobsSection" class="hidden mt-10">
+        <h2 class="text-xl font-bold mb-3">Lookups started here</h2>
+        <div id="lookupJobs" class="space-y-2"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/lookup.js"></script>
+{% endblock %}

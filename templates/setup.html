@@ -1,30 +1,14 @@
 {% extends "base.html" %}
 
-{% block title %}OSINT Toolkit Setup{% endblock %}
+{% block title %}Setup - OSINT Toolkit{% endblock %}
 
 {% block content %}
-<!DOCTYPE html>
-<html lang="en" class="dark">
-
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OSINT Toolkit Setup</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
-    <script>tailwind.config = { darkMode: 'class', theme: { extend: { fontFamily: { mono: ['JetBrains Mono', 'monospace'] } } } }</script>
-    <script src="https://unpkg.com/lucide@latest"></script>
-</head>
-
-<body class="bg-black text-white font-mono min-h-screen">
-    <div class="container mx-auto p-4 max-w-6xl">
-        <div class="text-center mb-12 mt-8">
-            <h1 class="text-4xl font-bold mb-4">OSINT Toolkit Setup</h1>
-            <p class="text-gray-400 text-lg">Configure your toolkit with comprehensive options</p>
-        </div>
+    <div class="page">
+        <h1 class="page-title">Setup</h1>
+        <p class="page-lead">First run: create the admin account and choose the modules and keys to configure. Everything can be changed later in Settings.</p>
 
         <!-- Progress Steps -->
-        <div class="max-w-4xl mx-auto mb-12">
+        <div class="mb-10">
             <div class="flex items-center justify-between">
                 <div class="flex items-center flex-1">
                     <div class="step-indicator" id="step-1-indicator"><span>1</span></div>
@@ -49,12 +33,12 @@
             </div>
         </div>
 
-        <div class="max-w-4xl mx-auto bg-gray-900 border border-gray-700 rounded-lg p-8">
+        <div class="card !p-8">
 
             <!-- Step 1: Admin Setup -->
             <div id="step-1" class="setup-step">
                 <h2 class="text-2xl font-bold mb-2">Administrator Account</h2>
-                <p class="text-gray-400 mb-6">Create secure admin credentials with enhanced validation</p>
+                <p class="page-lead">Create secure admin credentials with enhanced validation</p>
                 <form id="admin-form" class="space-y-4">
                     <div>
                         <label class="block text-gray-400 mb-2 text-sm">Email Address</label>
@@ -95,8 +79,8 @@
 
             <!-- Loading overlay -->
             <div id="loading-overlay"
-                class="hidden fixed inset-0 bg-black bg-opacity-75 backdrop-blur-sm flex items-center justify-center z-50">
-                <div class="bg-gray-900 border border-gray-700 rounded-lg p-8 text-center">
+                class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+                <div class="card !p-8 text-center">
                     <div class="animate-spin rounded-full h-16 w-16 border-b-2 border-white mx-auto mb-4"></div>
                     <p class="text-white" id="loading-text">Processing...</p>
                 </div>
@@ -147,7 +131,7 @@
         }
     </style>
 
-    <script src="/static/js/setup.js"></script>
+    <script src="/static/js/setup-advanced.js"></script>
     <script>
         let currentStep = 1;
         const systemStatus = {{ system_status| tojson | safe }};
@@ -262,7 +246,4 @@
             showStep({{ step }});
         });
     </script>
-</body>
-
-</html>
 {% endblock %}

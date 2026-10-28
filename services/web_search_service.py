@@ -127,6 +127,13 @@ class PhoneDorkGenerator(DorkGenerator):
 
     def _normalize_phone(self, phone: str) -> List[str]:
         """Generate different phone number formats"""
+        try:
+            from services.phone_service import phone_info
+            formats = phone_info(phone).get("search_formats") or []
+            if formats:
+                return formats[:4]
+        except Exception:
+            pass  # not parseable as an international number - fall back to digit patterns
         digits = re.sub(r'\D', '', phone)
         variants = [digits]
 
@@ -398,7 +405,13 @@ class OSINTSearchService:
             if result.url not in unique_results:
                 unique_results[result.url] = result
 
+        # Dorks that failed (quota exhausted, bad key, ...) - otherwise the user
+        # only sees "0 results" with no reason
+        errors = [{"dork": r.get("dork"), "engine": r.get("engine"), "error": r["error"]}
+                  for r in all_results if r.get("error")]
         return {
+            "errors": errors,
+            "dorks_executed": len(all_results),
             "query": {
                 "value": value,
                 "type": input_type.value,
@@ -460,7 +473,13 @@ class OSINTSearchService:
             if result.url not in unique_results:
                 unique_results[result.url] = result
 
+        # Dorks that failed (quota exhausted, bad key, ...) - otherwise the user
+        # only sees "0 results" with no reason
+        errors = [{"dork": r.get("dork"), "engine": r.get("engine"), "error": r["error"]}
+                  for r in all_results if r.get("error")]
         return {
+            "errors": errors,
+            "dorks_executed": len(all_results),
             "query": {
                 "custom_dorks": dorks,
                 "type": "custom",

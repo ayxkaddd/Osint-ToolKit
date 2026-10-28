@@ -1,3 +1,4 @@
+import logging
 import re
 from fastapi import APIRouter, Request, Form, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
@@ -14,6 +15,9 @@ from typing import Optional, Dict, Any
 import json
 import platform
 
+from utils.config import update_env
+
+logger = logging.getLogger(__name__)
 router = APIRouter()
 templates = Jinja2Templates(directory="templates")
 
@@ -80,7 +84,7 @@ def get_go_path() -> Optional[Path]:
     gopath = os.environ.get('GOPATH')
     if gopath:
         return Path(gopath) / "bin"
-
+    
     home = Path.home()
     return home / "go" / "bin"
 
@@ -89,7 +93,7 @@ def check_go_tools() -> Dict[str, Dict[str, Any]]:
     """Check if Go tools are installed with detailed info"""
     tools = {}
     go_bin = get_go_path()
-
+    
     tool_checks = {
         "subfinder": {
             "command": "subfinder",
@@ -108,7 +112,7 @@ def check_go_tools() -> Dict[str, Dict[str, Any]]:
         version = None
 
         ANSI_ESCAPE_RE = re.compile(r'\x1b\[[0-9;]*m')
-
+        
         if is_installed:
             try:
                 result = subprocess.run(
@@ -128,10 +132,10 @@ def check_go_tools() -> Dict[str, Dict[str, Any]]:
 
                 version = version_line or cleaned
 
-            except:
+            except Exception:
                 version = None
 
-
+        
         tools[name] = {
             "installed": is_installed,
             "version": version,
@@ -140,7 +144,7 @@ def check_go_tools() -> Dict[str, Dict[str, Any]]:
             "optional": info.get("optional", False),
             "path": shutil.which(info["command"]) if is_installed else None
         }
-
+    
     return tools
 
 
@@ -151,15 +155,15 @@ def check_gitfive_detailed() -> Dict[str, Any]:
         Path.home() / "GitFive",
         Path("/opt/GitFive"),
     ]
-
+    
     for path in possible_paths:
         if path.exists():
             venv_python = path / "venv" / "bin" / "python"
             main_script = path / "main.py"
-
+            
             has_venv = venv_python.exists()
             has_script = main_script.exists()
-
+            
             requirements_met = False
             if has_venv and has_script:
                 try:
@@ -169,9 +173,9 @@ def check_gitfive_detailed() -> Dict[str, Any]:
                         timeout=5
                     )
                     requirements_met = result.returncode == 0
-                except:
+                except Exception:
                     pass
-
+            
             return {
                 "installed": has_venv and has_script,
                 "path": str(path.absolute()),
@@ -180,7 +184,7 @@ def check_gitfive_detailed() -> Dict[str, Any]:
                 "requirements_met": requirements_met,
                 "status": "ready" if (has_venv and has_script and requirements_met) else "incomplete"
             }
-
+    
     return {
         "installed": False,
         "path": None,
@@ -204,7 +208,7 @@ def check_python_packages() -> Dict[str, bool]:
         "requests": "HTTP client",
         "aiohttp": "Async HTTP client"
     }
-
+    
     results = {}
     for package, description in packages.items():
         try:
@@ -212,7 +216,7 @@ def check_python_packages() -> Dict[str, bool]:
             results[package] = {"installed": True, "description": description}
         except ImportError:
             results[package] = {"installed": False, "description": description}
-
+    
     return results
 
 
@@ -223,7 +227,7 @@ def validate_hacker_target_api(api_key: str) -> Dict[str, Any]:
             f"https://api.hackertarget.com/findshareddns/?q=google.com&apikey={api_key}",
             timeout=10
         )
-
+        
         if response.status_code == 200 and "error" not in response.text.lower():
             return {
                 "valid": True,
@@ -247,7 +251,7 @@ def validate_osint_industries_api(api_key: str) -> Dict[str, Any]:
             headers=headers,
             timeout=10
         )
-
+        
         if response.status_code == 200:
             data = response.text
             return {
@@ -270,7 +274,7 @@ def validate_whois_history_api(api_key: str) -> Dict[str, Any]:
             f"https://whois-history.whoisxmlapi.com/api/v1?apiKey={api_key}&domainName=google.com&mode=purchase",
             timeout=10
         )
-
+        
         if response.status_code == 200:
             data = response.json()
             if "error" not in data:
@@ -295,7 +299,7 @@ def validate_securitytrails_api(api_key: str) -> Dict[str, Any]:
             headers=headers,
             timeout=10
         )
-
+        
         if response.status_code == 200:
             data = response.json()
             return {
@@ -320,7 +324,7 @@ def validate_virustotal_api(api_key: str) -> Dict[str, Any]:
             headers=headers,
             timeout=10
         )
-
+        
         if response.status_code == 200:
             return {"valid": True, "message": "API key is valid"}
         elif response.status_code == 401:
@@ -341,7 +345,7 @@ def validate_api_key(service: str, api_key: str) -> Dict[str, Any]:
         "securitytrails": validate_securitytrails_api,
         "virustotal": validate_virustotal_api
     }
-
+    
     validator = validators.get(service)
     if not validator:
         return {"valid": False, "message": "Unknown service"}
@@ -353,15 +357,8 @@ def validate_api_key(service: str, api_key: str) -> Dict[str, Any]:
 
 
 def save_env_config(config: Dict[str, str]):
-    """Save configuration to .env file"""
-    env_content = []
-
-    for key, value in config.items():
-        if value:
-            env_content.append(f"{key}={value}")
-
-    with open(CONFIG_PATH, "w") as f:
-        f.write("\n".join(env_content))
+    """Save configuration to the .env file, preserving existing keys and comments."""
+    update_env({k: v for k, v in config.items() if v not in (None, "")})
 
 
 def install_go_tool(tool_name: str, package: str) -> Dict[str, Any]:
@@ -374,14 +371,14 @@ def install_go_tool(tool_name: str, package: str) -> Dict[str, Any]:
                 "message": "Go is not installed",
                 "install_url": "https://golang.org/dl/"
             }
-
+        
         # Get Go version
         go_version = subprocess.run(
             ["go", "version"],
             capture_output=True,
             text=True
         ).stdout.strip()
-
+        
         # Install the tool
         process = subprocess.Popen(
             ["go", "install", "-v", package],
@@ -389,13 +386,13 @@ def install_go_tool(tool_name: str, package: str) -> Dict[str, Any]:
             stderr=subprocess.STDOUT,
             text=True
         )
-
+        
         output = []
         for line in process.stdout:
             output.append(line.strip())
-
+        
         process.wait()
-
+        
         if process.returncode == 0:
             # Verify installation
             tool_path = shutil.which(tool_name)
@@ -420,7 +417,7 @@ def install_go_tool(tool_name: str, package: str) -> Dict[str, Any]:
                 "message": f"Installation failed with exit code {process.returncode}",
                 "output": "\n".join(output)
             }
-
+    
     except Exception as e:
         return {
             "success": False,
@@ -436,18 +433,18 @@ def install_go_tools() -> Dict[str, Any]:
             "message": "Go is not installed. Please install Go first.",
             "install_url": "https://golang.org/dl/"
         }
-
+    
     tools = {
         "subfinder": "github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest",
         "httpx": "github.com/projectdiscovery/httpx/cmd/httpx@latest",
     }
-
+    
     results = {}
     for tool, package in tools.items():
         results[tool] = install_go_tool(tool, package)
-
+    
     all_success = all(r.get("success", False) for r in results.values())
-
+    
     return {
         "success": all_success,
         "results": results,
@@ -506,13 +503,13 @@ def setup_gitfive_guide() -> Dict[str, Any]:
 
 @router.get("/setup", response_class=HTMLResponse)
 async def setup_page(request: Request):
-    """Main setup page"""
     try:
-        if check_setup_complete():
-            return RedirectResponse(url="/")
-
+        """Main setup page"""
+        # if check_setup_complete():
+            # return RedirectResponse(url="/setup/complete")
+        
         state = get_setup_state()
-
+        
         # Get comprehensive system status
         system_status = {
             "python_version": f"{os.sys.version_info.major}.{os.sys.version_info.minor}.{os.sys.version_info.micro}",
@@ -524,7 +521,7 @@ async def setup_page(request: Request):
             "python_packages": check_python_packages(),
             "go_bin_path": str(get_go_path())
         }
-
+        
         if system_status["go_installed"]:
             try:
                 result = subprocess.run(
@@ -534,20 +531,20 @@ async def setup_page(request: Request):
                     timeout=5
                 )
                 system_status["go_version"] = result.stdout.strip()
-            except:
+            except Exception:
                 pass
-
+        
         return templates.TemplateResponse(
-            request=request,
-            name="setup.html",
-            context={
+            "setup.html",
+            {
+                "request": request,
                 "step": state.step,
                 "system_status": system_status,
                 "state": state.dict()
             }
         )
     except Exception as e:
-        print(e)
+        logger.exception("Setup page failed")
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
@@ -561,23 +558,23 @@ async def setup_admin(
     try:
         if password != confirm_password:
             raise HTTPException(status_code=400, detail="Passwords do not match")
-
+        
         # Validate credentials with enhanced rules
         creds = AdminCredentials(email=email, password=password)
-
+        
         # Hash password with bcrypt
         hashed = bcrypt.hashpw(password.encode(), bcrypt.gensalt(rounds=12))
-
+        
         # Generate secure JWT secret
         jwt_secret = secrets.token_urlsafe(32)
-
+        
         # Save to config
         config = {
             "ROOT_EMAIL": email,
             "ROOT_PASSWORD": hashed.decode(),
             "JWT_SECRET": jwt_secret
         }
-
+        
         # Read existing config if it exists
         existing_config = {}
         if CONFIG_PATH.exists():
@@ -586,23 +583,25 @@ async def setup_admin(
                     if "=" in line and not line.strip().startswith("#"):
                         key, val = line.strip().split("=", 1)
                         existing_config[key] = val
-
+        
         # Merge configs
         existing_config.update(config)
         save_env_config(existing_config)
-
+        
         # Update setup state
         state = get_setup_state()
         state.admin_configured = True
         state.step = 2
         save_setup_state(state)
-
+        
         return JSONResponse({
             "success": True,
             "message": "Admin credentials configured securely",
             "next_step": 2
         })
-
+    
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -616,8 +615,7 @@ async def setup_features(
     enable_ns_lookup: bool = Form(False),
     enable_osint_industries: bool = Form(False),
     enable_whois: bool = Form(False),
-    enable_cavalier: bool = Form(False),
-    enable_doxbin: bool = Form(False)
+    enable_cavalier: bool = Form(False)
 ):
     """Configure which features to enable"""
     features = {
@@ -626,10 +624,9 @@ async def setup_features(
         "ENABLE_NS_LOOKUP": str(enable_ns_lookup),
         "ENABLE_OSINT_INDUSTRIES": str(enable_osint_industries),
         "ENABLE_WHOIS": str(enable_whois),
-        "ENABLE_CAVALIER": str(enable_cavalier),
-        "ENABLE_DOXBIN": str(enable_doxbin)
+        "ENABLE_CAVALIER": str(enable_cavalier)
     }
-
+    
     # Read existing config
     existing_config = {}
     if CONFIG_PATH.exists():
@@ -638,11 +635,11 @@ async def setup_features(
                 if "=" in line and not line.strip().startswith("#"):
                     key, val = line.strip().split("=", 1)
                     existing_config[key] = val
-
+    
     # Merge configs
     existing_config.update(features)
     save_env_config(existing_config)
-
+    
     # Update setup state
     state = get_setup_state()
     state.features_selected = True
@@ -652,18 +649,17 @@ async def setup_features(
         "ns_lookup": enable_ns_lookup,
         "osint_industries": enable_osint_industries,
         "whois": enable_whois,
-        "cavalier": enable_cavalier,
-        "doxbin": enable_doxbin
+        "cavalier": enable_cavalier
     }
     state.step = 3
     save_setup_state(state)
-
+    
     return JSONResponse({
         "success": True,
         "message": "Features configured successfully",
         "next_step": 3,
-        "selected_count": sum([enable_github, enable_dns_recon, enable_ns_lookup,
-                               enable_osint_industries, enable_whois, enable_cavalier, enable_doxbin])
+        "selected_count": sum([enable_github, enable_dns_recon, enable_ns_lookup, 
+                               enable_osint_industries, enable_whois, enable_cavalier])
     })
 
 
@@ -679,7 +675,7 @@ async def setup_apis(
 ):
     """Configure API keys with validation"""
     api_config = {}
-
+    
     if hacker_target:
         api_config["HACKER_TARGET_API_KEY"] = hacker_target.strip()
     if osint_industries:
@@ -694,7 +690,7 @@ async def setup_apis(
         api_config["GITFIVE_VENV_PATH"] = gitfive_venv.strip()
     if gitfive_script:
         api_config["GITFIVE_SCRIPT_PATH"] = gitfive_script.strip()
-
+    
     # Read existing config
     existing_config = {}
     if CONFIG_PATH.exists():
@@ -703,17 +699,17 @@ async def setup_apis(
                 if "=" in line and not line.strip().startswith("#"):
                     key, val = line.strip().split("=", 1)
                     existing_config[key] = val
-
+    
     # Merge configs
     existing_config.update(api_config)
     save_env_config(existing_config)
-
+    
     # Update setup state
     state = get_setup_state()
     state.apis_configured = True
     state.step = 4
     save_setup_state(state)
-
+    
     return JSONResponse({
         "success": True,
         "message": f"Configured {len(api_config)} API keys",
@@ -730,14 +726,14 @@ async def install_tools():
             status_code=400,
             detail="Go is not installed. Please install Go first from https://golang.org/dl/"
         )
-
+    
     results = install_go_tools()
-
+    
     # Update setup state
     state = get_setup_state()
     state.tools_installed = results["success"]
     save_setup_state(state)
-
+    
     return JSONResponse(results)
 
 
@@ -752,7 +748,7 @@ async def validate_api(
             "valid": False,
             "message": "API key cannot be empty"
         })
-
+    
     result = validate_api_key(service, api_key.strip())
     return JSONResponse(result)
 
@@ -762,7 +758,7 @@ async def gitfive_guide():
     """Get detailed GitFive setup instructions"""
     guide = setup_gitfive_guide()
     gitfive_status = check_gitfive_detailed()
-
+    
     return JSONResponse({
         "guide": guide,
         "status": gitfive_status
@@ -798,18 +794,18 @@ async def complete_setup():
     """Mark setup as complete"""
     if not CONFIG_PATH.exists():
         raise HTTPException(status_code=400, detail="Configuration not found")
-
+    
     state = get_setup_state()
     if not state.admin_configured:
         raise HTTPException(status_code=400, detail="Admin account not configured")
-
+    
     # Create completion flag
     SETUP_COMPLETE_FLAG.touch()
-
+    
     # Final state update
     state.step = 5
     save_setup_state(state)
-
+    
     return JSONResponse({
         "success": True,
         "message": "Setup completed successfully! Redirecting...",
@@ -823,10 +819,10 @@ async def complete_setup():
     })
 
 
-@router.get("/setup/complete", response_class=HTMLResponse)
-async def setup_complete_page(request: Request):
-    """Setup completion page"""
-    return RedirectResponse(url="/")
+@router.get("/setup/complete")
+async def setup_complete_page():
+    """Setup completion: send the user to the login page."""
+    return RedirectResponse(url="/", status_code=303)
 
 
 @router.get("/setup/status")
@@ -850,13 +846,13 @@ async def reset_setup(confirm: str = Form(...)):
     """Reset setup (for development/testing)"""
     if confirm != "RESET":
         raise HTTPException(status_code=400, detail="Invalid confirmation")
-
+    
     if SETUP_COMPLETE_FLAG.exists():
         SETUP_COMPLETE_FLAG.unlink()
-
+    
     if SETUP_STATE_PATH.exists():
         SETUP_STATE_PATH.unlink()
-
+    
     return JSONResponse({
         "success": True,
         "message": "Setup reset successfully. You can now run setup again."

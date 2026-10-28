@@ -1,63 +1,65 @@
-import subprocess
+import json
+import logging
 import os
+import re
 from pathlib import Path
-from typing import Optional
 
-from config.token_manager import tokens
+from dotenv import load_dotenv
+
+from utils.subprocess_runner import run_command
+
+logger = logging.getLogger(__name__)
+
+GITFIVE_TIMEOUT = 600
+# GitHub logins: alphanumerics and single hyphens, max 39 chars
+GITHUB_LOGIN_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$")
+
+
+class GitFiveError(Exception):
+    pass
+
 
 class GitService:
     def __init__(self):
-        self.venv_path = tokens.get('GITFIVE_VENV_PATH', 'venv/bin/python')
-        self.gitfive_path = tokens.get('GITFIVE_SCRIPT_PATH', 'GitFive/main.py')
-
+        load_dotenv()
+        self.venv_path = os.getenv('GITFIVE_VENV_PATH', 'venv/bin/python')
+        self.gitfive_path = str(Path(os.getenv('GITFIVE_SCRIPT_PATH', 'GitFive/main.py')).resolve())
         self.assets_path = Path('./assets')
         self.assets_path.mkdir(exist_ok=True)
 
-    def _sanitize_username(self, username: str) -> str:
-        return ''.join(c for c in username if c.isalnum() or c in '-_')
+    @staticmethod
+    def normalize_username(username: str) -> str:
+        username = (username or "").strip().lstrip("@")
+        match = re.search(r"github\.com/([^/?#\s]+)", username)
+        if match:
+            username = match.group(1)
+        if not GITHUB_LOGIN_RE.match(username):
+            raise GitFiveError("Not a valid GitHub username")
+        return username
 
-    def run_gitfive(self, username: str) -> Optional[str]:
-        username = self._sanitize_username(username)
-        if not username:
-            print("Invalid username")
-            return None
+    def output_path(self, username: str) -> Path:
+        return self.assets_path / f"{username}_data.json"
 
-        output_file = self.assets_path / f"{username}_data.json"
-        output_file = str(output_file.resolve())
+    async def run_gitfive(self, username: str, refresh: bool = False) -> tuple[dict, bool]:
+        """Return (GitFive JSON, from_cache). Results are cached per username;
+        ``refresh`` re-runs GitFive."""
+        username = self.normalize_username(username)
+        output = self.output_path(username)
+        if output.exists() and not refresh:
+            return json.loads(output.read_text()), True
 
-        try:
-            cmd = [
-                self.venv_path,
-                self.gitfive_path,
-                'user',
-                username,
-                '--json',
-                output_file
-            ]
+        # Write to a temp file so a failed run never leaves (or returns) stale data
+        tmp = output.with_name(output.name + ".tmp")
+        tmp.unlink(missing_ok=True)
+        result = await run_command(
+            [self.venv_path, self.gitfive_path, 'user', username, '--json', str(tmp.resolve())],
+            timeout=GITFIVE_TIMEOUT,
+        )
+        if result.timed_out:
+            raise GitFiveError(f"GitFive did not finish within {GITFIVE_TIMEOUT // 60} minutes")
+        if result.returncode != 0 or not tmp.exists():
+            tmp.unlink(missing_ok=True)
+            raise GitFiveError(f"GitFive failed: {result.error_summary()}")
 
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                check=True,
-                timeout=300
-            )
-
-            if result.stderr:
-                print(f"Warnings/Errors: {result.stderr}")
-
-            if not Path(output_file).exists():
-                print("Output file was not created")
-                return None
-
-            return output_file
-        except subprocess.TimeoutExpired:
-            print("Process timed out")
-            return None
-        except subprocess.CalledProcessError as e:
-            print(f"Process failed with exit code {e.returncode}")
-            print(f"Error output: {e.stderr}")
-            return None
-        except Exception as e:
-            print(f"Unexpected error: {str(e)}")
-            return None
+        os.replace(tmp, output)
+        return json.loads(output.read_text()), False

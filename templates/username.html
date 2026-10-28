@@ -3,34 +3,20 @@
 {% block title %}Username Search - OSINT Toolkit{% endblock %}
 
 {% block content %}
-<div class="username-page mx-auto w-full max-w-6xl px-4 py-6 md:px-6">
-    <div class="username-toolbar">
-        <div class="username-title">
-            <h1>Username Search</h1>
-            <span id="progressText">0 / 0</span>
-        </div>
-
-        <form id="searchForm" class="username-search-form" autocomplete="off">
-            <input
-                type="search"
-                id="usernameSearchInput"
-                name="osint-search-target"
-                placeholder="Enter username"
-                autocomplete="off"
-                autocapitalize="none"
-                autocorrect="off"
-                spellcheck="false"
-                aria-label="Username"
-                required>
-            <button type="submit" id="searchBtn">
-                <i class="fas fa-search"></i>
-                <span>Search</span>
-            </button>
-            <button type="button" id="stopBtn" class="hidden">
-                <i class="fas fa-stop"></i>
-            </button>
-        </form>
+<div class="page max-w-6xl username-page">
+    <div class="flex items-end justify-between gap-3 flex-wrap">
+        <h1 class="page-title">Username Search</h1>
+        <span id="progressText" class="text-sm text-gray-500 mb-1">0 / 0</span>
     </div>
+    <p class="page-lead">Checks hundreds of sites for an account with this username and pulls profile details where it can.</p>
+
+    <form id="searchForm" class="flex gap-3 mb-4" autocomplete="off">
+        <input type="search" id="usernameSearchInput" name="osint-search-target" placeholder="Enter username"
+            autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" aria-label="Username" required
+            class="field flex-1">
+        <button type="submit" id="searchBtn" class="btn-primary"><i class="fas fa-search"></i><span>Search</span></button>
+        <button type="button" id="stopBtn" class="hidden btn-secondary text-red-300" title="Stop"><i class="fas fa-stop"></i></button>
+    </form>
 
     <div class="username-status-row">
         <div class="username-stat">
@@ -42,7 +28,7 @@
             <strong id="usernamesFound">0</strong>
         </div>
         <div class="username-stat">
-            <span>Accounts</span>
+            <span title="Sites that returned an error, blocked the request or rate-limited it">Couldn't check</span>
             <strong id="totalAccounts">0</strong>
         </div>
         <div class="username-stat">
@@ -88,11 +74,13 @@
     </div>
 </div>
 
-{% block extra_head %}
-<link rel="stylesheet" href="/static/css/username.css">
+
 {% endblock %}
 
 {% block extra_scripts %}
-<script src="/static/js/username.js"></script>
+<script src="/static/js/services/username.js"></script>
 {% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="/static/css/services/username.css">
 {% endblock %}

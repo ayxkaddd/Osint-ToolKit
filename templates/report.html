@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Case report - {{ investigation.name }}</title>
+    <style>
+        :root { --ink: #1f2937; --muted: #6b7280; --line: #e5e7eb; --accent: #6d28d9; --soft: #f5f3ff; }
+        * { box-sizing: border-box; }
+        body { margin: 0; background: #f3f4f6; color: var(--ink); font: 14px/1.5 -apple-system, "Segoe UI", Roboto, Arial, sans-serif; }
+        .page { max-width: 960px; margin: 24px auto; background: #fff; padding: 40px 48px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+        h1 { font-size: 26px; margin: 0 0 4px; }
+        h2 { font-size: 17px; margin: 32px 0 10px; padding-bottom: 6px; border-bottom: 2px solid var(--accent); }
+        h3 { font-size: 14px; margin: 18px 0 6px; }
+        .muted { color: var(--muted); }
+        .meta { display: flex; flex-wrap: wrap; gap: 6px 20px; color: var(--muted); font-size: 13px; margin-top: 8px; }
+        .desc { white-space: pre-line; margin: 12px 0 0; }
+        .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 20px; }
+        .stat { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+        .stat b { display: block; font-size: 20px; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+        th { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+        td.v { font-family: ui-monospace, Menlo, Consolas, monospace; word-break: break-all; }
+        .badge { display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--line); white-space: nowrap; }
+        .confirmed { background: #ecfdf5; border-color: #6ee7b7; color: #047857; }
+        .important { background: #fffbeb; border-color: #fcd34d; color: #b45309; }
+        .false_positive { background: #f3f4f6; color: var(--muted); }
+        .finding { border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; margin: 10px 0; break-inside: avoid; }
+        .finding .head { display: flex; justify-content: space-between; gap: 12px; }
+        .note { background: var(--soft); border-left: 3px solid var(--accent); padding: 6px 10px; margin-top: 8px; white-space: pre-line; }
+        .children { margin: 8px 0 0 14px; font-size: 13px; color: var(--muted); }
+        details summary { cursor: pointer; color: var(--accent); }
+        .toolbar { position: sticky; top: 0; background: #111827; color: #fff; padding: 10px 16px; display: flex; gap: 12px; align-items: center; justify-content: center; }
+        .toolbar a, .toolbar button { color: #fff; background: #374151; border: 0; border-radius: 6px; padding: 6px 12px; font: inherit; cursor: pointer; text-decoration: none; }
+        .toolbar .primary { background: var(--accent); }
+        footer { margin-top: 36px; font-size: 12px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 10px; }
+        @media print {
+            body { background: #fff; }
+            .page { margin: 0; box-shadow: none; padding: 0; max-width: none; }
+            .toolbar { display: none; }
+            details { display: block; }
+            details > summary { display: none; }
+            a { color: inherit; text-decoration: none; }
+        }
+        @media (max-width: 700px) { .page { padding: 20px; } .stats { grid-template-columns: repeat(2, 1fr); } }
+    </style>
+</head>
+<body>
+    <div class="toolbar">
+        <a href="/api/investigations/{{ investigation.investigation_id }}/view">&larr; Back to investigation</a>
+        {% if showing_all %}
+        <a href="?include=findings">Only marked findings</a>
+        {% else %}
+        <a href="?include=all">Include every result</a>
+        {% endif %}
+        <button class="primary" onclick="window.print()">Print / save as PDF</button>
+    </div>
+
+    <div class="page">
+        <div class="muted" style="font-size:12px;text-transform:uppercase;letter-spacing:.08em">Case report</div>
+        <h1>{{ investigation.name }}</h1>
+        <div class="meta">
+            <span>Status: {{ investigation.status }}</span>
+            <span>Opened {{ (investigation.created_at or '')[:16] | replace('T', ' ') }}</span>
+            <span>Last activity {{ (investigation.updated_at or '')[:16] | replace('T', ' ') }}</span>
+            <span>Report generated {{ generated_at }}</span>
+        </div>
+        {% if investigation.description %}<p class="desc">{{ investigation.description }}</p>{% endif %}
+
+        <div class="stats">
+            <div class="stat"><b>{{ counts.results }}</b>lookups</div>
+            <div class="stat"><b>{{ counts.modules }}</b>modules used</div>
+            <div class="stat"><b>{{ counts.entities }}</b>identifiers</div>
+            <div class="stat"><b>{{ counts.notes }}</b>notes</div>
+        </div>
+
+        {% if key_entities %}
+        <h2>Key identifiers</h2>
+        <table>
+            <tr><th>Type</th><th>Value</th><th>Assessment</th><th>Found in</th><th>Note</th></tr>
+            {% for e in key_entities %}
+            <tr>
+                <td>{{ type_label(e.type) }}</td>
+                <td class="v">{{ e.display or e.value }}</td>
+                <td><span class="badge {{ e.status }}">{{ status_labels.get(e.status, '') }}</span></td>
+                <td>{{ e.found_count }} result(s){% if e.searched %}, looked up{% endif %}</td>
+                <td>{{ e.note or '' }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+        {% endif %}
+
+        {% if searched %}
+        <h2>Identifiers looked up</h2>
+        <table>
+            <tr><th>Type</th><th>Value</th><th>Modules</th></tr>
+            {% for e in searched %}
+            <tr>
+                <td>{{ type_label(e.type) }}</td>
+                <td class="v">{{ e.display or e.value }}</td>
+                <td>{{ e.searched | map('string') | map('replace', '_', ' ') | join(', ') }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+        {% endif %}
+
+        <h2>{% if showing_all %}Results{% else %}Findings{% endif %}</h2>
+        {% if not findings %}<p class="muted">No lookups recorded yet.</p>{% endif %}
+        {% if not showing_all %}<p class="muted">Results marked confirmed or important. <a href="?include=all">Show every result</a>.</p>{% endif %}
+        {% for r in findings %}
+        <div class="finding">
+            <div class="head">
+                <div>
+                    <b>{{ module_names.get(r.service_name, r.service_name | replace('_', ' ')) }}</b>
+                    <span class="muted">· {{ r.method_name | replace('_', ' ') }}</span>
+                    {% if r.target %}<div class="v" style="font-family:ui-monospace,monospace">{{ r.target }}</div>{% endif %}
+                </div>
+                <div style="text-align:right">
+                    {% if r.triage and r.triage.status %}<span class="badge {{ r.triage.status }}">{{ status_labels.get(r.triage.status) }}</span><br>{% endif %}
+                    <span class="muted" style="font-size:12px">{{ (r.timestamp or '')[:16] | replace('T', ' ') }}</span>
+                </div>
+            </div>
+            <div style="margin-top:6px">{{ r.summary }}{% if r.partial %} <span class="badge">partial</span>{% endif %}</div>
+            {% if r.children %}
+            <div class="children">Follow-ups: {% for c in r.children %}{{ c.method_name | replace('_', ' ') }}{% if c.summary %} ({{ c.summary }}){% endif %}{% if not loop.last %}; {% endif %}{% endfor %}</div>
+            {% endif %}
+            {% if r.triage and r.triage.note %}<div class="note">{{ r.triage.note }}</div>{% endif %}
+        </div>
+        {% endfor %}
+
+        {% if entities_by_type %}
+        <h2>Other identifiers</h2>
+        {% for label, items in entities_by_type %}
+        <details>
+            <summary>{{ label }} ({{ items | length }})</summary>
+            <h3>{{ label }} ({{ items | length }})</h3>
+            <table>
+                <tr><th>Value</th><th>Found in</th><th>Modules</th></tr>
+                {% for e in items[:200] %}
+                <tr><td class="v">{{ e.display or e.value }}</td><td>{{ e.found_count }}</td><td>{{ e.services | join(', ') }}</td></tr>
+                {% endfor %}
+            </table>
+            {% if items | length > 200 %}<p class="muted">… and {{ items | length - 200 }} more (see the investigation's Entities view).</p>{% endif %}
+        </details>
+        {% endfor %}
+        {% endif %}
+
+        {% if notes %}
+        <h2>Notes</h2>
+        {% for n in notes %}
+        <div class="finding">
+            <div class="head"><b>{{ n.title }}</b><span class="muted" style="font-size:12px">{{ (n.created_at or '')[:16] | replace('T', ' ') }}</span></div>
+            <div class="desc">{{ n.content }}</div>
+        </div>
+        {% endfor %}
+        {% endif %}
+
+        <h2>Timeline</h2>
+        <table>
+            <tr><th>Time</th><th>Module</th><th>Query</th><th>Outcome</th></tr>
+            {% for r in results %}
+            <tr>
+                <td style="white-space:nowrap">{{ (r.timestamp or '')[:16] | replace('T', ' ') }}</td>
+                <td>{{ module_names.get(r.service_name, r.service_name | replace('_', ' ')) }}</td>
+                <td class="v">{{ r.target or '' }}</td>
+                <td>{{ r.summary }}{% if r.triage and r.triage.status %} <span class="badge {{ r.triage.status }}">{{ status_labels.get(r.triage.status) }}</span>{% endif %}</td>
+            </tr>
+            {% endfor %}
+        </table>
+
+        <footer>
+            Every result lists the exact query, module and time it was run. Raw data for each result is kept in the
+            investigation and can be exported as JSON.
+        </footer>
+    </div>
+</body>
+</html>

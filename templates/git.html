@@ -1,43 +1,29 @@
 {% extends "base.html" %}
 
-{% block title %}GitFive - GitHub User Analysis{% endblock %}
+{% block title %}GitFive - OSINT Toolkit{% endblock %}
 
 {% block extra_head %}
-<link rel="stylesheet" href="/static/css/git.css">
+<link rel="stylesheet" href="/static/css/services/git.css">
 {% endblock %}
 
 {% block content %}
-    <div class="container mx-auto p-4 max-w-4xl">
-        <!-- Search Section -->
-        <div class="flex flex-col items-center justify-center min-h-[50vh]">
-            <h1 class="text-4xl font-bold mb-8">GitFive</h1>
-            <div class="w-full max-w-xl relative">
-                <input
-                    type="text"
-                    id="usernameInput"
-                    placeholder="Enter GitHub username"
-                    class="w-full bg-gray-900 border border-gray-700 rounded-lg py-3 px-4 text-white placeholder-gray-500 focus:outline-none focus:border-gray-500 transition-colors"
-                >
-                <button
-                    id="searchButton"
-                    class="absolute right-2 top-1/2 transform -translate-y-1/2 bg-gray-800 hover:bg-gray-700 text-white px-4 py-1 rounded-md transition-colors"
-                >
-                    Search
-                </button>
-            </div>
+    <div class="page">
+        <h1 class="page-title">GitFive</h1>
+        <p class="page-lead">A GitHub user's real emails and names from their commits, linked accounts, SSH keys, repositories and languages.</p>
+
+        <div class="flex gap-3">
+            <input type="text" id="usernameInput" autocomplete="off" placeholder="GitHub username" class="field flex-1">
+            <button type="button" id="searchButton" class="btn-primary">Search</button>
         </div>
 
-        <!-- Loading indicator -->
-        <div id="loadingIndicator" class="hidden flex justify-center my-8">
-            <div class="animate-spin rounded-full h-8 w-8 border-t-2 border-white"></div>
-        </div>
+        <div id="loadingIndicator" class="hidden loading-line"><i class="fas fa-spinner fa-spin mr-2"></i>Running GitFive - this can take a minute…</div>
 
         <!-- Results Section -->
-        <div id="userData" class="hidden space-y-6 mt-8">
+        <div id="userData" class="hidden space-y-4 mt-6">
             <!-- Profile Section -->
-            <div class="bg-gray-900 rounded-lg p-6">
+            <div class="card">
                 <div class="flex items-start space-x-6">
-                    <img id="userAvatar" class="w-24 h-24 rounded-lg" src="/placeholder.svg" alt="User avatar">
+                    <img id="userAvatar" class="w-24 h-24 rounded-lg" src="/static/avatar_placeholder.png" alt="User avatar">
                     <div class="flex-1">
                         <div class="flex items-center space-x-2">
                             <h2 id="userName" class="text-2xl font-bold"></h2>
@@ -94,8 +80,8 @@
             </div>
 
             <!-- Language Stats Section -->
-            <div class="bg-gray-900 rounded-lg p-6">
-                <h3 class="text-xl font-bold mb-4 flex items-center">
+            <div class="card">
+                <h3 class="card-title">
                     <i data-lucide="pie-chart" class="w-5 h-5 mr-2"></i>
                     Language Statistics
                 </h3>
@@ -105,9 +91,9 @@
             </div>
 
             <!-- Repositories Section -->
-            <div class="bg-gray-900 rounded-lg p-6">
+            <div class="card">
                 <div class="flex items-center justify-between mb-4">
-                    <h3 class="text-xl font-bold flex items-center">
+                    <h3 class="card-title !mb-0">
                         <i data-lucide="book" class="w-5 h-5 mr-2"></i>
                         Repositories
                     </h3>
@@ -119,9 +105,9 @@
             </div>
 
             <!-- SSH Keys Section -->
-            <div class="bg-gray-900 rounded-lg p-6">
+            <div class="card">
                 <div class="flex items-center justify-between mb-4">
-                    <h3 class="text-xl font-bold flex items-center">
+                    <h3 class="card-title !mb-0">
                         <i data-lucide="key" class="w-5 h-5 mr-2"></i>
                         SSH Keys
                     </h3>
@@ -133,9 +119,9 @@
             </div>
 
             <!-- Usernames History Section -->
-            <div class="bg-gray-900 rounded-lg p-6">
+            <div class="card">
                 <div class="flex items-center justify-between mb-4">
-                    <h3 class="text-xl font-bold flex items-center">
+                    <h3 class="card-title !mb-0">
                         <i data-lucide="history" class="w-5 h-5 mr-2"></i>
                         Username History
                     </h3>
@@ -147,9 +133,9 @@
             </div>
 
             <!-- Domains Section -->
-            <div class="bg-gray-900 rounded-lg p-6">
+            <div class="card">
                 <div class="flex items-center justify-between mb-4">
-                    <h3 class="text-xl font-bold flex items-center">
+                    <h3 class="card-title !mb-0">
                         <i data-lucide="globe" class="w-5 h-5 mr-2"></i>
                         Domains
                     </h3>
@@ -161,9 +147,9 @@
             </div>
 
             <!-- All Contributions Section -->
-            <div class="bg-gray-900 rounded-lg p-6">
+            <div class="card">
                 <div class="flex items-center justify-between mb-4">
-                    <h3 class="text-xl font-bold flex items-center">
+                    <h3 class="card-title !mb-0">
                         <i data-lucide="git-commit" class="w-5 h-5 mr-2"></i>
                         All Contributions
                     </h3>
@@ -175,9 +161,9 @@
             </div>
 
             <!-- External Contributions Section -->
-            <div class="bg-gray-900 rounded-lg p-6">
+            <div class="card">
                 <div class="flex items-center justify-between mb-4">
-                    <h3 class="text-xl font-bold flex items-center">
+                    <h3 class="card-title !mb-0">
                         <i data-lucide="git-branch" class="w-5 h-5 mr-2"></i>
                         External Contributions
                     </h3>
@@ -189,9 +175,9 @@
             </div>
 
             <!-- Near Names Section -->
-            <div class="bg-gray-900 rounded-lg p-6">
+            <div class="card">
                 <div class="flex items-center justify-between mb-4">
-                    <h3 class="text-xl font-bold flex items-center">
+                    <h3 class="card-title !mb-0">
                         <i data-lucide="users" class="w-5 h-5 mr-2"></i>
                         Near Names
                     </h3>
@@ -202,9 +188,9 @@
             <div id="nearNamesList" class="space-y-4"></div>
             </div>
             <!-- Registered Emails Section -->
-            <div class="bg-gray-900 rounded-lg p-6">
+            <div class="card">
                 <div class="flex items-center justify-between mb-4">
-                    <h3 class="text-xl font-bold flex items-center">
+                    <h3 class="card-title !mb-0">
                         <i data-lucide="mail-check" class="w-5 h-5 mr-2"></i>
                         Registered Emails
                     </h3>
@@ -219,5 +205,5 @@
         </div>
         </div>
 
-    <script src="/static/js/git.js"></script>
+    <script src="/static/js/services/git.js"></script>
 {% endblock %}

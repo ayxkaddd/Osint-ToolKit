@@ -40,7 +40,8 @@ dependencies = [
     "socid-extractor>=0.0.27",
     "sse-starlette>=2.2.1",
     "pillow>=12.1.0",
-    "aiofiles>=25.1.0"
+    "aiofiles>=25.1.0",
+    "phonenumbers>=8.13.50"
 ]
 
 [project.urls]

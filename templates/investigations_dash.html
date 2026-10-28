@@ -1,0 +1,232 @@
+{% extends "base.html" %}
+
+{% block title %}Investigations - OSINT Toolkit{% endblock %}
+
+{% block content %}
+<div class="page max-w-6xl">
+    <!-- Header Section -->
+    <h1 class="page-title">Investigations</h1>
+    <p class="page-lead">Every case and what was looked up in it. The active one (red dot in the header) records every module lookup.</p>
+
+    <!-- Stats Overview -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div class="card">
+            <div class="flex items-center gap-3">
+                <div class="bg-purple-900/50 p-3 rounded-lg">
+                    <i data-lucide="folder-open" class="w-6 h-6 text-purple-400"></i>
+                </div>
+                <div>
+                    <div class="text-sm text-gray-400">Total Investigations</div>
+                    <div class="text-2xl font-bold" id="dashboardTotalInvestigations">0</div>
+                </div>
+            </div>
+        </div>
+        <div class="card">
+            <div class="flex items-center gap-3">
+                <div class="bg-green-900/50 p-3 rounded-lg">
+                    <i data-lucide="activity" class="w-6 h-6 text-green-400"></i>
+                </div>
+                <div>
+                    <div class="text-sm text-gray-400">Active Investigations</div>
+                    <div class="text-2xl font-bold" id="dashboardActiveInvestigations">0</div>
+                </div>
+            </div>
+        </div>
+        <div class="card">
+            <div class="flex items-center gap-3">
+                <div class="bg-blue-900/50 p-3 rounded-lg">
+                    <i data-lucide="file-text" class="w-6 h-6 text-blue-400"></i>
+                </div>
+                <div>
+                    <div class="text-sm text-gray-400">Total Results</div>
+                    <div class="text-2xl font-bold" id="dashboardTotalResults">0</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Actions Bar -->
+    <div class="flex justify-between items-center gap-3 flex-wrap mb-6">
+        <div class="flex items-center gap-3 flex-wrap">
+            <div class="relative">
+                <input type="text" id="dashboardSearchInput" placeholder="Search investigations..."
+                    class="field field-sm w-64 pl-10">
+                <div class="absolute inset-y-0 left-3 flex items-center pointer-events-none">
+                    <i data-lucide="search" class="w-4 h-4 text-gray-500"></i>
+                </div>
+            </div>
+            <select id="dashboardStatusFilter"
+                class="field field-sm w-auto">
+                <option value="all">All Status</option>
+                <option value="active">Active</option>
+                <option value="completed">Completed</option>
+                <option value="archived">Archived</option>
+            </select>
+        </div>
+        <button onclick="openCreateInvestigationModal()"
+            class="btn-primary !py-2">
+            <i data-lucide="plus" class="w-4 h-4"></i>
+            Create Investigation
+        </button>
+    </div>
+
+    <!-- Loading indicator -->
+    <div id="dashboardLoadingIndicator" class="loading-line"><i class="fas fa-spinner fa-spin mr-2"></i>Loading investigations…</div>
+
+    <!-- Investigations Grid -->
+    <div id="dashboardInvestigationsGrid" class="hidden">
+        <!-- Empty state -->
+        <div id="dashboardEmptyState" class="hidden flex-col items-center justify-center py-16">
+            <div class="bg-gray-900/50 p-8 rounded-full mb-4">
+                <i data-lucide="folder-open" class="w-16 h-16 text-gray-600"></i>
+            </div>
+            <h3 class="text-xl font-semibold mb-2">No Investigations Found</h3>
+            <p class="page-lead">Get started by creating your first investigation</p>
+            <button onclick="openCreateInvestigationModal()"
+                class="btn-primary">
+                <i data-lucide="plus" class="w-5 h-5"></i>
+                Create Your First Investigation
+            </button>
+        </div>
+
+        <!-- Investigations List -->
+        <div id="dashboardInvestigationsList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <!-- Investigation cards will be inserted here -->
+        </div>
+    </div>
+</div>
+
+<!-- Investigation Details Modal -->
+<div id="dashboardInvestigationDetailsModal"
+    class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+    <div class="bg-gray-900 rounded-xl p-6 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto border border-gray-800">
+        <div class="flex justify-between items-start mb-6">
+            <div class="flex items-center gap-4">
+                <div id="dashboardModalInvestigationPicture"
+                    class="w-16 h-16 bg-gray-800 rounded-lg flex items-center justify-center overflow-hidden">
+                    <i data-lucide="folder-open" class="w-8 h-8 text-gray-600"></i>
+                </div>
+                <div>
+                    <h2 id="dashboardModalInvestigationName" class="text-2xl font-bold"></h2>
+                    <div class="flex items-center gap-3 mt-1">
+                        <span id="dashboardModalInvestigationStatus" class="text-xs px-2 py-1 rounded-full"></span>
+                        <span id="dashboardModalInvestigationDate" class="text-sm text-gray-400"></span>
+                    </div>
+                </div>
+            </div>
+            <button onclick="closeDashboardInvestigationDetailsModal()"
+                class="text-gray-400 hover:text-white transition-colors">
+                <i data-lucide="x" class="w-6 h-6"></i>
+            </button>
+        </div>
+
+        <div class="space-y-6">
+            <!-- Description -->
+            <div class="bg-gray-800/50 rounded-lg p-4">
+                <h3 class="text-sm font-semibold text-gray-400 mb-2">Description</h3>
+                <p id="dashboardModalInvestigationDescription" class="text-gray-300"></p>
+            </div>
+
+            <!-- Statistics -->
+            <div class="grid grid-cols-3 gap-4">
+                <div class="bg-gray-800/50 rounded-lg p-4">
+                    <div class="flex items-center gap-2 mb-2">
+                        <i data-lucide="file-text" class="w-4 h-4 text-blue-400"></i>
+                        <span class="text-xs text-gray-400">Results</span>
+                    </div>
+                    <span id="dashboardModalResultsCount" class="text-2xl font-bold">0</span>
+                </div>
+                <div class="bg-gray-800/50 rounded-lg p-4">
+                    <div class="flex items-center gap-2 mb-2">
+                        <i data-lucide="calendar" class="w-4 h-4 text-green-400"></i>
+                        <span class="text-xs text-gray-400">Created</span>
+                    </div>
+                    <span id="dashboardModalCreatedDate" class="text-sm font-semibold"></span>
+                </div>
+                <div class="bg-gray-800/50 rounded-lg p-4">
+                    <div class="flex items-center gap-2 mb-2">
+                        <i data-lucide="clock" class="w-4 h-4 text-yellow-400"></i>
+                        <span class="text-xs text-gray-400">Last Updated</span>
+                    </div>
+                    <span id="dashboardModalUpdatedDate" class="text-sm font-semibold"></span>
+                </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="flex flex-wrap gap-3 pt-4 border-t border-gray-800">
+                <button onclick="setDashboardInvestigationAsActive()"
+                    id="dashboardModalSetActiveBtn"
+                    class="flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-3 rounded-lg transition-colors font-medium">
+                    <i data-lucide="check-circle" class="w-5 h-5"></i>
+                    Set as Active
+                </button>
+                <button onclick="viewDashboardInvestigationResults()"
+                    class="flex-1 flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-500 text-white px-4 py-3 rounded-lg transition-colors font-medium">
+                    <i data-lucide="eye" class="w-5 h-5"></i>
+                    View Results
+                </button>
+                <button onclick="openEditDashboardInvestigationModal()"
+                    class="flex items-center justify-center gap-2 bg-gray-700 hover:bg-gray-600 text-white px-4 py-3 rounded-lg transition-colors">
+                    <i data-lucide="edit" class="w-5 h-5"></i>
+                    Edit
+                </button>
+                <button onclick="deleteDashboardInvestigation()"
+                    class="flex items-center justify-center gap-2 bg-red-950/60 hover:bg-red-900 text-red-300 border border-red-800 px-4 py-3 rounded-lg transition-colors">
+                    <i data-lucide="trash-2" class="w-5 h-5"></i>
+                    Delete
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Investigation Modal -->
+<div id="dashboardEditInvestigationModal"
+    class="fixed inset-0 bg-black bg-opacity-60 hidden items-center justify-center z-50">
+    <div class="bg-gray-900 rounded-xl p-6 max-w-lg w-full mx-4 border border-gray-800 shadow-2xl">
+        <div class="flex justify-between items-center mb-6">
+            <h2 class="text-xl font-bold text-white flex items-center gap-2">
+                <i data-lucide="edit" class="w-5 h-5 text-purple-400"></i> Edit Investigation
+            </h2>
+            <button onclick="closeEditDashboardInvestigationModal()" class="text-gray-400 hover:text-white">
+                <i data-lucide="x" class="w-6 h-6"></i>
+            </button>
+        </div>
+        <form id="editInvestigationForm" onsubmit="submitEditInvestigation(event)" class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-300 mb-1">Investigation Name</label>
+                <input type="text" id="editInvName" required
+                    class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-purple-500">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-300 mb-1">Description</label>
+                <textarea id="editInvDescription" rows="3"
+                    class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-purple-500"></textarea>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-300 mb-1">Status</label>
+                <select id="editInvStatus"
+                    class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-purple-500">
+                    <option value="active">Active</option>
+                    <option value="completed">Completed</option>
+                    <option value="archived">Archived</option>
+                </select>
+            </div>
+            <div class="flex justify-end gap-3 pt-4 border-t border-gray-800">
+                <button type="button" onclick="closeEditDashboardInvestigationModal()"
+                    class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg transition-colors">
+                    Cancel
+                </button>
+                <button type="submit"
+                    class="px-5 py-2 bg-purple-600 hover:bg-purple-500 text-white font-medium rounded-lg transition-colors">
+                    Save Changes
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="/static/js/investigations_dash.js"></script>
+{% endblock %}

@@ -1,0 +1,65 @@
+.json-key {
+    color: #d19a66;
+}
+
+.json-string {
+    color: #98c379;
+}
+
+.json-number {
+    color: #d19a66;
+}
+
+.json-boolean {
+    color: #56b6c2;
+}
+
+.json-null {
+    color: #56b6c2;
+}
+
+.result-card {
+    transition: all 0.2s ease;
+}
+
+.result-card:hover {
+    border-color: #3b82f6;
+}
+
+/* DNS Recon Styles */
+.tech-badge {
+    @apply px-2 py-1 text-xs bg-blue-600 text-white rounded-full;
+}
+
+.status-badge {
+    @apply px-2 py-0.5 text-xs rounded;
+}
+
+.status-success {
+    @apply bg-green-500 text-black;
+}
+
+.status-warning {
+    @apply bg-yellow-500 text-black;
+}
+
+.status-error {
+    @apply bg-red-500 text-white;
+}
+
+.status-info {
+    @apply bg-blue-500 text-white;
+}
+
+/* Username Search Styles */
+.platform-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: bold;
+    font-size: 18px;
+}

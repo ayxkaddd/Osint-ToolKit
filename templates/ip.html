@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+
+{% block title %}IP Lookup - OSINT Toolkit{% endblock %}
+
+{% block content %}
+<div class="page max-w-4xl">
+    <h1 class="page-title">IP Lookup</h1>
+    <p class="page-lead">Location, network owner (ASN), reverse DNS, abuse reports and exposed services.
+        AbuseIPDB and Shodan are used when their keys are set in <a href="/settings" class="underline">Settings</a>.</p>
+
+    <form id="ipForm" class="flex gap-3">
+        <input id="ipInput" type="text" autocomplete="off" placeholder="8.8.8.8 or 2001:4860:4860::8888"
+            class="field flex-1">
+        <button type="submit" id="ipSubmit" class="btn-primary">Look up</button>
+    </form>
+
+    <div id="ipLoading" class="hidden loading-line"><i class="fas fa-spinner fa-spin mr-2"></i>Looking up…</div>
+    <div id="ipResult" class="mt-6 space-y-4"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/services/ip.js"></script>
+{% endblock %}

@@ -28,3 +28,11 @@ class ReconResults(BaseModel):
     port_scan_results: Optional[List[Dict[str, Any]]] = None
     external_api_data: Dict[str, Any]
     summary: Dict[str, Any]
+    # Tool problems (not installed, timed out, failed) - shown to the user
+    warnings: List[str] = []
+    # Owner intel from TXT/MX/NS/SOA/DMARC and certificates
+    intel: Dict[str, Any] = {}
+    # IPs the names resolve to, with network owner (ASN)
+    hosting: List[Dict[str, Any]] = []
+    # Earlier A/MX/NS values (SecurityTrails) and passive DNS (VirusTotal)
+    dns_history: Dict[str, Any] = {}
