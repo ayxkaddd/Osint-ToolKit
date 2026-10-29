@@ -2,6 +2,9 @@
 name: OathNet
 site: oathnet.org
 accepts:
+- email
+- phone
+- username
 - text
 settings:
   OATHNET_API_KEY:
