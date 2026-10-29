@@ -121,7 +121,13 @@
                 "API",
                 "Username",
                 "OSINT"
-            ]
+            ],
+            "settings": {
+                "GHUNT_SCRIPT_PATH": {
+                    "type": "text",
+                    "label": "GHunt command or path to the ghunt executable (default: ghunt)"
+                }
+            }
         },
         {
             "name": "Cavalier",

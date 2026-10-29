@@ -1,13 +1,11 @@
 import json
 import logging
-import os
 import re
 import uuid
 from pathlib import Path
 from typing import Literal
 
-from dotenv import load_dotenv
-
+from utils.config import get_setting
 from utils.subprocess_runner import run_command
 
 logger = logging.getLogger(__name__)
@@ -33,10 +31,13 @@ class GHuntService:
     which used to mangle Drive URLs."""
 
     def __init__(self):
-        load_dotenv()
-        self.ghunt_path = os.getenv('GHUNT_SCRIPT_PATH', 'ghunt')
         self.work_dir = Path('./assets/ghunt')
         self.work_dir.mkdir(parents=True, exist_ok=True)
+
+    @property
+    def ghunt_path(self) -> str:
+        """Read per lookup, so a path changed in Settings applies without a restart."""
+        return get_setting('GHUNT_SCRIPT_PATH') or 'ghunt'
 
     @staticmethod
     def validate(module: GHuntModule, target: str) -> str:
