@@ -143,3 +143,26 @@ def reduce_fingerprints(events: List[Any]) -> Dict[str, Any]:
 
 
 Reducer = Callable[[List[Any]], Any]
+
+
+def reduce_oi_stream(events: List[Any]) -> Dict[str, Any]:
+    """OSINT Industries stream -> the same shape as a JSON lookup: {type, query, modules: [cards]}."""
+    from services.oi_service import sort_oi_cards
+
+    result: Dict[str, Any] = {"modules": [], "modules_checked": 0, "completed": False}
+    for event in events:
+        if not isinstance(event, dict):
+            continue
+        kind = event.get("event")
+        if kind == "started":
+            for key in ("type", "query", "premium", "premium_modules_only"):
+                result[key] = event.get(key)
+        elif kind == "module":
+            result["modules"].extend(event.get("cards") or [])
+            result["modules_checked"] += 1
+        elif kind == "error":
+            result["error"] = event.get("detail")
+        elif kind == "done":
+            result["completed"] = bool(event.get("completed"))
+    result["modules"] = sort_oi_cards(result["modules"])
+    return result

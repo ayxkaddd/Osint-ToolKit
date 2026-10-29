@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+
+{% block title %}Notes - OSINT Toolkit{% endblock %}
+
+{% block content %}
+<div class="page max-w-7xl">
+    <a href="/api/investigations/{{ investigation_id }}/view" class="text-gray-400 hover:text-white mb-4 inline-flex items-center text-sm">
+        <i class="fas fa-arrow-left mr-2"></i>Back to the investigation
+    </a>
+    <div class="flex flex-wrap items-end justify-between gap-3 mb-4">
+        <div>
+            <h1 class="page-title !mb-1">Notes</h1>
+            <p class="text-sm text-gray-400" id="investigationInfo">Loading investigation…</p>
+        </div>
+        <p class="text-xs text-gray-500">Type <code class="text-purple-300">[[</code> to link a note, result or identifier,
+            <code class="text-purple-300">![[</code> to attach a snapshot of a result.</p>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-[17rem_minmax(0,1fr)] gap-4 md:h-[calc(100vh-15rem)] md:min-h-[30rem]">
+        <aside class="bg-[#14151f] border border-[#24283b] rounded-xl p-3 flex flex-col min-h-0 max-h-72 md:max-h-none">
+            <div class="flex gap-2 mb-3">
+                <input type="search" id="noteSearch" placeholder="Search notes…" class="field field-sm flex-1 min-w-0">
+                <button type="button" id="newNoteBtn" class="btn-primary !px-3 !py-1.5" title="New note"><i class="fas fa-plus"></i></button>
+            </div>
+            <div id="notesList" class="space-y-1 overflow-auto custom-scrollbar flex-1 min-h-0"></div>
+        </aside>
+
+        <section class="bg-[#14151f] border border-[#24283b] rounded-xl flex flex-col min-h-[26rem] md:min-h-0 overflow-hidden">
+            <div class="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-[#24283b]">
+                <span id="noteStatus" class="text-xs text-gray-500 truncate"></span>
+                <div class="flex items-center gap-1 shrink-0">
+                    <button type="button" id="exportNoteBtn" class="p-2 rounded text-gray-400 hover:text-white hover:bg-white/5" title="Download as Markdown (links become URLs, snapshots become summaries)"><i class="fas fa-download"></i></button>
+                    <button type="button" id="deleteNoteBtn" class="p-2 rounded text-gray-400 hover:text-red-300 hover:bg-white/5" title="Delete note"><i class="fas fa-trash"></i></button>
+                </div>
+            </div>
+            <div id="notesPageEditor" class="note-editor flex-1 min-h-0"></div>
+        </section>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Own scope: notes.js (on every page) has the shared NotePad and helpers
+(function () {
+    const investigationId = "{{ investigation_id }}";
+    window.notesForInvestigation = investigationId;
+    const api = `/api/investigations/${investigationId}`;
+    const $ = (id) => document.getElementById(id);
+    let notes = [];
+
+    const pad = new NotePad($('notesPageEditor'), {
+        investigationId,
+        statusEl: $('noteStatus'),
+        onSaved: () => loadNotes(),
+        onOpened: (note) => {
+            history.replaceState(null, '', note ? `#note-${note.note_id}` : location.pathname);
+            renderList();
+        },
+    });
+
+    async function loadInvestigationInfo() {
+        try {
+            const data = await fetch(`${api}/info`).then(r => r.json());
+            if (data.status === 'success') $('investigationInfo').textContent = data.investigation.name;
+        } catch (error) {
+            $('investigationInfo').textContent = '';
+        }
+    }
+
+    async function loadNotes() {
+        try {
+            const data = await fetch(`${api}/notes`).then(r => r.json());
+            notes = (data.notes || []).sort((a, b) => String(b.updated_at).localeCompare(String(a.updated_at)));
+        } catch (error) {
+            notes = [];
+        }
+        renderList();
+    }
+
+    function renderList() {
+        const needle = $('noteSearch').value.trim().toLowerCase();
+        const shown = notes.filter(n => !needle || `${n.title}\n${n.content}`.toLowerCase().includes(needle));
+        $('notesList').innerHTML = shown.length ? shown.map(note => `
+            <div class="note-list-item ${note.note_id === pad.noteId ? 'note-list-active' : ''}" data-open-note="${escapeAttr(note.note_id)}">
+                <div class="min-w-0">
+                    <div class="text-sm text-white truncate">${escapeHtml(note.title || 'Untitled note')}</div>
+                    <div class="text-xs text-gray-500">${escapeHtml(noteDate(note.updated_at))}</div>
+                </div>
+            </div>`).join('')
+            : `<p class="text-xs text-gray-500 text-center py-4">${notes.length ? 'No notes match' : 'No notes yet'}</p>`;
+    }
+
+    $('notesList').addEventListener('click', (event) => {
+        const item = event.target.closest('[data-open-note]');
+        if (item) pad.open(item.dataset.openNote).catch(() => showTemporaryNotification('Failed to open the note', 'error'));
+    });
+    $('noteSearch').addEventListener('input', renderList);
+    $('newNoteBtn').addEventListener('click', () => pad.newNote());
+
+    $('deleteNoteBtn').addEventListener('click', async () => {
+        if (!pad.noteId || !(await confirmDeleteNote(investigationId, pad.noteId))) return;
+        const response = await fetch(`${api}/notes/${encodeURIComponent(pad.noteId)}`, { method: 'DELETE' });
+        if (!response.ok) return showTemporaryNotification('Failed to delete note', 'error');
+        pad.version = pad.savedVersion;
+        await pad.newNote();
+        await loadNotes();
+        showTemporaryNotification('Note deleted', 'success');
+    });
+
+    $('exportNoteBtn').addEventListener('click', async () => {
+        const content = pad.editor ? pad.editor.getValue() : '';
+        if (!content.trim()) return;
+        const markdown = await exportNoteMarkdown(investigationId, content);
+        const name = noteTitle(content).replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '_') || 'note';
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(new Blob([markdown], { type: 'text/markdown' }));
+        link.download = `${name}.md`;
+        link.click();
+        setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+    });
+
+    window.addEventListener('pagehide', () => pad.saveOnUnload());
+    document.addEventListener('keydown', (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === 's' && !sidebarIsOpen()) {
+            e.preventDefault();
+            pad.flush();
+        }
+    });
+    // Notes added or deleted from the sidebar
+    document.addEventListener('notes:changed', loadNotes);
+
+    (async () => {
+        loadInvestigationInfo();
+        await loadNotes();
+        const linked = /^#note-([0-9a-f-]{36})$/.exec(location.hash);
+        const first = linked ? linked[1] : (notes[0] && notes[0].note_id);
+        try {
+            if (first) await pad.open(first);
+            else await pad.newNote();
+        } catch (error) {
+            await pad.newNote();
+        }
+    })();
+})();
+</script>
+{% endblock %}

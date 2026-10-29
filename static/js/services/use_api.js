@@ -3,6 +3,8 @@ window.currentService = 'oi';
 const state = {
     lastReport: null,
     isRunning: false,
+    controller: null,
+    view: null,
 };
 
 const els = {
@@ -10,12 +12,16 @@ const els = {
     queryType: document.getElementById('queryType'),
     queryInput: document.getElementById('queryInput'),
     submitQuery: document.getElementById('submitQuery'),
+    stopQuery: document.getElementById('stopQuery'),
     runPremiumOnly: document.getElementById('runPremiumOnly'),
-    loading: document.getElementById('loading'),
+    status: document.getElementById('oiStatus'),
+    statusIcon: document.getElementById('oiStatusIcon'),
+    statusText: document.getElementById('oiStatusText'),
+    error: document.getElementById('oiError'),
     result: document.getElementById('result'),
-    resultContent: document.getElementById('resultContent'),
     cards: document.getElementById('oiCards'),
     pdfFormat: document.getElementById('pdfFormat'),
+    sandbox: document.getElementById('sandboxMode'),
     pdfDownload: document.getElementById('pdfDownload'),
     pdfLink: document.getElementById('pdfLink'),
     queryTypeBtns: document.querySelectorAll('.query-type-btn'),
@@ -24,99 +30,63 @@ const els = {
 };
 
 window.loadResultIntoView = function (data) {
-    renderResult(data, { allowPremiumOnly: false });
+    resetResult();
+    if (data && data.url) {
+        showPdf(data.url);
+    } else if (data && Array.isArray(data.modules)) {
+        state.view.add(data.modules);
+        if (data.modules_checked != null) state.view.setSites(data.modules_checked);
+        const { accounts, breaches } = state.view.counts();
+        setStatus('done', `Saved result${data.query ? ` for ${data.query}` : ''}: ${summaryText(accounts, breaches)}`);
+        if (data.error) showError(data.error);
+    }
+    els.result.classList.remove('hidden');
 };
 
 function setBusy(isBusy) {
     state.isRunning = isBusy;
-    els.loading.classList.toggle('hidden', !isBusy);
     els.submitQuery.disabled = isBusy;
     els.runPremiumOnly.disabled = isBusy;
+    els.stopQuery.classList.toggle('hidden', !isBusy);
     els.searchModeBtns.forEach((button) => {
         button.disabled = isBusy;
     });
 }
 
-function oiCard(card) {
-    const picture = safeUrl(card.picture);
-    const profile = safeUrl(card.profile_url);
-    const chips = [
-        card.username ? pivotChip('username', String(card.username)) : '',
-        card.email ? pivotChip('email', String(card.email)) : '',
-        card.phone ? pivotChip('phone', String(card.phone)) : '',
-    ].join('');
-    const meta = [card.location, card.created && `created ${card.created}`, card.last_seen && `last seen ${card.last_seen}`]
-        .filter(Boolean).map(v => escapeHtml(v)).join(' · ');
-    return `
-        <div class="bg-gray-950/60 rounded-lg p-4 border border-gray-800 min-w-0">
-            <div class="flex items-start gap-3">
-                ${picture ? `<img src="${escapeAttr(picture)}" alt="" loading="lazy" referrerpolicy="no-referrer" class="w-12 h-12 rounded-lg object-cover bg-gray-800 shrink-0" onerror="this.remove()">` : ''}
-                <div class="min-w-0 flex-1">
-                    <div class="flex items-center justify-between gap-2">
-                        <span class="text-xs uppercase tracking-wide text-purple-300">${escapeHtml(card.module)}</span>
-                        ${profile ? `<a href="${escapeAttr(profile)}" target="_blank" rel="noopener noreferrer" class="text-xs text-blue-400 hover:underline">profile</a>` : ''}
-                    </div>
-                    ${card.name ? `<div class="text-white font-medium truncate">${escapeHtml(card.name)}</div>` : ''}
-                    ${meta ? `<div class="text-xs text-gray-500 mt-0.5">${meta}</div>` : ''}
-                </div>
-            </div>
-            ${chips ? `<div class="flex flex-wrap gap-1.5 mt-2">${chips}</div>` : ''}
-            ${card.bio ? `<p class="text-xs text-gray-400 mt-2">${escapeHtml(card.bio)}</p>` : ''}
-            ${(card.fields || []).length ? `<div class="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs">${card.fields.slice(0, 12).map(f =>
-                `<div class="text-gray-500 truncate">${escapeHtml(f.label)}</div><div class="text-gray-300 break-words">${escapeHtml(f.value)}</div>`).join('')}</div>` : ''}
-        </div>`;
+function summaryText(accounts, breaches) {
+    const parts = [`${accounts} account${accounts === 1 ? '' : 's'}`];
+    if (breaches) parts.push(`${breaches} breach${breaches === 1 ? '' : 'es'}`);
+    return parts.join(', ');
 }
 
-function renderResult(data, options = {}) {
-    const allowPremiumOnly = Boolean(options.allowPremiumOnly && state.lastReport);
-    els.cards.classList.add('hidden');
-
-    if (Array.isArray(data.modules)) {
-        // Only the "run premium modules" follow-up applies; there is no PDF to link
-        els.pdfLink.classList.add('hidden');
-        els.pdfDownload.classList.toggle('hidden', !allowPremiumOnly);
-        els.runPremiumOnly.classList.toggle('hidden', !allowPremiumOnly);
-        const found = data.modules.filter(m => m.registered !== false);
-        els.resultContent.textContent = '';
-        els.cards.innerHTML = `
-            <div class="flex items-center justify-between gap-3 flex-wrap mb-4">
-                <div class="text-sm text-gray-300">${found.length} account${found.length === 1 ? '' : 's'} for <span class="text-white">${escapeHtml(data.query || '')}</span></div>
-            </div>
-            ${found.length ? `<div class="grid grid-cols-1 md:grid-cols-2 gap-3">${found.map(oiCard).join('')}</div>`
-                : '<p class="text-sm text-gray-400">No accounts found.</p>'}`;
-        els.cards.classList.remove('hidden');
-    } else if (data.url) {
-        els.pdfLink.classList.remove('hidden');
-        els.pdfLink.href = data.url;
-        els.pdfDownload.classList.remove('hidden');
-        els.runPremiumOnly.classList.toggle('hidden', !allowPremiumOnly);
-        els.resultContent.textContent = options.message || 'PDF report generated successfully';
-    } else {
-        els.pdfDownload.classList.add('hidden');
-        els.runPremiumOnly.classList.add('hidden');
-        els.resultContent.textContent = JSON.stringify(data, null, 2);
-    }
-
-    els.result.classList.remove('hidden');
+function setStatus(kind, text) {
+    els.status.classList.remove('hidden');
+    els.statusIcon.innerHTML = kind === 'running'
+        ? '<span class="block w-2.5 h-2.5 rounded-full bg-purple-400 animate-pulse"></span>'
+        : `<i data-lucide="${kind === 'done' ? 'check-circle-2' : 'circle-alert'}" class="w-4 h-4 ${kind === 'done' ? 'text-emerald-400' : 'text-amber-400'}"></i>`;
+    els.statusText.textContent = text;
+    lucide.createIcons();
 }
 
-function renderError(error) {
+function showError(message) {
+    els.error.textContent = message;
+    els.error.classList.remove('hidden');
+}
+
+function resetResult() {
+    els.error.classList.add('hidden');
     els.pdfDownload.classList.add('hidden');
     els.runPremiumOnly.classList.add('hidden');
-    els.resultContent.textContent = 'Error: ' + error.message;
-    els.result.classList.remove('hidden');
+    els.pdfLink.classList.add('hidden');
+    els.status.classList.add('hidden');
+    state.view = new OiResultsView(els.cards);
 }
 
-function buildQueryUrl({ type, query, premium = false, premiumModulesOnly = false }) {
-    const params = new URLSearchParams({
-        type: type.toLowerCase(),
-        query,
-        premium: String(premium),
-        premium_modules_only: String(premiumModulesOnly),
-        format: els.pdfFormat.checked ? 'pdf' : 'json',
-    });
-
-    return `/api/oi/query?${params.toString()}`;
+function showPdf(url) {
+    els.pdfLink.href = url;
+    els.pdfLink.classList.remove('hidden');
+    els.pdfDownload.classList.remove('hidden');
+    setStatus('done', 'PDF report generated');
 }
 
 function getSearchMode() {
@@ -130,15 +100,90 @@ function getPremiumFlags(mode) {
     };
 }
 
-async function runOiQuery({ type, query, premium = false, premiumModulesOnly = false }) {
-    const response = await fetch(buildQueryUrl({ type, query, premium, premiumModulesOnly }));
-    const data = await response.json();
+// Reads the SSE stream from /api/oi/stream and adds each module's cards as it arrives
+async function streamOi({ type, query, premium, premiumModulesOnly, sandbox }) {
+    const params = new URLSearchParams({ type, query });
+    if (!sandbox) {
+        params.set('premium', String(premium));
+        params.set('premium_modules_only', String(premiumModulesOnly));
+    }
+    state.controller = new AbortController();
+    const started = Date.now();
+    let modules = 0;
+    let finished = false;
+    const progress = () => {
+        const { accounts, breaches } = state.view.counts();
+        setStatus('running', `Searching${sandbox ? ' the sandbox' : ''}… ${modules} sites answered, ${summaryText(accounts, breaches)} so far`);
+    };
+    progress();
 
-    if (!response.ok) {
-        throw new Error(data.detail || 'Request failed');
+    const handle = (event) => {
+        if (event.event === 'module') {
+            modules += 1;
+            state.view.add(event.cards);
+            state.view.setSites(modules);
+            progress();
+        } else if (event.event === 'error') {
+            showError(event.detail || 'OSINT Industries request failed');
+        } else if (event.event === 'done') {
+            finished = true;
+        }
+    };
+
+    try {
+        const response = await fetch(`/api/oi/${sandbox ? 'sandbox/' : ''}stream?${params}`, { signal: state.controller.signal });
+        if (!response.ok) {
+            const data = await response.json().catch(() => ({}));
+            const detail = Array.isArray(data.detail) ? data.detail.map(d => d.msg).join(', ') : data.detail;
+            throw new Error(detail || `Request failed (${response.status})`);
+        }
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const blocks = buffer.split('\n\n');
+            buffer = blocks.pop();
+            for (const block of blocks) {
+                const data = block.split('\n').filter(l => l.startsWith('data:')).map(l => l.slice(5).trimStart()).join('\n');
+                if (!data) continue;
+                try {
+                    handle(JSON.parse(data));
+                } catch (e) {
+                    console.error('Bad OSINT Industries event', e);
+                }
+            }
+        }
+    } catch (error) {
+        if (error.name !== 'AbortError') showError(error.message);
+    } finally {
+        state.controller = null;
     }
 
-    return data;
+    const { accounts, breaches } = state.view.counts();
+    const seconds = Math.round((Date.now() - started) / 1000);
+    if (finished) {
+        setStatus('done', `${summaryText(accounts, breaches)} · ${modules} sites answered in ${seconds}s`);
+    } else {
+        setStatus('stopped', `Stopped after ${seconds}s · ${summaryText(accounts, breaches)}`);
+    }
+}
+
+async function runPdfReport({ type, query, premium, premiumModulesOnly }) {
+    const params = new URLSearchParams({
+        type,
+        query,
+        premium: String(premium),
+        premium_modules_only: String(premiumModulesOnly),
+        format: 'pdf',
+    });
+    setStatus('running', 'Generating the PDF report - usually under a minute…');
+    const response = await fetch(`/api/oi/query?${params}`);
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.detail || 'Request failed');
+    showPdf(data.url);
 }
 
 async function updateCredits() {
@@ -156,60 +201,47 @@ async function submitBaseReport() {
     const type = els.queryType.value;
     const query = els.queryInput.value.trim();
     const searchMode = getSearchMode();
-    const premiumFlags = getPremiumFlags(searchMode);
+    const sandbox = els.sandbox.checked;
 
     if (!query) {
-        alert('Please enter a query');
+        els.queryInput.focus();
         return;
     }
+    if (state.isRunning) return;
 
-    state.lastReport = { type, query, searchMode };
-    els.result.classList.add('hidden');
-    els.runPremiumOnly.classList.add('hidden');
+    state.lastReport = { type, query, searchMode, sandbox };
+    resetResult();
+    els.result.classList.remove('hidden');
     setBusy(true);
 
     try {
-        const data = await runOiQuery({
-            type,
-            query,
-            ...premiumFlags,
-        });
-
-        renderResult(data, {
-            allowPremiumOnly: searchMode === 'standard',
-            message: searchMode === 'premium_only'
-                ? 'Premium-only PDF report generated successfully'
-                : 'PDF report generated successfully',
-        });
-        await updateCredits();
+        const request = { type, query, sandbox, ...getPremiumFlags(searchMode) };
+        if (els.pdfFormat.checked && !sandbox) {
+            await runPdfReport(request);
+        } else {
+            await streamOi(request);
+            els.runPremiumOnly.classList.toggle('hidden', searchMode !== 'standard' || sandbox);
+        }
+        if (!sandbox) await updateCredits();
     } catch (error) {
         state.lastReport = null;
-        renderError(error);
+        showError(error.message);
+        els.status.classList.add('hidden');
     } finally {
         setBusy(false);
     }
 }
 
+// After a standard search: run only the premium modules and add them to the same results
 async function submitPremiumOnlyReport() {
-    if (!state.lastReport) return;
-
+    if (!state.lastReport || state.isRunning) return;
+    els.runPremiumOnly.classList.add('hidden');
     setBusy(true);
-
     try {
-        const data = await runOiQuery({
-            type: state.lastReport.type,
-            query: state.lastReport.query,
-            premium: true,
-            premiumModulesOnly: true,
-        });
-
-        renderResult(data, {
-            allowPremiumOnly: false,
-            message: 'Premium-only PDF report generated successfully',
-        });
+        await streamOi({ type: state.lastReport.type, query: state.lastReport.query, premium: true, premiumModulesOnly: true, sandbox: false });
         await updateCredits();
     } catch (error) {
-        renderError(error);
+        showError(error.message);
     } finally {
         setBusy(false);
     }
@@ -225,6 +257,7 @@ function setActiveSearchMode(activeButton) {
 }
 
 els.submitQuery.addEventListener('click', submitBaseReport);
+els.stopQuery.addEventListener('click', () => state.controller?.abort());
 els.runPremiumOnly.addEventListener('click', submitPremiumOnlyReport);
 els.queryInput.addEventListener('keydown', (event) => {
     if (event.key === 'Enter') submitBaseReport();

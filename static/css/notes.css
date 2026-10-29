@@ -1,0 +1,206 @@
+/* Notes editor (static/js/notes.js + static/vendor/notes-editor.js): live preview
+   of markdown, reference chips and result snapshots. */
+
+.note-editor {
+    position: relative;
+    overflow: hidden;
+}
+
+.note-editor .cm-editor {
+    height: 100%;
+}
+
+/* Wide content (tables, snapshots) must not widen the editor */
+.note-editor .cm-md-embed,
+.note-editor .cm-md-table {
+    contain: inline-size;
+    max-width: 100%;
+}
+
+/* Headings */
+.note-editor .cm-md-h {
+    color: #fff;
+    font-weight: 700;
+    line-height: 1.35;
+}
+.note-editor .cm-md-h1 { font-size: 1.6em; padding-top: 0.35em !important; }
+.note-editor .cm-md-h2 { font-size: 1.35em; padding-top: 0.3em !important; }
+.note-editor .cm-md-h3 { font-size: 1.15em; padding-top: 0.2em !important; }
+.note-editor .cm-md-h4,
+.note-editor .cm-md-h5,
+.note-editor .cm-md-h6 { font-size: 1em; color: #e9d5ff; }
+.note-editor .cm-md-setext-line { font-size: 0.6em; color: #4b5563; }
+
+/* Inline */
+.note-editor .cm-md-strong { font-weight: 700; color: #fff; }
+.note-editor .cm-md-em { font-style: italic; }
+.note-editor .cm-md-strike { text-decoration: line-through; color: #9ca3af; }
+.note-editor .cm-md-code {
+    background: rgba(148, 163, 184, 0.14);
+    border-radius: 4px;
+    padding: 0.05em 0.3em;
+    color: #f0abfc;
+    font-size: 0.92em;
+}
+.note-editor .cm-md-link {
+    color: #c084fc;
+    text-decoration: underline;
+    text-decoration-color: rgba(192, 132, 252, 0.45);
+    text-underline-offset: 2px;
+    cursor: pointer;
+}
+
+/* Blocks */
+.note-editor .cm-md-quote {
+    border-left: 3px solid rgba(168, 85, 247, 0.6);
+    padding-left: 0.75em !important;
+    color: #cbd5e1;
+}
+.note-editor .cm-md-bullet {
+    color: #a78bfa;
+    display: inline-block;
+    width: 0.8em;
+}
+.note-editor .cm-md-listmark { color: #a78bfa; }
+.note-editor .cm-md-checkbox {
+    width: 0.95em;
+    height: 0.95em;
+    margin: 0 0.35em 0 0;
+    vertical-align: -0.12em;
+    accent-color: #9333ea;
+    cursor: pointer;
+}
+.note-editor .cm-md-done { color: #6b7280; text-decoration: line-through; }
+.note-editor .cm-md-hr {
+    display: inline-block;
+    width: 100%;
+    border-top: 1px solid #374151;
+    vertical-align: middle;
+}
+.note-editor .cm-md-codeblock {
+    background: rgba(2, 6, 23, 0.65);
+    font-size: 0.88em;
+    padding: 0 0.75em !important;
+    color: #e2e8f0;
+}
+.note-editor .cm-md-codeblock-first { border-radius: 6px 6px 0 0; padding-top: 0.3em !important; }
+.note-editor .cm-md-codeblock-last { border-radius: 0 0 6px 6px; padding-bottom: 0.3em !important; }
+.note-editor .cm-md-fence { color: #4b5563; font-size: 0.75em; }
+.note-editor .cm-md-image {
+    max-width: 100%;
+    max-height: 22rem;
+    border-radius: 6px;
+    vertical-align: top;
+}
+.note-editor .cm-md-table { overflow-x: auto; padding: 0.25em 0; }
+.note-editor .cm-md-table table { border-collapse: collapse; font-size: 0.9em; }
+.note-editor .cm-md-table th,
+.note-editor .cm-md-table td {
+    border: 1px solid #293142;
+    padding: 0.3em 0.65em;
+    text-align: left;
+}
+.note-editor .cm-md-table th { background: rgba(31, 41, 55, 0.6); color: #fff; }
+.note-editor .cm-md-table-source { color: #cbd5e1; }
+
+/* References: [[result:...]], [[email:...]] */
+.note-editor .cm-md-wiki-source { color: #a78bfa; }
+.note-chip-wrap .pivot-chip { vertical-align: baseline; }
+.note-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35em;
+    max-width: 100%;
+    padding: 0 0.45em;
+    border-radius: 5px;
+    background: rgba(147, 51, 234, 0.16);
+    border: 1px solid rgba(168, 85, 247, 0.35);
+    color: #e9d5ff;
+    font-size: 0.9em;
+    line-height: 1.5;
+    text-decoration: none;
+    vertical-align: baseline;
+    cursor: pointer;
+}
+.note-chip:hover { border-color: rgba(192, 132, 252, 0.8); color: #fff; }
+.note-chip i { font-size: 0.8em; color: #c084fc; }
+.note-chip-missing {
+    background: rgba(75, 85, 99, 0.2);
+    border-color: rgba(107, 114, 128, 0.4);
+    color: #9ca3af;
+    text-decoration: line-through;
+    cursor: default;
+}
+.note-chip-missing i { color: #9ca3af; }
+.note-chip-note { background: rgba(16, 185, 129, 0.12); border-color: rgba(52, 211, 153, 0.35); color: #d1fae5; }
+.note-chip-note i { color: #34d399; }
+.note-chip-snapshot { background: rgba(14, 165, 233, 0.12); border-color: rgba(56, 189, 248, 0.35); }
+
+/* Snapshots: ![[snapshot:...]] on a line of their own */
+.note-editor .cm-md-embed,
+.note-embed {
+    margin: 0.4em 0;
+    border: 1px solid #293142;
+    border-left: 3px solid #38bdf8;
+    border-radius: 8px;
+    background: rgba(15, 18, 24, 0.85);
+    font-size: 0.85rem;
+    line-height: 1.45;
+    white-space: normal;
+}
+.note-editor .cm-md-embed.note-embed-missing { border-left-color: #f87171; }
+.note-embed-head {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+}
+.note-embed-head > i { color: #38bdf8; font-size: 0.85em; }
+.note-embed-missing .note-embed-head > i { color: #f87171; }
+.note-embed-title {
+    min-width: 0;
+    flex: 1;
+    color: #fff;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.note-embed-meta { color: #8b95a7; font-size: 0.8em; white-space: nowrap; }
+.note-embed-actions { display: inline-flex; gap: 0.6rem; flex-shrink: 0; }
+.note-embed-actions a,
+.note-embed-actions button { color: #c084fc; font-size: 0.8em; font-weight: 600; }
+.note-embed-actions a:hover,
+.note-embed-actions button:hover { color: #e9d5ff; }
+.note-embed-gone { color: #f87171; font-size: 0.8em; }
+.note-embed-summary {
+    padding: 0 0.75rem 0.55rem;
+    color: #cbd5e1;
+    font-size: 0.85em;
+}
+.note-embed-body {
+    max-height: 32rem;
+    overflow: auto;
+    padding: 0.75rem;
+    border-top: 1px solid #24283b;
+    cursor: auto;
+}
+
+/* Notes list (sidebar and notes page) */
+.note-list-item {
+    display: flex;
+    align-items: center;
+    padding: 0.4rem 0.55rem;
+    border-radius: 6px;
+    cursor: pointer;
+    border: 1px solid transparent;
+}
+.note-list-item:hover { background: rgba(31, 41, 55, 0.7); }
+.note-list-item.note-list-active {
+    background: rgba(147, 51, 234, 0.14);
+    border-color: rgba(168, 85, 247, 0.35);
+}
+
+@media (max-width: 560px) {
+    .note-embed-meta { display: none; }
+}

@@ -25,20 +25,29 @@
         </div>
         <label class="flex items-center gap-2 cursor-pointer">
             <input type="checkbox" id="pdfFormat" class="rounded bg-gray-800 border-gray-600">
-            PDF report instead of results on the page
+            PDF report instead
+        </label>
+        <label class="flex items-center gap-2 cursor-pointer" title="OSINT Industries' test API: fake results, no credits used, nothing saved">
+            <input type="checkbox" id="sandboxMode" class="rounded bg-gray-800 border-gray-600">
+            Sandbox <span class="text-gray-500">(free fake data)</span>
         </label>
     </div>
     <input type="hidden" id="queryType" value="email">
     <input type="hidden" id="searchModeValue" value="standard">
 
-    <div id="loading" class="hidden loading-line"><i class="fas fa-spinner fa-spin mr-2"></i>Searching - usually under a minute…</div>
-
-    <section id="result" class="card mt-6 hidden">
-        <div id="oiCards" class="hidden"></div>
-        <pre id="resultContent" class="whitespace-pre-wrap text-sm font-mono text-gray-300"></pre>
+    <section id="result" class="mt-6 hidden">
+        <div id="oiStatus" class="hidden flex items-center gap-3 mb-5 text-sm text-gray-300">
+            <span id="oiStatusIcon" class="w-4 flex justify-center shrink-0"></span>
+            <span id="oiStatusText" class="flex-1"></span>
+            <button type="button" id="stopQuery" class="hidden btn-secondary !py-1 !px-3 text-xs">Stop</button>
+        </div>
+        <div id="oiError" class="hidden mb-5 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-sm text-red-300 break-words"></div>
+        <div id="oiCards"></div>
         <div id="pdfDownload" class="mt-4 hidden flex flex-wrap items-center justify-center gap-3">
-            <a id="pdfLink" target="_blank" class="btn-primary">Download PDF report</a>
-            <button type="button" id="runPremiumOnly" class="hidden btn-secondary">Run only premium modules</button>
+            <a id="pdfLink" target="_blank" class="btn-primary hidden">Download PDF report</a>
+        </div>
+        <div class="mt-5 flex justify-center">
+            <button type="button" id="runPremiumOnly" class="hidden btn-secondary">Add premium modules to these results</button>
         </div>
     </section>
 </div>

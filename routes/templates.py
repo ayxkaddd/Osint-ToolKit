@@ -96,7 +96,7 @@ async def notes_page(request: Request):
         return RedirectResponse(url="/investigations")
     return templates.TemplateResponse(
         request=request,
-        name="notes_test.html",
+        name="notes.html",
         context={"investigation_id": str(current)}
     )
 

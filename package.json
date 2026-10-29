@@ -3,9 +3,19 @@
   "private": true,
   "scripts": {
     "build:css": "tailwindcss -c tailwind.config.js -i static/css/tailwind.src.css -o static/css/tailwind.css --minify",
-    "watch:css": "tailwindcss -c tailwind.config.js -i static/css/tailwind.src.css -o static/css/tailwind.css --watch"
+    "watch:css": "tailwindcss -c tailwind.config.js -i static/css/tailwind.src.css -o static/css/tailwind.css --watch",
+    "build:notes": "esbuild frontend/notes-editor/index.js --bundle --minify --format=iife --target=es2020 --legal-comments=none --outfile=static/vendor/notes-editor.js"
   },
   "devDependencies": {
+    "@codemirror/autocomplete": "6.20.4",
+    "@codemirror/commands": "6.11.1",
+    "@codemirror/lang-markdown": "6.5.2",
+    "@codemirror/language": "6.13.1",
+    "@codemirror/search": "6.7.2",
+    "@codemirror/state": "6.7.6",
+    "@codemirror/view": "6.43.15",
+    "@lezer/highlight": "1.2.5",
+    "esbuild": "0.28.2",
     "tailwindcss": "3.4.17"
   }
 }
