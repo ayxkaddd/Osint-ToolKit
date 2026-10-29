@@ -372,6 +372,7 @@ async function expandCard(id, silent = false) {
     }
     if (!openCards.has(id)) return; // collapsed while loading
     body.innerHTML = renderDetail(detailCache[id]);
+    masonryPackAll(body);
     refreshIcons();
     loadResultEntities(id);
     if (!silent) card.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
@@ -892,7 +893,7 @@ function renderOi(data) {
             </div>`;
     }
     if (data && Array.isArray(data.modules)) {
-        return (data.error ? `<p class="text-sm text-red-300 mb-4">${escapeHtml(data.error)}</p>` : '') + oiResultsHtml(data.modules);
+        return (data.error ? `<p class="text-sm text-red-300 mb-4">${escapeHtml(data.error)}</p>` : '') + oiResultsHtml(data.modules, data.modules_checked);
     }
     return renderValue(data);
 }

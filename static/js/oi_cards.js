@@ -1,23 +1,21 @@
 // OSINT Industries results, shared by the OSINT Industries page (streamed, OiResultsView)
-// and saved results (oiResultsHtml). Cards come from services/oi_service.py:normalize_oi.
-// Layout: a summary of who the accounts point to (photos, names, usernames, places,
+// and saved results (oiResultsHtml). Cards come from services/oi_service.py:normalize_oi
+// and use the username search card styles (static/css/services/username.css) and its
+// packed columns (static/js/masonry.js).
+// Layout: counts, a summary of who the accounts point to (photos, names, usernames, places,
 // a timeline), then breaches, accounts with profile data, and sites where an account just exists.
 
 const OI_STAT_LABEL = /follower|following|friend|subscriber|post|repo|review|connection|like|karma|\bxp\b/i;
 const OI_INFO_KEYS = ['name', 'username', 'email', 'phone', 'picture', 'bio', 'location', 'account_id', 'age', 'website', 'created', 'last_seen'];
-// Letter placeholders until (or instead of) a site icon
-const OI_TINTS = [
-    'bg-purple-500/15 text-purple-300', 'bg-sky-500/15 text-sky-300', 'bg-emerald-500/15 text-emerald-300',
-    'bg-amber-500/15 text-amber-300', 'bg-rose-500/15 text-rose-300', 'bg-indigo-500/15 text-indigo-300',
-    'bg-teal-500/15 text-teal-300', 'bg-fuchsia-500/15 text-fuchsia-300',
-];
+const OI_SENSITIVE = /password|credit|ssn|security|bank/i;
+const OI_ROWS_SHOWN = 8;
 
 function oiCompact(value) {
     return new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 }).format(value);
 }
 
 function oiValue(value) {
-    if (typeof value === 'boolean') return value ? 'yes' : 'no';
+    if (typeof value === 'boolean') return value ? 'Yes' : 'No';
     if (typeof value === 'number') return value.toLocaleString();
     return String(value);
 }
@@ -28,136 +26,175 @@ function oiKind(card) {
         ? 'profile' : 'registered';
 }
 
-function oiLink(url, label, cls = 'text-blue-400 hover:underline') {
-    const safe = safeUrl(url);
-    return safe ? `<a href="${escapeAttr(safe)}" target="_blank" rel="noopener noreferrer" class="${cls}">${label}</a>` : '';
-}
-
 function oiWebsiteUrl(site) {
     return site ? (/^https?:/i.test(site) ? site : `https://${site}`) : '';
-}
-
-function oiTint(text) {
-    let hash = 0;
-    for (const ch of String(text || '')) hash = (hash * 31 + ch.charCodeAt(0)) | 0;
-    return OI_TINTS[Math.abs(hash) % OI_TINTS.length];
-}
-
-// First loadable image over a tinted letter; images that fail just disappear
-function oiImage(urls, label, box) {
-    const letter = escapeHtml((label || '?').trim().charAt(0).toUpperCase());
-    const [src, next] = urls.map(u => safeUrl(u)).filter(Boolean);
-    const onerror = next ? `this.onerror=()=>this.remove();this.src=this.dataset.next` : 'this.remove()';
-    return `<span class="relative ${box} shrink-0 overflow-hidden inline-flex items-center justify-center font-semibold ${oiTint(label)}">${letter}
-        ${src ? `<img src="${escapeAttr(src)}" ${next ? `data-next="${escapeAttr(next)}"` : ''} alt="" loading="lazy" referrerpolicy="no-referrer" class="absolute inset-0 w-full h-full object-cover bg-gray-900" onerror="${onerror}">` : ''}</span>`;
 }
 
 function oiIconUrl(card) {
     return card.domain ? `/api/oi/icon/${encodeURIComponent(card.domain)}` : '';
 }
 
-function oiSiteIcon(card, box = 'w-5 h-5 rounded text-[10px]') {
-    return oiImage([oiIconUrl(card)], card.module, box);
+// Site icon like the username cards: the first image that loads, else two letters
+function oiSiteMark(urls, label) {
+    const [src, next] = urls.map(u => safeUrl(u)).filter(Boolean);
+    const letters = escapeHtml(String(label || '').replace(/[^\p{L}\p{N}]/gu, '').slice(0, 2).toUpperCase() || '?');
+    const fallback = `<div class="platform-icon bg-gray-600${src ? ' username-site-mark-fallback' : ''}">${letters}</div>`;
+    if (!src) return `<div class="username-site-mark">${fallback}</div>`;
+    const giveUp = "this.style.display='none';this.nextElementSibling.style.display='flex'";
+    const onerror = next ? `if(this.dataset.next){this.src=this.dataset.next;this.removeAttribute('data-next')}else{${giveUp}}` : giveUp;
+    return `<div class="username-site-mark">
+        <img src="${escapeAttr(src)}" ${next ? `data-next="${escapeAttr(next)}"` : ''} alt="" loading="lazy" referrerpolicy="no-referrer" onerror="${onerror}">
+        ${fallback}</div>`;
 }
 
-function oiDetails(fields, openCount = 4) {
-    if (!fields.length) return '';
-    const row = f => `<div class="flex justify-between gap-4 py-1.5 border-t border-white/5 first:border-t-0">
-        <dt class="text-gray-500 shrink-0">${escapeHtml(f.label)}</dt>
-        <dd class="text-gray-200 text-right break-words min-w-0">${escapeHtml(oiValue(f.value))}</dd></div>`;
-    const shown = fields.length > openCount + 1 ? fields.slice(0, openCount) : fields;
-    const hidden = fields.slice(shown.length);
-    return `<dl class="mt-3 text-sm">${shown.map(row).join('')}</dl>
-        ${hidden.length ? `<details class="text-sm"><summary class="cursor-pointer text-gray-500 hover:text-gray-300 py-1 select-none">${hidden.length} more</summary>
-            <dl>${hidden.map(row).join('')}</dl></details>` : ''}`;
+function oiAvatar(url) {
+    const encoded = encodeURIComponent(url);
+    return `
+        <div class="username-card-media">
+            <a href="${escapeAttr(url)}" target="_blank" rel="noopener noreferrer" class="username-avatar-preview-btn" title="Open profile picture">
+                <img src="${escapeAttr(url)}" alt="" loading="lazy" referrerpolicy="no-referrer" class="username-card-avatar"
+                    onerror="this.closest('.username-result-card').classList.remove('has-profile-image'); this.closest('.username-card-media').style.display='none';">
+            </a>
+            <div class="username-reverse-search" aria-label="Reverse image search">
+                <a href="https://lens.google.com/uploadbyurl?url=${encoded}" target="_blank" rel="noopener noreferrer" title="Google reverse image search"><i class="fab fa-google"></i></a>
+                <a href="https://yandex.com/images/search?rpt=imageview&url=${encoded}" target="_blank" rel="noopener noreferrer" title="Yandex reverse image search"><i class="fas fa-search"></i></a>
+            </div>
+        </div>`;
 }
 
-function oiFact(icon, text) {
-    return `<span class="inline-flex items-center gap-1.5"><i data-lucide="${icon}" class="w-3.5 h-3.5 text-gray-500"></i>${escapeHtml(text)}</span>`;
+function oiRow(label, value) {
+    const text = oiValue(value);
+    return `<div class="username-data-row"><strong>${escapeHtml(label)}</strong><span title="${escapeAttr(text)}">${escapeHtml(text)}</span></div>`;
+}
+
+// The first rows, the rest behind the "more" button in the card footer
+function oiRows(rows) {
+    const shown = rows.length > OI_ROWS_SHOWN + 1 ? rows.slice(0, OI_ROWS_SHOWN) : rows;
+    const hidden = rows.slice(shown.length);
+    return {
+        html: shown.map(([label, value]) => oiRow(label, value)).join('')
+            + (hidden.length ? `<div data-oi-more class="hidden">${hidden.map(([label, value]) => oiRow(label, value)).join('')}</div>` : ''),
+        hidden: hidden.length,
+    };
+}
+
+function oiActions(url, label, hiddenRows) {
+    const safe = safeUrl(url);
+    if (!safe && !hiddenRows) return '';
+    return `
+        <div class="username-card-actions">
+            ${safe ? `<a href="${escapeAttr(safe)}" target="_blank" rel="noopener noreferrer" title="${escapeAttr(url)}">
+                <i class="fas fa-external-link-alt"></i><span>${label}</span></a>` : '<span></span>'}
+            ${hiddenRows ? `<button type="button" data-oi-more-toggle data-count="${hiddenRows}"><i class="fas fa-chevron-down"></i><span>${hiddenRows} more</span></button>` : ''}
+        </div>`;
+}
+
+function oiFilterText(card) {
+    return [card.module, card.slug, card.name, card.username, card.email, card.phone, card.location, card.bio, card.website,
+        ...(card.fields || []).map(f => f.value)].filter(v => v !== undefined && v !== null).join(' ').toLowerCase();
+}
+
+function oiShell(card, kind, picture, inner) {
+    return `
+        <div class="result-card username-result-card fade-in${picture ? ' has-profile-image' : ''}${kind === 'breach' ? ' !border-red-500/30' : ''}"
+            data-oi-text="${escapeAttr(oiFilterText(card))}" data-oi-category="${escapeAttr(card.breach ? 'Data breaches' : (card.category || 'Other'))}">
+            ${inner}
+        </div>`;
+}
+
+function oiHeader(title, subtitle, iconUrls, picture, subtitleClass = '') {
+    return `
+        <div class="username-card-header">
+            <div class="username-card-heading">
+                ${oiSiteMark(iconUrls, title)}
+                <div class="username-card-title">
+                    <h3 title="${escapeAttr(title)}">${escapeHtml(title)}</h3>
+                    ${subtitle ? `<span class="${subtitleClass}">${escapeHtml(subtitle)}</span>` : ''}
+                </div>
+            </div>
+            ${picture ? oiAvatar(picture) : ''}
+        </div>`;
 }
 
 function oiProfileCard(card) {
     const fields = card.fields || [];
     const stats = fields.filter(f => typeof f.value === 'number' && OI_STAT_LABEL.test(f.label));
-    const badges = fields.filter(f => f.value === true);
     // false flags ("private: no") say nothing worth a row
-    const rest = fields.filter(f => !stats.includes(f) && !badges.includes(f) && f.value !== false);
-    if (card.account_id) rest.unshift({ label: 'ID', value: card.account_id });
-    const facts = [
-        card.location && oiFact('map-pin', card.location),
-        (card.age || card.gender) && oiFact('user-round', [card.age && `${card.age} y/o`, card.gender].filter(Boolean).join(', ')),
-        card.created && oiFact('calendar-plus', `joined ${String(card.created).slice(0, 10)}`),
-        card.last_seen && oiFact('eye', `seen ${String(card.last_seen).slice(0, 10)}`),
-    ].filter(Boolean);
-    const chips = [
-        card.username ? pivotChip('username', String(card.username)) : '',
-        card.email ? pivotChip('email', String(card.email)) : '',
-        card.phone ? pivotChip('phone', String(card.phone)) : '',
-    ].join('');
-    const person = card.picture || card.name || chips;
-    return `
-        <article class="break-inside-avoid mb-3 rounded-xl border border-white/[0.07] bg-[#101119] hover:border-white/15 transition-colors min-w-0 overflow-hidden">
-            <header class="flex items-center gap-2.5 px-4 py-2.5 bg-white/[0.025] border-b border-white/[0.06]">
-                ${oiSiteIcon(card)}
-                <h4 class="text-sm font-semibold text-white truncate">${escapeHtml(card.module)}</h4>
-                ${card.category ? `<span class="text-[11px] px-1.5 py-0.5 rounded bg-white/5 text-gray-400 truncate">${escapeHtml(card.category)}</span>` : ''}
-                <span class="ml-auto flex items-center gap-1 shrink-0">
-                    ${oiLink(oiWebsiteUrl(card.website), '<i data-lucide="globe" class="w-4 h-4"></i>', 'p-1 rounded text-gray-500 hover:text-white hover:bg-white/5')}
-                    ${oiLink(card.profile_url, '<i data-lucide="external-link" class="w-4 h-4"></i>', 'p-1 rounded text-gray-500 hover:text-white hover:bg-white/5')}
-                </span>
-            </header>
-            <div class="p-4">
-                ${person ? `<div class="flex items-center gap-3">
-                    ${card.picture ? oiImage([card.picture], card.name || card.module, 'w-12 h-12 rounded-full text-base') : ''}
-                    <div class="min-w-0">
-                        ${card.name ? `<div class="text-base text-gray-50 font-medium break-words">${escapeHtml(card.name)}</div>` : ''}
-                        ${chips ? `<div class="flex flex-wrap gap-1.5 mt-1">${chips}</div>` : ''}
-                    </div>
+    const rest = fields.filter(f => !stats.includes(f) && f.value !== false);
+    const rows = [
+        ['Name', card.name], ['Email', card.email], ['Phone', card.phone], ['Location', card.location],
+        ['Age', card.age], ['Gender', card.gender],
+        ['Joined', card.created && String(card.created).slice(0, 10)],
+        ['Last seen', card.last_seen && String(card.last_seen).slice(0, 10)],
+        ['Website', card.website], ['ID', card.account_id],
+        ...rest.map(f => [f.label, f.value]),
+    ].filter(([, value]) => value !== undefined && value !== null && value !== '');
+    const { html, hidden } = oiRows(rows);
+    const picture = safeUrl(card.picture);
+    return oiShell(card, oiKind(card), picture, `
+        ${oiHeader(card.module, card.category || 'account', [oiIconUrl(card)], picture)}
+        ${card.username ? `
+            <div class="username-handle-row">
+                <span title="@${escapeAttr(String(card.username))}">@${escapeHtml(String(card.username))}</span>
+                <button type="button" class="copy-username-btn" data-oi-copy="${escapeAttr(String(card.username))}" title="Copy username"><i class="fas fa-copy"></i></button>
+            </div>` : ''}
+        ${card.bio || html || stats.length ? `
+            <div class="username-card-content">
+                ${card.bio ? `<p class="username-card-bio" title="${escapeAttr(card.bio)}">${escapeHtml(card.bio)}</p>` : ''}
+                ${html}
+                ${stats.length ? `<div class="username-mini-stats">${stats.slice(0, 6).map(f => `
+                    <div title="${escapeAttr(oiValue(f.value))}"><span>${escapeHtml(f.label)}</span><strong>${escapeHtml(oiCompact(f.value))}</strong></div>`).join('')}
                 </div>` : ''}
-                ${facts.length ? `<div class="${person ? 'mt-3' : ''} flex flex-wrap gap-x-4 gap-y-1 text-sm text-gray-400">${facts.join('')}</div>` : ''}
-                ${stats.length || badges.length ? `<div class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm">
-                    ${stats.map(f => `<span title="${escapeAttr(oiValue(f.value))}"><span class="text-white font-semibold">${escapeHtml(oiCompact(f.value))}</span> <span class="text-gray-500">${escapeHtml(f.label.toLowerCase())}</span></span>`).join('')}
-                    ${badges.map(f => `<span class="px-2 py-0.5 rounded-full text-xs bg-purple-500/10 text-purple-300 border border-purple-500/20">${escapeHtml(f.label.toLowerCase())}</span>`).join('')}
-                </div>` : ''}
-                ${card.bio ? `<p class="mt-3 text-sm text-gray-300 leading-relaxed break-words line-clamp-3" title="${escapeAttr(card.bio)}">${escapeHtml(card.bio)}</p>` : ''}
-                ${oiDetails(rest)}
-            </div>
-        </article>`;
+            </div>` : ''}
+        ${oiActions(card.profile_url, 'View', hidden)}`);
 }
 
-function oiBreachRow(card) {
+function oiBreachCard(card) {
     const fields = card.fields || [];
     const count = fields.find(f => /count|records/i.test(f.label) && typeof f.value === 'number');
     const classes = fields.find(f => /data classes/i.test(f.label));
-    const rest = fields.filter(f => f !== count && f !== classes);
     const tags = classes ? String(classes.value).split(/,\s*/).filter(Boolean) : [];
     const name = card.name || card.module;
-    return `
-        <article class="flex gap-3.5 py-3.5 border-t border-white/[0.06] first:border-t-0 min-w-0">
-            ${oiImage([card.picture, oiIconUrl(card)], name, 'w-10 h-10 rounded-lg text-sm')}
-            <div class="min-w-0 flex-1">
-                <div class="flex items-baseline justify-between gap-3">
-                    <h4 class="text-white font-semibold truncate">${escapeHtml(name)}</h4>
-                    ${card.created ? `<span class="text-sm text-gray-400 shrink-0 tabular-nums">${escapeHtml(String(card.created).slice(0, 10))}</span>` : ''}
-                </div>
-                <div class="text-sm text-gray-500">
-                    ${[card.website && oiLink(oiWebsiteUrl(card.website), escapeHtml(card.website)),
-                       count && `${escapeHtml(oiCompact(count.value))} accounts leaked`].filter(Boolean).join('<span class="mx-1.5">·</span>')}
-                </div>
-                ${tags.length ? `<div class="mt-2 flex flex-wrap gap-1.5">${tags.map(t =>
-                    `<span class="px-2 py-0.5 rounded-md text-xs ${/password|credit|ssn|security|bank/i.test(t) ? 'bg-red-500/15 text-red-300' : 'bg-white/5 text-gray-300'}">${escapeHtml(t)}</span>`).join('')}</div>` : ''}
-                ${rest.length ? `<details class="text-sm mt-1"><summary class="cursor-pointer text-gray-500 hover:text-gray-300 py-1 select-none">Details</summary>${oiDetails(rest, rest.length)}</details>` : ''}
-            </div>
-        </article>`;
+    const rows = [
+        ['Breached', card.created && String(card.created).slice(0, 10)],
+        ['Accounts leaked', count && oiCompact(count.value)],
+        ['Website', card.website],
+        ...fields.filter(f => f !== count && f !== classes).map(f => [f.label, f.value]),
+    ].filter(([, value]) => value !== undefined && value !== null && value !== '');
+    const { html, hidden } = oiRows(rows);
+    return oiShell(card, 'breach', '', `
+        ${oiHeader(name, 'data breach', [card.picture, oiIconUrl(card)], '', '!text-red-300')}
+        <div class="username-card-content">
+            ${tags.length ? `<div class="flex flex-wrap gap-1.5 mb-3">${tags.map(t =>
+                `<span class="px-2 py-0.5 rounded-md text-xs ${OI_SENSITIVE.test(t) ? 'bg-red-500/15 text-red-300' : 'bg-gray-800/60 text-gray-300'}">${escapeHtml(t)}</span>`).join('')}</div>` : ''}
+            ${html}
+        </div>
+        ${oiActions(oiWebsiteUrl(card.website), 'Website', hidden)}`);
 }
 
-function oiRegisteredChip(card) {
-    const inner = `${oiSiteIcon(card, 'w-4 h-4 rounded-sm text-[9px]')}<span>${escapeHtml(card.module)}</span>`;
-    const cls = 'inline-flex items-center gap-2 pl-2 pr-3 py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.07] text-sm text-gray-200';
-    return safeUrl(card.profile_url)
-        ? oiLink(card.profile_url, inner, `${cls} hover:border-blue-500/50 hover:text-white`)
-        : `<span class="${cls}" ${card.category ? `title="${escapeAttr(card.category)}"` : ''}>${inner}</span>`;
+function oiCardHtml(card) {
+    return card.breach ? oiBreachCard(card) : oiProfileCard(card);
 }
+
+// Card buttons work the same on the live page and in saved results
+document.addEventListener('click', (event) => {
+    const copy = event.target.closest('[data-oi-copy]');
+    if (copy) {
+        navigator.clipboard.writeText(copy.dataset.oiCopy).then(() => {
+            copy.innerHTML = '<i class="fas fa-check"></i>';
+            setTimeout(() => { copy.innerHTML = '<i class="fas fa-copy"></i>'; }, 1500);
+        }).catch(() => {});
+        return;
+    }
+    const toggle = event.target.closest('[data-oi-more-toggle]');
+    if (toggle) {
+        const more = toggle.closest('.username-result-card').querySelector('[data-oi-more]');
+        const open = !more.classList.toggle('hidden');
+        toggle.innerHTML = open
+            ? '<i class="fas fa-chevron-up"></i><span>Less</span>'
+            : `<i class="fas fa-chevron-down"></i><span>${toggle.dataset.count} more</span>`;
+    }
+});
 
 // ---------------------------------------------------------------------------
 // Summary: what the accounts say about the person
@@ -180,8 +217,8 @@ function oiSummaryRow(icon, label, items, render, limit = 8) {
     if (!items.length) return '';
     const more = items.length - limit;
     return `
-        <div class="flex gap-3 py-2 border-t border-white/[0.06] first:border-t-0">
-            <div class="w-28 shrink-0 flex items-center gap-2 text-xs uppercase tracking-wide text-gray-500 pt-1 self-start"><i data-lucide="${icon}" class="w-3.5 h-3.5"></i>${label}</div>
+        <div class="flex gap-3 py-2 border-t border-[#24283b] first:border-t-0">
+            <div class="w-28 shrink-0 flex items-center gap-2 text-xs text-gray-400 pt-1 self-start"><i data-lucide="${icon}" class="w-3.5 h-3.5"></i>${label}</div>
             <div class="flex flex-wrap gap-1.5 min-w-0">${items.slice(0, limit).map(render).join('')}
                 ${more > 0 ? `<span class="text-xs text-gray-500 self-center">+${more} more</span>` : ''}</div>
         </div>`;
@@ -189,7 +226,7 @@ function oiSummaryRow(icon, label, items, render, limit = 8) {
 
 function oiTag(entry) {
     const n = entry.sources.length;
-    return `<span class="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-white/[0.04] text-sm text-gray-200" title="${escapeAttr(entry.sources.join(', '))}">${escapeHtml(entry.value)}${n > 1 ? `<span class="text-[11px] text-gray-500">×${n}</span>` : ''}</span>`;
+    return `<span class="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-gray-800/40 text-sm text-gray-200" title="${escapeAttr(entry.sources.join(', '))}">${escapeHtml(entry.value)}${n > 1 ? `<span class="text-[11px] text-gray-500">×${n}</span>` : ''}</span>`;
 }
 
 function oiTimeline(cards) {
@@ -223,10 +260,10 @@ function oiTimeline(cards) {
             </div>`);
     }
     return `
-        <div class="pt-3 mt-1 border-t border-white/[0.06]">
-            <div class="flex items-center justify-between text-xs uppercase tracking-wide text-gray-500 mb-2">
+        <div class="pt-3 mt-1 border-t border-[#24283b]">
+            <div class="flex items-center justify-between text-xs text-gray-400 mb-2">
                 <span class="flex items-center gap-2"><i data-lucide="chart-column" class="w-3.5 h-3.5"></i>Timeline</span>
-                <span class="normal-case tracking-normal flex gap-3"><span class="flex items-center gap-1"><span class="w-2 h-2 rounded-sm bg-purple-400/80"></span>account created</span><span class="flex items-center gap-1"><span class="w-2 h-2 rounded-sm bg-red-400/70"></span>breach</span></span>
+                <span class="flex gap-3 text-gray-500"><span class="flex items-center gap-1"><span class="w-2 h-2 rounded-sm bg-purple-400/80"></span>account created</span><span class="flex items-center gap-1"><span class="w-2 h-2 rounded-sm bg-red-400/70"></span>breach</span></span>
             </div>
             <div class="flex items-end gap-1">${columns.join('')}</div>
         </div>`;
@@ -245,10 +282,11 @@ function oiSummaryHtml(cards) {
     const timeline = oiTimeline(cards);
     if (!photos.length && !rows && !timeline) return '';
     return `
-        <section class="rounded-xl border border-white/[0.07] bg-gradient-to-br from-purple-500/[0.07] via-transparent to-transparent p-4 mb-6">
+        <section class="username-category-section p-4 mb-4">
             ${photos.length ? `<div class="flex items-center gap-2 mb-3 overflow-x-auto pb-1">${photos.map(p => `
                 <a href="${escapeAttr(safeUrl(p.value))}" target="_blank" rel="noopener noreferrer" title="${escapeAttr(p.sources.join(', '))}" class="shrink-0">
-                    ${oiImage([p.value], p.sources[0], 'w-14 h-14 rounded-xl text-lg ring-1 ring-white/10 hover:ring-purple-400/60')}</a>`).join('')}
+                    <img src="${escapeAttr(safeUrl(p.value))}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.closest('a').remove()"
+                        class="w-14 h-14 rounded-lg object-cover border border-[#293142] hover:border-purple-400/70"></a>`).join('')}
             </div>` : ''}
             ${rows}
             ${timeline}
@@ -256,54 +294,68 @@ function oiSummaryHtml(cards) {
 }
 
 // ---------------------------------------------------------------------------
-// Sections
+// Groups and counts
 // ---------------------------------------------------------------------------
 
-const OI_SECTIONS = [
-    { kind: 'breach', title: 'Data breaches', icon: 'shield-alert', tone: 'text-red-300', body: 'rounded-xl border border-red-500/20 bg-red-500/[0.03] px-4 py-0.5', render: oiBreachRow },
-    { kind: 'profile', title: 'Accounts with profile data', icon: 'id-card', tone: 'text-gray-200', body: 'columns-1 md:columns-2 gap-3', render: oiProfileCard },
-    { kind: 'registered', title: 'Registered, no public details', icon: 'circle-check', tone: 'text-gray-300', body: 'flex flex-wrap gap-2', render: oiRegisteredChip },
+const OI_GROUPS = [
+    { kind: 'breach', title: 'Data breaches', tone: 'text-red-300' },
+    { kind: 'profile', title: 'Accounts with profile data', tone: 'text-white' },
+    { kind: 'registered', title: 'Registered, no public details', tone: 'text-white' },
 ];
 
-function oiSectionHtml(section, inner, count) {
+function oiStatsHtml({ accounts = 0, profile = 0, breach = 0, sites = '—' } = {}) {
+    const stat = (key, label, value) => `<div class="username-stat"><span>${label}</span><strong data-oi-stat="${key}">${escapeHtml(String(value))}</strong></div>`;
+    return `<div class="username-status-row">
+        ${stat('accounts', 'Accounts', accounts)}${stat('profile', 'With profile data', profile)}${stat('breach', 'Breaches', breach)}${stat('sites', 'Sites answered', sites)}
+    </div>`;
+}
+
+function oiGroupHtml(group, inner, count, attrs = '') {
     return `
-        <section data-oi-section="${section.kind}" class="mt-7 first:mt-0 ${count ? '' : 'hidden'}">
-            <h3 class="flex items-center gap-2 text-sm font-semibold ${section.tone} mb-3">
-                <i data-lucide="${section.icon}" class="w-4 h-4"></i>${section.title}
-                <span data-oi-count class="px-1.5 rounded-md bg-white/5 text-xs text-gray-400 font-normal tabular-nums">${count}</span>
-            </h3>
-            <div data-oi-body class="${section.body}">${inner}</div>
+        <section data-oi-group="${group.kind}" class="mt-6 first:mt-0 ${count ? '' : 'hidden'}">
+            <h2 class="flex items-center gap-2 text-sm font-semibold ${group.tone} mb-3">${group.title}
+                <span data-oi-count class="text-xs font-normal text-purple-300 tabular-nums">${count}</span></h2>
+            <div class="username-masonry" ${attrs}>${inner}</div>
         </section>`;
 }
 
-// Saved results: all cards at once
-function oiResultsHtml(cards) {
+// Saved results: all cards at once; masonryPackAll() lays out the columns after insertion
+function oiResultsHtml(cards, sitesAnswered) {
     const found = (cards || []).filter(c => c.registered !== false);
     if (!found.length) return '<p class="text-sm text-gray-400">No accounts found.</p>';
-    return oiSummaryHtml(found) + OI_SECTIONS.map(section => {
-        const items = found.filter(c => oiKind(c) === section.kind);
-        return items.length ? oiSectionHtml(section, items.map(section.render).join(''), items.length) : '';
-    }).join('');
+    const byKind = kind => found.filter(c => oiKind(c) === kind);
+    const profile = byKind('profile').length;
+    const breach = byKind('breach').length;
+    return oiStatsHtml({ accounts: found.length - breach, profile, breach, sites: sitesAnswered ?? '—' })
+        + oiSummaryHtml(found)
+        + OI_GROUPS.map(group => {
+            const items = byKind(group.kind);
+            return items.length ? oiGroupHtml(group, items.map(oiCardHtml).join(''), items.length, 'data-masonry-pack') : '';
+        }).join('');
 }
 
-// Live results: cards are appended as modules finish; text and category filters apply to all
+// Live results: cards are added as modules finish; text and category filters apply to all.
+// Filtered-out cards are kept aside and the columns re-packed, so no gaps are left behind.
 class OiResultsView {
     constructor(root) {
         this.root = root;
         this.cards = [];
+        this.items = [];
         this.category = '';
+        this.sites = '—';
         this.summaryQueued = false;
         root.innerHTML = `
+            ${oiStatsHtml()}
             <div data-oi-summary></div>
-            <div data-oi-filters class="hidden mb-6 space-y-3">
+            <div data-oi-filters class="hidden mb-5 space-y-3">
                 <div class="relative">
                     <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none"></i>
                     <input type="search" data-oi-filter placeholder="Filter by site, name, username, location…" class="field field-sm w-full !pl-9">
                 </div>
-                <div data-oi-categories class="flex flex-wrap gap-1.5"></div>
+                <div data-oi-categories class="flex flex-wrap gap-2"></div>
             </div>
             <p data-oi-empty class="hidden text-sm text-gray-400">No accounts match the filter.</p>
-            ${OI_SECTIONS.map(s => oiSectionHtml(s, '', 0)).join('')}`;
+            ${OI_GROUPS.map(g => oiGroupHtml(g, '', 0)).join('')}`;
         this.filterInput = root.querySelector('[data-oi-filter]');
         this.filterInput.addEventListener('input', () => this.applyFilter());
         root.querySelector('[data-oi-categories]').addEventListener('click', (event) => {
@@ -313,32 +365,41 @@ class OiResultsView {
             this.applyFilter();
             this.updateCategories();
         });
+        if (window.lucide) lucide.createIcons();
     }
 
-    section(kind) {
-        return this.root.querySelector(`[data-oi-section="${kind}"]`);
+    group(kind) {
+        return this.root.querySelector(`[data-oi-group="${kind}"]`);
+    }
+
+    grid(kind) {
+        return this.group(kind).querySelector('.username-masonry');
     }
 
     add(cards) {
+        const template = document.createElement('template');
         for (const card of cards || []) {
             if (card.registered === false) continue;
             const kind = oiKind(card);
-            const spec = OI_SECTIONS.find(s => s.kind === kind);
-            const section = this.section(kind);
-            const body = section.querySelector('[data-oi-body]');
-            body.insertAdjacentHTML('beforeend', spec.render(card));
-            const el = body.lastElementChild;
-            el.dataset.oiText = [card.module, card.slug, card.name, card.username, card.email, card.phone, card.location, card.bio, card.website,
-                ...(card.fields || []).map(f => f.value)].filter(v => v !== undefined && v !== null).join(' ').toLowerCase();
-            el.dataset.oiCategory = card.breach ? 'Data breaches' : (card.category || 'Other');
-            el.classList.toggle('hidden', !this.matches(el));
+            template.innerHTML = oiCardHtml(card).trim();
+            const el = template.content.firstElementChild;
+            this.items.push({ kind, el });
             this.cards.push(card);
+            if (this.matches(el)) {
+                // Columns are measured, so the group must be visible before the card goes in
+                this.group(kind).classList.remove('hidden');
+                masonryAppend(this.grid(kind), el);
+            }
         }
         this.updateCounts();
         this.updateCategories();
         this.root.querySelector('[data-oi-filters]').classList.toggle('hidden', this.cards.length < 6);
         this.queueSummary();
-        if (window.lucide) lucide.createIcons();
+    }
+
+    setSites(count) {
+        this.sites = count;
+        this.updateCounts();
     }
 
     // The summary is rebuilt from all cards, at most once per frame while results pour in
@@ -358,38 +419,47 @@ class OiResultsView {
     }
 
     applyFilter() {
-        this.root.querySelectorAll('[data-oi-text]').forEach(el => el.classList.toggle('hidden', !this.matches(el)));
+        for (const { kind } of OI_GROUPS) {
+            const shown = this.items.filter(item => item.kind === kind && this.matches(item.el)).map(item => item.el);
+            this.group(kind).classList.toggle('hidden', !shown.length);
+            masonryLayout(this.grid(kind), shown);
+        }
         this.updateCounts();
     }
 
     updateCounts() {
         let visible = 0;
-        for (const { kind } of OI_SECTIONS) {
-            const section = this.section(kind);
-            const items = section.querySelectorAll('[data-oi-text]');
-            const shown = [...items].filter(el => !el.classList.contains('hidden')).length;
+        for (const { kind } of OI_GROUPS) {
+            const total = this.items.filter(item => item.kind === kind).length;
+            const shown = this.grid(kind).querySelectorAll('.username-result-card').length;
             visible += shown;
-            section.querySelector('[data-oi-count]').textContent = shown === items.length ? items.length : `${shown} of ${items.length}`;
-            section.classList.toggle('hidden', !shown);
+            this.group(kind).querySelector('[data-oi-count]').textContent = shown === total ? total : `${shown} of ${total}`;
+            this.group(kind).classList.toggle('hidden', !shown);
         }
         this.root.querySelector('[data-oi-empty]').classList.toggle('hidden', !this.cards.length || visible > 0);
+        const { accounts, breaches } = this.counts();
+        const set = (key, value) => { this.root.querySelector(`[data-oi-stat="${key}"]`).textContent = value; };
+        set('accounts', accounts);
+        set('profile', this.items.filter(item => item.kind === 'profile').length);
+        set('breach', breaches);
+        set('sites', this.sites);
     }
 
     updateCategories() {
         const counts = new Map();
-        this.root.querySelectorAll('[data-oi-category]').forEach(el => counts.set(el.dataset.oiCategory, (counts.get(el.dataset.oiCategory) || 0) + 1));
-        const chip = (value, label, n) => {
+        this.items.forEach(({ el }) => counts.set(el.dataset.oiCategory, (counts.get(el.dataset.oiCategory) || 0) + 1));
+        const pill = (value, label, n) => {
             const active = this.category === value;
-            return `<button type="button" data-oi-cat="${escapeAttr(value)}" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs border transition-colors ${active
-                ? 'bg-purple-500/20 border-purple-400/50 text-white' : 'bg-white/[0.03] border-white/[0.08] text-gray-300 hover:border-white/20'}">${escapeHtml(label)}<span class="${active ? 'text-purple-200' : 'text-gray-500'} tabular-nums">${n}</span></button>`;
+            return `<button type="button" data-oi-cat="${escapeAttr(value)}" class="username-category-pill${active ? ' !border-purple-400/60 !bg-purple-500/15' : ''}">
+                <span>${escapeHtml(label)}</span><strong>${n}</strong></button>`;
         };
         const sorted = [...counts.entries()].sort((a, b) => (b[0] === 'Data breaches') - (a[0] === 'Data breaches') || b[1] - a[1]);
         this.root.querySelector('[data-oi-categories]').innerHTML =
-            chip('', 'All', this.cards.length) + sorted.map(([name, n]) => chip(name, name, n)).join('');
+            pill('', 'All', this.items.length) + sorted.map(([name, n]) => pill(name, name, n)).join('');
     }
 
     counts() {
-        const count = kind => this.section(kind).querySelectorAll('[data-oi-text]').length;
-        return { breaches: count('breach'), accounts: count('profile') + count('registered') };
+        const breaches = this.items.filter(item => item.kind === 'breach').length;
+        return { breaches, accounts: this.items.length - breaches };
     }
 }

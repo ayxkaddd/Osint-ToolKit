@@ -35,6 +35,7 @@ window.loadResultIntoView = function (data) {
         showPdf(data.url);
     } else if (data && Array.isArray(data.modules)) {
         state.view.add(data.modules);
+        if (data.modules_checked != null) state.view.setSites(data.modules_checked);
         const { accounts, breaches } = state.view.counts();
         setStatus('done', `Saved result${data.query ? ` for ${data.query}` : ''}: ${summaryText(accounts, breaches)}`);
         if (data.error) showError(data.error);
@@ -120,6 +121,7 @@ async function streamOi({ type, query, premium, premiumModulesOnly, sandbox }) {
         if (event.event === 'module') {
             modules += 1;
             state.view.add(event.cards);
+            state.view.setSites(modules);
             progress();
         } else if (event.event === 'error') {
             showError(event.detail || 'OSINT Industries request failed');
