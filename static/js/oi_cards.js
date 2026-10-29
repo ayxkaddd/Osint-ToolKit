@@ -34,6 +34,13 @@ function oiIconUrl(card) {
     return card.domain ? `/api/oi/icon/${encodeURIComponent(card.domain)}` : '';
 }
 
+// OSINT Industries' own module icon; modules named after a domain get its favicon instead
+function oiModuleIcons(card) {
+    const slug = String(card.slug || card.module || '').trim().toLowerCase();
+    if (slug.includes('.')) return [`/api/oi/icon/${encodeURIComponent(slug)}`, oiIconUrl(card)];
+    return [slug ? `https://cdn.osint.industries/modules/${encodeURIComponent(slug)}.png` : '', oiIconUrl(card)];
+}
+
 // Site icon like the username cards: the first image that loads, else two letters
 function oiSiteMark(urls, label) {
     const [src, next] = urls.map(u => safeUrl(u)).filter(Boolean);
@@ -132,7 +139,7 @@ function oiProfileCard(card) {
     const { html, hidden } = oiRows(rows);
     const picture = safeUrl(card.picture);
     return oiShell(card, oiKind(card), picture, `
-        ${oiHeader(card.module, card.category || 'account', [oiIconUrl(card)], picture)}
+        ${oiHeader(card.module, card.category || 'account', oiModuleIcons(card), picture)}
         ${card.username ? `
             <div class="username-handle-row">
                 <span title="@${escapeAttr(String(card.username))}">@${escapeHtml(String(card.username))}</span>
