@@ -1,5 +1,5 @@
 """Plugins (services/plugin_loader.py): list, run, review/enable, pages."""
-from typing import Literal, Optional
+from typing import Any, Dict, Literal, Optional
 
 from fastapi import APIRouter, Body, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
@@ -7,7 +7,9 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
 from plugins.sdk import PluginError
-from services import plugin_loader
+from services import plugin_builder, plugin_loader
+from services.entities import ENTITY_TYPES
+from services.plugin_builder import DraftError
 from services.plugin_loader import RunRefused
 from utils.investigation_decorator import save_investigation
 from utils.stream_reducers import reduce_plugin_stream
@@ -52,6 +54,118 @@ async def reload_plugins():
 async def client_script():
     return Response(plugin_loader.client_script(), media_type="text/javascript",
                     headers={"Cache-Control": "no-cache"})
+
+
+# ---------------------------------------------------------------------------
+# Builder (no-code plugins from the UI) - before the /{plugin_id}/... routes
+# ---------------------------------------------------------------------------
+
+class CurlRequest(BaseModel):
+    command: str
+    example: str = ""
+
+
+class DraftRequest(BaseModel):
+    id: str
+    manifest: Dict[str, Any]
+    value: str = ""
+    type: Optional[str] = None
+    settings: Dict[str, Optional[str]] = {}   # API keys typed in the builder (not saved by test)
+    detect: bool = False
+
+
+class PreviewRequest(BaseModel):
+    id: str
+    manifest: Dict[str, Any]
+    raw: Any = None
+    value: str = ""
+    type: str = ""
+
+
+class SaveRequest(BaseModel):
+    id: str
+    manifest: Optional[Dict[str, Any]] = None
+    yaml: Optional[str] = None
+    settings: Dict[str, Optional[str]] = {}
+    editing: bool = False
+
+
+def _draft_error(e: DraftError) -> HTTPException:
+    return HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/builder/curl")
+async def builder_curl(body: CurlRequest):
+    try:
+        return plugin_builder.parse_curl(body.command, body.example)
+    except DraftError as e:
+        raise _draft_error(e) from None
+
+
+@router.post("/builder/test")
+async def builder_test(body: DraftRequest):
+    """Send a draft plugin's request: the answer, its cards and a suggested mapping. Not saved."""
+    try:
+        return await plugin_builder.test_draft(body.id, body.manifest, body.value, body.type, body.settings, body.detect)
+    except DraftError as e:
+        raise _draft_error(e) from None
+
+
+@router.post("/builder/preview")
+async def builder_preview(body: PreviewRequest):
+    try:
+        return {"items": plugin_builder.preview(body.id, body.manifest, body.raw, body.value, body.type)}
+    except DraftError as e:
+        raise _draft_error(e) from None
+
+
+class DetectRequest(BaseModel):
+    raw: Any = None
+    format: Literal["json", "text"] = "json"
+
+
+@router.post("/builder/detect")
+async def builder_detect(body: DetectRequest):
+    """A results mapping for an answer already fetched (no request)."""
+    return {"suggestion": plugin_builder.suggest_mapping(body.raw, body.format)}
+
+
+@router.post("/builder/yaml")
+async def builder_yaml(body: PreviewRequest):
+    """plugin.yaml for the form's manifest, and whether it is valid."""
+    error = None
+    try:
+        plugin_builder.draft_plugin(body.id, body.manifest)
+    except DraftError as e:
+        error = str(e)
+    return {"yaml": plugin_builder.to_yaml(body.manifest), "error": error}
+
+
+@router.post("/builder/save")
+async def builder_save(body: SaveRequest):
+    try:
+        plugin = plugin_builder.save_draft(body.id, body.manifest, body.yaml, body.settings, body.editing)
+    except DraftError as e:
+        raise _draft_error(e) from None
+    return plugin.public()
+
+
+@router.get("/{plugin_id}/manifest")
+async def plugin_manifest(plugin_id: str):
+    """plugin.yaml of a plugin, for editing or duplicating it in the builder."""
+    try:
+        return plugin_builder.load_for_builder(_plugin(plugin_id))
+    except DraftError as e:
+        raise _draft_error(e) from None
+
+
+@router.delete("/{plugin_id}")
+async def delete_plugin(plugin_id: str):
+    try:
+        plugin_builder.delete_plugin(_plugin(plugin_id))
+    except DraftError as e:
+        raise _draft_error(e) from None
+    return {"deleted": plugin_id}
 
 
 @router.post("/{plugin_id}/run")
@@ -114,6 +228,12 @@ async def plugin_icon(plugin_id: str):
 @page_router.get("/plugins")
 def plugins_page(request: Request):
     return templates.TemplateResponse(request=request, name="plugins.html")
+
+
+@page_router.get("/plugins/builder")
+def plugin_builder_page(request: Request):
+    return templates.TemplateResponse(request=request, name="plugin_builder.html",
+                                      context={"entity_types": ENTITY_TYPES})
 
 
 @page_router.get("/plugins/{plugin_id}")

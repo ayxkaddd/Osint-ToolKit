@@ -8,10 +8,14 @@
         <div>
             <h1 class="page-title">Plugins</h1>
             <p class="page-lead">Your own modules: each folder in <code class="text-purple-300">plugins/</code> is one.
-                Create one with <code class="text-purple-300">python -m plugins new &lt;name&gt;</code>; the format is in
-                <code class="text-purple-300">plugins/README.md</code>. Changes are picked up automatically.</p>
+                Build a no-code one with <strong class="text-gray-200">New plugin</strong>, or write one by hand
+                (<code class="text-purple-300">python -m plugins new &lt;name&gt;</code>, format in <code class="text-purple-300">plugins/README.md</code>).
+                Changes are picked up automatically.</p>
         </div>
-        <button type="button" id="reloadPlugins" class="btn-secondary shrink-0"><i class="fas fa-sync-alt mr-2"></i>Reload</button>
+        <div class="flex gap-2 shrink-0">
+            <button type="button" id="reloadPlugins" class="btn-secondary"><i class="fas fa-sync-alt mr-2"></i>Reload</button>
+            <a href="/plugins/builder" class="btn-primary !py-2 !px-4"><i class="fas fa-plus mr-1"></i>New plugin</a>
+        </div>
     </div>
     <div id="pluginsList" class="space-y-4">
         <p class="text-gray-400"><i class="fas fa-spinner fa-spin mr-2"></i>Loading…</p>
@@ -93,6 +97,9 @@
                     <div class="flex flex-wrap gap-2 shrink-0">
                         ${p.enabled ? `<a href="${escapeAttr(p.page)}" class="btn-secondary !py-1.5 !px-3 text-sm">Open</a>` : ''}
                         ${p.settings.some(s => s.own) ? '<a href="/settings" class="btn-secondary !py-1.5 !px-3 text-sm">Settings</a>' : ''}
+                        ${p.editable ? `<a href="/plugins/builder?edit=${encodeURIComponent(p.id)}" class="btn-secondary !py-1.5 !px-3 text-sm">Edit</a>`
+                            : (p.kind === 'yaml' && !p.error ? `<a href="/plugins/builder?from=${encodeURIComponent(p.id)}" class="btn-secondary !py-1.5 !px-3 text-sm" title="A new plugin of yours, starting from this one">Duplicate</a>` : '')}
+                        ${p.editable ? `<button type="button" data-delete="${escapeAttr(p.id)}" class="btn-secondary !py-1.5 !px-3 text-sm hover:!bg-red-900/60" title="Delete the plugin's folder">Delete</button>` : ''}
                         ${canReview ? `<button type="button" data-review="${escapeAttr(p.id)}" class="btn-primary !py-1.5 !px-3 text-sm">Review &amp; enable</button>`
                             : (!p.error ? `<button type="button" data-files="${escapeAttr(p.id)}" class="btn-secondary !py-1.5 !px-3 text-sm">Files</button>` : '')}
                         ${['approved', 'local'].includes(p.source) ? `<button type="button" data-untrust="${escapeAttr(p.id)}" class="btn-secondary !py-1.5 !px-3 text-sm" title="Treat it as a plugin from another source again">Revoke</button>` : ''}
@@ -111,7 +118,7 @@
 
     function render() {
         if (!plugins.length) {
-            list.innerHTML = `<div class="card text-gray-400">No plugins yet. Run <code class="text-purple-300">python -m plugins new my_plugin</code> in the toolkit's folder to create one.</div>`;
+            list.innerHTML = `<div class="card text-gray-400">No plugins yet. <a href="/plugins/builder" class="text-purple-300 hover:text-white">Build one</a>, or run <code class="text-purple-300">python -m plugins new my_plugin</code> in the toolkit's folder.</div>`;
             return;
         }
         list.innerHTML = plugins.map(card).join('');
@@ -164,11 +171,27 @@
         load();
     }
 
+    async function deletePlugin(id) {
+        const plugin = plugins.find(p => p.id === id);
+        if (!confirm(`Delete ${plugin ? plugin.name : id}? Its folder (plugins/${id}) is removed. Results it saved stay in your investigations.`)) return;
+        const response = await fetch(`/api/plugins/${encodeURIComponent(id)}`, { method: 'DELETE' });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            showTemporaryNotification(data.detail || 'Failed', 'error');
+            return;
+        }
+        showTemporaryNotification(`${plugin ? plugin.name : id} deleted`, 'success');
+        getModules(true);
+        load();
+    }
+
     list.addEventListener('click', (event) => {
         const review = event.target.closest('[data-review]');
         if (review) return openFiles(review.dataset.review, true);
         const files = event.target.closest('[data-files]');
         if (files) return openFiles(files.dataset.files, false);
+        const del = event.target.closest('[data-delete]');
+        if (del) return deletePlugin(del.dataset.delete);
         const untrust = event.target.closest('[data-untrust]');
         if (untrust && confirm('Revoke? A plugin from another source with code stays off until you review it again.')) setTrust(untrust.dataset.untrust, null);
     });

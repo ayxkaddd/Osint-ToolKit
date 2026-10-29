@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+
+{% block title %}Plugin builder - OSINT Toolkit{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-6 py-8 max-w-7xl">
+    <div class="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+            <h1 class="page-title" id="builderTitle">New plugin</h1>
+            <p class="page-lead">Add an API without code: describe one request, try it, and pick what to show from the answer.
+                <a href="/plugins" class="text-purple-300 hover:text-white">All plugins</a></p>
+        </div>
+    </div>
+
+    <div id="builderGrid" class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] items-start">
+        <!-- Form -->
+        <div class="space-y-5 min-w-0">
+            <section class="card" id="importCard">
+                <h2 class="card-title"><i class="fas fa-terminal"></i>Start from a curl command <span class="text-xs font-normal text-gray-500">(optional)</span></h2>
+                <p class="text-sm text-gray-400 mb-3">Paste an example request from the API's docs, or from your browser
+                    (developer tools → Network → right-click a request → Copy as cURL). The API key and the looked-up value are found for you.</p>
+                <textarea id="curlInput" rows="3" class="field field-sm font-mono" placeholder="curl 'https://api.example.com/v1/lookup?email=someone@example.com' -H 'Authorization: Bearer sk_...'"></textarea>
+                <div class="flex flex-wrap gap-3 mt-3">
+                    <input id="curlExample" class="field field-sm flex-1 min-w-[12rem]" autocomplete="off"
+                        placeholder="Value looked up in it (if not an email, phone, domain or IP)">
+                    <button type="button" id="curlImport" class="btn-secondary">Import</button>
+                </div>
+                <div id="curlNotes" class="text-sm mt-3 space-y-1"></div>
+            </section>
+
+            <section class="card space-y-4">
+                <h2 class="card-title !mb-0"><i class="fas fa-puzzle-piece"></i>About</h2>
+                <div class="grid sm:grid-cols-2 gap-3">
+                    <label class="block"><span class="b-label">Name</span>
+                        <input id="fName" class="field field-sm" placeholder="Hunter.io email verifier" autocomplete="off"></label>
+                    <label class="block"><span class="b-label">Id <span class="text-gray-500">(folder name)</span></span>
+                        <input id="fId" class="field field-sm font-mono" placeholder="hunter_io" autocomplete="off"></label>
+                </div>
+                <label class="block"><span class="b-label">Description</span>
+                    <input id="fDescription" class="field field-sm" placeholder="What it finds, in one sentence" autocomplete="off"></label>
+                <div><span class="b-label">Looks up</span>
+                    <div id="fAccepts" class="flex flex-wrap gap-2">
+                        {% for type, label in entity_types.items() %}
+                        <button type="button" data-accept="{{ type }}" class="b-chip">{{ label }}</button>
+                        {% endfor %}
+                    </div>
+                </div>
+                <div class="grid sm:grid-cols-3 gap-3">
+                    <label class="block"><span class="b-label">Icon <a href="https://lucide.dev/icons" target="_blank" rel="noopener" class="text-purple-300">(lucide)</a></span>
+                        <span class="flex items-center gap-2"><i id="fIconPreview" data-lucide="puzzle" class="w-5 h-5 text-purple-300 shrink-0"></i>
+                        <input id="fIcon" class="field field-sm" placeholder="puzzle" autocomplete="off"></span></label>
+                    <label class="block"><span class="b-label">Site <span class="text-gray-500">(card icon)</span></span>
+                        <input id="fSite" class="field field-sm" placeholder="hunter.io" autocomplete="off"></label>
+                    <label class="block"><span class="b-label">Cost</span>
+                        <span class="flex gap-2 items-center"><select id="fCost" class="field field-sm !w-24"><option value="free">Free</option><option value="paid">Paid</option></select>
+                        <input id="fCostNote" class="field field-sm" placeholder="1 credit" autocomplete="off"></span></label>
+                </div>
+            </section>
+
+            <section class="card space-y-4">
+                <h2 class="card-title !mb-0"><i class="fas fa-paper-plane"></i>Request</h2>
+                <div class="flex gap-2">
+                    <select id="fMethod" class="field field-sm !w-24 font-mono"><option>GET</option><option>POST</option></select>
+                    <input id="fUrl" data-template class="field field-sm font-mono flex-1" placeholder="https://api.example.com/v1/users/{value}" autocomplete="off">
+                </div>
+                <div class="flex flex-wrap items-center gap-2 text-xs text-gray-400">Insert:
+                    <button type="button" data-insert="{value}" class="b-token">{value}</button>
+                    <button type="button" data-insert="{value|lower}" class="b-token">{value|lower}</button>
+                    <button type="button" data-insert="{key:API_KEY}" class="b-token" id="insertKey">API key</button>
+                    <span class="text-gray-500">into the field you were typing in</span>
+                </div>
+                <div>
+                    <div class="flex items-center justify-between"><span class="b-label">Query parameters</span>
+                        <button type="button" class="b-add" data-add-row="query"><i class="fas fa-plus mr-1"></i>Add</button></div>
+                    <div id="fQuery" class="space-y-2"></div>
+                </div>
+                <div>
+                    <div class="flex items-center justify-between"><span class="b-label">Headers</span>
+                        <button type="button" class="b-add" data-add-row="headers"><i class="fas fa-plus mr-1"></i>Add</button></div>
+                    <div id="fHeaders" class="space-y-2"></div>
+                </div>
+                <label id="fBodyBox" class="block hidden"><span class="b-label">JSON body</span>
+                    <textarea id="fBody" data-template rows="3" class="field field-sm font-mono" placeholder='{"query": "{value}"}'></textarea></label>
+                <div class="rounded-lg border border-gray-800 p-3 space-y-3">
+                    <label class="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" id="fNeedsKey" class="rounded bg-gray-800 border-gray-600">
+                        Needs an API key <span class="text-gray-500 font-mono text-xs" id="fKeyName"></span></label>
+                    <div id="fKeyBox" class="hidden grid sm:grid-cols-[minmax(0,1fr)_auto] gap-3 items-center">
+                        <input id="fKeyValue" type="password" class="field field-sm font-mono" placeholder="Paste the key (saved in Settings)"
+                            autocomplete="new-password" data-lpignore="true" data-1p-ignore data-bwignore data-form-type="other">
+                        <label class="flex items-center gap-2 text-sm text-gray-300 cursor-pointer"><input type="checkbox" id="fKeyOptional" class="rounded bg-gray-800 border-gray-600">Optional</label>
+                        <p class="text-xs text-gray-500 sm:col-span-2">Use the API key button above to put it where the API expects it (a header like
+                            <code>Authorization: Bearer …</code> or a parameter). Entries using an optional key are left out while it isn't set.</p>
+                    </div>
+                </div>
+                <label class="block"><span class="b-label">"Nothing found" status codes</span>
+                    <input id="fEmpty" class="field field-sm font-mono !w-40" value="404" autocomplete="off"></label>
+            </section>
+
+            <section class="card space-y-4">
+                <div class="flex items-center justify-between gap-3 flex-wrap">
+                    <h2 class="card-title !mb-0"><i class="fas fa-th-large"></i>Results</h2>
+                    <button type="button" id="redetect" class="btn-secondary !py-1 !px-3 text-xs" disabled title="Try it first"><i class="fas fa-magic mr-1"></i>Detect from the answer</button>
+                </div>
+                <p class="text-sm text-gray-400">Paths point into the answer (<code>owner.login</code>, <code>emails[0]</code>, <code>sources[].url</code>), or use
+                    a template like <code>{first} {last}</code>. Easiest: try it, then click values in the answer.</p>
+                <label class="block"><span class="b-label">Results list <span class="text-gray-500">(one card per element)</span></span>
+                    <select id="fItems" class="field field-sm font-mono"><option value="">The whole answer is one result</option></select></label>
+                <div class="grid sm:grid-cols-2 gap-3">
+                    <label class="block"><span class="b-label">Title</span><input id="fTitle" data-path class="field field-sm font-mono" list="pathList" autocomplete="off"></label>
+                    <label class="block"><span class="b-label">Subtitle</span><input id="fSubtitle" data-path class="field field-sm font-mono" list="pathList" autocomplete="off"></label>
+                    <label class="block"><span class="b-label">Link</span><input id="fLink" data-path class="field field-sm font-mono" list="pathList" autocomplete="off"></label>
+                    <label class="block"><span class="b-label">Picture</span><input id="fImage" data-path class="field field-sm font-mono" list="pathList" autocomplete="off"></label>
+                </div>
+                <div>
+                    <div class="flex items-center justify-between"><span class="b-label">Rows on the card</span>
+                        <button type="button" class="b-add" data-add-row="fields"><i class="fas fa-plus mr-1"></i>Add</button></div>
+                    <div id="fFields" class="space-y-2"></div>
+                </div>
+                <div>
+                    <div class="flex items-center justify-between"><span class="b-label">Identifiers to pivot on</span>
+                        <button type="button" class="b-add" data-add-row="entities"><i class="fas fa-plus mr-1"></i>Add</button></div>
+                    <div id="fEntities" class="space-y-2"></div>
+                </div>
+                <datalist id="pathList"></datalist>
+            </section>
+
+            <section class="card space-y-3">
+                <div class="flex items-center justify-between gap-3 flex-wrap">
+                    <h2 class="card-title !mb-0"><i class="fas fa-file-code"></i>plugin.yaml</h2>
+                    <label class="flex items-center gap-2 text-sm text-gray-300 cursor-pointer"><input type="checkbox" id="yamlEdit" class="rounded bg-gray-800 border-gray-600">Edit the YAML directly</label>
+                </div>
+                <p id="yamlNote" class="hidden text-sm text-amber-300/90">Saving uses the YAML below; the form above is ignored. Untick to go back to the form (your YAML edits are dropped).</p>
+                <textarea id="yamlText" rows="14" readonly spellcheck="false" class="field field-sm font-mono text-xs !leading-5"></textarea>
+                <p id="yamlError" class="hidden text-sm text-red-300"></p>
+                <div class="flex flex-wrap items-center justify-end gap-3 pt-1">
+                    <span id="saveNote" class="text-sm text-gray-400 mr-auto"></span>
+                    <a href="/plugins" class="btn-secondary">Cancel</a>
+                    <button type="button" id="saveBtn" class="btn-primary !py-2">Save plugin</button>
+                </div>
+            </section>
+        </div>
+
+        <!-- Try it -->
+        <div class="lg:sticky lg:top-24 space-y-4 min-w-0">
+            <section class="card">
+                <h2 class="card-title"><i class="fas fa-play"></i>Try it</h2>
+                <div class="flex gap-2">
+                    <select id="tryType" class="field field-sm !w-auto"></select>
+                    <input id="tryValue" class="field field-sm flex-1" placeholder="A value that exists, e.g. torvalds" autocomplete="off">
+                    <button type="button" id="tryBtn" class="btn-primary !py-2 !px-4">Send</button>
+                </div>
+                <p class="text-xs text-gray-500 mt-2">Sends the request for real (paid APIs use a credit). Nothing is saved.</p>
+                <div id="tryStatus" class="text-sm mt-3"></div>
+            </section>
+            <section id="previewCard" class="card hidden">
+                <h2 class="card-title"><i class="fas fa-eye"></i>Preview <span id="previewCount" class="text-xs font-normal text-gray-500"></span></h2>
+                <div id="previewError" class="hidden text-sm text-red-300 mb-3"></div>
+                <div id="previewCards" class="max-h-[34rem] overflow-y-auto pr-1"></div>
+            </section>
+            <section id="rawCard" class="card hidden">
+                <h2 class="card-title"><i class="fas fa-code"></i>Answer <span class="text-xs font-normal text-gray-500">click a value to show it on the cards</span></h2>
+                <div id="rawTree" class="b-tree max-h-[30rem] overflow-auto text-xs font-mono"></div>
+            </section>
+        </div>
+    </div>
+</div>
+
+<div id="pathMenu" class="hidden fixed z-50 w-60 bg-gray-900 border border-gray-700 rounded-lg shadow-xl py-1 text-sm"></div>
+{% endblock %}
+
+{% block scripts %}
+<script>window.builderTypes = {{ entity_types | tojson }};</script>
+<script src="/static/js/services/plugin_builder.js"></script>
+{% endblock %}

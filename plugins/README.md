@@ -11,7 +11,13 @@ Each folder in `plugins/` is one plugin; the folder name is its id. There are tw
 - **Python** - `plugin.yaml` + `plugin.py`. For anything else: several requests,
   paging, hashing, a CLI tool, streaming results.
 
-Create one from the toolkit's folder:
+**No-code plugins can be built in the app**: Plugins page (puzzle icon) → **New plugin**.
+Paste a curl command from the API's docs (the API key and the looked-up value are found
+for you), press **Send** to try it, and the results mapping is filled in from the answer;
+click values in the answer to show them on the cards. It writes the `plugin.yaml`
+described below, and can edit or duplicate no-code plugins later.
+
+Or create one from the toolkit's folder:
 
 ```sh
 python -m plugins new hunter_io                       # no-code, looks up emails

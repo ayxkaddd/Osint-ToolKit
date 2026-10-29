@@ -66,7 +66,7 @@ EMAIL_INPUT_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 RESERVED_IDS = {m.id for m in MODULES} | {m.service for m in MODULES} | {
     "ns", "whois", "dns_recon", "username", "hlr", "gitfive", "vk_profile", "oi", "cavalier", "ghunt",
     "web_search", "data_search", "face_search", "sharetrace", "funstat", "ip", "phone",
-    "sdk", "new", "reload", "client",
+    "sdk", "new", "reload", "client", "builder",
 }
 
 FILTERS: Dict[str, Callable[[str], str]] = {
@@ -280,6 +280,12 @@ class Plugin:
     run: Optional[Callable] = None
     has_renderer: bool = False
     icon_file: Optional[Path] = None
+    settings_override: Optional[Dict[str, Optional[str]]] = None   # plugin builder drafts
+
+    def setting(self, key: str) -> Optional[str]:
+        if self.settings_override is not None and self.settings_override.get(key):
+            return self.settings_override[key]
+        return get_setting(key)
 
     @property
     def name(self) -> str:
@@ -295,6 +301,11 @@ class Plugin:
         if not any(isinstance(f, _RedactFilter) for f in log.filters):
             log.addFilter(_RedactFilter(self.id))
         return log
+
+    @property
+    def editable(self) -> bool:
+        """The plugin builder edits (and deletes) no-code plugins you made."""
+        return self.kind == "yaml" and self.source == "local" and not self.has_renderer
 
     @property
     def icon_url(self) -> str:
@@ -316,18 +327,18 @@ class Plugin:
         return [k for k in (self.manifest.settings if self.manifest else {}) if not k.startswith(prefix)]
 
     def settings_values(self) -> Dict[str, Optional[str]]:
-        return {k: get_setting(k) for k in (self.manifest.settings if self.manifest else {})}
+        return {k: self.setting(k) for k in (self.manifest.settings if self.manifest else {})}
 
     def secret_values(self) -> List[str]:
         if not self.manifest:
             return []
-        values = [get_setting(k) for k, s in self.manifest.settings.items() if s.secret]
+        values = [self.setting(k) for k, s in self.manifest.settings.items() if s.secret]
         return [v for v in values if v and len(v) >= 4]
 
     def missing_settings(self) -> List[str]:
         if not self.manifest:
             return []
-        return [k for k, s in self.manifest.settings.items() if s.required and not get_setting(k)]
+        return [k for k, s in self.manifest.settings.items() if s.required and not self.setting(k)]
 
     def blocked(self) -> Optional[str]:
         """Why the plugin can't run until it is reviewed (None if it can)."""
@@ -383,6 +394,7 @@ class Plugin:
             "page": f"/plugins/{self.id}",
             "folder": str(self.path),
             "has_renderer": self.has_renderer,
+            "editable": self.editable,
             "missing_settings": self.missing_settings(),
             "settings": [{
                 "key": k, "label": s.label or k, "secret": s.secret, "required": s.required, "help": s.help,
@@ -918,8 +930,8 @@ def _client(plugin: Plugin, timeout: float) -> httpx.AsyncClient:
                              headers={"User-Agent": USER_AGENT}, event_hooks=hooks)
 
 
-async def _run_yaml(run: PreparedRun) -> None:
-    plugin, value, kind = run.plugin, run.value, run.type
+async def send_request(plugin: Plugin, value: str, kind: str) -> httpx.Response:
+    """Render and send a no-code plugin's request (also used by the plugin builder)."""
     assert plugin.manifest is not None
     spec = plugin.manifest.request_by_type.get(kind) or plugin.manifest.request
     assert spec is not None
@@ -967,26 +979,39 @@ async def _run_yaml(run: PreparedRun) -> None:
         kwargs["data"] = render_map(spec.form)
     try:
         async with _client(plugin, spec.timeout) as client:
-            response = await client.request(spec.method, url, **kwargs)
+            return await client.request(spec.method, url, **kwargs)
     except httpx.TimeoutException:
         raise PluginError(f"{host} did not answer within {spec.timeout:g} s") from None
     except httpx.HTTPError as e:
         raise PluginError(f"Request to {host} failed: {e.__class__.__name__}: {e}") from e
+
+
+def parse_response(response: httpx.Response, format: str) -> Any:
+    """JSON answer, or {text, lines} for format: text. Raises ValueError for bad JSON."""
+    if format == "json":
+        return response.json()
+    text = response.text
+    return {"text": text, "lines": [line.strip() for line in text.splitlines() if line.strip()]}
+
+
+async def _run_yaml(run: PreparedRun) -> None:
+    plugin = run.plugin
+    assert plugin.manifest is not None
+    spec = plugin.manifest.request_by_type.get(run.type) or plugin.manifest.request
+    assert spec is not None
+    response = await send_request(plugin, run.value, run.type)
+    host = response.request.url.host
     if response.status_code in spec.empty_status:
         run.note = "Nothing found"
         return
     if response.status_code >= 400:
         raise PluginError(f"{host} answered HTTP {response.status_code}: {_snippet(response.text)}")
-    if plugin.manifest.response.format == "json":
-        try:
-            data = response.json()
-        except ValueError:
-            raise PluginError(f"{host} did not answer with JSON: {_snippet(response.text)}") from None
-    else:
-        text = response.text
-        data = {"text": text, "lines": [line.strip() for line in text.splitlines() if line.strip()]}
+    try:
+        data = parse_response(response, plugin.manifest.response.format)
+    except ValueError:
+        raise PluginError(f"{host} did not answer with JSON: {_snippet(response.text)}") from None
     run.raw = data
-    run.items = build_items(plugin, data, value, kind)
+    run.items = build_items(plugin, data, run.value, run.type)
 
 
 def _plugin_failure(plugin: Plugin, e: BaseException) -> PluginError:
