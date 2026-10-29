@@ -97,6 +97,7 @@
                     <div class="flex flex-wrap gap-2 shrink-0">
                         ${p.enabled ? `<a href="${escapeAttr(p.page)}" class="btn-secondary !py-1.5 !px-3 text-sm">Open</a>` : ''}
                         ${p.settings.some(s => s.own) ? '<a href="/settings" class="btn-secondary !py-1.5 !px-3 text-sm">Settings</a>' : ''}
+                        ${p.editable ? `<a href="/plugins/builder?edit=${encodeURIComponent(p.id)}&add=1" class="btn-secondary !py-1.5 !px-3 text-sm" title="Another endpoint of the same API, in this plugin"><i class="fas fa-plus mr-1"></i>Lookup</a>` : ''}
                         ${p.editable ? `<a href="/plugins/builder?edit=${encodeURIComponent(p.id)}" class="btn-secondary !py-1.5 !px-3 text-sm">Edit</a>`
                             : (p.kind === 'yaml' && !p.error ? `<a href="/plugins/builder?from=${encodeURIComponent(p.id)}" class="btn-secondary !py-1.5 !px-3 text-sm" title="A new plugin of yours, starting from this one">Duplicate</a>` : '')}
                         ${p.editable ? `<button type="button" data-delete="${escapeAttr(p.id)}" class="btn-secondary !py-1.5 !px-3 text-sm hover:!bg-red-900/60" title="Delete the plugin's folder">Delete</button>` : ''}

@@ -95,6 +95,7 @@
             fields: rows('fields'),
             entities: rows('entities'),
             format: state.format,
+            auto: $('fAuto').checked,
             raw: state.raw,
             detected: state.detected,
             tryValue: val('tryValue'),
@@ -123,6 +124,8 @@
         (l.fields || []).forEach(([a, b]) => addRow('fields', a, b));
         clearRows('entities');
         (l.entities || []).forEach(([a, b]) => addRow('entities', a, b));
+        $('fAuto').checked = l.auto !== false;   // new lookups detect automatically
+        showAutoState();
         state.format = l.format || 'json';
         state.raw = l.raw === undefined ? null : l.raw;
         state.detected = !!l.detected;
@@ -135,6 +138,15 @@
             $('previewCard').classList.add('hidden');
             $('redetect').disabled = true;
         }
+    }
+
+    // Automatic: the inputs are optional overrides
+    function showAutoState() {
+        const auto = $('fAuto').checked;
+        for (const id of ['fTitle', 'fSubtitle', 'fLink', 'fImage']) $(id).placeholder = auto ? 'automatic' : '';
+        $('fItems').options[0].textContent = auto ? 'Automatic (or: the whole answer is one result)' : 'The whole answer is one result';
+        $('redetect').innerHTML = auto ? '<i class="fas fa-magic mr-1"></i>Fill in from the answer'
+            : '<i class="fas fa-magic mr-1"></i>Detect from the answer';
     }
 
     function nameFromUrl(url) {
@@ -201,6 +213,7 @@
 
         const response = { ...((l.base && l.base.response) || {}) };
         response.format = l.format || response.format || 'json';
+        if (l.auto) response.auto = true; else delete response.auto;
         if (l.items) response.items = l.items; else delete response.items;
         for (const [key, value] of [['title', l.title], ['subtitle', l.subtitle], ['url', l.link], ['image', l.image]]) {
             if (value) response[key] = value; else delete response[key];
@@ -327,6 +340,7 @@
             fields: Object.entries((res || {}).fields || {}),
             entities: Object.entries((res || {}).entities || {}).flatMap(([t, p]) => [].concat(p).map(path => [t, path])),
             format: (res || {}).format || 'json',
+            auto: !!(res || {}).auto,
             raw: null,
             detected: true,   // keep the mapping it comes with
         });
@@ -613,7 +627,7 @@
         try {
             const data = await post('/api/plugins/builder/test', {
                 id: pluginId(), manifest: buildActiveManifest(), value: state.tryValue, type: state.tryType,
-                settings: { [keyName()]: val('fKeyValue') }, detect: detect ?? !state.detected,
+                settings: { [keyName()]: val('fKeyValue') }, detect: detect ?? (!state.detected && !$('fAuto').checked),
             });
             state.raw = data.raw;
             state.format = data.format;
@@ -646,6 +660,8 @@
         try {
             const data = await post('/api/plugins/builder/detect', { raw: state.raw, format: state.format });
             applyMapping(data.suggestion);
+            $('fAuto').checked = false;   // the detected mapping is now in the form, to adjust
+            showAutoState();
             showAnswer();
             changed();
         } catch (e) {
@@ -735,6 +751,12 @@
     $('tryValue').addEventListener('keydown', (event) => { if (event.key === 'Enter') tryIt(); });
     $('redetect').addEventListener('click', redetect);
     $('addLookup').addEventListener('click', addLookup);
+    $('fAuto').addEventListener('change', () => {
+        showAutoState();
+        // switching to setting it yourself: start from what is detected in the answer
+        const empty = !val('fTitle') && !rows('fields').length;
+        if (!$('fAuto').checked && state.raw !== null && empty) redetect();
+    });
     $('removeLookup').addEventListener('click', removeLookup);
     $('lookupTabs').addEventListener('click', (event) => {
         const tab = event.target.closest('[data-lookup]');
@@ -769,6 +791,7 @@
                     $('fId').readOnly = true;
                     $('builderTitle').textContent = `Edit ${data.manifest.name || editId}`;
                     $('importCard').classList.add('hidden');
+                    if (params.get('add')) addLookup();
                     const key = [...state.managedKeys][0];
                     if (key && data.settings[key] && data.settings[key].configured) {
                         $('fKeyValue').placeholder = 'Saved - leave empty to keep it';
@@ -789,6 +812,7 @@
             addRow('query');
         }
         renderTabs();
+        showAutoState();
         state.dirty = false;
         refreshUi();
     }

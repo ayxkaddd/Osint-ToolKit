@@ -191,6 +191,18 @@ element becomes a row. With `format: text`, the answer is `{text, lines}`: use
 
 Without `items:`, the root is one card (or one card per element if it is a list).
 
+**`auto: true`** works the cards out from every answer as it comes: the results list,
+title, link, picture, rows and identifiers are detected each time, so an API that answers
+in different shapes (a profile, a search list, an empty object) still gives cards. What
+the response sets is used instead - `title:`, `url:`... - and its `fields:`/`entities:`
+are added to the detected ones. The builder turns this on for new lookups.
+
+```yaml
+response:
+  auto: true
+  subtitle: "{location}"     # pinned; everything else is detected
+```
+
 ## Python plugins
 
 `plugin.yaml` describes the plugin (everything above except `request:`/`response:`);

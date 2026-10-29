@@ -131,6 +131,9 @@ class ResponseSpec(BaseModel):
     category: str = ""
     fields: Optional[Dict[str, str]] = None
     entities: Dict[str, Union[str, List[str]]] = {}
+    # Work the cards out from every answer (APIs whose answers change shape). What is
+    # set above still wins: title, link...; fields and entities are added to the detected ones.
+    auto: bool = False
 
     @field_validator("entities")
     @classmethod
@@ -757,11 +760,35 @@ def _auto_fields(row: Any) -> List[Tuple[str, Any]]:
     return rows[:40]
 
 
+def _auto_spec(spec: ResponseSpec, data: Any) -> ResponseSpec:
+    """response: auto - the mapping detected for this answer, with what the manifest sets on top."""
+    from services.plugin_builder import suggest_mapping
+    detected = suggest_mapping(get_path(data, spec.root) if spec.root else data, spec.format)
+    merged = spec.model_dump()
+    merged["auto"] = False
+    if spec.items is None and detected.get("items"):
+        merged["items"] = detected["items"]
+    for key in ("title", "subtitle", "url", "image"):
+        if not merged[key] and detected.get(key):
+            merged[key] = detected[key]
+    merged["fields"] = {**(detected.get("fields") or {}), **(spec.fields or {})}
+    entities: Dict[str, List[str]] = {}
+    for source in (detected.get("entities") or {}, spec.entities):
+        for etype, paths in source.items():
+            for path in paths if isinstance(paths, list) else [paths]:
+                if path not in entities.setdefault(etype, []):
+                    entities[etype].append(path)
+    merged["entities"] = entities
+    return ResponseSpec.model_validate(merged)
+
+
 def build_items(plugin: Plugin, data: Any, value: str, kind: str,
                 spec: Optional[ResponseSpec] = None) -> List[Dict[str, Any]]:
     """Cards from an API answer, as described by a response: section."""
     assert plugin.manifest is not None
     spec = spec or plugin.manifest.response
+    if spec.auto:
+        spec = _auto_spec(spec, data)
     root = get_path(data, spec.root) if spec.root else data
     rows = get_path(root, spec.items) if spec.items not in (None, "", ".") else root
     if rows in (None, "", {}, []):

@@ -116,6 +116,13 @@
                     <h2 class="card-title !mb-0"><i class="fas fa-th-large"></i>Results</h2>
                     <button type="button" id="redetect" class="btn-secondary !py-1 !px-3 text-xs" disabled title="Try it first"><i class="fas fa-magic mr-1"></i>Detect from the answer</button>
                 </div>
+                <label class="flex items-start gap-3 rounded-lg border border-purple-500/30 bg-purple-500/5 p-3 cursor-pointer">
+                    <input type="checkbox" id="fAuto" checked class="mt-1 rounded bg-gray-800 border-gray-600">
+                    <span class="text-sm"><span class="text-white font-medium">Detect automatically in every answer</span>
+                        <span class="block text-gray-400 mt-0.5">The results list, title, link, picture, rows and identifiers are found in each answer as it comes,
+                            so answers of different shapes (a profile, a list, nothing) all become cards. Anything you fill in below is used instead
+                            (rows and identifiers are added). Untick to set everything yourself.</span></span>
+                </label>
                 <p class="text-sm text-gray-400">Paths point into the answer (<code>owner.login</code>, <code>emails[0]</code>, <code>sources[].url</code>), or use
                     a template like <code>{first} {last}</code>. Easiest: try it, then click values in the answer.</p>
                 <label class="block"><span class="b-label">Results list <span class="text-gray-500">(one card per element)</span></span>
