@@ -209,6 +209,8 @@ function openSettings(moduleName) {
                     <label class="block text-sm font-medium text-gray-400 mb-2">${config.label}</label>
                     <input type="${config.type}"
                            name="${key}"
+                           autocomplete="${config.type === 'password' ? 'new-password' : 'off'}"
+                           data-lpignore="true" data-1p-ignore data-bwignore data-form-type="other"
                            data-module="${moduleName}"
                            class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500"
                            value="${displayValue}"
