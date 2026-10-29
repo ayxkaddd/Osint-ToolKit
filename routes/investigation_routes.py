@@ -22,6 +22,10 @@ class NoteCreate(BaseModel):
     tags: Optional[List[str]] = None
 
 
+class SnapshotCreate(BaseModel):
+    result_id: str
+
+
 class NoteUpdate(BaseModel):
     title: Optional[str] = None
     content: Optional[str] = None
@@ -194,6 +198,14 @@ async def get_investigation_result_detail(investigation_id: UUID, result_id: str
     return JSONResponse(content={"status": "success", "result": record})
 
 
+@router.get("/{investigation_id}/results/{result_id}/references")
+async def get_result_references(investigation_id: UUID, result_id: str) -> JSONResponse:
+    """Notes that link to this result or hold a snapshot of it (asked before deleting it)."""
+    _require_investigation(investigation_id)
+    return JSONResponse(content={"status": "success",
+                                 "notes": investigation_service.result_references(investigation_id, result_id)})
+
+
 @router.delete("/{investigation_id}/results/{result_id}")
 async def delete_investigation_result(investigation_id: UUID, result_id: str) -> JSONResponse:
     _require_investigation(investigation_id)
@@ -223,7 +235,8 @@ async def export_investigation(investigation_id: UUID) -> JSONResponse:
         "results_count": len(results),
         "results": results,
         "notes_count": len(notes),
-        "notes": notes
+        "notes": notes,
+        "note_snapshots": investigation_service.get_snapshots(investigation_id),
     }
     clean_name = "".join(c for c in info.get("name", "investigation") if c.isalnum() or c in (" ", "-", "_")).strip().replace(" ", "_")
     filename = f"{clean_name or 'investigation'}_{investigation_id}.json"
@@ -341,9 +354,28 @@ async def view_investigation_notes(request: Request, investigation_id: UUID):
     is not captured as a note id)."""
     _require_investigation(investigation_id)
     return templates.TemplateResponse(
-        "notes_test.html",
+        "notes.html",
         {"request": request, "investigation_id": str(investigation_id)}
     )
+
+
+@router.post("/{investigation_id}/snapshots")
+async def create_snapshot(investigation_id: UUID, body: SnapshotCreate) -> JSONResponse:
+    """Copy a result for a note, so the note keeps it even if the result is deleted."""
+    _require_investigation(investigation_id)
+    snapshot = investigation_service.create_snapshot(investigation_id, body.result_id)
+    if snapshot is None:
+        raise HTTPException(status_code=404, detail="Result not found")
+    return JSONResponse(content={"status": "success", "snapshot": snapshot}, status_code=201)
+
+
+@router.get("/{investigation_id}/snapshots/{snapshot_id}")
+async def get_snapshot(investigation_id: UUID, snapshot_id: str) -> JSONResponse:
+    _require_investigation(investigation_id)
+    snapshot = investigation_service.get_snapshot(investigation_id, snapshot_id)
+    if snapshot is None:
+        raise HTTPException(status_code=404, detail="Snapshot not found")
+    return JSONResponse(content={"status": "success", "snapshot": snapshot})
 
 
 @router.get("/{investigation_id}/notes/{note_id}")

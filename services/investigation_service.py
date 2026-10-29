@@ -8,7 +8,10 @@ Layout (all under ``investigation_results/``)::
     <investigation_id>/
         index.json                  {result_id: summary} - listing never opens result files
         results/<result_id>.json.gz full result records (gzip-compressed JSON)
-        notes/<note_id>.json        analyst notes
+        notes/<note_id>.json        analyst notes (markdown; [[result:<id>]] links a result)
+        notes/snapshots/<id>.json.gz  copy of a result attached to a note (![[snapshot:<id>]]),
+                                    kept when the result itself is deleted
+        notes/snapshots/index.json  {snapshot_id: result_id}
         picture.webp                optional case picture (resized)
 
 A result can carry ``children``: follow-up lookups attached to it (e.g. the WHOIS
@@ -803,6 +806,58 @@ class InvestigationService:
             note_file.unlink()
             self._touch(investigation_id)
             return True
+
+    # ==================== NOTE SNAPSHOTS & REFERENCES ====================
+
+    def _snapshots_dir(self, investigation_id) -> Path:
+        return self._notes_dir(investigation_id) / "snapshots"
+
+    def create_snapshot(self, investigation_id: UUID, result_id: str) -> Optional[Dict[str, Any]]:
+        """Copy a result so a note keeps it as it was, even if the result is deleted later."""
+        record = self.get_result(investigation_id, result_id) if _valid_id(result_id) else None
+        if record is None:
+            return None
+        meta = {
+            "snapshot_id": uuid4().hex,
+            "result_id": record["result_id"],
+            "service_name": record.get("service_name"),
+            "method_name": record.get("method_name"),
+            "parameters": record.get("parameters"),
+            "target": find_target(record.get("parameters") or {}),
+            "summary": summarize(record.get("result")),
+            "timestamp": record.get("timestamp"),
+            "created_at": datetime.now().isoformat(),
+        }
+        directory = self._snapshots_dir(investigation_id)
+        with _STORE_LOCK:
+            _write_gz_atomic(directory / f"{meta['snapshot_id']}.json.gz", {**meta, "record": record})
+            index = _read_json(directory / "index.json", {})
+            index[meta["snapshot_id"]] = record["result_id"]
+            _write_json_atomic(directory / "index.json", index)
+        return meta
+
+    def get_snapshot(self, investigation_id: UUID, snapshot_id: str) -> Optional[Dict[str, Any]]:
+        if not re.fullmatch(r"[0-9a-f]{32}", snapshot_id or ""):
+            return None
+        return _read_gz(self._snapshots_dir(investigation_id) / f"{snapshot_id}.json.gz")
+
+    def get_snapshots(self, investigation_id: UUID) -> List[Dict[str, Any]]:
+        directory = self._snapshots_dir(investigation_id)
+        return [snap for path in sorted(directory.glob("*.json.gz")) if (snap := _read_gz(path))]
+
+    def result_references(self, investigation_id: UUID, result_id: str) -> List[Dict[str, Any]]:
+        """Notes that link to a result or hold a snapshot of it."""
+        snapshots = [s for s, r in _read_json(self._snapshots_dir(investigation_id) / "index.json", {}).items() if r == result_id]
+        link = re.compile(r"\[\[result:" + re.escape(result_id) + r"(?:[|\]])")
+        found = []
+        for note in self.get_investigation_notes(investigation_id):
+            content = note.get("content") or ""
+            links = len(link.findall(content))
+            attached = sum(content.count(f"snapshot:{s}") for s in snapshots)
+            if links or attached:
+                found.append({"note_id": note["note_id"], "title": note.get("title") or "Untitled note",
+                              "links": links, "snapshots": attached})
+        return found
 
     # ==================== LEGACY MIGRATION ====================
 
