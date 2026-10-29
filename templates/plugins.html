@@ -1,0 +1,188 @@
+{% extends "base.html" %}
+
+{% block title %}Plugins - OSINT Toolkit{% endblock %}
+
+{% block content %}
+<div class="page">
+    <div class="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+            <h1 class="page-title">Plugins</h1>
+            <p class="page-lead">Your own modules: each folder in <code class="text-purple-300">plugins/</code> is one.
+                Create one with <code class="text-purple-300">python -m plugins new &lt;name&gt;</code>; the format is in
+                <code class="text-purple-300">plugins/README.md</code>. Changes are picked up automatically.</p>
+        </div>
+        <button type="button" id="reloadPlugins" class="btn-secondary shrink-0"><i class="fas fa-sync-alt mr-2"></i>Reload</button>
+    </div>
+    <div id="pluginsList" class="space-y-4">
+        <p class="text-gray-400"><i class="fas fa-spinner fa-spin mr-2"></i>Loading…</p>
+    </div>
+</div>
+
+<!-- Review before enabling a plugin from another source -->
+<div id="reviewModal" class="fixed inset-0 z-50 hidden bg-black/70 flex items-center justify-center p-4">
+    <div class="bg-[#14151f] border border-[#24283b] rounded-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+        <div class="px-5 py-4 border-b border-[#24283b] flex items-center justify-between gap-3">
+            <h2 class="text-lg font-semibold text-white">Review <span id="reviewName"></span></h2>
+            <button type="button" data-review-close class="text-gray-400 hover:text-white"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="p-5 overflow-y-auto space-y-4">
+            <div class="px-4 py-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-sm text-amber-100 space-y-1">
+                <p><i class="fas fa-exclamation-triangle mr-2"></i><strong>Only enable plugins you have read, or that come from someone you trust.</strong></p>
+                <p>An enabled plugin runs with the toolkit's access: <code>plugin.py</code> can read your files, API keys and
+                    investigations; <code>renderer.js</code> runs in your browser while you're logged in.</p>
+                <p id="reviewReasons"></p>
+            </div>
+            <div id="reviewFiles" class="space-y-3"></div>
+        </div>
+        <div class="px-5 py-4 border-t border-[#24283b] flex flex-wrap justify-end gap-3">
+            <button type="button" data-review-close class="btn-secondary">Cancel</button>
+            <button type="button" id="reviewMine" class="btn-secondary" title="Your own plugin: stays enabled when you edit it">It's my plugin</button>
+            <button type="button" id="reviewEnable" class="btn-primary" title="Enabled while its files stay as they are now">I reviewed it - enable</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    const list = document.getElementById('pluginsList');
+    const modal = document.getElementById('reviewModal');
+    let plugins = [];
+    let reviewing = null;
+
+    const SOURCES = {
+        bundled: ['Example', 'bg-gray-800 text-gray-300', 'Ships with the toolkit'],
+        local: ['Yours', 'bg-emerald-500/15 text-emerald-300', 'You made it - runs as it is'],
+        approved: ['Reviewed', 'bg-sky-500/15 text-sky-300', 'You reviewed and enabled it'],
+        changed: ['Changed', 'bg-red-500/15 text-red-300', 'Its files changed since you enabled it'],
+        unreviewed: ['Not reviewed', 'bg-amber-500/15 text-amber-300', 'From another source'],
+    };
+
+    function badge(text, cls, title = '') {
+        return `<span class="px-2 py-0.5 rounded-md text-xs ${cls}" title="${escapeAttr(title)}">${escapeHtml(text)}</span>`;
+    }
+
+    function card(p) {
+        const [sourceLabel, sourceCls, sourceTitle] = SOURCES[p.source] || SOURCES.unreviewed;
+        const state = p.error ? badge('Broken', 'bg-red-500/15 text-red-300')
+            : p.blocked ? badge('Off until reviewed', 'bg-red-500/15 text-red-300')
+            : p.missing_settings.length ? badge('Needs setup', 'bg-amber-500/15 text-amber-300', p.missing_settings.join(', '))
+            : badge('Ready', 'bg-emerald-500/15 text-emerald-300');
+        const message = (cls, icon, text) =>
+            `<p class="mt-3 px-3 py-2 rounded-lg text-sm ${cls}"><i class="fas ${icon} mr-2"></i>${escapeHtml(text)}</p>`;
+        const canReview = !p.trusted && !p.error;
+        return `
+            <div class="card" id="plugin-${escapeAttr(p.id)}">
+                <div class="flex items-start justify-between gap-4 flex-wrap">
+                    <div class="flex items-start gap-3 min-w-0">
+                        <div class="w-10 h-10 rounded-lg bg-gray-800 flex items-center justify-center shrink-0">
+                            <i data-lucide="${escapeAttr(p.icon || 'puzzle')}" class="w-5 h-5 text-purple-300"></i></div>
+                        <div class="min-w-0">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                ${p.enabled ? `<a href="${escapeAttr(p.page)}" class="text-lg font-semibold text-white hover:text-purple-300">${escapeHtml(p.name)}</a>`
+                                    : `<span class="text-lg font-semibold text-white">${escapeHtml(p.name)}</span>`}
+                                ${state}
+                                ${badge(sourceLabel, sourceCls, sourceTitle)}
+                                ${badge(p.kind === 'python' ? 'Python' : 'No-code', 'bg-gray-800 text-gray-400')}
+                            </div>
+                            <p class="text-sm text-gray-400 mt-1">${escapeHtml(p.description || '')}</p>
+                            <p class="text-xs text-gray-500 mt-2 font-mono">${escapeHtml(p.folder)}</p>
+                        </div>
+                    </div>
+                    <div class="flex flex-wrap gap-2 shrink-0">
+                        ${p.enabled ? `<a href="${escapeAttr(p.page)}" class="btn-secondary !py-1.5 !px-3 text-sm">Open</a>` : ''}
+                        ${p.settings.some(s => s.own) ? '<a href="/settings" class="btn-secondary !py-1.5 !px-3 text-sm">Settings</a>' : ''}
+                        ${canReview ? `<button type="button" data-review="${escapeAttr(p.id)}" class="btn-primary !py-1.5 !px-3 text-sm">Review &amp; enable</button>`
+                            : (!p.error ? `<button type="button" data-files="${escapeAttr(p.id)}" class="btn-secondary !py-1.5 !px-3 text-sm">Files</button>` : '')}
+                        ${['approved', 'local'].includes(p.source) ? `<button type="button" data-untrust="${escapeAttr(p.id)}" class="btn-secondary !py-1.5 !px-3 text-sm" title="Treat it as a plugin from another source again">Revoke</button>` : ''}
+                    </div>
+                </div>
+                ${p.accepts.length ? `<div class="flex flex-wrap items-center gap-2 mt-3 text-xs text-gray-400">Looks up
+                    ${p.accepts.map(a => `<span class="px-2 py-0.5 rounded bg-gray-800 text-gray-300">${escapeHtml(a.label)}</span>`).join('')}
+                    ${p.hosts.length ? `<span class="ml-2">· sends it to ${p.hosts.map(h => `<span class="font-mono text-gray-300">${escapeHtml(h)}</span>`).join(', ')}</span>` : ''}
+                    ${p.cost === 'paid' ? `<span class="ml-2 text-amber-300/90">· paid${p.cost_note ? `: ${escapeHtml(p.cost_note)}` : ''}</span>` : ''}
+                </div>` : ''}
+                ${p.error ? message('bg-red-500/10 text-red-200', 'fa-bug', p.error) : ''}
+                ${!p.error && p.blocked ? message('bg-red-500/10 text-red-200', 'fa-ban', p.blocked) : ''}
+                ${p.warnings.map(w => message('bg-amber-500/10 text-amber-200', 'fa-exclamation-triangle', w)).join('')}
+            </div>`;
+    }
+
+    function render() {
+        if (!plugins.length) {
+            list.innerHTML = `<div class="card text-gray-400">No plugins yet. Run <code class="text-purple-300">python -m plugins new my_plugin</code> in the toolkit's folder to create one.</div>`;
+            return;
+        }
+        list.innerHTML = plugins.map(card).join('');
+        if (window.lucide) lucide.createIcons();
+        if (location.hash) document.querySelector(location.hash)?.scrollIntoView({ block: 'center' });
+    }
+
+    async function load(reload = false) {
+        try {
+            const response = await fetch(reload ? '/api/plugins/reload' : '/api/plugins', { method: reload ? 'POST' : 'GET' });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.detail || `HTTP ${response.status}`);
+            plugins = data.plugins;
+            render();
+        } catch (error) {
+            list.innerHTML = `<p class="text-red-400">Could not load plugins: ${escapeHtml(error.message)}</p>`;
+        }
+    }
+
+    async function openFiles(id, review) {
+        const data = await fetch(`/api/plugins/${encodeURIComponent(id)}/files`).then(r => r.json());
+        reviewing = id;
+        document.getElementById('reviewName').textContent = data.plugin.name;
+        document.getElementById('reviewReasons').textContent = data.plugin.blocked || data.plugin.warnings[0] || '';
+        document.getElementById('reviewFiles').innerHTML = data.files.map(f => `
+            <div>
+                <div class="flex items-center justify-between text-sm mb-1">
+                    <span class="font-mono text-gray-200">${escapeHtml(f.path)}</span>
+                    <span class="text-xs text-gray-500">${f.size.toLocaleString()} bytes</span>
+                </div>
+                ${f.text !== null ? `<pre class="p-3 bg-gray-950/70 border border-gray-800 rounded-lg text-xs text-gray-300 overflow-auto max-h-80">${escapeHtml(f.text)}</pre>`
+                    : '<p class="text-xs text-gray-500">Binary or large file - not shown.</p>'}
+            </div>`).join('');
+        modal.querySelectorAll('#reviewMine, #reviewEnable').forEach(b => b.classList.toggle('hidden', !review));
+        modal.classList.remove('hidden');
+    }
+
+    async function setTrust(id, mode) {
+        const response = await fetch(`/api/plugins/${encodeURIComponent(id)}/trust`, mode
+            ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode }) }
+            : { method: 'DELETE' });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            showTemporaryNotification(data.detail || 'Failed', 'error');
+            return;
+        }
+        if (data.error) showTemporaryNotification(`${data.name}: ${data.error}`, 'error');
+        else showTemporaryNotification(mode ? `${data.name} enabled` : `${data.name} is treated as from another source again`, mode ? 'success' : 'info');
+        getModules(true);
+        load();
+    }
+
+    list.addEventListener('click', (event) => {
+        const review = event.target.closest('[data-review]');
+        if (review) return openFiles(review.dataset.review, true);
+        const files = event.target.closest('[data-files]');
+        if (files) return openFiles(files.dataset.files, false);
+        const untrust = event.target.closest('[data-untrust]');
+        if (untrust && confirm('Revoke? A plugin from another source with code stays off until you review it again.')) setTrust(untrust.dataset.untrust, null);
+    });
+    modal.addEventListener('click', (event) => {
+        if (event.target === modal || event.target.closest('[data-review-close]')) modal.classList.add('hidden');
+    });
+    document.getElementById('reviewEnable').addEventListener('click', () => { modal.classList.add('hidden'); setTrust(reviewing, 'approved'); });
+    document.getElementById('reviewMine').addEventListener('click', () => { modal.classList.add('hidden'); setTrust(reviewing, 'local'); });
+    document.getElementById('reloadPlugins').addEventListener('click', () => load(true));
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') modal.classList.add('hidden');
+    });
+
+    load();
+})();
+</script>
+{% endblock %}

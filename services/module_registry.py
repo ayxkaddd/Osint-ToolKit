@@ -45,6 +45,8 @@ class Module:
     prefill: Optional[Dict[str, str]] = None
     # service_name its results are saved under (to find earlier lookups)
     service: str = ""
+    plugin: bool = False             # added from plugins/ (services/plugin_loader.py)
+    extra_problems: Optional[Callable[[], List[str]]] = None
 
     def __post_init__(self):
         self.service = self.service or SAVED_SERVICE.get(self.id, self.id)
@@ -163,6 +165,8 @@ async def module_status(module: Module) -> Dict[str, Any]:
             problems.append(problem)
     if module.needs_telegram and not await telegram_authorized():
         problems.append("Telegram is not logged in")
+    if module.extra_problems:
+        problems += module.extra_problems()
     missing_optional = [k for k in module.optional_keys if not get_setting(k)]
     missing_optional += [t for t in module.optional_tools if _tool_available(t)]
     return {
@@ -180,10 +184,13 @@ async def module_status(module: Module) -> Dict[str, Any]:
         "settings": module.keys + module.optional_keys + module.tools + module.optional_tools,
         "prefill": module.prefill,
         "service": module.service,
+        "plugin": module.plugin,
     }
 
 
 async def all_module_status() -> List[Dict[str, Any]]:
+    from services import plugin_loader
+    plugin_loader.refresh()
     return list(await asyncio.gather(*(module_status(m) for m in MODULES)))
 
 

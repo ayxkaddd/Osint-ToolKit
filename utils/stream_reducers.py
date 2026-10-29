@@ -166,3 +166,30 @@ def reduce_oi_stream(events: List[Any]) -> Dict[str, Any]:
             result["completed"] = bool(event.get("completed"))
     result["modules"] = sort_oi_cards(result["modules"])
     return result
+
+
+def reduce_plugin_stream(events: List[Any]) -> Dict[str, Any]:
+    """Plugin run (services/plugin_loader.py events) -> {kind: plugin_result, plugin, items, data, ...}."""
+    result: Dict[str, Any] = {"kind": "plugin_result", "items": [], "completed": False}
+    data: List[Any] = []
+    for event in events:
+        if not isinstance(event, dict):
+            continue
+        kind = event.get("event")
+        if kind == "started":
+            for key in ("plugin", "name", "value", "type"):
+                result[key] = event.get(key)
+        elif kind == "item":
+            result["items"].append(event.get("item"))
+        elif kind == "data":
+            data.append(event.get("data"))
+        elif kind == "error":
+            result["error"] = event.get("detail")
+        elif kind == "done":
+            result["completed"] = bool(event.get("completed"))
+            for key in ("note", "raw"):
+                if event.get(key) is not None:
+                    result[key] = event[key]
+    if data:
+        result["data"] = data[0] if len(data) == 1 else data
+    return result

@@ -1,0 +1,30 @@
+# No-code plugin returning a list: every certificate becomes a card.
+name: Certificate transparency (crt.sh)
+description: TLS certificates issued for a domain and its subdomains - reveals hostnames that DNS doesn't list.
+icon: shield-check
+site: crt.sh
+accepts: [domain]
+placeholder: example.org
+speed: medium
+
+request:
+  url: https://crt.sh/
+  query:
+    q: "%.{value}"
+    output: json
+  timeout: 90
+
+response:
+  items: "."             # the answer is a list of certificates
+  unique: name_value     # renewals repeat the same names
+  limit: 300
+  title: "{common_name}"
+  subtitle: "{issuer_name}"
+  url: "https://crt.sh/?id={id}"
+  fields:
+    Names: name_value
+    Valid from: "{not_before|date}"
+    Valid until: "{not_after|date}"
+    Serial: serial_number
+  entities:
+    domain: name_value

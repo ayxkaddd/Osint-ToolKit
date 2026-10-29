@@ -42,7 +42,8 @@
         container.innerHTML = settingsRes.modules.map((group, i) => `
             <form class="card" data-settings-form="${i}">
                 <div class="flex items-center justify-between gap-3 flex-wrap mb-4">
-                    <a href="${escapeAttr(group.endpoint)}" class="text-lg font-semibold hover:text-purple-300">${escapeHtml(group.module)}</a>
+                    <a href="${escapeAttr(group.endpoint)}" class="text-lg font-semibold hover:text-purple-300">${escapeHtml(group.module)}${group.plugin
+                        ? ' <span class="ml-1 align-middle px-2 py-0.5 rounded-md text-xs font-normal bg-purple-500/15 text-purple-300"><i class="fas fa-puzzle-piece mr-1"></i>Plugin</span>' : ''}</a>
                     <div class="flex flex-wrap gap-1.5">${readinessFor(group.endpoint, modules)}</div>
                 </div>
                 <div class="space-y-3">
@@ -57,6 +58,7 @@
                             <input name="${escapeAttr(f.key)}" type="${f.type === 'password' ? 'password' : 'text'}" autocomplete="off"
                                 placeholder="${f.configured ? 'Enter a new value to replace it' : 'Not set'}"
                                 class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-purple-500">
+                            ${f.help ? `<span class="block text-xs text-gray-500 mt-1">${escapeHtml(f.help)}</span>` : ''}
                         </label>`).join('')}
                 </div>
                 <div class="flex justify-end mt-4">

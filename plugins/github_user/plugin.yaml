@@ -1,0 +1,44 @@
+# No-code plugin: one request, and which parts of the answer to show.
+# Reference: plugins/README.md
+name: GitHub user
+description: Public GitHub profile of a username - name, company, location, email, links.
+icon: github
+site: github.com
+accepts: [username]
+placeholder: torvalds
+
+settings:
+  GITHUB_USER_TOKEN:
+    label: GitHub token (optional - raises the limit from 60 to 5000 lookups an hour)
+    secret: true
+    required: false
+
+request:
+  url: https://api.github.com/users/{value}
+  headers:
+    Accept: application/vnd.github+json
+    # left out while the token isn't set
+    Authorization: Bearer {settings.GITHUB_USER_TOKEN}
+
+response:
+  title: "{login}"
+  subtitle: "{name}"
+  url: html_url
+  image: avatar_url
+  fields:
+    Name: name
+    Company: company
+    Location: location
+    Email: email
+    Website: blog
+    Bio: bio
+    X / Twitter: twitter_username
+    Followers: followers
+    Following: following
+    Public repos: public_repos
+    Joined: "{created_at|date}"
+    Last update: "{updated_at|date}"
+    Account ID: id
+  entities:
+    email: email
+    url: [blog, html_url]

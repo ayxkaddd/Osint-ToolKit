@@ -62,6 +62,7 @@ const METHOD_LABELS = {
     ip_lookup: 'IP info',
     phone_info: 'Offline analysis',
     enrich_links: 'Link enrichment',
+    run: 'Lookup',  // plugins
 };
 
 const moduleInfo = (service) => MODULES[service] || {
@@ -86,6 +87,7 @@ function renderParameters(params) {
 
 function safeRender(service, method, data, record) {
     try {
+        if (typeof isPluginResult === 'function' && isPluginResult(data)) return renderPluginResult(data, record);
         const renderer = RENDERERS[`${service}.${method}`] || RENDERERS[service];
         if (renderer) return renderer(data, record) || renderValue(data);
     } catch (e) {

@@ -153,6 +153,7 @@ class JobManager:
     async def _run_stream(self, client, job: Job, method, path, headers, request_args) -> None:
         found = checked = 0
         last_event: Any = None
+        plugin_error = None
         async with client.stream(method, path, headers=headers, **request_args) as response:
             job.result_id = response.headers.get(RESULT_ID_HEADER)
             if response.status_code >= 400:
@@ -170,7 +171,8 @@ class JobManager:
                 except json.JSONDecodeError:
                     continue
                 last_event = event
-                kind = event.get("event_type") or event.get("type")
+                # plugin events are {"event": ...} ("type" there is the looked-up identifier's type)
+                kind = None if "event" in event else event.get("event_type") or event.get("type")
                 data = event.get("data") if isinstance(event.get("data"), dict) else event
                 if kind == "search_started":
                     job.progress["total"] = data.get("total_sites")
@@ -182,6 +184,19 @@ class JobManager:
                     job.progress.update(done=data.get("done"), total=data.get("total"))
                 elif kind == "search_completed":
                     job.progress.update(done=data.get("total_checked", checked))
+                elif event.get("event") == "item":   # plugins (services/plugin_loader.py)
+                    found += 1
+                    job.progress.update(found=found)
+                elif event.get("event") == "error":
+                    plugin_error = event.get("detail")
+        if plugin_error:
+            job.status = "failed"
+            job.error = f"{plugin_error} (partial results, if any, were saved)" if found else plugin_error
+            return
+        if last_event and last_event.get("event") == "done" and "count" in last_event:
+            job.status = "done"
+            job.summary = f"{found} result{'' if found == 1 else 's'}" if found else (last_event.get("note") or "Nothing found")
+            return
         job.status = "done"
         if found or checked:
             job.summary = f"{found} found / {checked} checked"

@@ -18,6 +18,8 @@ Usage::
   otherwise the current investigation. Nothing is saved when there is none.
 * ``parent_result_id`` (query param or ``X-Parent-Result-ID`` header) attaches
   the result to an earlier one, so follow-up lookups stay grouped.
+* ``service_name`` may be a function of the route's arguments (plugins save under
+  their own id).
 * The response carries ``X-Investigation-Result-ID`` so the client can group
   later follow-ups under this result.
 """
@@ -28,7 +30,7 @@ import inspect
 import json
 import logging
 from functools import wraps
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Optional, Union
 from uuid import UUID
 
 import anyio
@@ -183,7 +185,7 @@ def _tee_stream(response: StreamingResponse, on_complete: Callable[[str, bool], 
 
 
 def save_investigation(
-    service_name: str,
+    service_name: Union[str, Callable[[dict], str]],
     method_name: Optional[str] = None,
     store: Optional[Callable[[Any], Any]] = None,
     stream_reducer: Optional[Callable[[list], Any]] = None,
@@ -225,6 +227,7 @@ def save_investigation(
         def finish(result, request, response, args, kwargs, inv_id, parent_id):
             """Save (or arrange saving of) the result; returns the value to send."""
             parameters = _sanitize_params(args, kwargs)
+            service = service_name(kwargs) if callable(service_name) else service_name
             result_id = _new_result_id()
             header_id = parent_id or result_id
 
@@ -236,7 +239,7 @@ def save_investigation(
                     if not isinstance(events, list):
                         events = [events]
                     stored = stream_reducer(events) if stream_reducer else events
-                    _save(inv_id, service_name, used_method_name, parameters, stored,
+                    _save(inv_id, service, used_method_name, parameters, stored,
                           result_id, parent_id, partial=not completed)
 
                 _tee_stream(result, on_complete)
@@ -249,7 +252,7 @@ def save_investigation(
             stored = store(payload) if store else payload
             if skip_if is not None and skip_if(stored):
                 return result, None
-            return result, (parameters, stored, result_id, parent_id)
+            return result, (service, parameters, stored, result_id, parent_id)
 
         @wraps(func)
         async def async_wrapper(*args, **kwargs):
@@ -263,9 +266,9 @@ def save_investigation(
 
             result, pending = finish(result, request, response, args, kwargs, inv_id, parent_id)
             if pending:
-                parameters, stored, result_id, parent_id = pending
+                service, parameters, stored, result_id, parent_id = pending
                 saved_id = await asyncio.to_thread(
-                    _save, inv_id, service_name, used_method_name, parameters, stored, result_id, parent_id
+                    _save, inv_id, service, used_method_name, parameters, stored, result_id, parent_id
                 )
                 if saved_id:
                     target = result if isinstance(result, Response) else response
@@ -285,8 +288,8 @@ def save_investigation(
 
             result, pending = finish(result, request, response, args, kwargs, inv_id, parent_id)
             if pending:
-                parameters, stored, result_id, parent_id = pending
-                saved_id = _save(inv_id, service_name, used_method_name, parameters, stored, result_id, parent_id)
+                service, parameters, stored, result_id, parent_id = pending
+                saved_id = _save(inv_id, service, used_method_name, parameters, stored, result_id, parent_id)
                 if saved_id:
                     target = result if isinstance(result, Response) else response
                     if target is not None:

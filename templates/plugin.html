@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block title %}{{ plugin.name }} - OSINT Toolkit{% endblock %}
+
+{% block content %}
+<div class="page">
+    <div class="flex items-center gap-3 flex-wrap">
+        <h1 class="page-title !mb-0">{{ plugin.name }}</h1>
+        <a href="/plugins" class="px-2 py-0.5 rounded-md text-xs bg-purple-500/15 text-purple-300 border border-purple-500/30 hover:text-white">
+            <i class="fas fa-puzzle-piece mr-1"></i>Plugin</a>
+    </div>
+    <p class="page-lead mt-3">{{ plugin.description }}
+        {% if plugin.cost == 'paid' %}<span class="text-amber-300/90">Paid{% if plugin.cost_note %}: {{ plugin.cost_note }}{% endif %}.</span>
+        {% elif plugin.cost_note %}<span class="text-gray-400">{{ plugin.cost_note }}</span>{% endif %}</p>
+
+    {% if plugin.blocked %}
+    <div class="mb-5 px-4 py-3 rounded-lg bg-red-500/10 border border-red-500/30 text-sm text-red-200">
+        <i class="fas fa-ban mr-2"></i>{{ plugin.blocked }}
+        <a href="/plugins#plugin-{{ plugin.id }}" class="underline ml-1">Open the Plugins page</a>
+    </div>
+    {% endif %}
+    {% for warning in plugin.warnings %}
+    <div class="mb-5 px-4 py-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-sm text-amber-200">
+        <i class="fas fa-exclamation-triangle mr-2"></i>{{ warning }}
+        <a href="/plugins#plugin-{{ plugin.id }}" class="underline ml-1">Review it</a>
+    </div>
+    {% endfor %}
+    {% if plugin.missing_settings and not plugin.blocked %}
+    <div class="mb-5 px-4 py-3 rounded-lg bg-gray-800/60 border border-gray-700 text-sm text-gray-300">
+        <i class="fas fa-key mr-2 text-purple-300"></i>Needs {{ plugin.missing_settings | join(', ') }} -
+        <a href="/settings" class="underline">add it in Settings</a>.
+    </div>
+    {% endif %}
+
+    <div class="flex flex-col md:flex-row gap-3">
+        <div id="pluginType" class="segmented shrink-0{% if plugin.accepts | length < 2 %} hidden{% endif %}">
+            {% for accept in plugin.accepts %}
+            <button type="button" data-type="{{ accept.type }}" class="{% if loop.first %}active{% endif %}">{{ accept.label }}</button>
+            {% endfor %}
+        </div>
+        <input type="text" id="pluginInput" autocomplete="off" class="field flex-1"
+            placeholder="{{ plugin.placeholder or (plugin.accepts | map(attribute='label') | join(' or ')) }}">
+        <button type="button" id="pluginRun" class="btn-primary"{% if not plugin.enabled %} disabled{% endif %}>Look up</button>
+    </div>
+    <label class="inline-flex items-center gap-2 mt-3 text-sm text-gray-300 cursor-pointer"
+        title="Run without saving to the investigation - for trying a plugin out">
+        <input type="checkbox" id="pluginTest" class="rounded bg-gray-800 border-gray-600">
+        Test only <span class="text-gray-500">(don't save to the investigation)</span>
+    </label>
+
+    <section id="pluginResult" class="mt-6 hidden">
+        <div id="pluginStatus" class="flex items-center gap-3 mb-5 text-sm text-gray-300">
+            <span id="pluginStatusIcon" class="w-4 flex justify-center shrink-0"></span>
+            <span id="pluginStatusText" class="flex-1"></span>
+            <button type="button" id="pluginStop" class="hidden btn-secondary !py-1 !px-3 text-xs">Stop</button>
+        </div>
+        <div id="pluginError" class="hidden mb-5 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-sm text-red-300 break-words"></div>
+        <div id="pluginCards"></div>
+    </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>window.pluginInfo = {{ plugin | tojson }};</script>
+<script src="/static/js/services/plugin.js"></script>
+{% endblock %}
