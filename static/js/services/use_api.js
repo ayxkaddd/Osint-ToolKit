@@ -37,36 +37,6 @@ function setBusy(isBusy) {
     });
 }
 
-function oiCard(card) {
-    const picture = safeUrl(card.picture);
-    const profile = safeUrl(card.profile_url);
-    const chips = [
-        card.username ? pivotChip('username', String(card.username)) : '',
-        card.email ? pivotChip('email', String(card.email)) : '',
-        card.phone ? pivotChip('phone', String(card.phone)) : '',
-    ].join('');
-    const meta = [card.location, card.created && `created ${card.created}`, card.last_seen && `last seen ${card.last_seen}`]
-        .filter(Boolean).map(v => escapeHtml(v)).join(' · ');
-    return `
-        <div class="bg-gray-950/60 rounded-lg p-4 border border-gray-800 min-w-0">
-            <div class="flex items-start gap-3">
-                ${picture ? `<img src="${escapeAttr(picture)}" alt="" loading="lazy" referrerpolicy="no-referrer" class="w-12 h-12 rounded-lg object-cover bg-gray-800 shrink-0" onerror="this.remove()">` : ''}
-                <div class="min-w-0 flex-1">
-                    <div class="flex items-center justify-between gap-2">
-                        <span class="text-xs uppercase tracking-wide text-purple-300">${escapeHtml(card.module)}</span>
-                        ${profile ? `<a href="${escapeAttr(profile)}" target="_blank" rel="noopener noreferrer" class="text-xs text-blue-400 hover:underline">profile</a>` : ''}
-                    </div>
-                    ${card.name ? `<div class="text-white font-medium truncate">${escapeHtml(card.name)}</div>` : ''}
-                    ${meta ? `<div class="text-xs text-gray-500 mt-0.5">${meta}</div>` : ''}
-                </div>
-            </div>
-            ${chips ? `<div class="flex flex-wrap gap-1.5 mt-2">${chips}</div>` : ''}
-            ${card.bio ? `<p class="text-xs text-gray-400 mt-2">${escapeHtml(card.bio)}</p>` : ''}
-            ${(card.fields || []).length ? `<div class="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs">${card.fields.slice(0, 12).map(f =>
-                `<div class="text-gray-500 truncate">${escapeHtml(f.label)}</div><div class="text-gray-300 break-words">${escapeHtml(f.value)}</div>`).join('')}</div>` : ''}
-        </div>`;
-}
-
 function renderResult(data, options = {}) {
     const allowPremiumOnly = Boolean(options.allowPremiumOnly && state.lastReport);
     els.cards.classList.add('hidden');
@@ -76,14 +46,8 @@ function renderResult(data, options = {}) {
         els.pdfLink.classList.add('hidden');
         els.pdfDownload.classList.toggle('hidden', !allowPremiumOnly);
         els.runPremiumOnly.classList.toggle('hidden', !allowPremiumOnly);
-        const found = data.modules.filter(m => m.registered !== false);
         els.resultContent.textContent = '';
-        els.cards.innerHTML = `
-            <div class="flex items-center justify-between gap-3 flex-wrap mb-4">
-                <div class="text-sm text-gray-300">${found.length} account${found.length === 1 ? '' : 's'} for <span class="text-white">${escapeHtml(data.query || '')}</span></div>
-            </div>
-            ${found.length ? `<div class="grid grid-cols-1 md:grid-cols-2 gap-3">${found.map(oiCard).join('')}</div>`
-                : '<p class="text-sm text-gray-400">No accounts found.</p>'}`;
+        els.cards.innerHTML = oiCardsHtml(data.modules, data.query);
         els.cards.classList.remove('hidden');
     } else if (data.url) {
         els.pdfLink.classList.remove('hidden');

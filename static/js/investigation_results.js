@@ -891,18 +891,7 @@ function renderOi(data) {
                 <a href="${escapeAttr(safeUrl(data.url))}" target="_blank" class="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-semibold"><i data-lucide="download" class="w-4 h-4"></i>Open report</a>
             </div>`;
     }
-    if (data && Array.isArray(data.modules)) {
-        const found = data.modules.filter(m => m.registered !== false);
-        if (!found.length) return '<p class="text-sm text-gray-400">No accounts found.</p>';
-        return `<div class="grid grid-cols-1 md:grid-cols-2 gap-2">${found.map(m => `
-            <div class="bg-gray-900 rounded-lg p-3 border border-gray-800 min-w-0">
-                <div class="flex items-center justify-between gap-2"><span class="text-xs uppercase text-purple-300">${escapeHtml(m.module)}</span>
-                    ${safeUrl(m.profile_url) ? link(m.profile_url, 'profile') : ''}</div>
-                ${m.name ? `<div class="text-sm text-white truncate">${escapeHtml(m.name)}</div>` : ''}
-                <div class="flex flex-wrap gap-1.5 mt-1">${m.username ? pivotChip('username', String(m.username)) : ''}${m.email ? pivotChip('email', String(m.email)) : ''}${m.phone ? pivotChip('phone', String(m.phone)) : ''}</div>
-                ${m.created || m.last_seen || m.location ? `<div class="text-xs text-gray-500 mt-1">${escapeHtml([m.location, m.created && 'created ' + m.created, m.last_seen && 'seen ' + m.last_seen].filter(Boolean).join(' · '))}</div>` : ''}
-            </div>`).join('')}</div>`;
-    }
+    if (data && Array.isArray(data.modules)) return oiCardsHtml(data.modules);
     return renderValue(data);
 }
 

@@ -1,4 +1,5 @@
 import os
+import re
 import uuid
 import aiohttp
 from fastapi.responses import JSONResponse
@@ -101,54 +102,95 @@ class OiService:
 # ---------------------------------------------------------------------------
 # JSON results -> one flat card per account
 # ---------------------------------------------------------------------------
+# Response format (https://docs.osint.industries/reference/spec-format): a list of
+# modules, each with parallel ``spec_format`` / ``front_schemas`` lists - one entry
+# per account (several for "breach" and name searches). Every spec value is
+# wrapped as {"type", "proper_key", "value"}; ``platform_variables`` holds the
+# module-specific extras in the same shape plus a "key".
 
-# Field names OSINT Industries uses in spec_format, mapped to card slots
+# Standard spec_format fields, mapped to card slots
 OI_SLOTS = {
     "name": "name", "username": "username", "email": "email", "phone": "phone",
     "picture_url": "picture", "profile_url": "profile_url", "location": "location",
-    "creation_date": "created", "last_seen": "last_seen", "registered": "registered",
-    "id": "account_id", "gender": "gender", "language": "language", "bio": "bio",
+    "creation_date": "created", "last_seen": "last_seen", "website": "website",
+    "id": "account_id", "gender": "gender", "bio": "bio", "age": "age",
 }
+# Shown by the card itself (or always true), never as extra fields
+OI_SKIP = {"registered", "breach", "platform_variables", "first_name", "last_name"}
+ISO_DATETIME = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}")
 
 
-def _plain(value):
-    """{"value": x, "proper_key": "Label"} -> x"""
-    return value.get("value") if isinstance(value, dict) and "value" in value else value
+def _plain(raw):
+    """{"value": x, "type": "datetime"} -> display value; None for nested data."""
+    kind = raw.get("type") if isinstance(raw, dict) else None
+    value = raw.get("value") if isinstance(raw, dict) and "value" in raw else raw
+    if isinstance(value, list):
+        items = [str(v) for v in value if isinstance(v, (str, int, float)) and not isinstance(v, bool)]
+        return ", ".join(items) if items and len(items) == len(value) else None
+    if isinstance(value, dict) or value in (None, ""):
+        return None
+    if isinstance(value, str) and (kind == "datetime" or ISO_DATETIME.match(value)):
+        return value[:16].replace("T", " ")
+    return value
+
+
+def _oi_card(item: dict, spec: dict, front: dict) -> dict:
+    slug = str(item.get("module") or "unknown")
+    category = item.get("category")
+    card = {
+        "module": str(front.get("module") or slug),
+        "slug": slug,
+        "category": category.get("name") if isinstance(category, dict) else None,
+        "breach": slug == "breach" or _plain(spec.get("breach")) is True,
+        "fields": [],
+    }
+    if not card["breach"] and _plain(spec.get("registered")) is False:
+        card["registered"] = False
+    shown = set()
+    for key, raw in spec.items():
+        if key in OI_SKIP:
+            continue
+        value = _plain(raw)
+        if value is None:
+            continue
+        slot = OI_SLOTS.get(key)
+        if slot:
+            card[slot] = value
+        else:
+            card["fields"].append({"label": raw.get("proper_key") if isinstance(raw, dict) else key, "value": value})
+        if isinstance(value, str):
+            shown.add(value)
+    for var in spec.get("platform_variables") or []:
+        if not isinstance(var, dict):
+            continue
+        value = _plain(var)
+        # Breach entries repeat their name/logo/date as variables
+        if value is None or value in shown:
+            continue
+        card["fields"].append({"label": var.get("proper_key") or var.get("key") or "", "value": value})
+        if isinstance(value, str):
+            shown.add(value)
+    for field in card["fields"]:
+        if not field["label"]:
+            field["label"] = "value"
+        elif "_" in field["label"]:
+            field["label"] = field["label"].replace("_", " ")
+    return card
 
 
 def normalize_oi(data) -> list:
     items = data if isinstance(data, list) else (
-        (data.get("data") or data.get("results") or [data]) if isinstance(data, dict) else [])
+        (data.get("data") or data.get("results") or []) if isinstance(data, dict) else [])
     cards = []
     for item in items:
-        if not isinstance(item, dict):
+        if not isinstance(item, dict) or item.get("status", "found") != "found":
             continue
-        module = str(item.get("module") or item.get("platform") or item.get("name") or "unknown")
-        specs = item.get("spec_format") if isinstance(item.get("spec_format"), list) else [item]
-        for spec in specs:
-            if not isinstance(spec, dict):
-                continue
-            card = {"module": module, "fields": []}
-            for key, raw in spec.items():
-                if key in ("platform_variables", "spec_format", "front_schemas", "module"):
-                    continue
-                value = _plain(raw)
-                if value in (None, "", [], {}) or isinstance(value, (dict, list)):
-                    continue
-                slot = OI_SLOTS.get(key)
-                if slot:
-                    card[slot] = value
-                else:
-                    label = raw.get("proper_key") if isinstance(raw, dict) else None
-                    card["fields"].append({"label": label or key.replace("_", " "), "value": value})
-            for var in spec.get("platform_variables") or []:
-                if isinstance(var, dict) and var.get("value") not in (None, "", [], {}):
-                    value = var["value"]
-                    card["fields"].append({
-                        "label": var.get("proper_key") or var.get("key") or "",
-                        "value": value if isinstance(value, (str, int, float, bool)) else str(value),
-                    })
-            if card.get("registered") is False and len(card) <= 3 and not card["fields"]:
-                continue  # "not registered" with nothing else is noise
-            cards.append(card)
+        specs = item.get("spec_format") if isinstance(item.get("spec_format"), list) else []
+        fronts = item.get("front_schemas") if isinstance(item.get("front_schemas"), list) else []
+        for i, spec in enumerate(specs):
+            if isinstance(spec, dict):
+                front = fronts[i] if i < len(fronts) and isinstance(fronts[i], dict) else {}
+                cards.append(_oi_card(item, spec, front))
+    # Breaches first, then accounts with the most detail
+    cards.sort(key=lambda c: (not c["breach"], -len(c) - len(c["fields"])))
     return cards
