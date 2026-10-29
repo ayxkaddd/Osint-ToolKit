@@ -15,6 +15,7 @@ A self-hosted web workspace for OSINT investigations. Built with FastAPI and Tai
 - **Universal lookup**: paste an email, phone, @user, domain or IP in the top bar and pick which modules to run
 - **Triage, notes and reports**: mark results as confirmed or important, keep Markdown notes, export a report of the findings
 - **Dashboard and settings**: each module shows whether it is ready and what it costs; API keys and tool paths are set in the browser
+- **Plugins**: connect any service with an API without writing code - see [Plugins](#plugins)
 
 ### Modules
 - **Username Search**: checks ~700 sites (WhatsMyName list) for an account, streams results live, re-checks the sites that errored
@@ -89,7 +90,14 @@ GITFIVE_SCRIPT_PATH=/path/to/GitFive/main.py
 
 ## GHunt
 
-Install [GHunt](https://github.com/mxrch/GHunt) and run `ghunt login` as the user that runs the server. If `ghunt` is not on the PATH, set `GHUNT_SCRIPT_PATH`.
+Install [GHunt](https://github.com/mxrch/GHunt) and run its `login` as the user that runs the server. Then set its paths in Settings (or `.env`), like GitFive:
+
+```
+GHUNT_VENV_PATH=/path/to/GHunt/venv
+GHUNT_SCRIPT_PATH=/path/to/GHunt/main.py
+```
+
+With neither set, the `ghunt` command on the PATH is used.
 
 ## Telegram (Funstat media, VK history)
 
@@ -123,11 +131,23 @@ HACKER_TARGET_API_KEY=your_key    # shared NS lookups beyond the free daily limi
 | Web Search | `SERPAPI_KEY` | serpapi.com (dork links work without it) |
 | IP Lookup (optional) | `IPINFO_API_TOKEN`, `ABUSEIPDB_API_KEY`, `SHODAN_API_KEY` | ipinfo.io, abuseipdb.com, shodan.io |
 
+# Plugins
+
+Plugins add your own modules: a page to search with, a place in the lookup box, pivots and background lookups, API keys in Settings, and results saved to the investigation like any other module.
+
+- **No code**: Plugins page (puzzle icon in the top bar) → **New plugin**. Paste an example request from the service's API documentation (a `curl` line) - the address, settings and API key are filled in for you. Press **Test**, and the result cards are worked out from the answer automatically; click values in the answer to change what's shown. A service that does several things (e.g. checking an email and listing a company's emails) can be one plugin with several searches that share the API key.
+- **Python**: `python -m plugins new my_plugin --python` creates a plugin with a `run(value, type, ctx)` function, for anything that needs more than one request.
+
+The format, both kinds and examples are in [plugins/README.md](plugins/README.md). Three examples ship with the toolkit: GitHub user, certificate transparency (crt.sh) and Gravatar.
+
+Plugins you make, and the examples, run as they are. A plugin from someone else is marked **not checked**: a no-code one works, with a warning saying where your searches are sent, while one that runs code, reads another module's API key or connects to your local network stays off until you look at its files and turn it on.
+
 ## Project Structure
 
 - `/routes`: API route handlers and page routes
 - `/services`: lookups and external integrations (`module_registry.py` lists every module, its inputs and requirements)
 - `/models`: Pydantic models
 - `/utils`: investigation saving, stream reducers, settings, subprocess and Telegram helpers
+- `/plugins`: plugins (one folder each), the plugin SDK and `python -m plugins`
 - `/templates`, `/static`: pages, per-module JS (`static/js/services/`) and the Tailwind build
 - `/investigation_results`, `/media`: local case data (git-ignored, never commit it)
