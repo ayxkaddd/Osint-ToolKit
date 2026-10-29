@@ -79,7 +79,7 @@ function renderOwnerIntel(data) {
             </div>` : ''}
             ${(intel.other_txt || []).length ? `<div>
                 <div class="text-xs text-gray-500 mb-1">Other TXT records</div>
-                <div class="space-y-1">${intel.other_txt.map(t => `<div class="font-mono text-xs bg-gray-900 rounded px-2 py-1 break-all text-gray-300">${escapeHtml(t)}</div>`).join('')}</div>
+                <div class="space-y-1">${intel.other_txt.map(t => `<div class="font-mono text-xs bg-gray-900 rounded px-2 py-1 break-all text-gray-300">${pivotInText(t)}</div>`).join('')}</div>
             </div>` : ''}
         </div>`;
 }
@@ -145,7 +145,7 @@ function subdomainRow(s) {
             ${s.title || s.technologies?.length ? `<div class="text-xs text-gray-400 mt-1 truncate">${escapeHtml(s.title || '')}${s.technologies?.length ? ` <span class="text-gray-500">· ${escapeHtml(s.technologies.join(', '))}</span>` : ''}</div>` : ''}
         </div>
         <div class="text-right shrink-0 text-xs text-gray-500 space-y-0.5">
-            <div class="font-mono">${escapeHtml((s.ips || []).slice(0, 2).join(', '))}</div>
+            <div class="font-mono">${(s.ips || []).slice(0, 2).map(ip => pivotText('ip', ip)).join(', ')}</div>
             <div>${(s.sources || []).filter(x => x !== 'target').map(x => escapeHtml(x)).join(' · ')}${s.first_cert ? ` · cert ${escapeHtml(s.first_cert)}` : ''}</div>
         </div>
     </div>`;
@@ -214,7 +214,7 @@ function renderRecords(data) {
         if (type === 'A' || type === 'AAAA') return pivotChip('ip', value);
         if (type === 'MX') return pivotChip('domain', value.split(' ').pop().replace(/\.$/, ''), value);
         if (type === 'NS' || type === 'CNAME') return pivotChip('domain', value.replace(/\.$/, ''));
-        return `<div class="font-mono text-xs bg-gray-950 rounded px-2 py-1 break-all text-gray-300 w-full">${escapeHtml(value)}</div>`;
+        return `<div class="font-mono text-xs bg-gray-950 rounded px-2 py-1 break-all text-gray-300 w-full">${pivotInText(value)}</div>`;
     };
     document.getElementById('dnsRecords').innerHTML = records.length ? records.map(([type, list]) => `
         <div class="bg-gray-900 rounded-lg p-3 border border-gray-800">

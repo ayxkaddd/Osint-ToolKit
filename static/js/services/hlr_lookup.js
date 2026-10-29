@@ -99,7 +99,7 @@ function displayResults(data) {
                             <i data-lucide="phone" class="w-5 h-5 text-blue-500"></i>
                         </div>
                         <div>
-                            <span class="text-lg font-semibold">${escapeHtml(result.phone)}</span>
+                            <span class="text-lg font-semibold">${pivotText('phone', /^\d/.test(String(result.phone || '')) ? '+' + result.phone : result.phone, result.phone)}</span>
                             <div class="text-sm text-gray-400 mt-1">${escapeHtml(result.operator || 'Unknown Operator')} • ${escapeHtml(result.region || 'Unknown Region')}</div>
                         </div>
                     </div>

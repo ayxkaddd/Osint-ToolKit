@@ -281,7 +281,8 @@ def _key_hint(key: str) -> Optional[str]:
         return "bssid"
     if k in ("ip", "ip_address", "ipaddress", "ip_addr", "a"):
         return "ip"
-    if k in ("domain", "hostname", "host", "input", "name_servers", "nameservers", "subdomain") or k.endswith("_domain"):
+    if k in ("domain", "domains", "hostname", "hostnames", "host", "hosts", "input", "name_servers", "nameservers",
+             "subdomain", "subdomains") or k.endswith(("_domain", "_domains")):
         return "domain"
     if k in ("url", "link", "profile", "profile_url", "href", "website", "blog", "html_url", "uri"):
         return "url"
@@ -314,6 +315,9 @@ def is_noise(entity: Entity) -> bool:
     return False
 
 
+# Keys naming a person's or company's own website (its domain is a lead too)
+OWN_SITE_KEYS = {"blog", "website", "homepage", "web", "site", "personal_website"}
+
 # Bulk data that would bury the leads (every probed subdomain of a big site)
 SERVICE_SKIP_KEYS = {
     "dns_recon": {"httpx_results", "httpx_data", "subdomains", "hosts", "detected_urls"},
@@ -332,6 +336,10 @@ def extract_entities(result: Any, service: str = "") -> List[Tuple[Entity, str]]
     def add(entity: Optional[Entity], path: str):
         if entity and entity.key not in out and len(out) < MAX_ENTITIES_PER_RESULT and not is_noise(entity):
             out[entity.key] = (entity, path)
+            # an email's domain (a company or personal domain) is a lead of its own;
+            # free mail providers are dropped by is_noise
+            if entity.type == "email":
+                add(make_entity("domain", entity.value.rsplit("@", 1)[1]), path)
 
     # Typed values with their parent dict (for service hints)
     def visit(value: Any, path: str, depth: int):
@@ -353,6 +361,8 @@ def extract_entities(result: Any, service: str = "") -> List[Tuple[Entity, str]]
                 hint = _service_hints(service, value, k) or _key_hint(k)
                 if hint and not isinstance(v, (dict, list)):
                     add(make_entity(hint, v), sub)
+                    if k.lower() in OWN_SITE_KEYS and isinstance(v, str):   # someone's own site: its domain too
+                        add(make_entity("domain", urlparse(v if "//" in v else f"http://{v}").hostname or ""), sub)
                 elif hint and isinstance(v, list):
                     for i, item in enumerate(v[:500]):
                         if not isinstance(item, (dict, list)):

@@ -46,7 +46,7 @@ _STORE_LOCK = threading.RLock()
 _MIGRATED_DIRS: set = set()
 
 # Bump when the index entry format / summary logic changes
-INDEX_VERSION = 6
+INDEX_VERSION = 7
 
 TRIAGE_STATUSES = {None, "confirmed", "important", "false_positive"}
 

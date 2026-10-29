@@ -855,13 +855,18 @@ document.addEventListener("jobs:started", () => refreshJobs())
 // Pivot menu: any identifier -> look it up with another module.
 // Elements with data-pivot-type / data-pivot-value open it on click.
 // ---------------------------------------------------------------------------
+let pivotMenuAnchor = null
+
 function closePivotMenu() {
   document.getElementById("pivotMenu")?.remove()
+  pivotMenuAnchor = null
 }
 
 async function openPivotMenu(type, value, anchor, options = {}) {
   closePivotMenu()
+  pivotMenuAnchor = anchor
   const modules = (await getModules()).filter((m) => (m.accepts || []).includes(type))
+  if (pivotMenuAnchor !== anchor) return // closed or another chip clicked while loading
   const menu = document.createElement("div")
   menu.id = "pivotMenu"
   menu.className = "fixed z-[70] w-80 bg-gray-900 border border-gray-700 rounded-xl shadow-2xl text-sm slide-in"
@@ -915,6 +920,11 @@ document.addEventListener("click", (event) => {
   if (trigger) {
     event.preventDefault()
     event.stopPropagation()
+    // a second click on the chip whose menu is open closes it
+    if (trigger === pivotMenuAnchor) {
+      closePivotMenu()
+      return
+    }
     openPivotMenu(trigger.dataset.pivotType, trigger.dataset.pivotValue, trigger, {
       parentResultId: trigger.dataset.pivotParent || null,
     })
@@ -924,12 +934,112 @@ document.addEventListener("click", (event) => {
 })
 window.addEventListener("scroll", closePivotMenu, { passive: true })
 
+
 // Chip for an identifier that opens the pivot menu
 function pivotChip(type, value, label = null) {
   return `<button type="button" data-pivot-type="${escapeAttr(type)}" data-pivot-value="${escapeAttr(value)}"
       class="pivot-chip" title="Look up with another module">${escapeHtml(label || value)}<i class="fas fa-chevron-down"></i></button>`
 }
 window.pivotChip = pivotChip
+
+// An identifier in a result (an email in a list, a username in a heading): a pivot chip
+// when the value has that type's shape, plain text otherwise (masked or partial values).
+// pivotText("email", "a@b.c") / pivotText("username", handle, "@" + handle)
+// Shapes a value must have to be offered as that type (masked or partial values stay plain text)
+const PIVOT_SHAPES = {
+  email: /^[^\s@*]+@[^\s@*]+\.[^\s@*]+$/,
+  ip: /^(\d{1,3}\.){3}\d{1,3}$|^[0-9a-f]*:[0-9a-f:]+$/i,
+  domain: /^(?!-)(?:[a-z0-9-]+\.)+[a-z]{2,}$/i,
+  url: /^https?:\/\/[^\s*]+$/i,
+  phone: /^\+?[\d][\d\s().-]{5,}\d$/,
+  username: /^@?[\w.-]{2,64}$/,
+  telegram_username: /^@?[\w]{3,64}$/,
+  telegram_id: /^\d{5,15}$/,
+  gaia_id: /^\d{15,25}$/,
+}
+
+// The type a value can be offered as, or null (a "username" that is an email is an email)
+function pivotTypeFor(type, value) {
+  const text = String(value ?? "").trim()
+  if (!type || !text) return null
+  if ((type === "username" || type === "telegram_username") && text.includes("@") && !text.startsWith("@")) type = "email"
+  const shape = PIVOT_SHAPES[type]
+  return shape && !shape.test(text) ? null : type
+}
+window.pivotTypeFor = pivotTypeFor
+
+function pivotText(type, value, label = null) {
+  if (value === undefined || value === null || value === "") return escapeHtml(label ?? "")
+  const text = String(value).trim()
+  type = pivotTypeFor(type, text)
+  if (!type) return escapeHtml(label ?? value)
+  return pivotChip(type, type === "username" || type === "telegram_username" ? text.replace(/^@/, "") : text, label ?? text)
+}
+window.pivotText = pivotText
+
+// A login that is an email or a username
+function pivotLogin(value, label = null) {
+  return pivotText(String(value ?? "").includes("@") ? "email" : "username", value, label)
+}
+window.pivotLogin = pivotLogin
+
+// Identifier type a field name implies (same idea as services/entities.py _key_hint)
+function pivotKeyType(key) {
+  const k = String(key ?? "").toLowerCase().replace(/[\s-]+/g, "_")
+  if (k.includes("email") || k === "mail" || k === "e_mail") return "email"
+  if (/phone|msisdn|mobile|^tel$|telephone/.test(k)) return "phone"
+  if (/^(username|user_name|login|screen_name|nickname|handle|usernames|twitter|twitter_username|github|instagram|tiktok)$/.test(k)) return "username"
+  if (/^(telegram|telegram_username|tg_username)$/.test(k)) return "telegram_username"
+  if (/^(telegram_id|tg_id|user_id_telegram)$/.test(k)) return "telegram_id"
+  if (/^(domain|domains|hostname|hostnames|host|hosts|subdomain|subdomains)$/.test(k) || k.endsWith("_domain")) return "domain"
+  if (/^(ip|ip_address|ipaddress|ip_addr|ips)$/.test(k)) return "ip"
+  if (/gaia/.test(k) || k === "personid") return "gaia_id"
+  return null
+}
+
+// A result field's value: clickable when the field or the value is an identifier
+// (emails and +phones are recognised by shape whatever the field is called)
+function pivotField(key, value, label = null) {
+  if (value === undefined || value === null || typeof value === "object") return escapeHtml(label ?? value ?? "")
+  const text = String(value).trim()
+  let type = pivotKeyType(key)
+  if (!type && PIVOT_SHAPES.email.test(text)) type = "email"
+  else if (!type && text.startsWith("+") && PIVOT_SHAPES.phone.test(text)) type = "phone"
+  return type ? pivotText(type, text, label) : escapeHtml(label ?? value)
+}
+window.pivotField = pivotField
+
+// Free text (a snippet, bio or message): escaped, with the emails and +phone numbers in it clickable
+const TEXT_IDENTIFIER_RE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,24}|\+\d[\d\s().-]{7,18}\d/g
+function pivotInText(text) {
+  const source = String(text ?? "")
+  let out = ""
+  let last = 0
+  for (const match of source.matchAll(TEXT_IDENTIFIER_RE)) {
+    const found = match[0]
+    out += escapeHtml(source.slice(last, match.index))
+    out += found.includes("@") ? pivotText("email", found) : pivotText("phone", found.replace(/[\s().-]/g, ""), found)
+    last = match.index + found.length
+  }
+  return out + escapeHtml(source.slice(last))
+}
+window.pivotInText = pivotInText
+
+// Identifiers grouped by type, as pivot chips (investigation results and module pages)
+function identifierGroupsHtml(entities, limit = 150) {
+  const byType = {}
+  entities.forEach((e) => (byType[e.type] = byType[e.type] || []).push(e))
+  return Object.entries(byType).map(([type, list]) => `
+      <div class="mb-2">
+        <div class="text-xs text-gray-500 mb-1">${escapeHtml(ENTITY_LABELS[type] || type)} (${list.length})</div>
+        <div class="flex flex-wrap gap-1.5">
+          ${list.slice(0, limit).map((e) => pivotChip(e.type, e.value, e.display || e.value)).join("")}
+          ${list.length > limit ? `<span class="text-xs text-gray-500">+${list.length - limit} more in the investigation's Identifiers tab</span>` : ""}
+        </div>
+      </div>`).join("")
+}
+window.identifierGroupsHtml = identifierGroupsHtml
+
 
 // ---------------------------------------------------------------------------
 // Name server pairs -> "find other domains on the same name servers" (NS lookup)

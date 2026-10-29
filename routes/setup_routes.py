@@ -535,9 +535,9 @@ async def setup_page(request: Request):
                 pass
         
         return templates.TemplateResponse(
+            request,
             "setup.html",
             {
-                "request": request,
                 "step": state.step,
                 "system_status": system_status,
                 "state": state.dict()

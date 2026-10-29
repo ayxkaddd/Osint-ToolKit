@@ -81,6 +81,10 @@ document.addEventListener("DOMContentLoaded", () => {
         })
     }
 
+    // emails and GitHub usernames in the results open the "look up with" menu
+    const emailText = (value) => pivotText("email", value)
+    const userText = (value) => pivotText("username", value)
+
     function displayUserData(data) {
         // Update profile section
         document.getElementById("userAvatar").src = data.avatar_url
@@ -134,7 +138,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (data.twitter) {
             twitterContainer.classList.remove("hidden")
             twitterLink.href = `https://twitter.com/${data.twitter}`
-            twitterHandle.textContent = `@${data.twitter}`
+            twitterHandle.innerHTML = pivotText("username", data.twitter, `@${data.twitter}`)
         } else {
             twitterContainer.classList.add("hidden")
         }
@@ -202,7 +206,7 @@ document.addEventListener("DOMContentLoaded", () => {
             .map(
                 ([username, info]) => `
         <div class="bg-gray-800 p-4 rounded-lg">
-            <h4 class="font-bold">${escapeHtml(username)}</h4>
+            <h4 class="font-bold">${userText(username)}</h4>
             <div class="mt-2 space-y-2">
                 ${Object.entries(info.names)
                         .map(
@@ -228,7 +232,7 @@ document.addEventListener("DOMContentLoaded", () => {
             .map(
                 (domain) => `
         <div class="bg-gray-800 p-3 rounded-lg">
-            <code class="text-sm">${escapeHtml(domain)}</code>
+            <code class="text-sm">${pivotText("domain", domain)}</code>
         </div>
     `,
             )
@@ -241,7 +245,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 ([email, info]) => `
         <div class="bg-gray-800 p-4 rounded-lg">
             <div class="flex items-center justify-between">
-                <code class="text-sm">${escapeHtml(email)}</code>
+                <code class="text-sm">${emailText(email)}</code>
                 ${info.is_target
                         ? '<span class="px-2 py-0.5 text-xs bg-green-500 text-black rounded">Target User</span>'
                         : '<span class="px-2 py-0.5 text-xs bg-gray-700 rounded">Other User</span>'
@@ -250,7 +254,7 @@ document.addEventListener("DOMContentLoaded", () => {
             <div class="mt-2 text-sm text-gray-400">
                 <div class="flex items-center mt-1">
                     <i data-lucide="user" class="w-4 h-4 mr-2"></i>
-                    ${escapeHtml(info.username)}
+                    ${info.username ? userText(info.username) : ""}
                 </div>
                 ${info.full_name
                         ? `
@@ -274,7 +278,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 ([email, info]) => `
         <div class="bg-gray-800 p-4 rounded-lg">
             <div class="flex justify-between items-start">
-                <code class="text-sm">${escapeHtml(email)}</code>
+                <code class="text-sm">${emailText(email)}</code>
                 <button class="toggleRepos bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded text-sm transition-colors">
                     Show repos
                 </button>
@@ -305,7 +309,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 ([email, info]) => `
         <div class="bg-gray-800 p-4 rounded-lg">
             <div class="flex justify-between items-start">
-                <code class="text-sm">${escapeHtml(email)}</code>
+                <code class="text-sm">${emailText(email)}</code>
                 <button class="toggleRepos bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded text-sm transition-colors">
                     Show repos
                 </button>
@@ -335,13 +339,13 @@ document.addEventListener("DOMContentLoaded", () => {
             .map(
                 ([name, info]) => `
         <div class="bg-gray-800 p-4 rounded-lg">
-            <h4 class="font-bold">${escapeHtml(name)}</h4>
+            <h4 class="font-bold">${userText(name)}</h4>
             <div class="mt-2 space-y-2">
                 ${Object.entries(info.related_data)
                         .map(
                             ([email, emailInfo]) => `
                     <div>
-                        <code class="text-sm">${escapeHtml(email)}</code>
+                        <code class="text-sm">${emailText(email)}</code>
                         <div class="mt-2 text-sm text-gray-400"></div>
                         <div class="mt-2">
                             ${Object.entries(emailInfo.names)

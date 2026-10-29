@@ -219,8 +219,9 @@ async def view_investigation_results(request: Request, investigation_id: UUID):
     """Render investigation results page"""
     _require_investigation(investigation_id)
     return templates.TemplateResponse(
+        request,
         "investigation_results.html",
-        {"request": request, "investigation_id": str(investigation_id)}
+        {"investigation_id": str(investigation_id)}
     )
 
 
@@ -354,8 +355,9 @@ async def view_investigation_notes(request: Request, investigation_id: UUID):
     is not captured as a note id)."""
     _require_investigation(investigation_id)
     return templates.TemplateResponse(
+        request,
         "notes.html",
-        {"request": request, "investigation_id": str(investigation_id)}
+        {"investigation_id": str(investigation_id)}
     )
 
 

@@ -455,16 +455,7 @@ async function loadResultEntities(resultId) {
             box.textContent = 'No identifiers recognised in this result.';
             return;
         }
-        const byType = {};
-        entities.forEach(e => (byType[e.type] = byType[e.type] || []).push(e));
-        box.innerHTML = Object.entries(byType).map(([type, list]) => `
-            <div class="mb-2">
-                <div class="text-xs text-gray-500 mb-1">${escapeHtml((window.ENTITY_LABELS || {})[type] || type)} (${list.length})</div>
-                <div class="flex flex-wrap gap-1.5">
-                    ${list.slice(0, 150).map(e => pivotChip(e.type, e.value, e.display || e.value)).join('')}
-                    ${list.length > 150 ? `<span class="text-xs text-gray-500">+${list.length - 150} more in the Identifiers tab</span>` : ''}
-                </div>
-            </div>`).join('');
+        box.innerHTML = identifierGroupsHtml(entities);
     } catch (e) {
         box.textContent = 'Could not load identifiers.';
     }
