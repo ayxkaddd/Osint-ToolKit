@@ -1,0 +1,78 @@
+# Made with the plugin builder (Plugins page). Format: plugins/README.md
+name: hunter.io
+site: hunter.io
+settings:
+  HUNTER_IO_API_KEY:
+    label: API key
+    secret: true
+    required: true
+requests:
+- id: domain_search
+  name: Domain search
+  accepts:
+  - domain
+  request:
+    method: GET
+    url: https://api.hunter.io/v2/domain-search
+    query:
+      domain: '{value}'
+      api_key: '{settings.HUNTER_IO_API_KEY}'
+    empty_status:
+    - 404
+  response:
+    format: json
+    items: data.emails
+    title: first_name
+    subtitle: verification.status
+    url: linkedin
+    fields:
+      Value: value
+      Type: type
+      Source type: source_type
+      Provenance: provenance
+      Confidence: confidence
+      Sources domain: sources[].domain
+      Sources uri: sources[].uri
+      Sources extracted on: sources[].extracted_on
+      Sources last seen on: sources[].last_seen_on
+      Sources still on page: sources[].still_on_page
+      Last name: last_name
+      Position: position
+      Position raw: position_raw
+      Seniority: seniority
+    entities:
+      email: value
+      domain: sources[].domain
+      url:
+      - sources[].uri
+      - linkedin
+- id: email_verification
+  name: Email Verification
+  accepts:
+  - email
+  request:
+    method: GET
+    url: https://api.hunter.io/v2/email-verifier
+    query:
+      email: '{value}'
+      api_key: '{settings.HUNTER_IO_API_KEY}'
+    empty_status:
+    - 404
+  response:
+    format: json
+    auto: true
+- id: person_enrichment
+  name: Person Enrichment
+  accepts:
+  - email
+  request:
+    method: GET
+    url: https://api.hunter.io/v2/people/find
+    query:
+      email: '{value}'
+      api_key: '{settings.HUNTER_IO_API_KEY}'
+    empty_status:
+    - 404
+  response:
+    format: json
+    auto: true

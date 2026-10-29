@@ -1,4 +1,4 @@
-"""Gravatar: profiles are found by the SHA-256 of the email address.
+"""Gravatar: profiles are found by the MD5 hash of the email address.
 
 An async generator: each ``yield`` shows a card straight away - the profile
 first, then one card per account the person verified on Gravatar.
@@ -9,7 +9,7 @@ from plugins.sdk import Item, PluginError
 
 
 async def run(value, type, ctx):
-    email_hash = hashlib.sha256(value.strip().lower().encode()).hexdigest()
+    email_hash = hashlib.md5(value.strip().lower().encode()).hexdigest()
     headers = {"Authorization": f"Bearer {ctx.settings.GRAVATAR_API_KEY}"} if ctx.settings.GRAVATAR_API_KEY else {}
     r = await ctx.http.get(f"https://api.gravatar.com/v3/profiles/{email_hash}", headers=headers)
     if r.status_code == 404:

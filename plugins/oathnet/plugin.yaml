@@ -1,0 +1,22 @@
+# Made with the plugin builder (Plugins page). Format: plugins/README.md
+name: OathNet
+site: oathnet.org
+accepts:
+- text
+settings:
+  OATHNET_API_KEY:
+    label: API key
+    secret: true
+    required: true
+request:
+  method: GET
+  url: https://oathnet.org/api/service/v2/breach/search
+  query:
+    q: '{value}'
+  headers:
+    x-api-key: '{settings.OATHNET_API_KEY}'
+  empty_status:
+  - 404
+response:
+  format: json
+  auto: true

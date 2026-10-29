@@ -25,11 +25,12 @@ python -m plugins new my_api --python --accepts username,email
 python -m plugins list                                # every plugin and its state
 ```
 
-Then open `/plugins/<id>`, tick **Test only** (nothing is saved) and try it. Changes to
-the files are picked up automatically; **Raw response** under the results shows what the
-API answered, which is what the `response:` paths below point into.
+Then open `/plugins/<id>` and try it (or test it in the builder, where nothing is saved).
+Changes to the files are picked up automatically; **Raw response** under the results shows
+what the API answered, which is what the `response:` paths below point into.
 
-Examples in this folder: `github_user` and `crtsh` (no-code), `gravatar` (Python).
+Examples in this folder: `github_user`, `crtsh`, `hunter_io` (several searches) and
+`oathnet` (no-code), `gravatar` (Python).
 
 ## Plugins from other sources
 
