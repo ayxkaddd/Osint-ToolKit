@@ -24,6 +24,7 @@ pyasn1
 pycparser
 pydantic
 pydantic_core
+email-validator
 pyyaml
 PyJWT
 PyNaCl
