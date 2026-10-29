@@ -23,7 +23,7 @@ function renderActions() {
     const box = document.getElementById('pluginActions');
     const actions = (plugin.actions || []).filter(a => a.accepts.includes(state.type));
     box.classList.toggle('hidden', actions.length < 2);
-    box.innerHTML = 'Run:' + actions.map(a => `<button type="button" data-action-id="${escapeAttr(a.id)}"
+    box.innerHTML = 'Searches to run:' + actions.map(a => `<button type="button" data-action-id="${escapeAttr(a.id)}"
         class="b-chip${state.off.has(a.id) ? '' : ' active'}">${escapeHtml(a.name)}</button>`).join('');
 }
 

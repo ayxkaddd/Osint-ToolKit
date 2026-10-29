@@ -48,7 +48,7 @@ async function loadResources() {
                 <a href="/plugins/builder" class="bg-[#14151f] border border-dashed border-[#24283b] hover:border-purple-700/60 rounded-xl p-6 flex flex-col items-center justify-center text-center gap-3 opacity-0 transform translate-y-4 transition-all">
                     <div class="w-12 h-12 bg-gray-800 rounded-lg flex items-center justify-center"><i class="fas fa-plus text-purple-400 text-2xl"></i></div>
                     <h3 class="text-xl font-semibold text-white">Build a plugin</h3>
-                    <p class="text-gray-400">Add any API as a module - no code: paste a request, try it, pick what to show.</p>
+                    <p class="text-gray-400">Connect another website or service and search it from here - no coding needed.</p>
                 </a>`
 
         const resourcesList = document.getElementById('resourcesList')

@@ -147,6 +147,34 @@
         $('fItems').options[0].textContent = auto ? 'Automatic (or: the whole answer is one result)' : 'The whole answer is one result';
         $('redetect').innerHTML = auto ? '<i class="fas fa-magic mr-1"></i>Fill in from the answer'
             : '<i class="fas fa-magic mr-1"></i>Detect from the answer';
+        if (!auto) $('mappingBox').open = true;
+    }
+
+    // What's still missing, in the words of the form (checked before the plugin file itself)
+    function missingStep() {
+        if (!val('fName')) return 'give it a name (step 2).';
+        for (const [i, l] of state.lookups.entries()) {
+            const which = state.lookups.length > 1 ? ` for "${l.name || `Search ${i + 1}`}"` : '';
+            if (!(l.accepts || []).length) return `pick what you search with${which} (step 3).`;
+            if (!l.url) return `enter the address${which} (step 4).`;
+            if (!/[{]value/.test([l.url, ...(l.query || []).map(r => r[1]), l.body || ''].join(' '))) {
+                return `put "what you search for" in the address or a setting${which} (step 4) - click the field, then "+ what you search for".`;
+            }
+        }
+        return null;
+    }
+
+    function friendlyError(error) {
+        if (!error) return null;
+        return error.replace(/^Value error, /, '').replace(/\{key:API_KEY\}/g, 'your API key');
+    }
+
+    function testFailure(status) {
+        if (status === 401 || status === 403) return 'The service refused the request - check your API key (step 4).';
+        if (status === 429) return 'Too many searches - the service asks to wait a little.';
+        if (status >= 500) return 'The service had a problem answering. Try again later.';
+        if (status === 400 || status === 422) return 'The service did not understand the request - check the address and settings (step 4).';
+        return `The service answered with an error (HTTP ${status}).`;
     }
 
     function nameFromUrl(url) {
@@ -158,7 +186,7 @@
     function renderTabs() {
         const many = state.lookups.length > 1;
         $('lookupTabs').innerHTML = many ? state.lookups.map((l, i) =>
-            `<button type="button" data-lookup="${i}" class="b-chip${i === state.active ? ' active' : ''}">${escapeHtml((i === state.active ? val('fLookupName') : l.name) || `Lookup ${i + 1}`)}</button>`).join('') : '';
+            `<button type="button" data-lookup="${i}" class="b-chip${i === state.active ? ' active' : ''}">${escapeHtml((i === state.active ? val('fLookupName') : l.name) || `Search ${i + 1}`)}</button>`).join('') : '';
         $('lookupTabs').classList.toggle('hidden', !many);
         $('lookupNameRow').classList.toggle('hidden', !many);
     }
@@ -174,10 +202,10 @@
     function addLookup() {
         state.lookups[state.active] = readLookup();
         const first = state.lookups[0];
-        if (!first.name) first.name = nameFromUrl(first.url) || 'Lookup 1';
+        if (!first.name) first.name = nameFromUrl(first.url) || 'Search 1';
         let origin = '';
         try { origin = new URL(first.url.replace(/\{[^}]*\}/g, 'x')).origin + '/'; } catch (e) { /* no URL yet */ }
-        state.lookups.push({ name: `Lookup ${state.lookups.length + 1}`, url: origin, query: [], headers: [], fields: [], entities: [] });
+        state.lookups.push({ name: `Search ${state.lookups.length + 1}`, url: origin, query: [], headers: [], fields: [], entities: [] });
         state.active = state.lookups.length - 1;
         writeLookup(state.lookups[state.active]);
         renderTabs();
@@ -186,7 +214,7 @@
     }
 
     function removeLookup() {
-        if (state.lookups.length < 2 || !confirm(`Remove the lookup "${val('fLookupName') || state.active + 1}"?`)) return;
+        if (state.lookups.length < 2 || !confirm(`Remove the search "${val('fLookupName') || state.active + 1}"?`)) return;
         state.lookups.splice(state.active, 1);
         state.active = 0;
         writeLookup(state.lookups[0]);
@@ -206,7 +234,7 @@
             try {
                 request.json = JSON.parse(withKey(l.body));
             } catch (e) {
-                state.bodyError = `${l.name || 'The lookup'}: the JSON body is not valid JSON`;
+                state.bodyError = `${l.name ? `${l.name}: t` : 'T'}he request body (Advanced, step 4) is not valid JSON`;
             }
         }
         request.empty_status = String(l.empty || '').split(/[\s,]+/).map(Number).filter(n => n >= 100 && n < 600);
@@ -262,7 +290,7 @@
             let id = slug(l.name) || `lookup_${i + 1}`;
             while (used.has(id)) id = `${id}_${i + 1}`;
             used.add(id);
-            return { id, name: l.name || `Lookup ${i + 1}`, ...lookupPart(l) };
+            return { id, name: l.name || `Search ${i + 1}`, ...lookupPart(l) };
         });
         return m;
     }
@@ -283,7 +311,7 @@
 
     function ensureItemsOption(path) {
         if (!path || [...$('fItems').options].some(o => o.value === path)) return;
-        $('fItems').insertAdjacentHTML('beforeend', `<option value="${escapeAttr(path)}">${escapeHtml(path === '.' ? 'The answer is a list' : path)}</option>`);
+        $('fItems').insertAdjacentHTML('beforeend', `<option value="${escapeAttr(path)}">${escapeHtml(path === '.' ? 'Each item of the answer' : path)}</option>`);
     }
 
     function applyMapping(r) {
@@ -379,8 +407,9 @@
             if (TYPES[result.value.type]) $('tryType').value = result.value.type;
         }
         const notes = [];
-        if (result.api_key) notes.push(`<p class="text-emerald-300"><i class="fas fa-key mr-2"></i>API key found - it is saved in Settings as <span class="font-mono">${escapeHtml(keyName())}</span>, not in the plugin.</p>`);
-        if (result.value) notes.push(`<p class="text-emerald-300"><i class="fas fa-check mr-2"></i>${escapeHtml(TYPES[result.value.type] || result.value.type)} <span class="font-mono">${escapeHtml(result.value.example)}</span> replaced with <span class="font-mono">{value}</span>.</p>`);
+        notes.push('<p class="text-emerald-300"><i class="fas fa-check mr-2"></i>Filled in the address and its settings (step 4).</p>');
+        if (result.api_key) notes.push('<p class="text-emerald-300"><i class="fas fa-key mr-2"></i>Found your API key - it is kept in Settings, not in the plugin.</p>');
+        if (result.value) notes.push(`<p class="text-emerald-300"><i class="fas fa-search mr-2"></i>The example ${escapeHtml((TYPES[result.value.type] || result.value.type).toLowerCase())} <span class="font-mono">${escapeHtml(result.value.example)}</span> will be replaced by what you search for. Press <strong>Test</strong> on the right to try it.</p>`);
         for (const w of result.warnings || []) notes.push(`<p class="text-amber-300"><i class="fas fa-exclamation-triangle mr-2"></i>${escapeHtml(w)}</p>`);
         $('curlNotes').innerHTML = notes.join('');
         refreshUi();
@@ -393,14 +422,15 @@
         const select = $('tryType');
         const current = select.value;
         select.innerHTML = types.map(t => `<option value="${escapeAttr(t)}">${escapeHtml(TYPES[t])}</option>`).join('')
-            || '<option value="">Choose what it looks up</option>';
+            || '<option value="">Pick what you search with (step 3)</option>';
         if (types.includes(current)) select.value = current;
         select.classList.toggle('hidden', types.length < 2);
     }
 
     function refreshUi() {
         if (!state.idTouched && !state.editing) $('fId').value = slug(val('fName'));
-        $('fKeyName').textContent = $('fNeedsKey').checked ? `saved as ${keyName()}` : '';
+        $('fKeyName').textContent = '';
+        $('fNeedsKey').closest('label').title = `Kept in Settings as ${keyName()}`;
         $('fKeyBox').classList.toggle('hidden', !$('fNeedsKey').checked);
         $('fBodyBox').classList.toggle('hidden', $('fMethod').value !== 'POST');
         $('fIconPreview').outerHTML = `<i id="fIconPreview" data-lucide="${escapeAttr(val('fIcon') || 'puzzle')}" class="w-5 h-5 text-purple-300 shrink-0"></i>`;
@@ -430,8 +460,8 @@
             const data = await post('/api/plugins/builder/yaml', { id: pluginId(), manifest: buildManifest() });
             renderTabs();
             $('yamlText').value = data.yaml;
-            const error = state.bodyError || data.error;
-            $('yamlError').textContent = error ? `Not ready to save: ${error}` : '';
+            const error = missingStep() || state.bodyError || friendlyError(data.error);
+            $('yamlError').innerHTML = error ? `<i class="fas fa-info-circle mr-2"></i>Before saving: ${escapeHtml(error)}` : '';
             $('yamlError').classList.toggle('hidden', !error);
         } catch (e) { /* shown on save */ }
     }
@@ -454,7 +484,7 @@
         $('previewCard').classList.remove('hidden');
         $('previewCount').textContent = `${items.length} card${items.length === 1 ? '' : 's'}`;
         $('previewCards').innerHTML = items.length ? pluginCardsHtml(items.slice(0, 30))
-            : '<p class="text-sm text-gray-400">No cards - check the results list and the paths.</p>';
+            : '<p class="text-sm text-gray-400">No results to show. If the answer on the right has results, click the list they are in and choose "One card for each".</p>';
         masonryPackAll($('previewCards'));
         if (window.lucide) lucide.createIcons();
     }
@@ -494,12 +524,12 @@
     function showAnswer() {
         $('rawCard').classList.remove('hidden');
         $('rawTree').innerHTML = state.raw && state.raw.truncated
-            ? `<p class="text-amber-300">The answer is too large to show (${state.raw.characters.toLocaleString()} characters).</p>`
+            ? `<p class="text-amber-300">The answer is too long to show here (${state.raw.characters.toLocaleString()} characters).</p>`
             : treeHtml(state.raw, '', null, 0);
         const lists = findLists(state.raw);
         const current = $('fItems').value;
         $('fItems').innerHTML = '<option value="">The whole answer is one result</option>'
-            + [...new Set(lists)].map(p => `<option value="${escapeAttr(p)}">${escapeHtml(p === '.' ? 'The answer is a list' : p)}</option>`).join('');
+            + [...new Set(lists)].map(p => `<option value="${escapeAttr(p)}">${escapeHtml(p === '.' ? 'Each item of the answer' : p)}</option>`).join('');
         ensureItemsOption(current);
         $('fItems').value = current;
         markUsed();
@@ -547,19 +577,19 @@
         let html;
         if (kind === 'list') {
             html = `<div class="px-3 py-1.5 text-xs text-gray-500 font-mono truncate">${escapeHtml(abs || '.')}</div>`
-                + item('items', '<i class="fas fa-th-large w-4 mr-2 text-purple-300"></i>One card per element');
+                + item('items', '<i class="fas fa-th-large w-4 mr-2 text-purple-300"></i>One card for each item in this list');
         } else {
             const rel = relativePath(abs);
             if (rel === null) {
-                html = '<p class="px-3 py-2 text-xs text-gray-400">Outside the results list. Pick the list that contains it, or "The whole answer is one result".</p>';
+                html = '<p class="px-3 py-2 text-xs text-gray-400">This is not part of a result. To use it, first choose the list it is in (click the list\'s name), or set "Where the results are" to "The whole answer is one result".</p>';
             } else {
                 html = `<div class="px-3 py-1.5 text-xs text-gray-500 font-mono truncate" title="${escapeAttr(rel)}">${escapeHtml(rel)}</div>`
-                    + item('fTitle', '<i class="fas fa-heading w-4 mr-2 text-purple-300"></i>Title')
-                    + item('fSubtitle', '<i class="fas fa-font w-4 mr-2 text-purple-300"></i>Subtitle')
-                    + item('fLink', '<i class="fas fa-external-link-alt w-4 mr-2 text-purple-300"></i>Link')
-                    + item('fImage', '<i class="fas fa-image w-4 mr-2 text-purple-300"></i>Picture')
-                    + item('field', '<i class="fas fa-list w-4 mr-2 text-purple-300"></i>Add as a row')
-                    + `<div class="px-3 pt-2 pb-1 text-xs text-gray-500">Identifier to pivot on</div>
+                    + item('fTitle', '<i class="fas fa-heading w-4 mr-2 text-purple-300"></i>Use as the title')
+                    + item('fSubtitle', '<i class="fas fa-font w-4 mr-2 text-purple-300"></i>Use as the second line')
+                    + item('fLink', '<i class="fas fa-external-link-alt w-4 mr-2 text-purple-300"></i>Use as the link to open')
+                    + item('fImage', '<i class="fas fa-image w-4 mr-2 text-purple-300"></i>Use as the picture')
+                    + item('field', '<i class="fas fa-list w-4 mr-2 text-purple-300"></i>Show in the details')
+                    + `<div class="px-3 pt-2 pb-1 text-xs text-gray-500">Make it clickable to search further, as:</div>
                        <div class="px-2 pb-2 flex flex-wrap gap-1">${['email', 'phone', 'username', 'domain', 'ip', 'url', 'telegram_username', 'telegram_id']
                         .map(t => `<button type="button" data-menu="entity" data-type="${t}" class="b-chip !px-2 !py-0.5">${escapeHtml(TYPES[t])}</button>`).join('')}</div>`;
                 menu.dataset.rel = rel;
@@ -594,6 +624,7 @@
         } else {
             $(action).value = rel;
         }
+        $('mappingBox').open = true;
         closeMenu();
         changed();
     });
@@ -618,11 +649,11 @@
         state.tryValue = val('tryValue');
         state.tryType = $('tryType').value || accepts()[0] || '';
         if (!state.tryValue) {
-            $('tryStatus').innerHTML = '<span class="text-amber-300">Enter a value to look up.</span>';
+            $('tryStatus').innerHTML = '<span class="text-amber-300">Type something to search for first.</span>';
             return;
         }
         $('tryBtn').disabled = true;
-        $('tryStatus').innerHTML = '<span class="text-gray-400"><i class="fas fa-spinner fa-spin mr-2"></i>Sending…</span>';
+        $('tryStatus').innerHTML = '<span class="text-gray-400"><i class="fas fa-spinner fa-spin mr-2"></i>Asking the service…</span>';
         const started = Date.now();
         try {
             const data = await post('/api/plugins/builder/test', {
@@ -632,17 +663,18 @@
             state.raw = data.raw;
             state.format = data.format;
             const seconds = ((Date.now() - started) / 1000).toFixed(1);
-            const color = data.status < 300 ? 'text-emerald-300' : data.status < 500 ? 'text-amber-300' : 'text-red-300';
-            $('tryStatus').innerHTML = `<div class="flex flex-wrap gap-x-3"><span class="${color} font-semibold">HTTP ${data.status}</span>
-                <span class="text-gray-400">${seconds}s · ${escapeHtml(data.format === 'text' ? 'text' : 'JSON')}</span></div>
-                <div class="text-xs text-gray-500 font-mono break-all mt-1">${escapeHtml(data.url)}</div>
-                ${data.note ? `<p class="text-amber-300 mt-2">${escapeHtml(data.note)}</p>` : ''}
-                ${data.error ? `<p class="text-red-300 mt-2 break-words">${escapeHtml(data.error)}</p>` : ''}`;
+            const [color, icon, headline] = data.error ? ['text-red-300', 'fa-times-circle', testFailure(data.status)]
+                : data.note ? ['text-amber-300', 'fa-search', 'The service answered, but found nothing for this. Try something that exists.']
+                : ['text-emerald-300', 'fa-check-circle', `It works - the service answered in ${seconds}s.`];
+            $('tryStatus').innerHTML = `<p class="${color} font-medium"><i class="fas ${icon} mr-2"></i>${escapeHtml(headline)}</p>
+                ${data.error ? `<p class="text-xs text-gray-400 mt-1 break-words">${escapeHtml(data.error)}</p>` : ''}
+                <details class="text-xs text-gray-500 mt-1"><summary class="cursor-pointer hover:text-gray-300">Details</summary>
+                    <p class="font-mono break-all mt-1">HTTP ${data.status} · ${escapeHtml(data.format === 'text' ? 'text' : 'JSON')} · ${escapeHtml(data.url)}</p></details>`;
             showAnswer();
             if (data.suggestion) {
                 applyMapping(data.suggestion);
                 state.detected = true;
-                $('tryStatus').insertAdjacentHTML('beforeend', '<p class="text-purple-300 mt-2"><i class="fas fa-magic mr-2"></i>Results mapping filled in from the answer - adjust it on the left or click values below.</p>');
+                $('tryStatus').insertAdjacentHTML('beforeend', '<p class="text-purple-300 mt-2"><i class="fas fa-magic mr-2"></i>Step 6 was filled in from the answer - change it there, or click values in the answer below.</p>');
             }
             $('redetect').disabled = false;
             $('redetect').title = '';
@@ -680,6 +712,12 @@
         if ($('yamlEdit').checked) body.yaml = $('yamlText').value; else body.manifest = manifest;
         $('saveBtn').disabled = true;
         $('saveNote').textContent = 'Saving…';
+        const missing = $('yamlEdit').checked ? null : missingStep();
+        if (missing) {
+            $('saveNote').innerHTML = `<span class="text-amber-300">${escapeHtml(missing)}</span>`;
+            $('saveBtn').disabled = false;
+            return;
+        }
         try {
             const plugin = await post('/api/plugins/builder/save', body);
             state.saving = true;

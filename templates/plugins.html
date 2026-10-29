@@ -7,10 +7,10 @@
     <div class="flex items-start justify-between gap-4 flex-wrap">
         <div>
             <h1 class="page-title">Plugins</h1>
-            <p class="page-lead">Your own modules: each folder in <code class="text-purple-300">plugins/</code> is one.
-                Build a no-code one with <strong class="text-gray-200">New plugin</strong>, or write one by hand
-                (<code class="text-purple-300">python -m plugins new &lt;name&gt;</code>, format in <code class="text-purple-300">plugins/README.md</code>).
-                Changes are picked up automatically.</p>
+            <p class="page-lead">Plugins connect other websites and services to the toolkit, so you can search them like the built-in modules.
+                Click <strong class="text-gray-200">New plugin</strong> to connect one - no coding needed.
+                <span class="block text-xs text-gray-500 mt-1">Developers: each folder in <code>plugins/</code> is a plugin
+                    (<code>python -m plugins new &lt;name&gt;</code>, format in <code>plugins/README.md</code>).</span></p>
         </div>
         <div class="flex gap-2 shrink-0">
             <button type="button" id="reloadPlugins" class="btn-secondary"><i class="fas fa-sync-alt mr-2"></i>Reload</button>
@@ -56,11 +56,11 @@
     let reviewing = null;
 
     const SOURCES = {
-        bundled: ['Example', 'bg-gray-800 text-gray-300', 'Ships with the toolkit'],
-        local: ['Yours', 'bg-emerald-500/15 text-emerald-300', 'You made it - runs as it is'],
-        approved: ['Reviewed', 'bg-sky-500/15 text-sky-300', 'You reviewed and enabled it'],
-        changed: ['Changed', 'bg-red-500/15 text-red-300', 'Its files changed since you enabled it'],
-        unreviewed: ['Not reviewed', 'bg-amber-500/15 text-amber-300', 'From another source'],
+        bundled: ['Example', 'bg-gray-800 text-gray-300', 'Comes with the toolkit'],
+        local: ['Yours', 'bg-emerald-500/15 text-emerald-300', 'You made it'],
+        approved: ['Checked by you', 'bg-sky-500/15 text-sky-300', 'You looked at it and turned it on'],
+        changed: ['Changed', 'bg-red-500/15 text-red-300', 'Its files changed since you turned it on'],
+        unreviewed: ['Not checked', 'bg-amber-500/15 text-amber-300', 'Made by someone else - not checked by you yet'],
     };
 
     function badge(text, cls, title = '') {
@@ -70,7 +70,7 @@
     function card(p) {
         const [sourceLabel, sourceCls, sourceTitle] = SOURCES[p.source] || SOURCES.unreviewed;
         const state = p.error ? badge('Broken', 'bg-red-500/15 text-red-300')
-            : p.blocked ? badge('Off until reviewed', 'bg-red-500/15 text-red-300')
+            : p.blocked ? badge('Off until you check it', 'bg-red-500/15 text-red-300')
             : p.missing_settings.length ? badge('Needs setup', 'bg-amber-500/15 text-amber-300', p.missing_settings.join(', '))
             : badge('Ready', 'bg-emerald-500/15 text-emerald-300');
         const message = (cls, icon, text) =>
@@ -88,7 +88,7 @@
                                     : `<span class="text-lg font-semibold text-white">${escapeHtml(p.name)}</span>`}
                                 ${state}
                                 ${badge(sourceLabel, sourceCls, sourceTitle)}
-                                ${badge(p.kind === 'python' ? 'Python' : 'No-code', 'bg-gray-800 text-gray-400')}
+                                ${badge(p.kind === 'python' ? 'Python code' : 'No code', 'bg-gray-800 text-gray-400')}
                             </div>
                             <p class="text-sm text-gray-400 mt-1">${escapeHtml(p.description || '')}</p>
                             <p class="text-xs text-gray-500 mt-2 font-mono">${escapeHtml(p.folder)}</p>
@@ -97,18 +97,18 @@
                     <div class="flex flex-wrap gap-2 shrink-0">
                         ${p.enabled ? `<a href="${escapeAttr(p.page)}" class="btn-secondary !py-1.5 !px-3 text-sm">Open</a>` : ''}
                         ${p.settings.some(s => s.own) ? '<a href="/settings" class="btn-secondary !py-1.5 !px-3 text-sm">Settings</a>' : ''}
-                        ${p.editable ? `<a href="/plugins/builder?edit=${encodeURIComponent(p.id)}&add=1" class="btn-secondary !py-1.5 !px-3 text-sm" title="Another endpoint of the same API, in this plugin"><i class="fas fa-plus mr-1"></i>Lookup</a>` : ''}
+                        ${p.editable ? `<a href="/plugins/builder?edit=${encodeURIComponent(p.id)}&add=1" class="btn-secondary !py-1.5 !px-3 text-sm" title="Add another kind of search from the same service to this plugin"><i class="fas fa-plus mr-1"></i>Search</a>` : ''}
                         ${p.editable ? `<a href="/plugins/builder?edit=${encodeURIComponent(p.id)}" class="btn-secondary !py-1.5 !px-3 text-sm">Edit</a>`
                             : (p.kind === 'yaml' && !p.error ? `<a href="/plugins/builder?from=${encodeURIComponent(p.id)}" class="btn-secondary !py-1.5 !px-3 text-sm" title="A new plugin of yours, starting from this one">Duplicate</a>` : '')}
                         ${p.editable ? `<button type="button" data-delete="${escapeAttr(p.id)}" class="btn-secondary !py-1.5 !px-3 text-sm hover:!bg-red-900/60" title="Delete the plugin's folder">Delete</button>` : ''}
-                        ${canReview ? `<button type="button" data-review="${escapeAttr(p.id)}" class="btn-primary !py-1.5 !px-3 text-sm">Review &amp; enable</button>`
+                        ${canReview ? `<button type="button" data-review="${escapeAttr(p.id)}" class="btn-primary !py-1.5 !px-3 text-sm">Check &amp; turn on</button>`
                             : (!p.error ? `<button type="button" data-files="${escapeAttr(p.id)}" class="btn-secondary !py-1.5 !px-3 text-sm">Files</button>` : '')}
                         ${['approved', 'local'].includes(p.source) ? `<button type="button" data-untrust="${escapeAttr(p.id)}" class="btn-secondary !py-1.5 !px-3 text-sm" title="Treat it as a plugin from another source again">Revoke</button>` : ''}
                     </div>
                 </div>
-                ${p.accepts.length ? `<div class="flex flex-wrap items-center gap-2 mt-3 text-xs text-gray-400">Looks up
+                ${p.accepts.length ? `<div class="flex flex-wrap items-center gap-2 mt-3 text-xs text-gray-400">Search with
                     ${p.accepts.map(a => `<span class="px-2 py-0.5 rounded bg-gray-800 text-gray-300">${escapeHtml(a.label)}</span>`).join('')}
-                    ${p.hosts.length ? `<span class="ml-2">· sends it to ${p.hosts.map(h => `<span class="font-mono text-gray-300">${escapeHtml(h)}</span>`).join(', ')}</span>` : ''}
+                    ${p.hosts.length ? `<span class="ml-2">· sends your searches to ${p.hosts.map(h => `<span class="font-mono text-gray-300">${escapeHtml(h)}</span>`).join(', ')}</span>` : ''}
                     ${p.cost === 'paid' ? `<span class="ml-2 text-amber-300/90">· paid${p.cost_note ? `: ${escapeHtml(p.cost_note)}` : ''}</span>` : ''}
                 </div>` : ''}
                 ${p.error ? message('bg-red-500/10 text-red-200', 'fa-bug', p.error) : ''}

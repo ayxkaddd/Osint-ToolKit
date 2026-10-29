@@ -51,7 +51,7 @@ def draft_plugin(plugin_id: str, manifest: Dict[str, Any],
     """A Plugin object for a manifest from the builder (not written anywhere)."""
     plugin_id = (plugin_id or "").strip()
     if not pl.ID_RE.match(plugin_id):
-        raise DraftError("The id is lowercase letters, digits and _ (2-40 characters)")
+        raise DraftError("The folder name can only use lowercase letters, digits and _ (More options, step 2)")
     plugin = pl.Plugin(id=plugin_id, path=pl.PLUGINS_DIR / plugin_id, kind="yaml", source="local")
     try:
         parsed = pl.Manifest.model_validate(manifest)
@@ -98,10 +98,10 @@ async def test_draft(plugin_id: str, manifest: Dict[str, Any], value: str, kind:
         value, kind = pl._check_input(plugin, value, kind)
         missing = plugin.missing_settings()
         if missing:
-            raise DraftError(f"Enter a value for {', '.join(missing)} to try it")
+            raise DraftError("Paste your API key first (step 4) - the service needs it")
         actions = plugin.actions(kind)
         if not actions:
-            raise DraftError("No request for this input type")
+            raise DraftError("Pick what you search with (step 3)")
         action = actions[0]   # the builder tries one lookup at a time
         response = await pl.send_request(plugin, value, kind, action.request)
     except pl.RunRefused as e:
@@ -161,7 +161,7 @@ def save_draft(plugin_id: str, manifest: Optional[Dict[str, Any]], yaml_text: Op
         raise DraftError(f"'{plugin.id}' is the name of a built-in module")
     if existing or folder.exists():
         if not editing:
-            raise DraftError(f"A plugin called '{plugin.id}' already exists - pick another id")
+            raise DraftError(f"There is already a plugin called '{plugin.id}' - change the name or the folder name (step 2)")
         if not existing or not can_edit(existing):
             raise DraftError("Only no-code plugins you made can be edited here - duplicate it instead")
     text = yaml_text if yaml_text is not None else to_yaml(manifest)
@@ -220,7 +220,7 @@ def parse_curl(command: str, example: str = "") -> Dict[str, Any]:
     try:
         tokens = shlex.split(text)
     except ValueError as e:
-        raise DraftError(f"Can't read the command: {e}") from None
+        raise DraftError(f"Couldn't read that example ({e}) - paste the whole command, starting with curl") from None
     if tokens and tokens[0].lower() in ("curl", "curl.exe"):
         tokens = tokens[1:]
     method, url, headers, data, is_json = None, None, {}, None, False
@@ -255,7 +255,7 @@ def parse_curl(command: str, example: str = "") -> Dict[str, Any]:
             url = token
         i += 1
     if not url:
-        raise DraftError("No URL found in the command")
+        raise DraftError("No web address found - paste the whole example, starting with curl")
     if not re.match(r"^https?://", url, re.I):
         url = "https://" + url
     parts = urlsplit(url)
@@ -273,7 +273,7 @@ def parse_curl(command: str, example: str = "") -> Dict[str, Any]:
             form = dict(parse_qsl(stripped, keep_blank_values=True))
     method = method or ("POST" if data is not None else "GET")
     if method not in ("GET", "POST"):
-        raise DraftError(f"{method} requests aren't supported - GET or POST")
+        raise DraftError(f"This example uses {method}, which plugins can't do - only GET and POST (searching)")
     headers = {k: v for k, v in headers.items() if k.lower() not in ("content-type", "content-length", "accept-encoding",
                                                                    "user-agent", "cookie", "host", "connection")}
 
@@ -334,7 +334,8 @@ def parse_curl(command: str, example: str = "") -> Dict[str, Any]:
         json_body = {k: put_value(v) for k, v in json_body.items()}
     warnings = []
     if not found:
-        warnings.append("Couldn't tell where the looked-up value goes - put {value} in the URL or a parameter.")
+        warnings.append("Couldn't spot the example value - in step 4, click where it belongs and press "
+                        "\"+ what you search for\" (or type the example username next to the command and fill in again).")
     return {
         "request": {"method": method, "url": base_url, "query": query, "headers": headers,
                     "json": json_body, "form": form},

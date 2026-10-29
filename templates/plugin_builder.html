@@ -7,8 +7,9 @@
     <div class="flex items-start justify-between gap-4 flex-wrap">
         <div>
             <h1 class="page-title" id="builderTitle">New plugin</h1>
-            <p class="page-lead">Add an API without code: describe one request, try it, and pick what to show from the answer.
-                <a href="/plugins" class="text-purple-300 hover:text-white">All plugins</a></p>
+            <p class="page-lead max-w-3xl">Connect a website or service that has an API, so you can search it from the toolkit -
+                no coding needed. Fill in the steps, test it on the right, and save.
+                <a href="/plugins" class="text-purple-300 hover:text-white whitespace-nowrap">All plugins</a></p>
         </div>
     </div>
 
@@ -16,178 +17,216 @@
         <!-- Form -->
         <div class="space-y-5 min-w-0">
             <section class="card" id="importCard">
-                <h2 class="card-title"><i class="fas fa-terminal"></i>Start from a curl command <span class="text-xs font-normal text-gray-500">(optional)</span></h2>
-                <p class="text-sm text-gray-400 mb-3">Paste an example request from the API's docs, or from your browser
-                    (developer tools → Network → right-click a request → Copy as cURL). The API key and the looked-up value are found for you.</p>
-                <textarea id="curlInput" rows="3" class="field field-sm font-mono" placeholder="curl 'https://api.example.com/v1/lookup?email=someone@example.com' -H 'Authorization: Bearer sk_...'"></textarea>
+                <h2 class="card-title"><span class="b-step">1</span>Paste an example <span class="text-xs font-normal text-gray-500">optional, but the quickest way</span></h2>
+                <p class="text-sm text-gray-400 mb-3">Services explain their API with example requests - usually a line starting with
+                    <code class="text-purple-300">curl</code>. Copy one from the service's API documentation and paste it here:
+                    the form below is filled in for you, and your API key is found and kept safe.</p>
+                <details class="text-xs text-gray-500 mb-3">
+                    <summary class="cursor-pointer hover:text-gray-300">Where do I find one?</summary>
+                    <ul class="list-disc pl-5 mt-2 space-y-1">
+                        <li>In the service's <strong>API documentation</strong> (search the web for "<em>service name</em> API"), look for an example with "curl".</li>
+                        <li>Or from your browser: open the site, press F12 → <strong>Network</strong>, do a search on the site, right-click the request → <strong>Copy → Copy as cURL</strong>.</li>
+                    </ul>
+                </details>
+                <textarea id="curlInput" rows="3" class="field field-sm font-mono" placeholder="curl 'https://api.example.com/v1/lookup?email=someone@example.com' -H 'Authorization: Bearer YOUR_KEY'"></textarea>
                 <div class="flex flex-wrap gap-3 mt-3">
                     <input id="curlExample" class="field field-sm flex-1 min-w-[12rem]" autocomplete="off"
-                        placeholder="Value looked up in it (if not an email, phone, domain or IP)">
-                    <button type="button" id="curlImport" class="btn-secondary">Import</button>
+                        placeholder="The example username or name in it (emails, phones, domains and IPs are found by themselves)">
+                    <button type="button" id="curlImport" class="btn-secondary">Fill in the form</button>
                 </div>
                 <div id="curlNotes" class="text-sm mt-3 space-y-1"></div>
             </section>
 
             <section class="card space-y-4">
-                <h2 class="card-title !mb-0"><i class="fas fa-puzzle-piece"></i>About</h2>
-                <div class="grid sm:grid-cols-2 gap-3">
-                    <label class="block"><span class="b-label">Name</span>
-                        <input id="fName" class="field field-sm" placeholder="Hunter.io email verifier" autocomplete="off"></label>
-                    <label class="block"><span class="b-label">Id <span class="text-gray-500">(folder name)</span></span>
-                        <input id="fId" class="field field-sm font-mono" placeholder="hunter_io" autocomplete="off"></label>
-                </div>
-                <label class="block"><span class="b-label">Description</span>
-                    <input id="fDescription" class="field field-sm" placeholder="What it finds, in one sentence" autocomplete="off"></label>
-                <div class="grid sm:grid-cols-3 gap-3">
-                    <label class="block"><span class="b-label">Icon <a href="https://lucide.dev/icons" target="_blank" rel="noopener" class="text-purple-300">(lucide)</a></span>
-                        <span class="flex items-center gap-2"><i id="fIconPreview" data-lucide="puzzle" class="w-5 h-5 text-purple-300 shrink-0"></i>
-                        <input id="fIcon" class="field field-sm" placeholder="puzzle" autocomplete="off"></span></label>
-                    <label class="block"><span class="b-label">Site <span class="text-gray-500">(card icon)</span></span>
-                        <input id="fSite" class="field field-sm" placeholder="hunter.io" autocomplete="off"></label>
-                    <label class="block"><span class="b-label">Cost</span>
-                        <span class="flex gap-2 items-center"><select id="fCost" class="field field-sm !w-24"><option value="free">Free</option><option value="paid">Paid</option></select>
-                        <input id="fCostNote" class="field field-sm" placeholder="1 credit" autocomplete="off"></span></label>
-                </div>
+                <h2 class="card-title !mb-0"><span class="b-step">2</span>Name it</h2>
+                <label class="block"><span class="b-label">Name</span>
+                    <input id="fName" class="field field-sm" placeholder="e.g. Hunter.io" autocomplete="off"></label>
+                <label class="block"><span class="b-label">What does it find? <span class="text-gray-500">(optional, shown on its page)</span></span>
+                    <input id="fDescription" class="field field-sm" placeholder="e.g. Checks if an email exists and finds the emails of a company" autocomplete="off"></label>
+                <details class="text-sm">
+                    <summary class="cursor-pointer text-gray-400 hover:text-gray-200">More options <span class="text-xs text-gray-500">(icon, cost, folder name)</span></summary>
+                    <div class="grid sm:grid-cols-2 gap-3 mt-3">
+                        <label class="block"><span class="b-label">Website <span class="text-gray-500">(its icon is shown on the results)</span></span>
+                            <input id="fSite" class="field field-sm" placeholder="hunter.io" autocomplete="off"></label>
+                        <label class="block"><span class="b-label">Icon <a href="https://lucide.dev/icons" target="_blank" rel="noopener" class="text-purple-300">(pick a name here)</a></span>
+                            <span class="flex items-center gap-2"><i id="fIconPreview" data-lucide="puzzle" class="w-5 h-5 text-purple-300 shrink-0"></i>
+                            <input id="fIcon" class="field field-sm" placeholder="puzzle" autocomplete="off"></span></label>
+                        <label class="block"><span class="b-label">Does a search cost money?</span>
+                            <span class="flex gap-2 items-center"><select id="fCost" class="field field-sm !w-28"><option value="free">Free</option><option value="paid">Paid</option></select>
+                            <input id="fCostNote" class="field field-sm" placeholder="e.g. 1 credit per search" autocomplete="off"></span></label>
+                        <label class="block"><span class="b-label">Folder name <span class="text-gray-500">(made from the name)</span></span>
+                            <input id="fId" class="field field-sm font-mono" placeholder="hunter_io" autocomplete="off"></label>
+                    </div>
+                </details>
             </section>
 
             <section class="card space-y-4" id="lookupCard">
-                <div class="flex items-center justify-between gap-3 flex-wrap">
-                    <h2 class="card-title !mb-0"><i class="fas fa-layer-group"></i>Lookups</h2>
-                    <button type="button" id="addLookup" class="b-add"><i class="fas fa-plus mr-1"></i>Add a lookup</button>
-                </div>
-                <p class="text-xs text-gray-500">One API with several endpoints (say an email verifier and a domain search) can be one plugin:
-                    add a lookup for each. Lookups for the same kind of input run together, and share the API key.</p>
+                <h2 class="card-title !mb-0"><span class="b-step">3</span>What do you search with?</h2>
                 <div id="lookupTabs" class="flex flex-wrap gap-2"></div>
                 <div id="lookupNameRow" class="hidden flex gap-2 items-end">
-                    <label class="block flex-1"><span class="b-label">Lookup name</span>
-                        <input id="fLookupName" class="field field-sm" placeholder="Email verifier" autocomplete="off"></label>
-                    <button type="button" id="removeLookup" class="btn-secondary !py-2 hover:!bg-red-900/60" title="Remove this lookup"><i class="fas fa-trash"></i></button>
+                    <label class="block flex-1"><span class="b-label">Name of this search</span>
+                        <input id="fLookupName" class="field field-sm" placeholder="e.g. Email check" autocomplete="off"></label>
+                    <button type="button" id="removeLookup" class="btn-secondary !py-2 hover:!bg-red-900/60" title="Remove this search"><i class="fas fa-trash"></i></button>
                 </div>
-                <div><span class="b-label">Looks up</span>
+                <div>
+                    <p class="text-sm text-gray-400 mb-2">Pick what you type in to search - an email, a username, a domain...</p>
                     <div id="fAccepts" class="flex flex-wrap gap-2">
                         {% for type, label in entity_types.items() %}
                         <button type="button" data-accept="{{ type }}" class="b-chip">{{ label }}</button>
                         {% endfor %}
                     </div>
                 </div>
+                <div class="rounded-lg bg-gray-900/60 border border-gray-800 px-3 py-2.5 flex items-start gap-3 text-sm">
+                    <i class="fas fa-layer-group text-purple-300 mt-0.5"></i>
+                    <div class="flex-1 text-gray-400">Does the service do more than one thing? (e.g. Hunter can <em>check an email</em> and
+                        <em>list a company's emails</em>.) Add each as its own search - they share the API key, and run together when
+                        they take the same kind of input.</div>
+                    <button type="button" id="addLookup" class="btn-secondary !py-1.5 !px-3 text-xs shrink-0"><i class="fas fa-plus mr-1"></i>Add a search</button>
+                </div>
             </section>
 
             <section class="card space-y-4">
-                <h2 class="card-title !mb-0"><i class="fas fa-paper-plane"></i>Request</h2>
-                <div class="flex gap-2">
-                    <select id="fMethod" class="field field-sm !w-24 font-mono"><option>GET</option><option>POST</option></select>
-                    <input id="fUrl" data-template class="field field-sm font-mono flex-1" placeholder="https://api.example.com/v1/users/{value}" autocomplete="off">
+                <h2 class="card-title !mb-0"><span class="b-step">4</span>Where to send the search</h2>
+                <div>
+                    <span class="b-label">Address <span class="text-gray-500">(from the API documentation)</span></span>
+                    <div class="flex gap-2">
+                        <select id="fMethod" class="field field-sm !w-24 font-mono" title="GET for most APIs; POST if the documentation says so"><option>GET</option><option>POST</option></select>
+                        <input id="fUrl" data-template class="field field-sm font-mono flex-1" placeholder="https://api.example.com/v1/users/{value}" autocomplete="off">
+                    </div>
                 </div>
-                <div class="flex flex-wrap items-center gap-2 text-xs text-gray-400">Insert:
-                    <button type="button" data-insert="{value}" class="b-token">{value}</button>
-                    <button type="button" data-insert="{value|lower}" class="b-token">{value|lower}</button>
-                    <button type="button" data-insert="{key:API_KEY}" class="b-token" id="insertKey">API key</button>
-                    <span class="text-gray-500">into the field you were typing in</span>
+                <div class="rounded-lg bg-gray-900/60 border border-gray-800 px-3 py-2.5 text-xs text-gray-400 space-y-2">
+                    <p>Put <strong class="text-gray-200">what you search for</strong> where it goes in the address or in a setting below.
+                        Click a field, then a button:</p>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <button type="button" data-insert="{value}" class="b-token">+ what you search for</button>
+                        <button type="button" data-insert="{value|lower}" class="b-token" title="The same, in lowercase">+ in lowercase</button>
+                        <button type="button" data-insert="{key:API_KEY}" class="b-token" id="insertKey">+ your API key</button>
+                    </div>
+                    <p class="text-gray-500">In the fields they show as <code class="text-purple-300">{value}</code> and
+                        <code class="text-purple-300">{key:API_KEY}</code> - the real search and key are put there each time.</p>
                 </div>
                 <div>
-                    <div class="flex items-center justify-between"><span class="b-label">Query parameters</span>
+                    <div class="flex items-center justify-between"><span class="b-label">Settings sent with it <span class="text-gray-500">(the part after ? in the address)</span></span>
                         <button type="button" class="b-add" data-add-row="query"><i class="fas fa-plus mr-1"></i>Add</button></div>
                     <div id="fQuery" class="space-y-2"></div>
                 </div>
-                <div>
-                    <div class="flex items-center justify-between"><span class="b-label">Headers</span>
-                        <button type="button" class="b-add" data-add-row="headers"><i class="fas fa-plus mr-1"></i>Add</button></div>
-                    <div id="fHeaders" class="space-y-2"></div>
-                </div>
-                <label id="fBodyBox" class="block hidden"><span class="b-label">JSON body</span>
-                    <textarea id="fBody" data-template rows="3" class="field field-sm font-mono" placeholder='{"query": "{value}"}'></textarea></label>
                 <div class="rounded-lg border border-gray-800 p-3 space-y-3">
                     <label class="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" id="fNeedsKey" class="rounded bg-gray-800 border-gray-600">
-                        Needs an API key <span class="text-gray-500 font-mono text-xs" id="fKeyName"></span></label>
-                    <div id="fKeyBox" class="hidden grid sm:grid-cols-[minmax(0,1fr)_auto] gap-3 items-center">
-                        <input id="fKeyValue" type="password" class="field field-sm font-mono" placeholder="Paste the key (saved in Settings)"
-                            autocomplete="new-password" data-lpignore="true" data-1p-ignore data-bwignore data-form-type="other">
-                        <label class="flex items-center gap-2 text-sm text-gray-300 cursor-pointer"><input type="checkbox" id="fKeyOptional" class="rounded bg-gray-800 border-gray-600">Optional</label>
-                        <p class="text-xs text-gray-500 sm:col-span-2">Use the API key button above to put it where the API expects it (a header like
-                            <code>Authorization: Bearer …</code> or a parameter). Entries using an optional key are left out while it isn't set.</p>
+                        The service needs an API key <span class="text-gray-500 font-mono text-xs" id="fKeyName"></span></label>
+                    <div id="fKeyBox" class="hidden space-y-2">
+                        <div class="grid sm:grid-cols-[minmax(0,1fr)_auto] gap-3 items-center">
+                            <input id="fKeyValue" type="password" class="field field-sm font-mono" placeholder="Paste your API key"
+                                autocomplete="new-password" data-lpignore="true" data-1p-ignore data-bwignore data-form-type="other">
+                            <label class="flex items-center gap-2 text-sm text-gray-300 cursor-pointer" title="Searches also work without a key (e.g. with a lower limit)">
+                                <input type="checkbox" id="fKeyOptional" class="rounded bg-gray-800 border-gray-600">Works without one too</label>
+                        </div>
+                        <p class="text-xs text-gray-500"><i class="fas fa-lock mr-1"></i>Kept in Settings, never inside the plugin - you can share the plugin safely.
+                            Use "+ your API key" above to put it where the documentation says (often a setting called <code>api_key</code>, or a header).</p>
                     </div>
                 </div>
-                <label class="block"><span class="b-label">"Nothing found" status codes</span>
-                    <input id="fEmpty" class="field field-sm font-mono !w-40" value="404" autocomplete="off"></label>
+                <details class="text-sm" id="advancedRequest">
+                    <summary class="cursor-pointer text-gray-400 hover:text-gray-200">Advanced <span class="text-xs text-gray-500">(headers, request body, "not found" answers)</span></summary>
+                    <div class="space-y-4 mt-3">
+                        <div>
+                            <div class="flex items-center justify-between"><span class="b-label">Headers</span>
+                                <button type="button" class="b-add" data-add-row="headers"><i class="fas fa-plus mr-1"></i>Add</button></div>
+                            <div id="fHeaders" class="space-y-2"></div>
+                        </div>
+                        <label id="fBodyBox" class="block hidden"><span class="b-label">Body (JSON, for POST)</span>
+                            <textarea id="fBody" data-template rows="3" class="field field-sm font-mono" placeholder='{"query": "{value}"}'></textarea></label>
+                        <label class="block"><span class="b-label">Answers that mean "nothing found" <span class="text-gray-500">(HTTP codes)</span></span>
+                            <input id="fEmpty" class="field field-sm font-mono !w-40" value="404" autocomplete="off"></label>
+                    </div>
+                </details>
             </section>
 
             <section class="card space-y-4">
                 <div class="flex items-center justify-between gap-3 flex-wrap">
-                    <h2 class="card-title !mb-0"><i class="fas fa-th-large"></i>Results</h2>
-                    <button type="button" id="redetect" class="btn-secondary !py-1 !px-3 text-xs" disabled title="Try it first"><i class="fas fa-magic mr-1"></i>Detect from the answer</button>
+                    <h2 class="card-title !mb-0"><span class="b-step">6</span>What to show</h2>
+                    <button type="button" id="redetect" class="btn-secondary !py-1 !px-3 text-xs" disabled title="Test it first"><i class="fas fa-magic mr-1"></i>Detect from the answer</button>
                 </div>
                 <label class="flex items-start gap-3 rounded-lg border border-purple-500/30 bg-purple-500/5 p-3 cursor-pointer">
                     <input type="checkbox" id="fAuto" checked class="mt-1 rounded bg-gray-800 border-gray-600">
-                    <span class="text-sm"><span class="text-white font-medium">Detect automatically in every answer</span>
-                        <span class="block text-gray-400 mt-0.5">The results list, title, link, picture, rows and identifiers are found in each answer as it comes,
-                            so answers of different shapes (a profile, a list, nothing) all become cards. Anything you fill in below is used instead
-                            (rows and identifiers are added). Untick to set everything yourself.</span></span>
+                    <span class="text-sm"><span class="text-white font-medium">Let the toolkit work it out <span class="text-xs font-normal text-purple-300">recommended</span></span>
+                        <span class="block text-gray-400 mt-0.5">Every answer is read as it comes in and turned into result cards - names, pictures, links and
+                            details - even when the service answers in different ways. You can still change anything below.</span></span>
                 </label>
-                <p class="text-sm text-gray-400">Paths point into the answer (<code>owner.login</code>, <code>emails[0]</code>, <code>sources[].url</code>), or use
-                    a template like <code>{first} {last}</code>. Easiest: try it, then click values in the answer.</p>
-                <label class="block"><span class="b-label">Results list <span class="text-gray-500">(one card per element)</span></span>
-                    <select id="fItems" class="field field-sm font-mono"><option value="">The whole answer is one result</option></select></label>
-                <div class="grid sm:grid-cols-2 gap-3">
-                    <label class="block"><span class="b-label">Title</span><input id="fTitle" data-path class="field field-sm font-mono" list="pathList" autocomplete="off"></label>
-                    <label class="block"><span class="b-label">Subtitle</span><input id="fSubtitle" data-path class="field field-sm font-mono" list="pathList" autocomplete="off"></label>
-                    <label class="block"><span class="b-label">Link</span><input id="fLink" data-path class="field field-sm font-mono" list="pathList" autocomplete="off"></label>
-                    <label class="block"><span class="b-label">Picture</span><input id="fImage" data-path class="field field-sm font-mono" list="pathList" autocomplete="off"></label>
-                </div>
-                <div>
-                    <div class="flex items-center justify-between"><span class="b-label">Rows on the card</span>
-                        <button type="button" class="b-add" data-add-row="fields"><i class="fas fa-plus mr-1"></i>Add</button></div>
-                    <div id="fFields" class="space-y-2"></div>
-                </div>
-                <div>
-                    <div class="flex items-center justify-between"><span class="b-label">Identifiers to pivot on</span>
-                        <button type="button" class="b-add" data-add-row="entities"><i class="fas fa-plus mr-1"></i>Add</button></div>
-                    <div id="fEntities" class="space-y-2"></div>
-                </div>
+                <details id="mappingBox" class="text-sm">
+                    <summary class="cursor-pointer text-gray-400 hover:text-gray-200">Choose what's shown yourself</summary>
+                    <div class="space-y-4 mt-3">
+                        <p class="text-gray-400"><i class="fas fa-hand-pointer text-purple-300 mr-1"></i>Easiest: test it, then <strong class="text-gray-200">click a value
+                            in the answer</strong> on the right and pick where it goes. Or type the name of the value, e.g. <code>name</code>,
+                            <code>owner.login</code>, or text like <code>{first_name} {last_name}</code>.</p>
+                        <label class="block"><span class="b-label">Where the results are <span class="text-gray-500">(one card each)</span></span>
+                            <select id="fItems" class="field field-sm font-mono"><option value="">The whole answer is one result</option></select></label>
+                        <div class="grid sm:grid-cols-2 gap-3">
+                            <label class="block"><span class="b-label">Title</span><input id="fTitle" data-path class="field field-sm font-mono" list="pathList" autocomplete="off"></label>
+                            <label class="block"><span class="b-label">Second line</span><input id="fSubtitle" data-path class="field field-sm font-mono" list="pathList" autocomplete="off"></label>
+                            <label class="block"><span class="b-label">Link to open</span><input id="fLink" data-path class="field field-sm font-mono" list="pathList" autocomplete="off"></label>
+                            <label class="block"><span class="b-label">Picture</span><input id="fImage" data-path class="field field-sm font-mono" list="pathList" autocomplete="off"></label>
+                        </div>
+                        <div>
+                            <div class="flex items-center justify-between"><span class="b-label">Details on each card</span>
+                                <button type="button" class="b-add" data-add-row="fields"><i class="fas fa-plus mr-1"></i>Add</button></div>
+                            <div id="fFields" class="space-y-2"></div>
+                        </div>
+                        <div>
+                            <div class="flex items-center justify-between"><span class="b-label">Things to search further <span class="text-gray-500">(emails, usernames... become clickable)</span></span>
+                                <button type="button" class="b-add" data-add-row="entities"><i class="fas fa-plus mr-1"></i>Add</button></div>
+                            <div id="fEntities" class="space-y-2"></div>
+                        </div>
+                    </div>
+                </details>
                 <datalist id="pathList"></datalist>
             </section>
 
             <section class="card space-y-3">
-                <div class="flex items-center justify-between gap-3 flex-wrap">
-                    <h2 class="card-title !mb-0"><i class="fas fa-file-code"></i>plugin.yaml</h2>
-                    <label class="flex items-center gap-2 text-sm text-gray-300 cursor-pointer"><input type="checkbox" id="yamlEdit" class="rounded bg-gray-800 border-gray-600">Edit the YAML directly</label>
-                </div>
-                <p id="yamlNote" class="hidden text-sm text-amber-300/90">Saving uses the YAML below; the form above is ignored. Untick to go back to the form (your YAML edits are dropped).</p>
-                <textarea id="yamlText" rows="14" readonly spellcheck="false" class="field field-sm font-mono text-xs !leading-5"></textarea>
-                <p id="yamlError" class="hidden text-sm text-red-300"></p>
-                <div class="flex flex-wrap items-center justify-end gap-3 pt-1">
+                <h2 class="card-title !mb-0"><span class="b-step">7</span>Save</h2>
+                <p id="yamlError" class="hidden text-sm text-amber-300"></p>
+                <div class="flex flex-wrap items-center justify-end gap-3">
                     <span id="saveNote" class="text-sm text-gray-400 mr-auto"></span>
                     <a href="/plugins" class="btn-secondary">Cancel</a>
                     <button type="button" id="saveBtn" class="btn-primary !py-2">Save plugin</button>
                 </div>
+                <details class="text-sm">
+                    <summary class="cursor-pointer text-gray-400 hover:text-gray-200">The plugin file <span class="text-xs text-gray-500">(for advanced users)</span></summary>
+                    <div class="space-y-2 mt-3">
+                        <label class="flex items-center gap-2 text-sm text-gray-300 cursor-pointer"><input type="checkbox" id="yamlEdit" class="rounded bg-gray-800 border-gray-600">Edit the file directly</label>
+                        <p id="yamlNote" class="hidden text-sm text-amber-300/90">Saving uses the file below; the form above is ignored. Untick to go back to the form (your edits here are dropped).</p>
+                        <textarea id="yamlText" rows="14" readonly spellcheck="false" class="field field-sm font-mono text-xs !leading-5"></textarea>
+                    </div>
+                </details>
             </section>
         </div>
 
-        <!-- Try it -->
+        <!-- Test -->
         <div class="lg:sticky lg:top-24 space-y-4 min-w-0">
             <section class="card">
-                <h2 class="card-title"><i class="fas fa-play"></i>Try it</h2>
+                <h2 class="card-title"><span class="b-step">5</span>Test it</h2>
+                <p class="text-sm text-gray-400 mb-3">Search for something that exists, to see what the service answers.</p>
                 <div class="flex gap-2">
                     <select id="tryType" class="field field-sm !w-auto"></select>
-                    <input id="tryValue" class="field field-sm flex-1" placeholder="A value that exists, e.g. torvalds" autocomplete="off">
-                    <button type="button" id="tryBtn" class="btn-primary !py-2 !px-4">Send</button>
+                    <input id="tryValue" class="field field-sm flex-1" placeholder="e.g. a real email or username" autocomplete="off">
+                    <button type="button" id="tryBtn" class="btn-primary !py-2 !px-4">Test</button>
                 </div>
-                <p class="text-xs text-gray-500 mt-2">Sends the request for real (paid APIs use a credit). Nothing is saved.</p>
+                <p class="text-xs text-gray-500 mt-2">This really asks the service (paid services use a credit). Nothing is saved.</p>
                 <div id="tryStatus" class="text-sm mt-3"></div>
             </section>
             <section id="previewCard" class="card hidden">
-                <h2 class="card-title"><i class="fas fa-eye"></i>Preview <span id="previewCount" class="text-xs font-normal text-gray-500"></span></h2>
+                <h2 class="card-title"><i class="fas fa-eye"></i>How results will look <span id="previewCount" class="text-xs font-normal text-gray-500"></span></h2>
                 <div id="previewError" class="hidden text-sm text-red-300 mb-3"></div>
                 <div id="previewCards" class="max-h-[34rem] overflow-y-auto pr-1"></div>
             </section>
             <section id="rawCard" class="card hidden">
-                <h2 class="card-title"><i class="fas fa-code"></i>Answer <span class="text-xs font-normal text-gray-500">click a value to show it on the cards</span></h2>
+                <h2 class="card-title"><i class="fas fa-reply"></i>What the service answered</h2>
+                <p class="text-xs text-gray-500 -mt-2 mb-3">Click any value to show it on the result cards.</p>
                 <div id="rawTree" class="b-tree max-h-[30rem] overflow-auto text-xs font-mono"></div>
             </section>
         </div>
     </div>
 </div>
 
-<div id="pathMenu" class="hidden fixed z-50 w-60 bg-gray-900 border border-gray-700 rounded-lg shadow-xl py-1 text-sm"></div>
+<div id="pathMenu" class="hidden fixed z-50 w-64 bg-gray-900 border border-gray-700 rounded-lg shadow-xl py-1 text-sm"></div>
 {% endblock %}
 
 {% block scripts %}

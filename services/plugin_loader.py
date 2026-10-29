@@ -220,7 +220,8 @@ def _validation_message(error: ValidationError) -> str:
     parts = []
     for e in error.errors()[:4]:
         where = ".".join(str(p) for p in e.get("loc", ()))
-        parts.append(f"{where}: {e.get('msg')}" if where else str(e.get("msg")))
+        msg = str(e.get("msg") or "").removeprefix("Value error, ")
+        parts.append(f"{where}: {msg}" if where else msg)
     return "; ".join(parts)
 
 
