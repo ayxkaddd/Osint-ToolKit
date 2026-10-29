@@ -81,7 +81,7 @@ MODULES: List[Module] = [
             "gaia_id": RunSpec("GET", "/api/ghunt/gaia", _q("gaia_id")),
             "bssid": RunSpec("GET", "/api/ghunt/geolocate", _q("bssid")),
             "domain": RunSpec("GET", "/api/ghunt/spiderdal", _q("domain"))},
-           speed="medium", tools=["GHUNT_SCRIPT_PATH"], concurrency=1, prefill={"input": "#searchInput"}),
+           speed="medium", concurrency=1, prefill={"input": "#searchInput"}),
     Module("oi", "OSINT Industries", "/api", "shield-alert",
            {t: RunSpec("GET", "/api/oi/query", (lambda kind: lambda v: {"params": {"type": kind, "query": v}})(t))
             for t in ("email", "phone", "username")},
@@ -126,7 +126,7 @@ MODULES_BY_ID = {m.id: m for m in MODULES}
 
 def _tool_available(setting: str) -> Optional[str]:
     """None if the executable/script named by a setting exists, else a message."""
-    defaults = {"GHUNT_SCRIPT_PATH": "ghunt", "SUBFINDER_PATH": "subfinder", "HTTPX_PATH": "httpx-toolkit"}
+    defaults = {"SUBFINDER_PATH": "subfinder", "HTTPX_PATH": "httpx-toolkit"}
     value = get_setting(setting) or defaults.get(setting)
     if not value:
         return f"{setting} is not set"
@@ -159,6 +159,11 @@ async def module_status(module: Module) -> Dict[str, Any]:
             problems.append(f"{key} is not configured")
     if module.id == "hlr" and not Path("assets/sms_logins.json").exists():
         problems.append("assets/sms_logins.json is missing")
+    if module.id == "ghunt":
+        from services.ghunt_service import ghunt_command
+        problem = ghunt_command()[1]
+        if problem:
+            problems.append(problem)
     for tool in module.tools:
         problem = _tool_available(tool)
         if problem:
