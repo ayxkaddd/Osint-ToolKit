@@ -121,7 +121,7 @@ def cmd_new(args) -> int:
     files = ", ".join(p.name for p in sorted(folder.iterdir()))
     print(dedent(f"""\
         Created {folder}/ ({files}), marked as your plugin.
-        Edit it, then open /plugins/{plugin_id} in the toolkit and use "Test only" to try it.
+        Edit it, then open /plugins/{plugin_id} in the toolkit to try it.
         Its API key goes in Settings ({values['key']})."""))
     return 0
 

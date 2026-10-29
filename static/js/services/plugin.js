@@ -1,4 +1,4 @@
-// Plugin page (templates/plugin.html): runs /api/plugins/<id>/run (or /test) and
+// Plugin page (templates/plugin.html): runs /api/plugins/<id>/run and
 // shows the NDJSON events as cards (PluginResultsView, static/js/plugin_cards.js).
 const plugin = window.pluginInfo;
 window.currentService = plugin.id;
@@ -7,7 +7,6 @@ const els = {
     input: document.getElementById('pluginInput'),
     run: document.getElementById('pluginRun'),
     stop: document.getElementById('pluginStop'),
-    test: document.getElementById('pluginTest'),
     types: document.querySelectorAll('#pluginType [data-type]'),
     result: document.getElementById('pluginResult'),
     statusIcon: document.getElementById('pluginStatusIcon'),
@@ -95,7 +94,6 @@ async function runLookup() {
     if (state.controller) state.controller.abort();
     resetResult();
     setBusy(true);
-    const test = els.test.checked;
     const started = Date.now();
     let count = 0;
     let finished = false;
@@ -115,7 +113,7 @@ async function runLookup() {
     };
 
     try {
-        const response = await fetch(`/api/plugins/${encodeURIComponent(plugin.id)}/${test ? 'test' : 'run'}`, {
+        const response = await fetch(`/api/plugins/${encodeURIComponent(plugin.id)}/run`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ value, type: state.type, actions: selectedActions() }),
@@ -150,21 +148,18 @@ async function runLookup() {
             state.view.stopped();
             setStatus('error', 'Lookup failed');
             setBusy(false);
-renderActions();
             state.controller = null;
             return;
         }
     }
     state.controller = null;
     setBusy(false);
-renderActions();
     const seconds = ((Date.now() - started) / 1000).toFixed(1);
-    const saved = test ? ' · test, not saved' : '';
     if (finished) {
-        setStatus('done', `${countText(count)} in ${seconds}s${saved}`);
+        setStatus('done', `${countText(count)} in ${seconds}s`);
     } else {
         state.view.stopped();
-        setStatus('stopped', `Stopped after ${seconds}s · ${countText(count)}${saved}`);
+        setStatus('stopped', `Stopped after ${seconds}s · ${countText(count)}`);
     }
 }
 

@@ -43,11 +43,6 @@
         <button type="button" id="pluginRun" class="btn-primary"{% if not plugin.enabled %} disabled{% endif %}>Look up</button>
     </div>
     <div id="pluginActions" class="hidden flex flex-wrap items-center gap-2 mt-3 text-sm text-gray-400"></div>
-    <label class="inline-flex items-center gap-2 mt-3 text-sm text-gray-300 cursor-pointer"
-        title="Run without saving to the investigation - for trying a plugin out">
-        <input type="checkbox" id="pluginTest" class="rounded bg-gray-800 border-gray-600">
-        Test only <span class="text-gray-500">(don't save to the investigation)</span>
-    </label>
 
     <section id="pluginResult" class="mt-6 hidden">
         <div id="pluginStatus" class="flex items-center gap-3 mb-5 text-sm text-gray-300">
