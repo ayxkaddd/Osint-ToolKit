@@ -855,13 +855,18 @@ document.addEventListener("jobs:started", () => refreshJobs())
 // Pivot menu: any identifier -> look it up with another module.
 // Elements with data-pivot-type / data-pivot-value open it on click.
 // ---------------------------------------------------------------------------
+let pivotMenuAnchor = null
+
 function closePivotMenu() {
   document.getElementById("pivotMenu")?.remove()
+  pivotMenuAnchor = null
 }
 
 async function openPivotMenu(type, value, anchor, options = {}) {
   closePivotMenu()
+  pivotMenuAnchor = anchor
   const modules = (await getModules()).filter((m) => (m.accepts || []).includes(type))
+  if (pivotMenuAnchor !== anchor) return // closed or another chip clicked while loading
   const menu = document.createElement("div")
   menu.id = "pivotMenu"
   menu.className = "fixed z-[70] w-80 bg-gray-900 border border-gray-700 rounded-xl shadow-2xl text-sm slide-in"
@@ -915,6 +920,11 @@ document.addEventListener("click", (event) => {
   if (trigger) {
     event.preventDefault()
     event.stopPropagation()
+    // a second click on the chip whose menu is open closes it
+    if (trigger === pivotMenuAnchor) {
+      closePivotMenu()
+      return
+    }
     openPivotMenu(trigger.dataset.pivotType, trigger.dataset.pivotValue, trigger, {
       parentResultId: trigger.dataset.pivotParent || null,
     })
