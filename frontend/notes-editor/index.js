@@ -13,7 +13,7 @@
 // Typing [[ (or ![[ to attach) opens a search of results and identifiers.
 
 import { EditorSelection, EditorState, StateField } from '@codemirror/state';
-import { Decoration, EditorView, WidgetType, drawSelection, keymap, placeholder } from '@codemirror/view';
+import { Decoration, EditorView, WidgetType, drawSelection, keymap, placeholder, tooltips } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { markdownKeymap, markdownLanguage } from '@codemirror/lang-markdown';
 import { HighlightStyle, ensureSyntaxTree, syntaxHighlighting, syntaxTree } from '@codemirror/language';
@@ -382,9 +382,10 @@ const theme = EditorView.theme({
     '.cm-cursor': { borderLeftColor: '#c084fc', borderLeftWidth: '2px' },
     '&.cm-focused .cm-selectionBackground, .cm-selectionBackground, ::selection': { backgroundColor: 'rgba(147, 51, 234, 0.35) !important' },
     '.cm-placeholder': { color: '#6b7280' },
-    '.cm-tooltip': { backgroundColor: '#14151f', border: '1px solid #293142', borderRadius: '8px', overflow: 'hidden' },
-    '.cm-tooltip-autocomplete > ul': { fontFamily: 'inherit', maxHeight: '18rem' },
-    '.cm-tooltip-autocomplete > ul > li': { padding: '0.35rem 0.6rem !important', color: '#e5e7eb' },
+    // Above the notes sidebar (z-50); the [[ list is rendered into <body>, see tooltips() below
+    '.cm-tooltip': { backgroundColor: '#14151f', border: '1px solid #293142', borderRadius: '8px', overflow: 'hidden', zIndex: '100' },
+    '.cm-tooltip-autocomplete > ul': { fontFamily: 'inherit', maxHeight: '18rem', maxWidth: 'min(34rem, calc(100vw - 2rem))' },
+    '.cm-tooltip-autocomplete > ul > li': { padding: '0.35rem 0.6rem !important', color: '#e5e7eb', overflow: 'hidden', textOverflow: 'ellipsis' },
     '.cm-tooltip-autocomplete > ul > li[aria-selected]': { backgroundColor: 'rgba(147, 51, 234, 0.3)', color: '#fff' },
     '.cm-completionDetail': { color: '#8b95a7', fontStyle: 'normal', marginLeft: '0.6rem' },
     '.cm-searchMatch': { backgroundColor: 'rgba(250, 204, 21, 0.25)' },
@@ -412,6 +413,9 @@ function create(parent, options = {}) {
             ...completionKeymap, ...markdownKeymap, ...searchKeymap, ...historyKeymap, ...defaultKeymap, indentWithTab,
         ]),
         placeholder(options.placeholder || ''),
+        // The sidebar clips its content and is transformed (it slides in), which would
+        // crop the [[ suggestions; render them into <body> instead
+        tooltips({ parent: document.body }),
         theme,
         EditorView.updateListener.of((update) => {
             if (update.docChanged && options.onChange) options.onChange(update.state.doc.toString());
