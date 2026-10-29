@@ -138,7 +138,7 @@ Plugins add your own modules: a page to search with, a place in the lookup box, 
 - **No code**: Plugins page (puzzle icon in the top bar) → **New plugin**. Paste an example request from the service's API documentation (a `curl` line) - the address, settings and API key are filled in for you. Press **Test**, and the result cards are worked out from the answer automatically; click values in the answer to change what's shown. A service that does several things (e.g. checking an email and listing a company's emails) can be one plugin with several searches that share the API key.
 - **Python**: `python -m plugins new my_plugin --python` creates a plugin with a `run(value, type, ctx)` function, for anything that needs more than one request.
 
-The format, both kinds and examples are in [plugins/README.md](plugins/README.md). Three examples ship with the toolkit: GitHub user, certificate transparency (crt.sh) and Gravatar.
+The format, both kinds and examples are in [plugins/README.md](plugins/README.md). Examples ship with the toolkit: GitHub user, certificate transparency (crt.sh), Gravatar, OathNet and Hunter.io (one plugin with three searches: domain search, email verification, person enrichment).
 
 Plugins you make, and the examples, run as they are. A plugin from someone else is marked **not checked**: a no-code one works, with a warning saying where your searches are sent, while one that runs code, reads another module's API key or connects to your local network stays off until you look at its files and turn it on.
 
