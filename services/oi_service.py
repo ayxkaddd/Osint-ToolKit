@@ -6,6 +6,7 @@ import aiohttp
 from fastapi.responses import JSONResponse
 
 from dotenv import load_dotenv
+from services.site_icon_service import domain_from_url
 from utils.config import get_setting
 
 load_dotenv()
@@ -211,6 +212,14 @@ OI_SLOTS = {
     "creation_date": "created", "last_seen": "last_seen", "website": "website",
     "id": "account_id", "gender": "gender", "bio": "bio", "age": "age",
 }
+# Modules whose site is not <module>.com (for the site icon)
+OI_DOMAINS = {
+    "maps": "maps.google.com", "twitter": "x.com", "office365": "office.com", "protonmail": "proton.me",
+    "hibp": "haveibeenpwned.com", "yahoo": "yahoo.com", "microsoft": "microsoft.com", "outlook": "outlook.com",
+    "skype": "skype.com", "xbox": "xbox.com", "imgur": "imgur.com", "lastpass": "lastpass.com",
+    "kakao": "kakao.com", "naver": "naver.com", "vk": "vk.com", "ok": "ok.ru", "mailru": "mail.ru",
+    "yandex": "yandex.ru", "wordpress": "wordpress.com", "zoho": "zoho.com", "bitmoji": "bitmoji.com",
+}
 # Shown by the card itself (or always true), never as extra fields
 OI_SKIP = {"registered", "breach", "platform_variables", "first_name", "last_name"}
 ISO_DATETIME = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}")
@@ -240,6 +249,12 @@ def _oi_card(item: dict, spec: dict, front: dict) -> dict:
         "breach": slug == "breach" or _plain(spec.get("breach")) is True,
         "fields": [],
     }
+    card["domain"] = (
+        domain_from_url(_plain(spec.get("profile_url")))
+        or (domain_from_url(_plain(spec.get("website"))) if card["breach"] else None)
+        or OI_DOMAINS.get(slug)
+        or (domain_from_url(f"{slug}.com") if not card["breach"] and slug.isalnum() else None)
+    )
     if not card["breach"] and _plain(spec.get("registered")) is False:
         card["registered"] = False
     shown = set()

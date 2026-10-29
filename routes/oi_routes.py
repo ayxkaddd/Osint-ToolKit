@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException, Query
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from services import site_icon_service
 from services.oi_service import OiService
 from utils.investigation_decorator import save_investigation
 from utils.stream_reducers import reduce_oi_stream
@@ -56,6 +57,16 @@ async def stream_oi_sandbox(
 ):
     """OSINT Industries' sandbox: fake data, no credits used, not saved."""
     return _event_stream(oi_service.stream_oi(type, query, sandbox=True))
+
+
+@router.get("/icon/{domain}")
+async def site_icon(domain: str):
+    """A site's favicon for result cards (cached under media/site_icons)."""
+    icon = await site_icon_service.get_icon(domain)
+    if not icon:
+        raise HTTPException(status_code=404, detail="No icon")
+    path, media_type = icon
+    return FileResponse(path, media_type=media_type, headers={"Cache-Control": "private, max-age=604800"})
 
 
 @router.get("/credits")
