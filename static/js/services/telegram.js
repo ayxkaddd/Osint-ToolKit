@@ -52,7 +52,6 @@ async function searchProfile() {
 }
 
 function displayResults(data) {
-    showIdentifiers(data);
     const entriesContainer = document.getElementById('profile-entries');
     const photosContainer = document.getElementById('photos');
 
@@ -131,7 +130,7 @@ function displayResults(data) {
                     <span class="text-gray-400 text-sm">${escapeHtml(formatFieldName(key))}:</span>
                     ${key === 'url' ?
                     `<a href="${escapeAttr(safeUrl(value))}" target="_blank" rel="noopener noreferrer" class="text-sm text-blue-400 hover:text-blue-300 truncate">${escapeHtml(value)}</a>` :
-                    `<span class="text-sm truncate">${escapeHtml(value)}</span>`
+                    `<span class="text-sm truncate">${key === 'vk_id' || key === 'username' ? pivotText('vk', value) : pivotField(key, value)}</span>`
                 }
                 </div>
             `).join('');

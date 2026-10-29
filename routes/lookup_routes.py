@@ -1,7 +1,7 @@
 """Search box, background jobs, entities/triage, phone & IP lookups, case report."""
 from collections import Counter, defaultdict
 from datetime import datetime
-from typing import Any, Optional
+from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, Request
@@ -9,7 +9,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
-from services.entities import detect, extract_entities, make_entity, type_label
+from services.entities import detect, make_entity, type_label
 from services.investigation_service import InvestigationService
 from services.ip_service import IPLookupError, IPService
 from services.job_manager import job_manager
@@ -33,11 +33,6 @@ class JobRequest(BaseModel):
 class TriageRequest(BaseModel):
     status: Optional[str] = None
     note: Optional[str] = None
-
-
-class ExtractRequest(BaseModel):
-    service: str = ""
-    data: Any = None
 
 
 class EntityTriageRequest(TriageRequest):
@@ -167,14 +162,6 @@ async def triage_entity(investigation_id: UUID, body: EntityTriageRequest):
     if entity is None:
         raise HTTPException(status_code=404, detail="Entity not found")
     return {"entity": entity}
-
-
-@router.post("/api/entities/extract")
-async def extract_identifiers(body: ExtractRequest):
-    """Identifiers in a module's result, for module pages (same extraction as saved results)."""
-    found = extract_entities(body.data, body.service)
-    return {"entities": [{"type": e.type, "value": e.value, "display": e.display, "label": type_label(e.type)}
-                         for e, _ in found]}
 
 
 @router.get("/api/investigations/{investigation_id}/results/{result_id}/entities")

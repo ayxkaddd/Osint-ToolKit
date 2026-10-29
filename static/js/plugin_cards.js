@@ -29,10 +29,11 @@ function pluginItemText(item) {
         .filter(v => v !== undefined && v !== null).join(' ').toLowerCase();
 }
 
-function pluginEntityChips(entities) {
+// Identifiers the plugin found that no row shows (rows show theirs inline)
+function pluginEntityChips(entities, shownValues = new Set()) {
     const chips = [];
     for (const [type, values] of Object.entries(entities || {})) {
-        for (const value of values) chips.push([type, value]);
+        for (const value of values) if (!shownValues.has(String(value))) chips.push([type, value]);
     }
     if (!chips.length || typeof pivotChip !== 'function') return '';
     return `<div class="flex flex-wrap gap-1.5 mt-3">${chips.slice(0, 8).map(([type, value]) => pivotChip(type, value)).join('')}
@@ -41,9 +42,14 @@ function pluginEntityChips(entities) {
 
 function pluginCardHtml(item) {
     const picture = safeUrl(item.image);
-    const rows = (item.fields || []).filter(([, value]) => value !== undefined && value !== null && value !== '');
+    const typeOf = new Map();
+    for (const [type, values] of Object.entries(item.entities || {})) {
+        for (const value of values) if (!typeOf.has(String(value))) typeOf.set(String(value), type);
+    }
+    const rows = (item.fields || []).filter(([, value]) => value !== undefined && value !== null && value !== '')
+        .map(([label, value]) => [label, value, typeOf.get(String(value)) || null]);
     const { html, hidden } = oiRows(rows);
-    const chips = pluginEntityChips(item.entities);
+    const chips = pluginEntityChips(item.entities, new Set(rows.filter(r => r[2]).map(r => String(r[1]))));
     return `
         <div class="result-card username-result-card fade-in${picture ? ' has-profile-image' : ''}" data-plugin-text="${escapeAttr(pluginItemText(item))}">
             ${oiHeader(item.title || '', item.subtitle || item.category || '', [item.icon || ''], picture, '!normal-case')}

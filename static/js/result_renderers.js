@@ -174,27 +174,34 @@ function link(url, text) {
     return `<a href="${escapeAttr(href)}" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:underline break-all">${escapeHtml(text || url)}</a>`;
 }
 
-function chips(values, limit = 200, cls = 'font-mono') {
-    const shown = values.slice(0, limit).map(v => `<span class="bg-gray-900 px-2 py-1 rounded-md text-xs ${cls} text-gray-200 border border-gray-800 break-all">${escapeHtml(v)}</span>`).join('');
+// type: the identifier type of the values (e.g. 'domain'); emails are recognised anyway
+function chips(values, limit = 200, cls = 'font-mono', type = null) {
+    const chip = (v) => {
+        const t = pivotTypeFor(type, v) || pivotTypeFor('email', v);
+        return t ? pivotChip(t, String(v).trim().replace(/^@/, ''), v)
+            : `<span class="bg-gray-900 px-2 py-1 rounded-md text-xs ${cls} text-gray-200 border border-gray-800 break-all">${escapeHtml(v)}</span>`;
+    };
+    const shown = values.slice(0, limit).map(chip).join('');
     const more = values.length > limit ? `<span class="text-xs text-gray-500 px-2 py-1">+${values.length - limit} more (see Raw JSON)</span>` : '';
     return `<div class="flex flex-wrap gap-1.5">${shown}${more}</div>`;
 }
 
 // Generic, readable rendering for any JSON value.
-function renderValue(value, depth = 0) {
+// key: the field name the value came from (decides whether it is an identifier)
+function renderValue(value, depth = 0, key = null) {
     if (value === null || value === undefined || value === '') return '<span class="text-gray-500">—</span>';
     if (typeof value !== 'object') {
         const text = String(value);
         if (/^https?:\/\//i.test(text)) return link(text);
-        if (text.length > 300) return `<div class="whitespace-pre-wrap break-words text-sm text-gray-200 max-h-64 overflow-y-auto">${escapeHtml(text)}</div>`;
-        return `<span class="text-gray-200 break-words">${escapeHtml(text)}</span>`;
+        if (text.length > 300) return `<div class="whitespace-pre-wrap break-words text-sm text-gray-200 max-h-64 overflow-y-auto">${pivotInText(text)}</div>`;
+        return `<span class="text-gray-200 break-words">${pivotField(key, text)}</span>`;
     }
     if (depth >= 3) {
         return `<pre class="text-xs text-gray-400 whitespace-pre-wrap break-all max-h-48 overflow-y-auto">${escapeHtml(JSON.stringify(value, null, 2))}</pre>`;
     }
     if (Array.isArray(value)) {
         if (!value.length) return '<span class="text-gray-500">none</span>';
-        if (value.every(v => v === null || typeof v !== 'object')) return chips(value.map(String));
+        if (value.every(v => v === null || typeof v !== 'object')) return chips(value.map(String), 200, 'font-mono', pivotKeyType(key));
         if (value.every(v => v && typeof v === 'object' && !Array.isArray(v))) return renderTable(value);
         return `<div class="space-y-2">${value.slice(0, 50).map(v => `<div class="bg-gray-900/60 rounded-lg p-2">${renderValue(v, depth + 1)}</div>`).join('')}</div>`;
     }
@@ -204,7 +211,7 @@ function renderValue(value, depth = 0) {
         <dl class="grid grid-cols-1 md:grid-cols-[minmax(8rem,auto)_1fr] gap-x-4 gap-y-1.5 text-sm">
             ${entries.map(([k, v]) => `
                 <dt class="text-gray-500 text-xs pt-0.5 break-all">${escapeHtml(k.replace(/_/g, ' '))}</dt>
-                <dd class="min-w-0">${renderValue(v, depth + 1)}</dd>
+                <dd class="min-w-0">${renderValue(v, depth + 1, k)}</dd>
             `).join('')}
         </dl>`;
 }
@@ -218,17 +225,17 @@ function renderTable(rows, columns = null, limit = 200) {
         }));
         columns = Object.keys(counts).sort((a, b) => counts[b] - counts[a]).slice(0, 8);
     }
-    const cell = (v) => {
+    const cell = (v, column) => {
         if (v === null || v === undefined || v === '') return '<span class="text-gray-600">—</span>';
         if (typeof v === 'object') return `<span class="text-gray-400 font-mono text-[11px]">${escapeHtml(JSON.stringify(v).slice(0, 80))}</span>`;
         const text = String(v);
-        return /^https?:\/\//i.test(text) ? link(text, text.length > 60 ? text.slice(0, 60) + '…' : text) : escapeHtml(text);
+        return /^https?:\/\//i.test(text) ? link(text, text.length > 60 ? text.slice(0, 60) + '…' : text) : pivotField(column, text);
     };
     return `
         <div class="overflow-x-auto border border-gray-800 rounded-lg max-h-[32rem] overflow-y-auto">
             <table class="w-full text-xs">
                 <thead class="bg-gray-900 sticky top-0"><tr>${columns.map(c => `<th class="text-left px-3 py-2 text-gray-400 font-semibold whitespace-nowrap">${escapeHtml(c.replace(/_/g, ' '))}</th>`).join('')}</tr></thead>
-                <tbody>${rows.slice(0, limit).map(r => `<tr class="border-t border-gray-800/80 hover:bg-gray-900/60">${columns.map(c => `<td class="px-3 py-1.5 text-gray-200 align-top break-words max-w-xs">${cell(r[c])}</td>`).join('')}</tr>`).join('')}</tbody>
+                <tbody>${rows.slice(0, limit).map(r => `<tr class="border-t border-gray-800/80 hover:bg-gray-900/60">${columns.map(c => `<td class="px-3 py-1.5 text-gray-200 align-top break-words max-w-xs">${cell(r[c], c)}</td>`).join('')}</tr>`).join('')}</tbody>
             </table>
         </div>
         ${rows.length > limit ? `<p class="text-xs text-gray-500 mt-2">Showing ${limit} of ${rows.length} (see Raw JSON for all)</p>` : ''}`;
@@ -432,10 +439,10 @@ function renderGitFive(data) {
                 <div class="min-w-0">
                     <div class="flex items-center gap-2 flex-wrap">
                         <h4 class="text-xl font-bold text-white">${escapeHtml(data.name || data.username)}</h4>
-                        <span class="text-sm text-gray-400 font-mono">@${escapeHtml(data.username)}</span>
+                        <span class="text-sm text-gray-400 font-mono">${pivotText('username', data.username, '@' + data.username)}</span>
                         ${data.is_site_admin ? '<span class="px-2 py-0.5 text-xs bg-yellow-500 text-black rounded font-bold">Admin</span>' : ''}
                     </div>
-                    ${data.bio ? `<p class="text-gray-300 text-sm mt-1">${escapeHtml(data.bio)}</p>` : ''}
+                    ${data.bio ? `<p class="text-gray-300 text-sm mt-1">${pivotInText(data.bio)}</p>` : ''}
                     <div class="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs text-gray-400">
                         ${data.company ? `<span><i data-lucide="building" class="w-3.5 h-3.5 inline mr-1"></i>${escapeHtml(data.company)}</span>` : ''}
                         ${data.location ? `<span><i data-lucide="map-pin" class="w-3.5 h-3.5 inline mr-1"></i>${escapeHtml(data.location)}</span>` : ''}
@@ -446,8 +453,8 @@ function renderGitFive(data) {
                 </div>
             </div>
             ${emails.length ? `<div><h5 class="text-xs font-semibold text-gray-400 uppercase mb-2">Emails found (${emails.length})</h5>${renderTable(emails, ['email', 'username', 'full_name', 'is_target'])}</div>` : ''}
-            ${(data.usernames || []).length ? `<div><h5 class="text-xs font-semibold text-gray-400 uppercase mb-2">Usernames</h5>${chips(data.usernames)}</div>` : ''}
-            ${(data.domains || []).length ? `<div><h5 class="text-xs font-semibold text-gray-400 uppercase mb-2">Domains</h5>${chips(data.domains)}</div>` : ''}
+            ${(data.usernames || []).length ? `<div><h5 class="text-xs font-semibold text-gray-400 uppercase mb-2">Usernames</h5>${chips(data.usernames, 200, 'font-mono', 'username')}</div>` : ''}
+            ${(data.domains || []).length ? `<div><h5 class="text-xs font-semibold text-gray-400 uppercase mb-2">Domains</h5>${chips(data.domains, 200, 'font-mono', 'domain')}</div>` : ''}
             ${(data.ssh_keys || []).length ? `<div><h5 class="text-xs font-semibold text-gray-400 uppercase mb-2">SSH keys</h5>${chips(data.ssh_keys)}</div>` : ''}
             ${(data.repos || []).length ? `<div><h5 class="text-xs font-semibold text-gray-400 uppercase mb-2">Repositories (${data.repos.length})</h5>${renderTable(data.repos, ['name', 'main_language', 'stars', 'forks', 'is_fork'])}</div>` : ''}
         </div>`;
@@ -491,10 +498,10 @@ function renderCavalier(data) {
                         <div><div class="text-gray-500">Compromised</div><div class="text-gray-200">${escapeHtml((e.date_compromised || '').slice(0, 19).replace('T', ' '))}</div></div>
                         <div><div class="text-gray-500">Computer</div><div class="text-gray-200 break-all">${escapeHtml(e.computer_name)}</div></div>
                         <div><div class="text-gray-500">OS</div><div class="text-gray-200">${escapeHtml(e.operating_system)}</div></div>
-                        <div><div class="text-gray-500">IP</div><div class="text-gray-200 font-mono">${escapeHtml(e.ip)}</div></div>
+                        <div><div class="text-gray-500">IP</div><div class="text-gray-200 font-mono">${pivotText('ip', e.ip)}</div></div>
                     </div>
                     ${e.malware_path ? `<div class="text-xs"><span class="text-gray-500">Malware path:</span> <span class="font-mono text-gray-300 break-all">${escapeHtml(e.malware_path)}</span></div>` : ''}
-                    ${(e.top_logins || []).length ? `<div><div class="text-xs text-gray-500 mb-1">Top logins</div>${chips(e.top_logins)}</div>` : ''}
+                    ${(e.top_logins || []).length ? `<div><div class="text-xs text-gray-500 mb-1">Top logins</div>${chips(e.top_logins, 200, 'font-mono', 'username')}</div>` : ''}
                     ${(e.top_passwords || []).length ? `<div><div class="text-xs text-gray-500 mb-1">Top passwords</div>${chips(e.top_passwords)}</div>` : ''}
                     ${(e.credentials || []).length ? `<div><div class="text-xs text-gray-500 mb-1">Credentials</div>${renderTable(e.credentials, ['domain', 'username', 'url'])}</div>` : ''}
                 </div>`).join('')}
@@ -515,8 +522,8 @@ function renderGhuntProfile(data) {
                 ${safeUrl(avatar) ? `<img src="${escapeAttr(safeUrl(avatar))}" alt="" loading="lazy" class="w-16 h-16 rounded-full object-cover border-2 border-purple-500/50 shrink-0">` : ''}
                 <div class="space-y-1 min-w-0">
                     <h4 class="text-lg font-bold text-white">${escapeHtml(name)}</h4>
-                    ${email ? `<div class="text-sm text-gray-300">${escapeHtml(email)}</div>` : ''}
-                    ${gaiaId ? `<div class="text-xs text-gray-400 font-mono">Gaia ID ${escapeHtml(gaiaId)} · ${link(`https://www.google.com/maps/contrib/${encodeURIComponent(gaiaId)}/reviews`, 'Maps reviews')}</div>` : ''}
+                    ${email ? `<div class="text-sm text-gray-300">${pivotText('email', email)}</div>` : ''}
+                    ${gaiaId ? `<div class="text-xs text-gray-400 font-mono">Gaia ID ${pivotText('gaia_id', gaiaId)} · ${link(`https://www.google.com/maps/contrib/${encodeURIComponent(gaiaId)}/reviews`, 'Maps reviews')}</div>` : ''}
                 </div>
             </div>
             ${Object.values(rest).some(Boolean) ? renderValue(rest, 1) : ''}
@@ -540,7 +547,7 @@ function renderWebSearch(data) {
                             <div class="text-sm font-semibold">${link(r.link || r.url, r.title || r.link || r.url)}</div>
                             ${r.engine ? `<span class="text-[10px] px-1.5 py-0.5 rounded bg-gray-800 text-gray-400 uppercase shrink-0">${escapeHtml(r.engine)}</span>` : ''}
                         </div>
-                        ${r.snippet ? `<p class="text-xs text-gray-400 mt-1">${escapeHtml(r.snippet)}</p>` : ''}
+                        ${r.snippet ? `<p class="text-xs text-gray-400 mt-1">${pivotInText(r.snippet)}</p>` : ''}
                     </div>`).join('')}
             </div>
         </div>`;
@@ -573,7 +580,7 @@ function renderFunstatUsers(data) {
             <div class="w-12 h-12 rounded-full bg-purple-900/50 flex items-center justify-center text-xl shrink-0">${u.is_bot ? '🤖' : '👤'}</div>
             <div class="min-w-0">
                 <div class="text-lg font-bold text-white">${escapeHtml([u.first_name, u.last_name].filter(Boolean).join(' ') || 'Unknown')}</div>
-                <div class="text-sm text-gray-400">${u.username ? `${link(`https://t.me/${encodeURIComponent(u.username)}`, '@' + u.username)} · ` : ''}<span class="font-mono">ID ${escapeHtml(u.id)}</span></div>
+                <div class="text-sm text-gray-400">${u.username ? `${pivotText('telegram_username', u.username, '@' + u.username)} ${link(`https://t.me/${encodeURIComponent(u.username)}`, '↗')} · ` : ''}<span class="font-mono">ID ${pivotText('telegram_id', u.id)}</span></div>
             </div>
         </div>`).join('');
 }
@@ -598,7 +605,7 @@ function renderTmeProfile(p) {
             <div class="min-w-0 text-sm space-y-1">
                 <div class="text-lg font-semibold text-white">${escapeHtml(p.name || '')}</div>
                 <div>${pivotChip('telegram_username', p.username, '@' + p.username)}</div>
-                ${p.bio ? `<div class="text-gray-300 whitespace-pre-wrap break-words">${escapeHtml(p.bio)}</div>` : ''}
+                ${p.bio ? `<div class="text-gray-300 whitespace-pre-wrap break-words">${pivotInText(p.bio)}</div>` : ''}
                 <a href="${escapeAttr(p.link)}" target="_blank" rel="noopener noreferrer" class="text-xs text-purple-300 hover:text-white">${escapeHtml(p.link)}</a>
             </div>
         </div>`;
@@ -617,7 +624,7 @@ function renderFunstatMessages(messages) {
                         <span class="text-purple-300 truncate">${escapeHtml((m.group && m.group.title) || 'Unknown chat')}</span>
                         <span class="shrink-0">${escapeHtml(m.date ? new Date(m.date).toLocaleString() : '')}</span>
                     </div>
-                    <div class="text-sm text-gray-200 whitespace-pre-wrap break-words">${m.text ? escapeHtml(m.text) : '<i class="text-gray-500">media / no text</i>'}</div>
+                    <div class="text-sm text-gray-200 whitespace-pre-wrap break-words">${m.text ? pivotInText(m.text) : '<i class="text-gray-500">media / no text</i>'}</div>
                 </div>`).join('')}
             ${messages.length > limit ? `<p class="text-xs text-gray-500">Showing ${limit} of ${messages.length} - open in module to browse all.</p>` : ''}
         </div>`;

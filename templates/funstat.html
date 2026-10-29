@@ -1374,7 +1374,6 @@ function formatNumber(num) {
 
 // Display enriched links section
 function displayEnrichedLinks(results) {
-    showIdentifiers({ links: results }, { append: true });
     window.enrichedLinksData = results;
 
     if (!results || results.length === 0) {
@@ -1479,9 +1478,8 @@ function renderTikTokCard(data) {
                         <h6 class="font-bold text-white truncate">${escapeHtml(data.nickname || data.username || 'Unknown')}</h6>
                         ${data.private_account ? '<i class="fas fa-lock text-gray-500 text-xs" title="Private Account"></i>' : ''}
                     </div>
-                    <a href="${escapeAttr(safeUrl(data.profile || '#'))}" target="_blank" class="text-sm text-purple-400 hover:text-purple-300">
-                        @${escapeHtml(data.username || 'unknown')}
-                    </a>
+                    <span class="text-sm text-purple-400 hover:text-purple-300">${data.username ? pivotText('username', data.username, '@' + data.username) : '@unknown'}</span>
+                        <a href="${escapeAttr(safeUrl(data.profile || '#'))}" target="_blank" rel="noopener noreferrer" class="text-sm text-purple-400 hover:text-purple-300 ml-1" title="Open profile"><i class="fas fa-external-link-alt text-[10px]"></i></a>
                     ${data.country ? `
                         <div class="flex items-center gap-1 mt-1 text-xs text-gray-500">
                             <i class="fas fa-map-marker-alt"></i>
@@ -1545,9 +1543,8 @@ function renderInstagramCard(data) {
                 `}
                 <div class="flex-1 min-w-0">
                     <h6 class="font-bold text-white truncate">${escapeHtml(data.full_name || data.username || 'Unknown')}</h6>
-                    <a href="https://instagram.com/${escapeAttr(data.username)}" target="_blank" class="text-sm text-purple-400 hover:text-purple-300">
-                        @${escapeHtml(data.username || 'unknown')}
-                    </a>
+                    <span class="text-sm text-purple-400 hover:text-purple-300">${data.username ? pivotText('username', data.username, '@' + data.username) : '@unknown'}</span>
+                        <a href="https://instagram.com/${escapeAttr(data.username)}" target="_blank" rel="noopener noreferrer" class="text-sm text-purple-400 hover:text-purple-300 ml-1" title="Open profile"><i class="fas fa-external-link-alt text-[10px]"></i></a>
                     ${data.biography || data.bio ? `
                         <p class="text-sm text-gray-400 mt-2 line-clamp-2">${escapeHtml(data.biography || data.bio)}</p>
                     ` : ''}
@@ -1629,9 +1626,8 @@ function renderTelegramCard(data) {
                 <div class="flex-1 min-w-0">
                     <h6 class="font-bold text-white truncate">${escapeHtml(data.title || data.name || 'Unknown')}</h6>
                     ${data.username ? `
-                        <a href="https://t.me/${escapeAttr(data.username)}" target="_blank" class="text-sm text-purple-400 hover:text-purple-300">
-                            @${escapeHtml(data.username)}
-                        </a>
+                        <span class="text-sm text-purple-400 hover:text-purple-300">${pivotText('telegram_username', data.username, '@' + data.username)}</span>
+                            <a href="https://t.me/${escapeAttr(data.username)}" target="_blank" rel="noopener noreferrer" class="text-sm text-purple-400 hover:text-purple-300 ml-1" title="Open profile"><i class="fas fa-external-link-alt text-[10px]"></i></a>
                     ` : ''}
                     ${data.description || data.about ? `
                         <p class="text-sm text-gray-400 mt-2 line-clamp-2">${escapeHtml(data.description || data.about)}</p>
@@ -2067,7 +2063,6 @@ function enableUserActions() {
 }
 
 function displayUserBasicInfo(user) {
-    showIdentifiers(user);
     const html = `
         <div class="result-card border border-gray-800 rounded-xl p-6 card-hover fade-in">
             <div class="flex items-start justify-between mb-4">
@@ -2079,10 +2074,10 @@ function displayUserBasicInfo(user) {
                         <h3 class="text-2xl font-bold text-white">
                             ${escapeHtml(user.first_name || '')} ${escapeHtml(user.last_name || '')}
                         </h3>
-                        ${user.username ? `<p class="text-purple-400">@${escapeHtml(user.username)}</p>` : ''}
+                        ${user.username ? `<p class="text-purple-400">${pivotText('telegram_username', user.username, '@' + user.username)}</p>` : ''}
                         <div id="tmeProfile" class="text-sm"></div>
                         <div class="flex items-center gap-2 mt-1">
-                            <p class="text-gray-500 text-sm">ID: ${escapeHtml(user.id)}</p>
+                            <p class="text-gray-500 text-sm">ID: ${pivotText('telegram_id', user.id)}</p>
                             <button onclick="copyToClipboard('${escapeAttr(user.id)}', this)" class="text-gray-500 hover:text-purple-400 transition-colors text-sm" title="Copy ID">
                                 <i class="fas fa-copy"></i>
                             </button>
@@ -2128,7 +2123,6 @@ async function loadTmeProfile(username) {
 }
 
 function displayUserStats(stats, full = false) {
-    showIdentifiers(stats, { append: true });
     const existingCard = document.querySelector('#userResults .result-card');
 
     const statsHtml = `
@@ -2187,7 +2181,6 @@ function displayUserStats(stats, full = false) {
 }
 
 function displayUserGroups(groups) {
-    showIdentifiers(groups, { append: true });
     const html = `
         <div class="result-card border border-gray-800 rounded-xl p-6 mt-6 fade-in">
             <h4 class="text-xl font-bold mb-4 flex items-center">
@@ -2202,9 +2195,8 @@ function displayUserGroups(groups) {
                             <div class="flex-1">
                                 <p class="font-semibold text-white">${escapeHtml(g.chat.title)}</p>
                                 ${g.chat.username ? `
-                                    <a href="https://t.me/${escapeAttr(g.chat.username)}" target="_blank" class="text-sm text-purple-400 hover:text-purple-300">
-                                        @${escapeHtml(g.chat.username)}
-                                    </a>
+                                    <span class="text-sm text-purple-400 hover:text-purple-300">${pivotText('telegram_username', g.chat.username, '@' + g.chat.username)}</span>
+                                        <a href="https://t.me/${escapeAttr(g.chat.username)}" target="_blank" rel="noopener noreferrer" class="text-sm text-purple-400 hover:text-purple-300 ml-1" title="Open profile"><i class="fas fa-external-link-alt text-[10px]"></i></a>
                                 ` : ''}
                                 <p class="text-xs text-gray-500">ID: ${escapeHtml(g.chat.id)}</p>
                                 <div class="flex items-center gap-4 mt-2 text-xs text-gray-400">
@@ -2224,7 +2216,6 @@ function displayUserGroups(groups) {
 }
 
 function displayUserMessages(data) {
-    showIdentifiers(data, { append: true });
     const messages = data.messages || [];
     const paging = data.paging || {};
     const totalPages = paging.totalPages || Math.ceil((paging.total || 0) / (paging.pageSize || 20)) || 1;
@@ -2458,7 +2449,6 @@ async function flushThumbnails() {
 }
 
 function displayAllMessagesWithFilters(messages) {
-    showIdentifiers({ messages }, { append: true });
     messageList.all = messages || [];
     messageList.all.forEach(msg => {
         const group = msg.group || {};
@@ -2709,7 +2699,6 @@ function displayMessagesAnalysis(analysis) {
 }
 
 function displayGroupInfo(group) {
-    showIdentifiers(group);
     const data = group.data || group;
 
     const html = `
@@ -2722,9 +2711,8 @@ function displayGroupInfo(group) {
                     <div>
                         <h3 class="text-2xl font-bold text-white">${escapeHtml(data.title || 'Unknown Group')}</h3>
                         ${data.username ? `
-                            <a href="https://t.me/${escapeAttr(data.username)}" target="_blank" class="text-blue-400 hover:text-blue-300">
-                                @${escapeHtml(data.username)}
-                            </a>
+                            <span class="text-blue-400 hover:text-blue-300">${pivotText('telegram_username', data.username, '@' + data.username)}</span>
+                                <a href="https://t.me/${escapeAttr(data.username)}" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:text-blue-300 ml-1" title="Open profile"><i class="fas fa-external-link-alt text-[10px]"></i></a>
                         ` : ''}
                         <p class="text-gray-500 text-sm">ID: ${currentGroupId}</p>
                     </div>
@@ -2760,7 +2748,6 @@ function displayGroupInfo(group) {
 }
 
 function displayGroupMembers(members) {
-    showIdentifiers({ members }, { append: true });
     const html = `
         <div class="result-card border border-gray-800 rounded-xl p-6 mt-6">
             <h4 class="text-xl font-bold mb-4 flex items-center">
@@ -2780,9 +2767,8 @@ function displayGroupMembers(members) {
                                     ${escapeHtml(member.first_name || '')} ${escapeHtml(member.last_name || '')}
                                 </p>
                                 ${member.username ? `
-                                    <a href="https://t.me/${escapeAttr(member.username)}" target="_blank" class="text-sm text-purple-400 hover:text-purple-300">
-                                        @${escapeHtml(member.username)}
-                                    </a>
+                                    <span class="text-sm text-purple-400 hover:text-purple-300">${pivotText('telegram_username', member.username, '@' + member.username)}</span>
+                                        <a href="https://t.me/${escapeAttr(member.username)}" target="_blank" rel="noopener noreferrer" class="text-sm text-purple-400 hover:text-purple-300 ml-1" title="Open profile"><i class="fas fa-external-link-alt text-[10px]"></i></a>
                                 ` : ''}
                             </div>
                         </div>
@@ -2801,7 +2787,6 @@ function displayGroupMembers(members) {
 }
 
 function displayTextResults(data) {
-    showIdentifiers(data);
     const results = data.results || [];
 
     const html = `
@@ -2820,7 +2805,7 @@ function displayTextResults(data) {
                         <div class="bg-gray-800/50 p-4 rounded-lg hover:bg-gray-800 transition-all">
                             <div class="flex justify-between items-start mb-2">
                                 <div class="flex items-center gap-2">
-                                    ${result.username ? `<span class="text-purple-400">@${escapeHtml(result.username)}</span>` : ''}
+                                    ${result.username ? `<span class="text-purple-400">${pivotText('telegram_username', result.username, '@' + result.username)}</span>` : ''}
                                     ${result.name ? `<span class="text-white">${escapeHtml(result.name)}</span>` : ''}
                                 </div>
                                 <span class="text-xs text-gray-500">${escapeHtml(result.date ? new Date(result.date).toLocaleString() : '')}</span>
@@ -2877,7 +2862,6 @@ function displayTextResults(data) {
 }
 
 function displayUsernameResults(data) {
-    showIdentifiers(data);
     const html = `
         <div class="result-card border border-gray-800 rounded-xl p-6">
             <h4 class="text-xl font-bold mb-4 flex items-center">
@@ -2893,7 +2877,7 @@ function displayUsernameResults(data) {
                             <div class="bg-gray-800/50 p-3 rounded-lg flex justify-between items-center">
                                 <div>
                                     <p class="font-medium text-white">${escapeHtml(user.first_name || '')} ${escapeHtml(user.last_name || '')}</p>
-                                    <p class="text-sm text-gray-400">ID: ${escapeHtml(user.id)}</p>
+                                    <p class="text-sm text-gray-400">ID: ${pivotText('telegram_id', user.id)}</p>
                                 </div>
                                 ${user.is_active ? '<span class="stat-badge px-2 py-1 rounded text-xs text-green-400">Active</span>' : ''}
                             </div>
@@ -2909,7 +2893,7 @@ function displayUsernameResults(data) {
                         ${data.usage_by_users_in_the_past.map(user => `
                             <div class="bg-gray-800/50 p-3 rounded-lg">
                                 <p class="font-medium text-white">${escapeHtml(user.first_name || '')} ${escapeHtml(user.last_name || '')}</p>
-                                <p class="text-sm text-gray-400">ID: ${escapeHtml(user.id)}</p>
+                                <p class="text-sm text-gray-400">ID: ${pivotText('telegram_id', user.id)}</p>
                             </div>
                         `).join('')}
                     </div>
@@ -2925,7 +2909,7 @@ function displayUsernameResults(data) {
                                 <a href="https://t.me/${escapeAttr(group.username)}" target="_blank" class="font-medium text-white hover:text-purple-400">
                                     ${escapeHtml(group.title)}
                                 </a>
-                                ${group.username ? `<p class="text-sm text-purple-400">@${escapeHtml(group.username)}</p>` : ''}
+                                ${group.username ? `<p class="text-sm text-purple-400">${pivotText('telegram_username', group.username, '@' + group.username)}</p>` : ''}
                             </div>
                         `).join('')}
                     </div>

@@ -60,7 +60,7 @@ function createStealerCard(data, isEmailSearch) {
                         <p><i class="fas fa-shield-alt stealer-icon"></i><span class="stealer-label">Antiviruses:</span>
                         <span class="stealer-value">${escapeHtml(Array.isArray(entry.antiviruses) ? entry.antiviruses.join(", ") : entry.antiviruses)}</span></p>
                         <p><i class="fas fa-network-wired stealer-icon"></i><span class="stealer-label">IP:</span>
-                        <span class="stealer-value">${escapeHtml(entry.ip)}</span></p>
+                        <span class="stealer-value">${pivotText("ip", entry.ip)}</span></p>
                         ${entry.clientAt ? `<p><i class="fas fa-users stealer-icon"></i><span class="stealer-label">Client At:</span>
                             <span class="stealer-value">${escapeHtml(entry.clientAt.filter(e => e).join(", "))}</span></p>` : ''}
                         ${entry.credentials?.length > 0 ? `
@@ -69,8 +69,8 @@ function createStealerCard(data, isEmailSearch) {
                             <div class="credentials-grid">
                                 ${entry.credentials.map(cred => `
                                     <div class="credential-line">
-                                        <span class="cred-domain">${escapeHtml(cred.domain)}</span>
-                                        <span class="cred-username">${escapeHtml(cred.username)}</span>
+                                        <span class="cred-domain">${pivotText("domain", String(cred.domain || "").replace(/^https?:\/\//, "").split("/")[0], cred.domain)}</span>
+                                        <span class="cred-username">${pivotLogin(cred.username)}</span>
                                         <span class="cred-password">${cred.password ? '••••••••••' : ''}</span>
                                     </div>
                                 `).join('')}
@@ -100,14 +100,14 @@ function createStealerCard(data, isEmailSearch) {
                         <p><i class="fas fa-shield-alt stealer-icon"></i><span class="stealer-label">Antiviruses:</span>
                         <span class="stealer-value">${escapeHtml(Array.isArray(stealer.antiviruses) ? stealer.antiviruses.join(", ") : stealer.antiviruses)}</span></p>
                         <p><i class="fas fa-network-wired stealer-icon"></i><span class="stealer-label">IP:</span>
-                        <span class="stealer-value">${escapeHtml(stealer.ip)}</span></p>
+                        <span class="stealer-value">${pivotText("ip", stealer.ip)}</span></p>
                         <p><i class="fas fa-key stealer-icon"></i><span class="stealer-label">Top Passwords:</span>
                         <ul class="stealer-list">
                             ${stealer.top_passwords.map((pwd) => `<li>${escapeHtml(pwd)}</li>`).join("")}
                         </ul></p>
                         <p><i class="fas fa-user stealer-icon"></i><span class="stealer-label">Top Logins:</span>
                         <ul class="stealer-list">
-                            ${stealer.top_logins.map((login) => `<li>${escapeHtml(login)}</li>`).join("")}
+                            ${stealer.top_logins.map((login) => `<li>${pivotLogin(login)}</li>`).join("")}
                         </ul></p>
                     `;
             });
@@ -139,7 +139,6 @@ async function displayResults(input) {
 }
 
 function renderCavalierData(data, isEmailSearch) {
-    showIdentifiers(data);
     const stealerResultsContainer = document.getElementById("stealerResults");
     stealerResultsContainer.innerHTML = "";
 

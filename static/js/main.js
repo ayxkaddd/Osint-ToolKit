@@ -923,6 +923,13 @@ document.addEventListener("click", (event) => {
   if (!event.target.closest("#pivotMenu")) closePivotMenu()
 })
 window.addEventListener("scroll", closePivotMenu, { passive: true })
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter" && event.key !== " ") return
+  const trigger = event.target.closest?.(".pivot-link[data-pivot-type]")
+  if (!trigger) return
+  event.preventDefault()
+  openPivotMenu(trigger.dataset.pivotType, trigger.dataset.pivotValue, trigger, {})
+})
 
 // Chip for an identifier that opens the pivot menu
 function pivotChip(type, value, label = null) {
@@ -930,6 +937,91 @@ function pivotChip(type, value, label = null) {
       class="pivot-chip" title="Look up with another module">${escapeHtml(label || value)}<i class="fas fa-chevron-down"></i></button>`
 }
 window.pivotChip = pivotChip
+
+// An identifier inside result text (an email in a list, a username in a heading):
+// looks like the text around it, underlined, and opens the same "look up with" menu.
+// pivotText("email", "a@b.c") / pivotText("username", handle, "@" + handle)
+// Shapes a value must have to be offered as that type (masked or partial values stay plain text)
+const PIVOT_SHAPES = {
+  email: /^[^\s@*]+@[^\s@*]+\.[^\s@*]+$/,
+  ip: /^(\d{1,3}\.){3}\d{1,3}$|^[0-9a-f]*:[0-9a-f:]+$/i,
+  domain: /^(?!-)(?:[a-z0-9-]+\.)+[a-z]{2,}$/i,
+  url: /^https?:\/\/[^\s*]+$/i,
+  phone: /^\+?[\d][\d\s().-]{5,}\d$/,
+  username: /^@?[\w.-]{2,64}$/,
+  telegram_username: /^@?[\w]{3,64}$/,
+  telegram_id: /^\d{5,15}$/,
+  gaia_id: /^\d{15,25}$/,
+}
+
+// The type a value can be offered as, or null (a "username" that is an email is an email)
+function pivotTypeFor(type, value) {
+  const text = String(value ?? "").trim()
+  if (!type || !text) return null
+  if ((type === "username" || type === "telegram_username") && text.includes("@") && !text.startsWith("@")) type = "email"
+  const shape = PIVOT_SHAPES[type]
+  return shape && !shape.test(text) ? null : type
+}
+window.pivotTypeFor = pivotTypeFor
+
+function pivotText(type, value, label = null) {
+  if (value === undefined || value === null || value === "") return escapeHtml(label ?? "")
+  const text = String(value).trim()
+  type = pivotTypeFor(type, text)
+  if (!type) return escapeHtml(label ?? value)
+  value = type === "username" || type === "telegram_username" ? text.replace(/^@/, "") : text
+  return `<span role="button" tabindex="0" data-pivot-type="${escapeAttr(type)}" data-pivot-value="${escapeAttr(value)}"
+      class="pivot-link" title="Look up with another module">${escapeHtml(label ?? value)}</span>`
+}
+window.pivotText = pivotText
+
+// A login that is an email or a username
+function pivotLogin(value, label = null) {
+  return pivotText(String(value ?? "").includes("@") ? "email" : "username", value, label)
+}
+window.pivotLogin = pivotLogin
+
+// Identifier type a field name implies (same idea as services/entities.py _key_hint)
+function pivotKeyType(key) {
+  const k = String(key ?? "").toLowerCase().replace(/[\s-]+/g, "_")
+  if (k.includes("email") || k === "mail" || k === "e_mail") return "email"
+  if (/phone|msisdn|mobile|^tel$|telephone/.test(k)) return "phone"
+  if (/^(username|user_name|login|screen_name|nickname|handle|usernames|twitter|twitter_username|github|instagram|tiktok)$/.test(k)) return "username"
+  if (/^(telegram|telegram_username|tg_username)$/.test(k)) return "telegram_username"
+  if (/^(telegram_id|tg_id|user_id_telegram)$/.test(k)) return "telegram_id"
+  if (/^(domain|domains|hostname|hostnames|host|hosts|subdomain|subdomains)$/.test(k) || k.endsWith("_domain")) return "domain"
+  if (/^(ip|ip_address|ipaddress|ip_addr|ips)$/.test(k)) return "ip"
+  if (/gaia/.test(k) || k === "personid") return "gaia_id"
+  return null
+}
+
+// A result field's value: clickable when the field or the value is an identifier
+// (emails and +phones are recognised by shape whatever the field is called)
+function pivotField(key, value, label = null) {
+  if (value === undefined || value === null || typeof value === "object") return escapeHtml(label ?? value ?? "")
+  const text = String(value).trim()
+  let type = pivotKeyType(key)
+  if (!type && PIVOT_SHAPES.email.test(text)) type = "email"
+  else if (!type && text.startsWith("+") && PIVOT_SHAPES.phone.test(text)) type = "phone"
+  return type ? pivotText(type, text, label) : escapeHtml(label ?? value)
+}
+window.pivotField = pivotField
+
+// Free text (a snippet, bio or message): escaped, with the emails and +phone numbers in it clickable
+const TEXT_IDENTIFIER_RE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,24}|\+\d[\d\s().-]{7,18}\d/g
+function pivotInText(text) {
+  const source = String(text ?? "")
+  let out = ""
+  let last = 0
+  for (const match of source.matchAll(TEXT_IDENTIFIER_RE)) {
+    const found = match[0]
+    out += escapeHtml(source.slice(last, match.index))
+    out += found.includes("@") ? pivotText("email", found) : pivotText("phone", found.replace(/[\s().-]/g, ""), found)
+    last = match.index + found.length
+  }
+  return out + escapeHtml(source.slice(last))
+}
+window.pivotInText = pivotInText
 
 // Identifiers grouped by type, as pivot chips (investigation results and module pages)
 function identifierGroupsHtml(entities, limit = 150) {
@@ -946,66 +1038,6 @@ function identifierGroupsHtml(entities, limit = 150) {
 }
 window.identifierGroupsHtml = identifierGroupsHtml
 
-// Module pages: "Identifiers found" under the results - the emails, phones, usernames,
-// domains... in what a lookup returned, extracted the same way as saved results.
-// showIdentifiers(data) replaces the panel; showIdentifiers(data, { append: true })
-// adds to it (pages that show one lookup in several parts); resetIdentifiers() hides it.
-let identifierSources = []
-let identifierRequest = 0
-
-function identifiersPanel() {
-  let panel = document.getElementById("identifiersPanel")
-  if (!panel) {
-    panel = document.createElement("section")
-    panel.id = "identifiersPanel"
-    panel.className = "hidden mt-8 bg-[#14151f] border border-[#24283b] rounded-xl p-5"
-    const host = document.querySelector("[data-identifiers-host]") || document.querySelector(".page") || document.querySelector("main") || document.body
-    host.appendChild(panel)
-  }
-  return panel
-}
-
-let identifierTimer = null
-
-function showIdentifiers(data, { append = false, service = window.currentService } = {}) {
-  if (data === undefined || data === null) return
-  identifierSources = append ? [...identifierSources, data] : [data]
-  // pages that repaint while results stream in call this often: extract once they settle
-  clearTimeout(identifierTimer)
-  identifierTimer = setTimeout(() => extractIdentifiers(service), 400)
-}
-
-async function extractIdentifiers(service) {
-  const request = ++identifierRequest
-  const panel = identifiersPanel()
-  try {
-    const response = await fetch("/api/entities/extract", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ service: service || "", data: identifierSources.length === 1 ? identifierSources[0] : identifierSources }),
-    })
-    if (!response.ok) throw new Error(`HTTP ${response.status}`)
-    const { entities } = await response.json()
-    if (request !== identifierRequest) return // a newer lookup replaced this one
-    panel.innerHTML = `
-      <h3 class="text-sm font-bold text-gray-300 mb-3"><i class="fas fa-fingerprint mr-2 text-purple-400"></i>Identifiers found
-        <span class="font-normal text-gray-500">${entities.length ? `(${entities.length}) - click one to look it up with another module` : ""}</span></h3>
-      ${entities.length ? identifierGroupsHtml(entities) : '<p class="text-sm text-gray-500">No emails, phones, usernames, domains or other identifiers recognised in this result.</p>'}`
-    panel.classList.remove("hidden")
-  } catch (e) {
-    if (request === identifierRequest) panel.classList.add("hidden")
-  }
-}
-
-function resetIdentifiers() {
-  identifierSources = []
-  clearTimeout(identifierTimer)
-  identifierRequest++
-  const panel = document.getElementById("identifiersPanel")
-  if (panel) panel.classList.add("hidden")
-}
-window.showIdentifiers = showIdentifiers
-window.resetIdentifiers = resetIdentifiers
 
 // ---------------------------------------------------------------------------
 // Name server pairs -> "find other domains on the same name servers" (NS lookup)

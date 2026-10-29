@@ -335,7 +335,7 @@ class OSINTSearch {
 
             ${keyInfo.username ? `
                 <div class="username-handle-row">
-                    <span title="@${this.escapeHtml(String(keyInfo.username))}">@${this.escapeHtml(String(keyInfo.username))}</span>
+                    <span title="@${this.escapeHtml(String(keyInfo.username))}">${pivotText('username', String(keyInfo.username), '@' + keyInfo.username)}</span>
                     <button class="copy-username-btn" data-username="${this.escapeHtml(String(keyInfo.username))}" title="Copy username">
                         <i class="fas fa-copy"></i>
                     </button>
@@ -344,13 +344,13 @@ class OSINTSearch {
 
             <div class="username-card-content">
                 ${keyInfo.bio ? `
-                    <p class="username-card-bio">${this.escapeHtml(String(keyInfo.bio))}</p>
+                    <p class="username-card-bio">${pivotInText(String(keyInfo.bio))}</p>
                 ` : ''}
 
                 ${metaRows.map(row => `
                     <div class="username-data-row">
                         <strong>${this.escapeHtml(row.label)}</strong>
-                        <span title="${this.escapeHtml(String(row.value))}">${this.escapeHtml(String(row.value))}</span>
+                        <span title="${this.escapeHtml(String(row.value))}">${pivotField(row.label, row.value)}</span>
                     </div>
                 `).join('')}
 
@@ -536,7 +536,6 @@ class OSINTSearch {
         if (!result) return;
 
         result.profileData = data.profile_data;
-        showIdentifiers({ results: this.results });   // profiles carry emails, names, links
         this.replaceResultCard(result);
     }
 
@@ -1172,7 +1171,7 @@ class OSINTSearch {
 
             html += `
                 <div class="${indentClass} mb-2">
-                    <span class="text-gray-400 text-sm font-medium">${key}:</span>
+                    <span class="text-gray-400 text-sm font-medium">${this.escapeHtml(key)}:</span>
             `;
 
             value.forEach((item, index) => {
@@ -1183,7 +1182,7 @@ class OSINTSearch {
                     }
                     html += `</div>`;
                 } else {
-                    html += `<div class="ml-4 text-white text-sm">${this.escapeHtml(String(item))}</div>`;
+                    html += `<div class="ml-4 text-white text-sm">${pivotField(key, item)}</div>`;
                 }
             });
 
@@ -1197,7 +1196,7 @@ class OSINTSearch {
 
             html += `
                 <div class="${indentClass} mb-2">
-                    <span class="text-gray-400 text-sm font-medium">${key}:</span>
+                    <span class="text-gray-400 text-sm font-medium">${this.escapeHtml(key)}:</span>
                     <div class="ml-4 mt-1 p-2 bg-gray-800/50 rounded border border-gray-700">
             `;
 
@@ -1212,8 +1211,8 @@ class OSINTSearch {
         if (typeof value === 'string' && (value.startsWith('http://') || value.startsWith('https://'))) {
             return `
                 <div class="${indentClass} flex justify-between items-start gap-4 mb-2">
-                    <span class="text-gray-400 text-sm whitespace-nowrap">${key}</span>
-                    <a href="${value}" target="_blank" class="text-purple-400 hover:text-purple-300 hover:underline text-sm text-right break-all">${this.truncateUrl(value)}</a>
+                    <span class="text-gray-400 text-sm whitespace-nowrap">${this.escapeHtml(key)}</span>
+                    <a href="${this.escapeHtml(safeUrl(value))}" target="_blank" rel="noopener noreferrer" class="text-purple-400 hover:text-purple-300 hover:underline text-sm text-right break-all">${this.escapeHtml(this.truncateUrl(value))}</a>
                 </div>
             `;
         }
@@ -1222,7 +1221,7 @@ class OSINTSearch {
             const boolValue = value === true || value === 'True';
             return `
                 <div class="${indentClass} flex justify-between items-start gap-4 mb-2">
-                    <span class="text-gray-400 text-sm whitespace-nowrap">${key}</span>
+                    <span class="text-gray-400 text-sm whitespace-nowrap">${this.escapeHtml(key)}</span>
                     <span class="px-2 py-0.5 rounded ${boolValue ? 'bg-green-900 text-green-300' : 'bg-red-900 text-red-300'} text-xs">${boolValue ? 'Yes' : 'No'}</span>
                 </div>
             `;
@@ -1234,8 +1233,8 @@ class OSINTSearch {
                 const formattedValue = date.toLocaleDateString() + (value.includes('T') ? ' ' + date.toLocaleTimeString() : '');
                 return `
                     <div class="${indentClass} flex justify-between items-start gap-4 mb-2">
-                        <span class="text-gray-400 text-sm whitespace-nowrap">${key}</span>
-                        <span class="text-white text-sm text-right">${formattedValue}</span>
+                        <span class="text-gray-400 text-sm whitespace-nowrap">${this.escapeHtml(key)}</span>
+                        <span class="text-white text-sm text-right">${this.escapeHtml(formattedValue)}</span>
                     </div>
                 `;
             }
@@ -1243,8 +1242,8 @@ class OSINTSearch {
 
         return `
             <div class="${indentClass} flex justify-between items-start gap-4 mb-2">
-                <span class="text-gray-400 text-sm whitespace-nowrap">${key}</span>
-                <span class="text-white text-sm text-right break-words">${this.escapeHtml(String(value))}</span>
+                <span class="text-gray-400 text-sm whitespace-nowrap">${this.escapeHtml(key)}</span>
+                <span class="text-white text-sm text-right break-words">${pivotField(key, value)}</span>
             </div>
         `;
     }
@@ -1301,7 +1300,6 @@ class OSINTSearch {
 
     resetResults() {
         this.results = [];
-        resetIdentifiers();
         this.resultsByCategory = {};
         this.stats = { scanned: 0, total: 0, found: 0, unchecked: 0 };
         this.viewMode = 'flat';
@@ -1324,7 +1322,6 @@ class OSINTSearch {
     }
 
     handleSearchCompleted(data) {
-        showIdentifiers({ results: this.results });
         const wasRetry = this.retrying;
         this.stopSearch();
         const errored = [...new Set(this.erroredSites || [])];
@@ -1389,8 +1386,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
         }
-
-        showIdentifiers(data);
 
         // Show results section
         search.elements.resultsContainer.classList.remove('hidden');

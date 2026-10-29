@@ -110,9 +110,9 @@ function timelineEntry(entry) {
                 ${entry.first ? `<div class="text-gray-300">First archived record${entry.registrant ? ` - registrant <span class="text-white">${escapeHtml(entry.registrant)}</span>` : ''}${entry.registrar ? `, registrar ${escapeHtml(entry.registrar)}` : ''}</div>` : ''}
                 ${(entry.changes || []).map(c => `
                     <div class="mb-1 break-words"><span class="text-gray-400">${escapeHtml(FIELD_LABELS[c.field] || c.field)}:</span>
-                        <span class="text-red-300/80 line-through decoration-red-400/40">${escapeHtml(c.from)}</span>
+                        <span class="text-red-300/80 line-through decoration-red-400/40">${pivotField(c.field, c.from)}</span>
                         <i class="fas fa-arrow-right text-gray-600 text-xs mx-1"></i>
-                        <span class="text-emerald-200">${escapeHtml(c.to)}</span></div>`).join('')}
+                        <span class="text-emerald-200">${pivotField(c.field, c.to)}</span></div>`).join('')}
             </div>
         </div>`;
 }
@@ -134,7 +134,6 @@ function whoisNsSets(records) {
 }
 
 function displayResults(data) {
-    showIdentifiers(data);
     data = data || {};
     const records = data.records || [];
     const a = data.analysis;

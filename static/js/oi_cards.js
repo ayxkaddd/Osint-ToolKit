@@ -69,9 +69,13 @@ function oiAvatar(url) {
         </div>`;
 }
 
-function oiRow(label, value) {
+// rows are [label, value] or [label, value, identifier type] (plugin cards know the type)
+function oiRow(label, value, type = null) {
     const text = oiValue(value);
-    return `<div class="username-data-row"><strong>${escapeHtml(label)}</strong><span title="${escapeAttr(text)}">${escapeHtml(text)}</span></div>`;
+    // emails, phones, usernames... open the "look up with" menu (OI and plugin cards)
+    const shown = type ? pivotText(type, value, text)
+        : typeof value === 'string' ? pivotField(label, value, text) : escapeHtml(text);
+    return `<div class="username-data-row"><strong>${escapeHtml(label)}</strong><span title="${escapeAttr(text)}">${shown}</span></div>`;
 }
 
 // The first rows, the rest behind the "more" button in the card footer
@@ -79,8 +83,8 @@ function oiRows(rows) {
     const shown = rows.length > OI_ROWS_SHOWN + 1 ? rows.slice(0, OI_ROWS_SHOWN) : rows;
     const hidden = rows.slice(shown.length);
     return {
-        html: shown.map(([label, value]) => oiRow(label, value)).join('')
-            + (hidden.length ? `<div data-oi-more class="hidden">${hidden.map(([label, value]) => oiRow(label, value)).join('')}</div>` : ''),
+        html: shown.map(([label, value, type]) => oiRow(label, value, type)).join('')
+            + (hidden.length ? `<div data-oi-more class="hidden">${hidden.map(([label, value, type]) => oiRow(label, value, type)).join('')}</div>` : ''),
         hidden: hidden.length,
     };
 }
@@ -142,12 +146,12 @@ function oiProfileCard(card) {
         ${oiHeader(card.module, card.category || 'account', oiModuleIcons(card), picture)}
         ${card.username ? `
             <div class="username-handle-row">
-                <span title="@${escapeAttr(String(card.username))}">@${escapeHtml(String(card.username))}</span>
+                <span title="@${escapeAttr(String(card.username))}">${pivotText('username', String(card.username), '@' + card.username)}</span>
                 <button type="button" class="copy-username-btn" data-oi-copy="${escapeAttr(String(card.username))}" title="Copy username"><i class="fas fa-copy"></i></button>
             </div>` : ''}
         ${card.bio || html || stats.length ? `
             <div class="username-card-content">
-                ${card.bio ? `<p class="username-card-bio" title="${escapeAttr(card.bio)}">${escapeHtml(card.bio)}</p>` : ''}
+                ${card.bio ? `<p class="username-card-bio" title="${escapeAttr(card.bio)}">${pivotInText(card.bio)}</p>` : ''}
                 ${html}
                 ${stats.length ? `<div class="username-mini-stats">${stats.slice(0, 6).map(f => `
                     <div title="${escapeAttr(oiValue(f.value))}"><span>${escapeHtml(f.label)}</span><strong>${escapeHtml(oiCompact(f.value))}</strong></div>`).join('')}

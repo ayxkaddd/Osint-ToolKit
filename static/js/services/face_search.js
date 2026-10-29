@@ -290,7 +290,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Accepts the current {query_image, results} shape and older saved lists
     function displayResults(data) {
-        showIdentifiers(data);
         const results = Array.isArray(data) ? data : (data && data.results) || [];
         const queryImage = !Array.isArray(data) && data && data.query_image;
         resultsSection.classList.remove('hidden');

@@ -58,7 +58,6 @@ function showError(message) {
 }
 
 function resetResult() {
-    resetIdentifiers();
     els.error.classList.add('hidden');
     els.result.classList.remove('hidden');
     state.view = new PluginResultsView(els.cards, plugin.id);
@@ -84,7 +83,6 @@ window.loadResultIntoView = function (result, record) {
     resetResult();
     els.cards.innerHTML = renderPluginResult(result);
     masonryPackAll(els.cards);
-    showIdentifiers(result);
     if (window.lucide) lucide.createIcons();
     const when = record && record.timestamp ? ` · ${new Date(record.timestamp).toLocaleString()}` : '';
     setStatus('done', `Saved result for ${result.value || '…'}: ${countText((result.items || []).length)}${when}`);
@@ -156,7 +154,6 @@ async function runLookup() {
     }
     state.controller = null;
     setBusy(false);
-    showIdentifiers(state.view.result);
     const seconds = ((Date.now() - started) / 1000).toFixed(1);
     if (finished) {
         setStatus('done', `${countText(count)} in ${seconds}s`);

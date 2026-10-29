@@ -435,7 +435,6 @@
 
         // --- Render Results ---
         function renderResults(data) {
-            showIdentifiers(data);
             const results = data.results || [];
             const enginesUsed = new Set();
             const dorksUsed = new Set();
@@ -497,10 +496,10 @@
                         </div>
                     </div>
                     <div class="flex items-center gap-2 mb-2">
-                        ${domain ? `<span class="text-xs text-gray-400 font-bold">${escapeHtml(domain)}</span><span class="text-gray-700">|</span>` : ''}
+                        ${domain ? `<span class="text-xs text-gray-400 font-bold">${pivotText('domain', domain)}</span><span class="text-gray-700">|</span>` : ''}
                         <p class="text-xs text-gray-500 truncate">${escapeHtml(url)}</p>
                     </div>
-                    ${result.snippet ? `<p class="text-sm text-gray-400 leading-relaxed mb-3">${escapeHtml(result.snippet)}</p>` : ''}
+                    ${result.snippet ? `<p class="text-sm text-gray-400 leading-relaxed mb-3">${pivotInText(result.snippet)}</p>` : ''}
                     ${result.dork ? `
                         <div class="flex items-center gap-2 mt-2 pt-2 border-t border-gray-800">
                             <i data-lucide="terminal" class="w-3 h-3 text-gray-600"></i>

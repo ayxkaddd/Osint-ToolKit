@@ -14,7 +14,6 @@ function ipField(label, value) {
 }
 
 function renderIp(data) {
-    showIdentifiers(data);
     const basic = data.basic_info || {};
     const abuse = data.abuse_info;
     const shodan = data.shodan_info;
@@ -52,13 +51,13 @@ function renderIp(data) {
         ${warnings.length ? `<div class="bg-yellow-900/30 border border-yellow-700/60 rounded-lg p-4 text-sm text-yellow-100">${warnings.map(w => `<p>${escapeHtml(w)}</p>`).join('')}</div>` : ''}
         <section class="bg-gray-900 rounded-xl p-5 border border-gray-800">
             <div class="flex items-center justify-between gap-3 mb-4">
-                <div class="font-mono text-xl text-purple-200">${escapeHtml(data.ip)}</div>
+                <div class="font-mono text-xl text-purple-200">${pivotText('ip', data.ip)}</div>
                 ${data.reverse_dns ? pivotChip('domain', data.reverse_dns) : '<span class="text-xs text-gray-500">no reverse DNS</span>'}
             </div>
             <div class="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
                 ${ipField('Location', escapeHtml([basic.city, basic.region, basic.country].filter(Boolean).join(', ')))}
                 ${ipField('Network (ASN / owner)', escapeHtml(basic.org))}
-                ${ipField('Hostname', escapeHtml(basic.hostname))}
+                ${ipField('Hostname', pivotText('domain', basic.hostname))}
                 ${ipField('Postal code', escapeHtml(basic.postal))}
                 ${ipField('Timezone', escapeHtml(basic.timezone))}
                 ${ipField('Anycast', basic.anycast ? 'yes' : '')}

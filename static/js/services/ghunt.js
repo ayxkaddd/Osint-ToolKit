@@ -87,7 +87,6 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function displayResults(module, data) {
-      showIdentifiers(data)
     // Hide all result sections
     document.querySelectorAll('#resultsData > div[id$="Results"]').forEach((section) => {
       section.classList.add("hidden")
@@ -124,17 +123,13 @@ document.addEventListener("DOMContentLoaded", () => {
     // Profile Section
     document.getElementById("userAvatar").src = profilePhoto
     setElementContent("userName", name)
-    setElementContent("userEmailText", email)
+    const emailElement = document.getElementById("userEmailText")
+    if (emailElement) emailElement.innerHTML = email ? pivotText("email", email) : ""
 
     if (personId) {
       showContainer("gaiaContainer", true)
       const gaiaElement = document.getElementById("gaiaId")
-      gaiaElement.innerHTML = `
-                <a href="https://www.google.com/maps/contrib/${personId}/reviews" target="_blank" class="text-blue-400 hover:text-blue-300 font-mono text-sm">
-                    ${personId}
-                    <i data-lucide="external-link" class="w-3 h-3 inline ml-1"></i>
-                </a>
-            `
+      gaiaElement.innerHTML = gaiaHtml(personId)
     }
 
     if (lastUpdated) {
@@ -160,7 +155,7 @@ document.addEventListener("DOMContentLoaded", () => {
             <div class="mb-3 flex items-center">
                 <i data-lucide="mail" class="w-4 h-4 mr-2 text-gray-400"></i>
                 <span class="text-gray-400 font-semibold">Email:</span> 
-                <span class="ml-2">${escapeHtml(data.email)}</span>
+                <span class="ml-2">${pivotText("email", data.email)}</span>
             </div>
         `)
     if (data.gaia_id || data.personId) {
@@ -169,10 +164,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 <div class="mb-3 flex items-center">
                     <i data-lucide="hash" class="w-4 h-4 mr-2 text-gray-400"></i>
                     <span class="text-gray-400 font-semibold">Gaia ID:</span> 
-                    <a href="https://www.google.com/maps/contrib/${gaiaId}/reviews" target="_blank" class="text-blue-400 hover:text-blue-300 ml-2 font-mono text-sm">
-                        ${escapeHtml(gaiaId)}
-                        <i data-lucide="external-link" class="w-3 h-3 inline ml-1"></i>
-                    </a>
+                    <span class="ml-2">${gaiaHtml(gaiaId)}</span>
                 </div>
             `)
     }
@@ -186,6 +178,14 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // Helper functions
+
+  // The Gaia ID opens the "look up with" menu; the icon opens the Google Maps profile
+  function gaiaHtml(gaiaId) {
+    const id = String(gaiaId)
+    return `<span class="font-mono text-sm">${pivotText("gaia_id", id)}</span>
+      <a href="https://www.google.com/maps/contrib/${encodeURIComponent(id)}/reviews" target="_blank" rel="noopener noreferrer"
+         class="text-blue-400 hover:text-blue-300 ml-1" title="Google Maps profile"><i data-lucide="external-link" class="w-3 h-3 inline"></i></a>`
+  }
   function setElementContent(id, content) {
     const element = document.getElementById(id)
     if (element) {
