@@ -42,6 +42,7 @@
             placeholder="{{ plugin.placeholder or (plugin.accepts | map(attribute='label') | join(' or ')) }}">
         <button type="button" id="pluginRun" class="btn-primary"{% if not plugin.enabled %} disabled{% endif %}>Look up</button>
     </div>
+    <div id="pluginActions" class="hidden flex flex-wrap items-center gap-2 mt-3 text-sm text-gray-400"></div>
     <label class="inline-flex items-center gap-2 mt-3 text-sm text-gray-300 cursor-pointer"
         title="Run without saving to the investigation - for trying a plugin out">
         <input type="checkbox" id="pluginTest" class="rounded bg-gray-800 border-gray-600">

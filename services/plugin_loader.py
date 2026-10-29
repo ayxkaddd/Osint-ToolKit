@@ -141,6 +141,25 @@ class ResponseSpec(BaseModel):
         return entities
 
 
+class ActionSpec(BaseModel):
+    """One of several lookups of a no-code plugin (requests:), e.g. Hunter's email
+    verifier and domain search: each has its own inputs, request and cards."""
+    model_config = ConfigDict(extra="forbid")
+    id: str = Field(pattern=r"^[a-z][a-z0-9_]{0,39}$")
+    name: str = Field(min_length=1, max_length=80)
+    accepts: List[str] = Field(min_length=1)
+    request: RequestSpec
+    response: ResponseSpec = Field(default_factory=lambda: ResponseSpec())
+
+    @field_validator("accepts")
+    @classmethod
+    def known_accepts(cls, accepts):
+        unknown = [t for t in accepts if t not in ENTITY_TYPES]
+        if unknown:
+            raise ValueError(f"unknown identifier type {', '.join(unknown)} (known: {', '.join(ENTITY_TYPES)})")
+        return list(dict.fromkeys(accepts))
+
+
 class Manifest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     id: Optional[str] = None
@@ -154,11 +173,12 @@ class Manifest(BaseModel):
     speed: Literal["fast", "medium", "slow"] = "fast"
     concurrency: int = Field(2, ge=1, le=5)
     timeout: float = Field(120, ge=5, le=1800)                   # Python plugins: the whole run
-    accepts: List[str] = Field(min_length=1)
+    accepts: List[str] = []              # with requests: defaults to what its lookups accept
     settings: Dict[str, SettingSpec] = {}
     request: Optional[RequestSpec] = None
     request_by_type: Dict[str, RequestSpec] = {}
     response: ResponseSpec = Field(default_factory=lambda: ResponseSpec())
+    requests: List[ActionSpec] = []      # several lookups instead of request:/response:
 
     @field_validator("accepts")
     @classmethod
@@ -178,6 +198,15 @@ class Manifest(BaseModel):
 
     @model_validator(mode="after")
     def by_type_accepted(self):
+        if self.requests:
+            if self.request or self.request_by_type:
+                raise ValueError("use either request: (one lookup) or requests: (several), not both")
+            ids = [a.id for a in self.requests]
+            if len(set(ids)) != len(ids):
+                raise ValueError("every lookup in requests: needs a different id")
+            self.accepts = list(dict.fromkeys(self.accepts + [t for a in self.requests for t in a.accepts]))
+        if not self.accepts:
+            raise ValueError("accepts: what the plugin looks up (email, username, domain, ...)")
         extra = [t for t in self.request_by_type if t not in self.accepts]
         if extra:
             raise ValueError(f"request_by_type has {', '.join(extra)}, which is not in accepts")
@@ -204,15 +233,16 @@ def builtin_setting_keys() -> set:
 def _templates(manifest: Manifest) -> Tuple[List[str], List[str]]:
     """(request templates, response templates) for checking placeholders."""
     request, response = [], []
-    for spec in [manifest.request, *manifest.request_by_type.values()]:
+    specs = [manifest.request, *manifest.request_by_type.values(), *(a.request for a in manifest.requests)]
+    for spec in specs:
         if not spec:
             continue
         request.append(spec.url)
         request += [str(v) for part in (spec.query, spec.headers, spec.form) for v in part.values()]
         request += [s for s in _strings(spec.json_body)]
-    r = manifest.response
-    response += [r.title, r.subtitle, r.url, r.image, r.site, r.category]
-    response += [v for v in (r.fields or {}).values() if "{" in v]
+    for r in [manifest.response, *(a.response for a in manifest.requests)]:
+        response += [r.title, r.subtitle, r.url, r.image, r.site, r.category]
+        response += [v for v in (r.fields or {}).values() if "{" in v]
     return request, response
 
 
@@ -228,9 +258,10 @@ def _strings(value: Any):
 
 
 def _check_manifest(plugin: "Plugin", manifest: Manifest) -> None:
-    if plugin.kind == "python" and (manifest.request or manifest.request_by_type):
+    if plugin.kind == "python" and (manifest.request or manifest.request_by_type or manifest.requests):
         raise ValueError("has both plugin.py and a request: section - use one of them")
-    if plugin.kind == "yaml" and not manifest.request and set(manifest.accepts) - set(manifest.request_by_type):
+    if plugin.kind == "yaml" and not manifest.request and not manifest.requests \
+            and set(manifest.accepts) - set(manifest.request_by_type):
         raise ValueError("needs a request: section (no-code plugin) or a plugin.py (Python plugin)")
     prefix = plugin.id.upper() + "_"
     builtin = builtin_setting_keys()
@@ -317,7 +348,18 @@ class Plugin:
     def requests(self) -> List[RequestSpec]:
         if not self.manifest:
             return []
-        return [s for s in [self.manifest.request, *self.manifest.request_by_type.values()] if s]
+        specs = [self.manifest.request, *self.manifest.request_by_type.values(), *(a.request for a in self.manifest.requests)]
+        return [s for s in specs if s]
+
+    def actions(self, kind: str) -> List["Action"]:
+        """The lookups a no-code plugin runs for this input type."""
+        m = self.manifest
+        if not m:
+            return []
+        if m.requests:
+            return [Action(a.id, a.name, a.request, a.response) for a in m.requests if kind in a.accepts]
+        spec = m.request_by_type.get(kind) or m.request
+        return [Action("lookup", m.name, spec, m.response)] if spec else []
 
     def hosts(self) -> List[str]:
         return sorted({urlsplit(s.url).hostname or "" for s in self.requests()} - {""})
@@ -395,12 +437,21 @@ class Plugin:
             "folder": str(self.path),
             "has_renderer": self.has_renderer,
             "editable": self.editable,
+            "actions": [{"id": a.id, "name": a.name, "accepts": a.accepts} for a in (m.requests if m else [])],
             "missing_settings": self.missing_settings(),
             "settings": [{
                 "key": k, "label": s.label or k, "secret": s.secret, "required": s.required, "help": s.help,
                 "own": k.startswith(self.id.upper() + "_"), "configured": bool(get_setting(k)),
             } for k, s in (m.settings if m else {}).items()],
         }
+
+
+@dataclass
+class Action:
+    id: str
+    name: str
+    request: RequestSpec
+    response: ResponseSpec
 
 
 class _RedactFilter(logging.Filter):
@@ -706,10 +757,11 @@ def _auto_fields(row: Any) -> List[Tuple[str, Any]]:
     return rows[:40]
 
 
-def build_items(plugin: Plugin, data: Any, value: str, kind: str) -> List[Dict[str, Any]]:
-    """Cards from an API answer, as described by the manifest's response: section."""
+def build_items(plugin: Plugin, data: Any, value: str, kind: str,
+                spec: Optional[ResponseSpec] = None) -> List[Dict[str, Any]]:
+    """Cards from an API answer, as described by a response: section."""
     assert plugin.manifest is not None
-    spec = plugin.manifest.response
+    spec = spec or plugin.manifest.response
     root = get_path(data, spec.root) if spec.root else data
     rows = get_path(root, spec.items) if spec.items not in (None, "", ".") else root
     if rows in (None, "", {}, []):
@@ -888,6 +940,9 @@ class PreparedRun:
     raw: Any = None
     note: Optional[str] = None
     stream: Optional[AsyncGenerator[Tuple[str, Any], None]] = None
+    actions: Optional[List[str]] = None    # only these lookups (requests: plugins)
+    warnings: List[str] = dataclasses.field(default_factory=list)
+    lookups: List[Dict[str, Any]] = dataclasses.field(default_factory=list)   # what each of several did
 
 
 def _check_input(plugin: Plugin, value: str, kind: Optional[str]) -> Tuple[str, str]:
@@ -930,11 +985,8 @@ def _client(plugin: Plugin, timeout: float) -> httpx.AsyncClient:
                              headers={"User-Agent": USER_AGENT}, event_hooks=hooks)
 
 
-async def send_request(plugin: Plugin, value: str, kind: str) -> httpx.Response:
-    """Render and send a no-code plugin's request (also used by the plugin builder)."""
-    assert plugin.manifest is not None
-    spec = plugin.manifest.request_by_type.get(kind) or plugin.manifest.request
-    assert spec is not None
+async def send_request(plugin: Plugin, value: str, kind: str, spec: RequestSpec) -> httpx.Response:
+    """Render and send one of a no-code plugin's requests (also used by the plugin builder)."""
     settings = plugin.settings_values()
 
     def request_lookup(empty: List[str]) -> Callable[[str], Any]:
@@ -994,25 +1046,56 @@ def parse_response(response: httpx.Response, format: str) -> Any:
     return {"text": text, "lines": [line.strip() for line in text.splitlines() if line.strip()]}
 
 
-async def _run_yaml(run: PreparedRun) -> None:
-    plugin = run.plugin
-    assert plugin.manifest is not None
-    spec = plugin.manifest.request_by_type.get(run.type) or plugin.manifest.request
-    assert spec is not None
-    response = await send_request(plugin, run.value, run.type)
+async def _run_action(plugin: Plugin, action: Action, value: str, kind: str) -> Tuple[List[Dict[str, Any]], Any]:
+    """One lookup: (cards, answer). Cards are [] when the answer means "nothing found"."""
+    response = await send_request(plugin, value, kind, action.request)
     host = response.request.url.host
-    if response.status_code in spec.empty_status:
-        run.note = "Nothing found"
-        return
+    if response.status_code in action.request.empty_status:
+        return [], None
     if response.status_code >= 400:
         raise PluginError(f"{host} answered HTTP {response.status_code}: {_snippet(response.text)}")
     try:
-        data = parse_response(response, plugin.manifest.response.format)
+        data = parse_response(response, action.response.format)
     except ValueError:
         raise PluginError(f"{host} did not answer with JSON: {_snippet(response.text)}") from None
-    run.raw = data
-    run.items = build_items(plugin, data, run.value, run.type)
+    return build_items(plugin, data, value, kind, action.response), data
 
+
+async def _run_yaml(run: PreparedRun) -> None:
+    """Run the lookups for the input type at the same time. With several, one failing
+    is a warning next to the others' cards; all failing is an error."""
+    plugin = run.plugin
+    actions = plugin.actions(run.type)
+    if run.actions:
+        actions = [a for a in actions if a.id in run.actions] or actions
+    if len(actions) == 1:
+        run.items, run.raw = await _run_action(plugin, actions[0], run.value, run.type)
+        if plugin.manifest and plugin.manifest.requests:   # say which lookup found them
+            for item in run.items:
+                item["action"] = actions[0].name
+        if run.raw is None:
+            run.note = "Nothing found"
+        return
+    results = await asyncio.gather(*(_run_action(plugin, a, run.value, run.type) for a in actions),
+                                   return_exceptions=True)
+    errors, raw = [], {}
+    for action, result in zip(actions, results):
+        if isinstance(result, BaseException):
+            if not isinstance(result, (PluginError, RunRefused)):
+                logger.warning("Plugin %s, %s failed", plugin.id, action.id, exc_info=result)
+            errors.append(f"{action.name}: {getattr(result, 'detail', None) or result}")
+            run.lookups.append({"name": action.name, "status": "failed"})
+            continue
+        items, data = result
+        for item in items:
+            item["action"] = action.name
+        run.items += items
+        raw[action.id] = data
+        run.lookups.append({"name": action.name, "status": "found" if items else "nothing", "count": len(items)})
+    if len(errors) == len(actions):
+        raise PluginError("; ".join(errors))
+    run.warnings = errors
+    run.raw = raw
 
 def _plugin_failure(plugin: Plugin, e: BaseException) -> PluginError:
     if isinstance(e, PluginError):
@@ -1075,7 +1158,8 @@ async def _run_python(run: PreparedRun) -> None:
     run.items, run.data = split_output(result, plugin)
 
 
-async def prepare(plugin_id: str, value: str, kind: Optional[str]) -> PreparedRun:
+async def prepare(plugin_id: str, value: str, kind: Optional[str],
+                  actions: Optional[List[str]] = None) -> PreparedRun:
     """Check the input and run the lookup (async-generator plugins start streaming
     later). Raises RunRefused, or PluginError when the lookup itself failed."""
     plugin = get(plugin_id)
@@ -1088,7 +1172,7 @@ async def prepare(plugin_id: str, value: str, kind: Optional[str]) -> PreparedRu
     missing = plugin.missing_settings()
     if missing:
         raise RunRefused(400, f"{', '.join(missing)} {'is' if len(missing) == 1 else 'are'} not set - add it in Settings")
-    run = PreparedRun(plugin, value, kind)
+    run = PreparedRun(plugin, value, kind, actions=actions or None)
     try:
         if plugin.kind == "python":
             await _run_python(run)
@@ -1114,6 +1198,8 @@ async def events(run: PreparedRun) -> AsyncIterator[str]:
     has_data = run.data is not None
     if has_data:
         yield line({"event": "data", "data": run.data})
+    for warning in run.warnings:
+        yield line({"event": "warning", "detail": warning})
     error = None
     if run.stream is not None:
         try:
@@ -1128,7 +1214,8 @@ async def events(run: PreparedRun) -> AsyncIterator[str]:
         if error:
             yield line({"event": "error", "detail": error})
     note = run.note or ("Nothing found" if not count and not has_data and not error else None)
-    yield line({"event": "done", "count": count, "completed": error is None, "note": note, "raw": _cap_raw(run.raw)})
+    yield line({"event": "done", "count": count, "completed": error is None, "note": note,
+                "lookups": run.lookups or None, "raw": _cap_raw(run.raw)})
 
 
 def client_script() -> str:

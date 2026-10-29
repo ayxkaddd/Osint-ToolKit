@@ -67,11 +67,41 @@ function pluginRawHtml(raw) {
         </details>`;
 }
 
+// Plugins with several lookups (requests:) tag cards with the lookup's name
+function pluginGroups(items) {
+    const groups = new Map();
+    for (const item of items || []) {
+        const name = item.action || '';
+        if (!groups.has(name)) groups.set(name, []);
+        groups.get(name).push(item);
+    }
+    return [...groups.entries()];
+}
+
+function pluginGroupHead(name, count) {
+    return `<h3 class="flex items-center gap-2 text-sm font-semibold text-white mt-6 first:mt-0 mb-3" data-plugin-group-head>${escapeHtml(name)}
+        <span data-plugin-group-count class="text-xs font-normal text-purple-300 tabular-nums">${count}</span></h3>`;
+}
+
+function pluginLookupsHtml(lookups) {
+    if (!(lookups || []).length) return '';
+    const chip = (l) => {
+        const [cls, text] = l.status === 'found' ? ['bg-emerald-500/10 text-emerald-300', `${l.count}`]
+            : l.status === 'failed' ? ['bg-red-500/10 text-red-300', 'failed'] : ['bg-gray-800 text-gray-400', 'nothing found'];
+        return `<span class="px-2 py-0.5 rounded-md text-xs ${cls}">${escapeHtml(l.name)} · ${escapeHtml(text)}</span>`;
+    };
+    return `<div class="flex flex-wrap gap-1.5 mb-4">${lookups.map(chip).join('')}</div>`;
+}
+
 function pluginNoticeHtml(result) {
     const parts = [];
     if (result.error) {
         parts.push(`<p class="text-sm text-red-300 mb-4"><i class="fas fa-exclamation-triangle mr-2"></i>${escapeHtml(result.error)}</p>`);
     }
+    for (const warning of result.warnings || []) {
+        parts.push(`<p class="text-sm text-amber-300/90 mb-2"><i class="fas fa-exclamation-triangle mr-2"></i>${escapeHtml(warning)}</p>`);
+    }
+    parts.push(pluginLookupsHtml(result.lookups));
     if (!result.error && result.completed === false) {
         parts.push('<p class="text-sm text-amber-300/80 mb-4">Stopped before the end - these are partial results.</p>');
     }
@@ -93,9 +123,13 @@ function renderPluginResult(result) {
         }
     }
     const items = result.items || [];
+    const groups = pluginGroups(items);
+    const cards = groups.length > 1 || (groups[0] && groups[0][0])
+        ? groups.map(([name, group]) => pluginGroupHead(name, group.length) + pluginCardsHtml(group)).join('')
+        : pluginCardsHtml(items);
     return pluginNoticeHtml(result)
         + (items.length ? `<p class="text-xs text-gray-500 mb-3">${items.length} result${items.length === 1 ? '' : 's'}</p>` : '')
-        + pluginCardsHtml(items)
+        + cards
         + (result.data !== undefined && result.data !== null ? `<div class="mt-4">${renderValue(result.data)}</div>` : '')
         + pluginRawHtml(result.raw);
 }
@@ -107,7 +141,8 @@ class PluginResultsView {
         this.pluginId = pluginId;
         this.result = { kind: 'plugin_result', plugin: pluginId, items: [], completed: false };
         this.custom = !!PLUGIN_RENDERERS[pluginId];
-        this.items = [];
+        this.items = [];          // {el, group}
+        this.grids = new Map();   // lookup name -> its cards (one unnamed grid for single-lookup plugins)
         root.innerHTML = `
             <div data-plugin-notice></div>
             <div data-plugin-filter-box class="hidden mb-4 relative">
@@ -115,10 +150,10 @@ class PluginResultsView {
                 <input type="search" data-plugin-filter placeholder="Filter results…" class="field field-sm w-full !pl-9">
             </div>
             <p data-plugin-count class="hidden text-xs text-gray-500 mb-3"></p>
-            <div data-plugin-cards class="username-masonry"></div>
+            <div data-plugin-cards></div>
             <div data-plugin-data></div>
             <div data-plugin-raw></div>`;
-        this.grid = root.querySelector('[data-plugin-cards]');
+        this.cards = root.querySelector('[data-plugin-cards]');
         this.filter = root.querySelector('[data-plugin-filter]');
         this.filter.addEventListener('input', () => this.applyFilter());
         if (window.lucide) lucide.createIcons();
@@ -131,8 +166,9 @@ class PluginResultsView {
             const template = document.createElement('template');
             template.innerHTML = pluginCardHtml(event.item).trim();
             const el = template.content.firstElementChild;
-            this.items.push(el);
-            if (this.matches(el)) masonryAppend(this.grid, el);
+            const group = event.item.action || '';
+            this.items.push({ el, group });
+            if (this.matches(el)) masonryAppend(this.grid(group), el);
             this.updateCount();
         } else if (event.event === 'data') {
             this.result.data = this.result.data === undefined ? event.data : [].concat(this.result.data, [event.data]);
@@ -140,9 +176,12 @@ class PluginResultsView {
             this.root.querySelector('[data-plugin-data]').innerHTML = `<div class="mt-4">${renderValue(this.result.data)}</div>`;
         } else if (event.event === 'error') {
             this.result.error = event.detail;
+        } else if (event.event === 'warning') {
+            (this.result.warnings = this.result.warnings || []).push(event.detail);
         } else if (event.event === 'done') {
             this.result.completed = !!event.completed;
             this.result.note = event.note;
+            this.result.lookups = event.lookups;
             this.result.raw = event.raw;
             this.finish();
         }
@@ -167,19 +206,42 @@ class PluginResultsView {
         if (window.lucide) lucide.createIcons();
     }
 
+    // Cards of one lookup, under its name
+    grid(group) {
+        if (!this.grids.has(group)) {
+            const section = document.createElement('section');
+            section.innerHTML = (group ? pluginGroupHead(group, 0) : '') + '<div class="username-masonry"></div>';
+            this.cards.appendChild(section);
+            this.grids.set(group, section.querySelector('.username-masonry'));
+        }
+        return this.grids.get(group);
+    }
+
     matches(el) {
         const text = this.filter.value.trim().toLowerCase();
         return !text || el.dataset.pluginText.includes(text);
     }
 
     applyFilter() {
-        masonryLayout(this.grid, this.items.filter(el => this.matches(el)));
+        for (const [group, grid] of this.grids) {
+            const shown = this.items.filter(i => i.group === group && this.matches(i.el)).map(i => i.el);
+            masonryLayout(grid, shown);
+            grid.parentElement.classList.toggle('hidden', !shown.length);
+        }
         this.updateCount();
     }
 
     updateCount() {
         const total = this.items.length;
-        const shown = this.grid.querySelectorAll('.username-result-card').length;
+        const shown = this.cards.querySelectorAll('.username-result-card').length;
+        for (const [group, grid] of this.grids) {
+            const counter = grid.parentElement.querySelector('[data-plugin-group-count]');
+            if (counter) {
+                const all = this.items.filter(i => i.group === group).length;
+                const visible = grid.querySelectorAll('.username-result-card').length;
+                counter.textContent = visible === all ? all : `${visible} of ${all}`;
+            }
+        }
         const count = this.root.querySelector('[data-plugin-count]');
         count.classList.toggle('hidden', !total);
         count.textContent = shown === total ? `${total} result${total === 1 ? '' : 's'}` : `${shown} of ${total} results`;

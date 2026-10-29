@@ -23,6 +23,8 @@
         tryValue: '',
         tryType: '',
         detected: !!editId,     // first Try fills the results mapping, unless editing
+        lookups: [{}],          // snapshots of each lookup (requests:); the form shows lookups[active]
+        active: 0,
         lastTemplate: null,
         dirty: false,
         saving: false,
@@ -70,57 +72,195 @@
     const withKey = (text) => String(text).replaceAll('{key:API_KEY}', `{settings.${keyName()}}`);
     const accepts = () => [...document.querySelectorAll('[data-accept].active')].map(b => b.dataset.accept);
 
-    function buildManifest() {
+    // ------------------------------------------------------------------ lookups
+    // The form shows one lookup (request + results mapping); each is kept as a snapshot.
+
+    function readLookup() {
+        const current = state.lookups[state.active] || {};
+        return {
+            ...current,
+            name: val('fLookupName'),
+            accepts: accepts(),
+            method: $('fMethod').value,
+            url: val('fUrl'),
+            query: rows('query'),
+            headers: rows('headers'),
+            body: val('fBody'),
+            empty: val('fEmpty'),
+            items: $('fItems').value,
+            title: val('fTitle'),
+            subtitle: val('fSubtitle'),
+            link: val('fLink'),
+            image: val('fImage'),
+            fields: rows('fields'),
+            entities: rows('entities'),
+            format: state.format,
+            raw: state.raw,
+            detected: state.detected,
+            tryValue: val('tryValue'),
+        };
+    }
+
+    function writeLookup(l) {
+        $('fLookupName').value = l.name || '';
+        setAccepts(l.accepts || []);
+        $('fMethod').value = l.method || 'GET';
+        $('fUrl').value = l.url || '';
+        clearRows('query');
+        (l.query || []).forEach(([k, v]) => addRow('query', k, v));
+        if (!(l.query || []).length) addRow('query');
+        clearRows('headers');
+        (l.headers || []).forEach(([k, v]) => addRow('headers', k, v));
+        $('fBody').value = l.body || '';
+        $('fEmpty').value = l.empty || '404';
+        ensureItemsOption(l.items || '');
+        $('fItems').value = l.items || '';
+        $('fTitle').value = l.title || '';
+        $('fSubtitle').value = l.subtitle || '';
+        $('fLink').value = l.link || '';
+        $('fImage').value = l.image || '';
+        clearRows('fields');
+        (l.fields || []).forEach(([a, b]) => addRow('fields', a, b));
+        clearRows('entities');
+        (l.entities || []).forEach(([a, b]) => addRow('entities', a, b));
+        state.format = l.format || 'json';
+        state.raw = l.raw === undefined ? null : l.raw;
+        state.detected = !!l.detected;
+        $('tryValue').value = l.tryValue || '';
+        $('tryStatus').innerHTML = '';
+        if (state.raw !== null) {
+            showAnswer();
+        } else {
+            $('rawCard').classList.add('hidden');
+            $('previewCard').classList.add('hidden');
+            $('redetect').disabled = true;
+        }
+    }
+
+    function nameFromUrl(url) {
+        const path = String(url || '').replace(/\?.*$/, '').replace(/\{[^}]*\}/g, '').split('/').filter(Boolean);
+        const last = (path[path.length - 1] || '').replace(/[-_]+/g, ' ').trim();
+        return last ? last[0].toUpperCase() + last.slice(1) : '';
+    }
+
+    function renderTabs() {
+        const many = state.lookups.length > 1;
+        $('lookupTabs').innerHTML = many ? state.lookups.map((l, i) =>
+            `<button type="button" data-lookup="${i}" class="b-chip${i === state.active ? ' active' : ''}">${escapeHtml((i === state.active ? val('fLookupName') : l.name) || `Lookup ${i + 1}`)}</button>`).join('') : '';
+        $('lookupTabs').classList.toggle('hidden', !many);
+        $('lookupNameRow').classList.toggle('hidden', !many);
+    }
+
+    function switchLookup(index) {
+        state.lookups[state.active] = readLookup();
+        state.active = index;
+        writeLookup(state.lookups[index]);
+        renderTabs();
+        refreshUi();
+    }
+
+    function addLookup() {
+        state.lookups[state.active] = readLookup();
+        const first = state.lookups[0];
+        if (!first.name) first.name = nameFromUrl(first.url) || 'Lookup 1';
+        let origin = '';
+        try { origin = new URL(first.url.replace(/\{[^}]*\}/g, 'x')).origin + '/'; } catch (e) { /* no URL yet */ }
+        state.lookups.push({ name: `Lookup ${state.lookups.length + 1}`, url: origin, query: [], headers: [], fields: [], entities: [] });
+        state.active = state.lookups.length - 1;
+        writeLookup(state.lookups[state.active]);
+        renderTabs();
+        changed();
+        $('fLookupName').select();
+    }
+
+    function removeLookup() {
+        if (state.lookups.length < 2 || !confirm(`Remove the lookup "${val('fLookupName') || state.active + 1}"?`)) return;
+        state.lookups.splice(state.active, 1);
+        state.active = 0;
+        writeLookup(state.lookups[0]);
+        renderTabs();
+        changed();
+    }
+
+    // A lookup snapshot -> {accepts, request, response} (keeping parts the form doesn't show)
+    function lookupPart(l) {
+        const request = { ...((l.base && l.base.request) || {}) };
+        request.method = l.method || 'GET';
+        request.url = withKey(l.url || '');
+        request.query = Object.fromEntries((l.query || []).map(([k, v]) => [k, withKey(v)]));
+        request.headers = Object.fromEntries((l.headers || []).map(([k, v]) => [k, withKey(v)]));
+        delete request.json;
+        if (request.method === 'POST' && l.body) {
+            try {
+                request.json = JSON.parse(withKey(l.body));
+            } catch (e) {
+                state.bodyError = `${l.name || 'The lookup'}: the JSON body is not valid JSON`;
+            }
+        }
+        request.empty_status = String(l.empty || '').split(/[\s,]+/).map(Number).filter(n => n >= 100 && n < 600);
+
+        const response = { ...((l.base && l.base.response) || {}) };
+        response.format = l.format || response.format || 'json';
+        if (l.items) response.items = l.items; else delete response.items;
+        for (const [key, value] of [['title', l.title], ['subtitle', l.subtitle], ['url', l.link], ['image', l.image]]) {
+            if (value) response[key] = value; else delete response[key];
+        }
+        // no rows: every simple value of a result is shown
+        if ((l.fields || []).length) response.fields = Object.fromEntries(l.fields); else delete response.fields;
+        const entities = {};
+        for (const [type, path] of l.entities || []) (entities[type] = entities[type] || []).push(path);
+        response.entities = Object.fromEntries(Object.entries(entities).map(([t, p]) => [t, p.length === 1 ? p[0] : p]));
+        return { accepts: l.accepts || [], request, response };
+    }
+
+    function commonManifest() {
         const m = JSON.parse(JSON.stringify(state.extra || {}));
-        delete m.id;
+        for (const key of ['id', 'request', 'response', 'requests', 'request_by_type', 'accepts']) delete m[key];
         m.name = val('fName');
         m.description = val('fDescription');
         m.icon = val('fIcon') || 'puzzle';
         m.site = val('fSite');
-        m.accepts = accepts();
         m.cost = $('fCost').value;
         m.cost_note = val('fCostNote');
-
         const settings = { ...(m.settings || {}) };
         for (const key of state.managedKeys) delete settings[key];
         if ($('fNeedsKey').checked) {
             settings[keyName()] = { label: state.keyLabel || 'API key', secret: true, required: !$('fKeyOptional').checked };
         }
         m.settings = settings;
-
-        const request = { ...(m.request || {}) };
-        request.method = $('fMethod').value;
-        request.url = withKey(val('fUrl'));
-        request.query = Object.fromEntries(rows('query').map(([k, v]) => [k, withKey(v)]));
-        request.headers = Object.fromEntries(rows('headers').map(([k, v]) => [k, withKey(v)]));
-        delete request.json;
-        state.bodyError = null;
-        if (request.method === 'POST' && val('fBody')) {
-            try {
-                request.json = JSON.parse(withKey(val('fBody')));
-            } catch (e) {
-                state.bodyError = 'The JSON body is not valid JSON';
-            }
-        }
-        const empty = val('fEmpty').split(/[\s,]+/).map(Number).filter(n => n >= 100 && n < 600);
-        request.empty_status = empty;
-        m.request = request;
-
-        const response = { ...(m.response || {}) };
-        response.format = state.format || response.format || 'json';
-        const items = $('fItems').value;
-        if (items) response.items = items; else delete response.items;
-        for (const [key, id] of [['title', 'fTitle'], ['subtitle', 'fSubtitle'], ['url', 'fLink'], ['image', 'fImage']]) {
-            if (val(id)) response[key] = val(id); else delete response[key];
-        }
-        const fields = rows('fields');
-        // no rows: every simple value of a result is shown
-        if (fields.length) response.fields = Object.fromEntries(fields); else delete response.fields;
-        const entities = {};
-        for (const [type, path] of rows('entities')) (entities[type] = entities[type] || []).push(path);
-        response.entities = Object.fromEntries(Object.entries(entities).map(([t, p]) => [t, p.length === 1 ? p[0] : p]));
-        m.response = response;
         return m;
+    }
+
+    // The whole plugin: request:/response: for one lookup, requests: for several
+    function buildManifest() {
+        state.lookups[state.active] = readLookup();
+        state.bodyError = null;
+        const m = commonManifest();
+        if (state.lookups.length === 1) {
+            const part = lookupPart(state.lookups[0]);
+            m.accepts = part.accepts;
+            m.request = part.request;
+            m.response = part.response;
+            if (state.extra.request_by_type) m.request_by_type = state.extra.request_by_type;
+            return m;
+        }
+        const used = new Set();
+        m.requests = state.lookups.map((l, i) => {
+            let id = slug(l.name) || `lookup_${i + 1}`;
+            while (used.has(id)) id = `${id}_${i + 1}`;
+            used.add(id);
+            return { id, name: l.name || `Lookup ${i + 1}`, ...lookupPart(l) };
+        });
+        return m;
+    }
+
+    // Just the lookup on screen, for Try it and the preview
+    function buildActiveManifest() {
+        state.lookups[state.active] = readLookup();
+        state.bodyError = null;
+        const m = commonManifest();
+        const part = lookupPart(state.lookups[state.active]);
+        return { ...m, accepts: part.accepts, request: part.request, response: part.response };
     }
 
     function setAccepts(types) {
@@ -157,9 +297,9 @@
         if (ownKey) {
             state.fixedKey = ownKey;
             state.keyLabel = m.settings[ownKey].label || '';
+            state.managedKeys.add(ownKey);
         }
         const unkey = (text) => ownKey ? String(text).replaceAll(`{settings.${ownKey}}`, '{key:API_KEY}') : String(text);
-        if (ownKey) state.managedKeys.add(ownKey);
         $('fName').value = m.name || '';
         $('fId').value = id;
         $('fDescription').value = m.description || '';
@@ -167,20 +307,35 @@
         $('fSite').value = m.site || '';
         $('fCost').value = m.cost || 'free';
         $('fCostNote').value = m.cost_note || '';
-        setAccepts(m.accepts || []);
-        const req = m.request || {};
-        $('fMethod').value = req.method || 'GET';
-        $('fUrl').value = unkey(req.url || '');
-        clearRows('query');
-        Object.entries(req.query || {}).forEach(([k, v]) => addRow('query', k, unkey(v)));
-        clearRows('headers');
-        Object.entries(req.headers || {}).forEach(([k, v]) => addRow('headers', k, unkey(v)));
-        $('fBody').value = req.json !== undefined && req.json !== null ? unkey(JSON.stringify(req.json, null, 2)) : '';
-        $('fEmpty').value = (req.empty_status || [404]).join(', ');
         $('fNeedsKey').checked = !!ownKey;
         $('fKeyOptional').checked = ownKey ? m.settings[ownKey].required === false : false;
-        applyMapping(m.response || {});
-        state.format = (m.response || {}).format || 'json';
+
+        const snapshot = (name, accepts, req, res) => ({
+            name, accepts: accepts || [],
+            base: { request: req || {}, response: res || {} },
+            method: (req || {}).method || 'GET',
+            url: unkey((req || {}).url || ''),
+            query: Object.entries((req || {}).query || {}).map(([k, v]) => [k, unkey(v)]),
+            headers: Object.entries((req || {}).headers || {}).map(([k, v]) => [k, unkey(v)]),
+            body: req && req.json !== undefined && req.json !== null ? unkey(JSON.stringify(req.json, null, 2)) : '',
+            empty: ((req || {}).empty_status || [404]).join(', '),
+            items: (res || {}).items || '',
+            title: (res || {}).title || '',
+            subtitle: (res || {}).subtitle || '',
+            link: (res || {}).url || '',
+            image: (res || {}).image || '',
+            fields: Object.entries((res || {}).fields || {}),
+            entities: Object.entries((res || {}).entities || {}).flatMap(([t, p]) => [].concat(p).map(path => [t, path])),
+            format: (res || {}).format || 'json',
+            raw: null,
+            detected: true,   // keep the mapping it comes with
+        });
+        state.lookups = (m.requests || []).length
+            ? m.requests.map(a => snapshot(a.name, a.accepts, a.request, a.response))
+            : [snapshot('', m.accepts, m.request, m.response)];
+        state.active = 0;
+        writeLookup(state.lookups[0]);
+        renderTabs();
         refreshUi();
     }
 
@@ -259,6 +414,7 @@
         if ($('yamlEdit').checked) return;
         try {
             const data = await post('/api/plugins/builder/yaml', { id: pluginId(), manifest: buildManifest() });
+            renderTabs();
             $('yamlText').value = data.yaml;
             const error = state.bodyError || data.error;
             $('yamlError').textContent = error ? `Not ready to save: ${error}` : '';
@@ -270,7 +426,7 @@
         if (state.raw === null) return;
         try {
             const data = await post('/api/plugins/builder/preview', {
-                id: pluginId(), manifest: buildManifest(), raw: state.raw, value: state.tryValue, type: state.tryType,
+                id: pluginId(), manifest: buildActiveManifest(), raw: state.raw, value: state.tryValue, type: state.tryType,
             });
             showCards(data.items);
             $('previewError').classList.add('hidden');
@@ -456,7 +612,7 @@
         const started = Date.now();
         try {
             const data = await post('/api/plugins/builder/test', {
-                id: pluginId(), manifest: buildManifest(), value: state.tryValue, type: state.tryType,
+                id: pluginId(), manifest: buildActiveManifest(), value: state.tryValue, type: state.tryType,
                 settings: { [keyName()]: val('fKeyValue') }, detect: detect ?? !state.detected,
             });
             state.raw = data.raw;
@@ -498,13 +654,14 @@
     }
 
     async function save() {
+        const manifest = buildManifest();
         if (state.bodyError && !$('yamlEdit').checked) {
             $('saveNote').innerHTML = `<span class="text-red-300">${escapeHtml(state.bodyError)}</span>`;
             return;
         }
         const id = pluginId();
         const body = { id, editing: state.editing, settings: { [keyName()]: val('fKeyValue') } };
-        if ($('yamlEdit').checked) body.yaml = $('yamlText').value; else body.manifest = buildManifest();
+        if ($('yamlEdit').checked) body.yaml = $('yamlText').value; else body.manifest = manifest;
         $('saveBtn').disabled = true;
         $('saveNote').textContent = 'Saving…';
         try {
@@ -577,6 +734,13 @@
     $('tryBtn').addEventListener('click', () => tryIt());
     $('tryValue').addEventListener('keydown', (event) => { if (event.key === 'Enter') tryIt(); });
     $('redetect').addEventListener('click', redetect);
+    $('addLookup').addEventListener('click', addLookup);
+    $('removeLookup').addEventListener('click', removeLookup);
+    $('lookupTabs').addEventListener('click', (event) => {
+        const tab = event.target.closest('[data-lookup]');
+        if (tab && Number(tab.dataset.lookup) !== state.active) switchLookup(Number(tab.dataset.lookup));
+    });
+    $('fLookupName').addEventListener('input', renderTabs);
     $('saveBtn').addEventListener('click', save);
     $('yamlEdit').addEventListener('change', () => {
         const editing = $('yamlEdit').checked;
@@ -624,6 +788,7 @@
         } else {
             addRow('query');
         }
+        renderTabs();
         state.dirty = false;
         refreshUi();
     }

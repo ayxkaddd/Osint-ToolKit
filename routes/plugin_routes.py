@@ -1,5 +1,5 @@
 """Plugins (services/plugin_loader.py): list, run, review/enable, pages."""
-from typing import Any, Dict, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from fastapi import APIRouter, Body, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
@@ -26,9 +26,9 @@ def _plugin(plugin_id: str) -> plugin_loader.Plugin:
     return plugin
 
 
-async def _stream(plugin_id: str, value: str, type: Optional[str]):
+async def _stream(plugin_id: str, value: str, type: Optional[str], actions: Optional[List[str]] = None):
     try:
-        run = await plugin_loader.prepare(plugin_id, value, type)
+        run = await plugin_loader.prepare(plugin_id, value, type, actions)
     except RunRefused as e:
         raise HTTPException(status_code=e.status, detail=e.detail) from None
     except PluginError as e:
@@ -171,15 +171,17 @@ async def delete_plugin(plugin_id: str):
 @router.post("/{plugin_id}/run")
 @save_investigation(service_name=lambda kwargs: kwargs["plugin_id"], method_name="run",
                     stream_reducer=reduce_plugin_stream)
-async def run_plugin(plugin_id: str, value: str = Body(..., max_length=2000), type: Optional[str] = Body(None)):
-    """Run a plugin; NDJSON events, saved to the investigation when done."""
-    return await _stream(plugin_id, value, type)
+async def run_plugin(plugin_id: str, value: str = Body(..., max_length=2000), type: Optional[str] = Body(None),
+                     actions: Optional[List[str]] = Body(None)):
+    """Run a plugin (only the lookups in actions, if given); NDJSON events, saved to the investigation."""
+    return await _stream(plugin_id, value, type, actions)
 
 
 @router.post("/{plugin_id}/test")
-async def test_plugin(plugin_id: str, value: str = Body(..., max_length=2000), type: Optional[str] = Body(None)):
+async def test_plugin(plugin_id: str, value: str = Body(..., max_length=2000), type: Optional[str] = Body(None),
+                      actions: Optional[List[str]] = Body(None)):
     """Same as run, but not saved (trying a plugin out)."""
-    return await _stream(plugin_id, value, type)
+    return await _stream(plugin_id, value, type, actions)
 
 
 class TrustRequest(BaseModel):

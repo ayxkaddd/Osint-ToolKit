@@ -68,8 +68,9 @@ def draft_plugin(plugin_id: str, manifest: Dict[str, Any],
 def to_yaml(manifest: Dict[str, Any]) -> str:
     """plugin.yaml text, fields in the README's order, empty parts left out."""
     order = ["name", "description", "icon", "site", "placeholder", "accepts", "cost", "cost_note", "speed",
-             "concurrency", "settings", "request", "request_by_type", "response"]
-    clean = {k: _strip_empty(manifest[k]) for k in order if k in manifest}
+             "concurrency", "timeout", "settings", "request", "request_by_type", "response", "requests"]
+    unknown = [k for k in manifest if k not in order and k != "id"]
+    clean = {k: _strip_empty(manifest[k]) for k in order + unknown if k in manifest}
     clean = {k: v for k, v in clean.items() if v not in (None, "", [], {})}
     for key, default in (("icon", "puzzle"), ("cost", "free"), ("speed", "fast"), ("concurrency", 2)):
         if clean.get(key) == default:
@@ -98,7 +99,11 @@ async def test_draft(plugin_id: str, manifest: Dict[str, Any], value: str, kind:
         missing = plugin.missing_settings()
         if missing:
             raise DraftError(f"Enter a value for {', '.join(missing)} to try it")
-        response = await pl.send_request(plugin, value, kind)
+        actions = plugin.actions(kind)
+        if not actions:
+            raise DraftError("No request for this input type")
+        action = actions[0]   # the builder tries one lookup at a time
+        response = await pl.send_request(plugin, value, kind, action.request)
     except pl.RunRefused as e:
         raise DraftError(e.detail) from None
     except PluginError as e:
@@ -106,7 +111,7 @@ async def test_draft(plugin_id: str, manifest: Dict[str, Any], value: str, kind:
 
     out: Dict[str, Any] = {"status": response.status_code, "url": pl.redact(str(response.request.url), secrets),
                            "content_type": response.headers.get("content-type", ""), "value": value, "type": kind}
-    fmt = plugin.manifest.response.format
+    fmt = action.response.format
     try:
         data = pl.parse_response(response, fmt)
     except ValueError:
@@ -114,8 +119,7 @@ async def test_draft(plugin_id: str, manifest: Dict[str, Any], value: str, kind:
         data = pl.parse_response(response, fmt)
     out["format"] = fmt
     out["raw"] = pl.redact(data, secrets)
-    spec = plugin.manifest.request_by_type.get(kind) or plugin.manifest.request
-    if response.status_code in (spec.empty_status if spec else [404]):
+    if response.status_code in action.request.empty_status:
         out["note"] = f"HTTP {response.status_code}: counted as \"nothing found\". Try a value that exists."
     elif response.status_code >= 400:
         out["error"] = f"HTTP {response.status_code}: {pl._snippet(response.text)}"
@@ -160,8 +164,11 @@ def save_draft(plugin_id: str, manifest: Optional[Dict[str, Any]], yaml_text: Op
             raise DraftError(f"A plugin called '{plugin.id}' already exists - pick another id")
         if not existing or not can_edit(existing):
             raise DraftError("Only no-code plugins you made can be edited here - duplicate it instead")
-    folder.mkdir(parents=True, exist_ok=True)
     text = yaml_text if yaml_text is not None else to_yaml(manifest)
+    written = yaml.safe_load(text) or {}
+    written.pop("id", None)
+    draft_plugin(plugin.id, written)   # what is written must load the same way
+    folder.mkdir(parents=True, exist_ok=True)
     (folder / "plugin.yaml").write_text(text, encoding="utf-8")
     pl.write_trust(plugin.id, "local")
     own: Dict[str, Optional[str]] = {k: v.strip() for k, v in (settings or {}).items()

@@ -162,6 +162,8 @@ def reduce_oi_stream(events: List[Any]) -> Dict[str, Any]:
             result["modules_checked"] += 1
         elif kind == "error":
             result["error"] = event.get("detail")
+        elif kind == "warning":   # one of several lookups failed
+            result.setdefault("warnings", []).append(event.get("detail"))
         elif kind == "done":
             result["completed"] = bool(event.get("completed"))
     result["modules"] = sort_oi_cards(result["modules"])
@@ -185,9 +187,11 @@ def reduce_plugin_stream(events: List[Any]) -> Dict[str, Any]:
             data.append(event.get("data"))
         elif kind == "error":
             result["error"] = event.get("detail")
+        elif kind == "warning":   # one of several lookups failed
+            result.setdefault("warnings", []).append(event.get("detail"))
         elif kind == "done":
             result["completed"] = bool(event.get("completed"))
-            for key in ("note", "raw"):
+            for key in ("note", "raw", "lookups"):
                 if event.get(key) is not None:
                     result[key] = event[key]
     if data:

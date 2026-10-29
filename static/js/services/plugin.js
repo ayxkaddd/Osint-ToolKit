@@ -16,7 +16,30 @@ const els = {
     cards: document.getElementById('pluginCards'),
 };
 
-const state = { type: plugin.accepts[0] && plugin.accepts[0].type, controller: null, view: null };
+const state = { type: plugin.accepts[0] && plugin.accepts[0].type, controller: null, view: null, off: new Set() };
+
+// Plugins with several lookups: choose which run (all by default)
+function renderActions() {
+    const box = document.getElementById('pluginActions');
+    const actions = (plugin.actions || []).filter(a => a.accepts.includes(state.type));
+    box.classList.toggle('hidden', actions.length < 2);
+    box.innerHTML = 'Run:' + actions.map(a => `<button type="button" data-action-id="${escapeAttr(a.id)}"
+        class="b-chip${state.off.has(a.id) ? '' : ' active'}">${escapeHtml(a.name)}</button>`).join('');
+}
+
+function selectedActions() {
+    const actions = (plugin.actions || []).filter(a => a.accepts.includes(state.type));
+    const on = actions.filter(a => !state.off.has(a.id)).map(a => a.id);
+    return on.length && on.length < actions.length ? on : null;
+}
+
+document.getElementById('pluginActions').addEventListener('click', (event) => {
+    const chip = event.target.closest('[data-action-id]');
+    if (!chip) return;
+    const id = chip.dataset.actionId;
+    if (state.off.has(id)) state.off.delete(id); else state.off.add(id);
+    renderActions();
+});
 
 const STATUS_ICONS = {
     running: '<i class="fas fa-spinner fa-spin text-purple-300"></i>',
@@ -53,6 +76,7 @@ function countText(count) {
 els.types.forEach((button) => button.addEventListener('click', () => {
     state.type = button.dataset.type;
     els.types.forEach((b) => b.classList.toggle('active', b === button));
+    renderActions();
 }));
 
 window.loadResultIntoView = function (result, record) {
@@ -94,7 +118,7 @@ async function runLookup() {
         const response = await fetch(`/api/plugins/${encodeURIComponent(plugin.id)}/${test ? 'test' : 'run'}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ value, type: state.type }),
+            body: JSON.stringify({ value, type: state.type, actions: selectedActions() }),
             signal: state.controller.signal,
         });
         if (!response.ok) {
@@ -126,12 +150,14 @@ async function runLookup() {
             state.view.stopped();
             setStatus('error', 'Lookup failed');
             setBusy(false);
+renderActions();
             state.controller = null;
             return;
         }
     }
     state.controller = null;
     setBusy(false);
+renderActions();
     const seconds = ((Date.now() - started) / 1000).toFixed(1);
     const saved = test ? ' · test, not saved' : '';
     if (finished) {
@@ -148,3 +174,4 @@ els.input.addEventListener('keydown', (event) => {
 });
 els.stop.addEventListener('click', () => state.controller && state.controller.abort());
 setBusy(false);
+renderActions();

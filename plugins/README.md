@@ -117,6 +117,44 @@ request_by_type:
   domain: {url: "https://api.example.com/domain/{value}"}
 ```
 
+### Several lookups (requests:)
+
+An API with several endpoints can be one plugin. Instead of `request:`/`response:`, list
+them under `requests:`, each with its own id, name, inputs, request and response (same
+format as above). All lookups that accept the looked-up type run at the same time; cards
+are grouped by lookup, and one failing shows a warning next to the others' results. The
+plugin page lets you choose which to run. They share the plugin's settings (one API key).
+
+```yaml
+name: Hunter.io
+site: hunter.io
+settings:
+  HUNTER_IO_API_KEY: {label: API key, secret: true}
+requests:
+  - id: verify
+    name: Email verifier
+    accepts: [email]
+    request:
+      url: https://api.hunter.io/v2/email-verifier
+      query: {email: "{value}", api_key: "{settings.HUNTER_IO_API_KEY}"}
+    response:
+      root: data
+      title: email
+      subtitle: status
+      fields: {Score: score, Disposable: disposable}
+  - id: domain_search
+    name: Domain search
+    accepts: [domain]
+    request:
+      url: https://api.hunter.io/v2/domain-search
+      query: {domain: "{value}", api_key: "{settings.HUNTER_IO_API_KEY}"}
+    response:
+      items: data.emails
+      title: value
+```
+
+`accepts:` at the top is optional here: the plugin accepts what its lookups do.
+
 ### response:
 
 Paths point into the JSON answer: `name`, `owner.login`, `emails[0]`, and `sources[].uri`
