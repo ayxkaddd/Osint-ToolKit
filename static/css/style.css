@@ -262,15 +262,6 @@
 .pivot-chip:hover { background: rgba(109, 40, 217, 0.45); color: #fff; }
 .pivot-chip i { font-size: 0.6rem; opacity: 0.7; flex-shrink: 0; }
 
-/* Identifier inside result text (pivotText): keeps the surrounding style */
-.pivot-link {
-  cursor: pointer;
-  text-decoration: underline dotted rgba(167, 139, 250, 0.7);
-  text-underline-offset: 3px;
-  border-radius: 0.2rem;
-}
-.pivot-link:hover, .pivot-link:focus-visible { color: #e9d5ff; background: rgba(109, 40, 217, 0.25); outline: none; }
-
 /* Investigation tabs and identifier facets */
 .inv-tab { padding: 0.6rem 1rem; color: #9ca3af; border-bottom: 2px solid transparent; margin-bottom: -1px; font-size: 0.9rem; }
 .inv-tab:hover { color: #fff; }

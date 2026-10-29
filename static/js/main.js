@@ -923,13 +923,7 @@ document.addEventListener("click", (event) => {
   if (!event.target.closest("#pivotMenu")) closePivotMenu()
 })
 window.addEventListener("scroll", closePivotMenu, { passive: true })
-document.addEventListener("keydown", (event) => {
-  if (event.key !== "Enter" && event.key !== " ") return
-  const trigger = event.target.closest?.(".pivot-link[data-pivot-type]")
-  if (!trigger) return
-  event.preventDefault()
-  openPivotMenu(trigger.dataset.pivotType, trigger.dataset.pivotValue, trigger, {})
-})
+
 
 // Chip for an identifier that opens the pivot menu
 function pivotChip(type, value, label = null) {
@@ -938,8 +932,8 @@ function pivotChip(type, value, label = null) {
 }
 window.pivotChip = pivotChip
 
-// An identifier inside result text (an email in a list, a username in a heading):
-// looks like the text around it, underlined, and opens the same "look up with" menu.
+// An identifier in a result (an email in a list, a username in a heading): a pivot chip
+// when the value has that type's shape, plain text otherwise (masked or partial values).
 // pivotText("email", "a@b.c") / pivotText("username", handle, "@" + handle)
 // Shapes a value must have to be offered as that type (masked or partial values stay plain text)
 const PIVOT_SHAPES = {
@@ -969,9 +963,7 @@ function pivotText(type, value, label = null) {
   const text = String(value).trim()
   type = pivotTypeFor(type, text)
   if (!type) return escapeHtml(label ?? value)
-  value = type === "username" || type === "telegram_username" ? text.replace(/^@/, "") : text
-  return `<span role="button" tabindex="0" data-pivot-type="${escapeAttr(type)}" data-pivot-value="${escapeAttr(value)}"
-      class="pivot-link" title="Look up with another module">${escapeHtml(label ?? value)}</span>`
+  return pivotChip(type, type === "username" || type === "telegram_username" ? text.replace(/^@/, "") : text, label ?? text)
 }
 window.pivotText = pivotText
 
