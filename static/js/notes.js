@@ -1,7 +1,7 @@
 // Notes: markdown notes per investigation, edited with Obsidian-style live preview
 // (static/vendor/notes-editor.js, built from frontend/notes-editor, loaded on first use).
-// Notes save themselves while you type. They can link results ([[result:<id>|label]])
-// and identifiers ([[email:x@y.com]]), and attach snapshots of results
+// Notes save themselves while you type. They can link other notes ([[note:<id>|title]]),
+// results ([[result:<id>|label]]) and identifiers ([[email:x@y.com]]), and attach snapshots of results
 // (![[snapshot:<id>|label]]): a copy that stays in the note even if the result is deleted.
 // Used by the Ctrl+K sidebar (every page) and the notes page (templates/notes.html).
 
@@ -97,6 +97,30 @@ function resultUrl(investigationId, resultId) {
   return `${notesApi(investigationId)}/view#result-${encodeURIComponent(resultId)}`
 }
 
+// Titles of the investigation's notes, for note links: Map(note_id -> {title, updated_at, content})
+async function loadNoteList(investigationId) {
+  try {
+    const data = await fetch(`${notesApi(investigationId)}/notes`).then((r) => r.json())
+    return new Map((data.notes || []).map((n) => [n.note_id, { title: n.title || "Untitled note", updated_at: n.updated_at, content: n.content || "" }]))
+  } catch (error) {
+    return new Map()
+  }
+}
+
+function noteUrl(investigationId, noteId) {
+  return `${notesApi(investigationId)}/notes/view#note-${encodeURIComponent(noteId)}`
+}
+
+// Titles of the notes that link to a note (asked before deleting it)
+async function noteBacklinks(investigationId, noteId) {
+  const notes = await loadNoteList(investigationId)
+  return [...notes.entries()].filter(([id, n]) => id !== noteId && n.content.includes(`[[note:${noteId}`)).map(([, n]) => n.title)
+}
+
+function noteLabel(text) {
+  return String(text || "").replace(/[\]|\n]/g, " ").trim()
+}
+
 function noteDate(iso) {
   return iso ? new Date(iso).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : ""
 }
@@ -105,10 +129,17 @@ function noteDate(iso) {
 // Rendering references inside the editor
 // ---------------------------------------------------------------------------
 
-function renderNoteChip(investigationId, results, link) {
+function renderNoteChip(investigationId, results, notes, link) {
   const wrap = document.createElement("span")
   wrap.className = "note-chip-wrap"
-  if (link.kind === "result") {
+  if (link.kind === "note") {
+    const note = notes.get(link.value)
+    // The linked note's current title, so renamed notes keep showing correctly
+    const label = note ? note.title : link.label || "note"
+    wrap.innerHTML = note
+      ? `<a class="note-chip note-chip-note" href="${escapeAttr(noteUrl(investigationId, link.value))}" data-note-link="${escapeAttr(link.value)}" title="Open note · edited ${escapeAttr(noteDate(note.updated_at))}"><i class="fas fa-note-sticky"></i>${escapeHtml(label)}</a>`
+      : `<span class="note-chip note-chip-missing" title="This note was deleted"><i class="fas fa-link-slash"></i>${escapeHtml(label)}</span>`
+  } else if (link.kind === "result") {
     const result = results.get(link.value)
     const label = link.label || (result ? resultLabel(result) : link.value)
     if (result) {
@@ -197,9 +228,50 @@ function renderNoteInline(text) {
     .replace(/`([^`]+)`/g, "<code>$1</code>")
 }
 
-// [[ completion: results, then identifiers. ![[ attaches a snapshot of a result.
-async function completeNoteReference(investigationId, query, embed) {
+async function createLinkedNote(investigationId, title) {
+  const response = await fetch(`${notesApi(investigationId)}/notes`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title, content: `# ${title}\n`, note_type: "manual", tags: [] }),
+  })
+  const data = await response.json().catch(() => ({}))
+  if (data.status !== "success") throw new Error(data.detail || data.message || `HTTP ${response.status}`)
+  return data.note_id
+}
+
+// [[ completion: other notes, results, then identifiers (or a new note named after the query).
+// ![[ attaches a snapshot of a result.
+async function completeNoteReference(investigationId, query, embed, pad) {
   const needle = query.trim().toLowerCase()
+  let noteOptions = []
+  if (!embed && pad) {
+    pad.notes = await loadNoteList(investigationId)
+    const others = [...pad.notes.entries()].filter(([id]) => id !== pad.noteId)
+    noteOptions = others
+      .filter(([, n]) => !needle || needle.split(/\s+/).every((word) => n.title.toLowerCase().includes(word)))
+      .sort((a, b) => String(b[1].updated_at).localeCompare(String(a[1].updated_at)))
+      .slice(0, 10)
+      .map(([id, n]) => ({ label: n.title, detail: `note · ${noteDate(n.updated_at)}`, type: "note", text: () => `[[note:${id}|${noteLabel(n.title)}]]` }))
+    const title = noteLabel(query)
+    if (title && !others.some(([, n]) => n.title.toLowerCase() === title.toLowerCase())) {
+      noteOptions.push({
+        label: `New note: ${title}`,
+        detail: "create and link",
+        type: "note",
+        text: () =>
+          createLinkedNote(investigationId, title)
+            .then((id) => {
+              pad.notes.set(id, { title, updated_at: new Date().toISOString(), content: `# ${title}\n` })
+              document.dispatchEvent(new CustomEvent("notes:changed"))
+              return `[[note:${id}|${title}]]`
+            })
+            .catch((error) => {
+              showTemporaryNotification(`Could not create the note: ${error.message}`, "error")
+              return null
+            }),
+      })
+    }
+  }
   const results = [...(await loadNoteResults(investigationId)).values()]
   const matches = results
     .filter((r) => {
@@ -235,7 +307,7 @@ async function completeNoteReference(investigationId, query, embed) {
   } catch (error) {
     // identifiers are optional here
   }
-  return [...matches, ...entities]
+  return [...noteOptions, ...matches, ...entities]
 }
 
 // ---------------------------------------------------------------------------
@@ -267,6 +339,8 @@ class NotePad {
     this.timer = null
     this.saving = null
     this.loading = false
+    this.notes = new Map()
+    container.notePad = this
   }
 
   investigationId() {
@@ -278,14 +352,14 @@ class NotePad {
     await loadNotesEditor()
     if (this.editor) return
     const investigation = () => this.investigationId()
-    const results = await loadNoteResults(investigation())
-    this.results = results
+    this.results = await loadNoteResults(investigation())
+    this.notes = await loadNoteList(investigation())
     this.editor = NotesEditor.create(this.container, {
-      placeholder: "Start writing…  Type [[ to link a result or identifier, ![[ to attach a snapshot of a result.",
+      placeholder: "Start writing…  Type [[ to link a note, result or identifier, ![[ to attach a snapshot of a result.",
       onChange: () => this.changed(),
-      renderChip: (link) => renderNoteChip(investigation(), this.results, link),
+      renderChip: (link) => renderNoteChip(investigation(), this.results, this.notes, link),
       renderEmbed: (link, el) => renderNoteEmbed(investigation(), this.results, link, el),
-      complete: (query, embed) => completeNoteReference(investigation(), query, embed),
+      complete: (query, embed) => completeNoteReference(investigation(), query, embed, this),
       renderInline: renderNoteInline,
       openLink: (href) => {
         const url = safeUrl(href)
@@ -310,8 +384,10 @@ class NotePad {
     this.timer = setTimeout(() => this.save(), NOTE_SAVE_DELAY)
   }
 
+  // Results and notes that links in the note point to
   async refreshResults() {
-    this.results = await loadNoteResults(this.investigationId(), { fresh: true })
+    const investigationId = this.investigationId()
+    ;[this.results, this.notes] = await Promise.all([loadNoteResults(investigationId, { fresh: true }), loadNoteList(investigationId)])
   }
 
   async open(noteId) {
@@ -444,6 +520,7 @@ async function exportNoteMarkdown(investigationId, content) {
         .join("\n")
     })
     .replace(/\[\[result:([^\]|]+)(?:\|([^\]]*))?\]\]/g, (m, id, label) => `[${label || id}](${origin}${resultUrl(investigationId, id)})`)
+    .replace(/\[\[note:([^\]|]+)(?:\|([^\]]*))?\]\]/g, (m, id, label) => `[${label || "note"}](${origin}${noteUrl(investigationId, id)})`)
     .replace(/\[\[[a-z_]+:([^\]|]+)(?:\|([^\]]*))?\]\]/g, (m, value, label) => `\`${label || value}\``)
 }
 
@@ -582,10 +659,23 @@ async function loadSavedNotes() {
   }
 }
 
+async function confirmDeleteNote(investigationId, noteId) {
+  let linking = []
+  try {
+    linking = await noteBacklinks(investigationId, noteId)
+  } catch (error) {
+    // the warning is best effort
+  }
+  const warning = linking.length
+    ? `\n\nIt is linked from ${linking.length} other note${linking.length === 1 ? "" : "s"}:\n${linking.map((t) => `  • ${t}`).join("\n")}\nThose links will show as a deleted note.`
+    : ""
+  return confirm(`Delete this note?${warning}`)
+}
+
 async function deleteNote(noteId, event) {
   if (event) event.stopPropagation()
   const investigationId = notesInvestigationId()
-  if (!investigationId || !confirm("Delete this note?")) return false
+  if (!investigationId || !(await confirmDeleteNote(investigationId, noteId))) return false
   try {
     const response = await fetch(`${notesApi(investigationId)}/notes/${encodeURIComponent(noteId)}`, { method: "DELETE" })
     if (!response.ok) throw new Error(`HTTP ${response.status}`)
@@ -628,6 +718,15 @@ async function addResultToNote(resultId, { snapshot = false } = {}) {
 }
 window.addResultToNote = addResultToNote
 
+// Note links open the note in the editor they are in (sidebar or notes page)
+document.addEventListener("click", (event) => {
+  const link = event.target.closest("[data-note-link]")
+  const pad = link && link.closest(".note-editor") && link.closest(".note-editor").notePad
+  if (!pad || event.ctrlKey || event.metaKey || event.button !== 0) return
+  event.preventDefault()
+  pad.open(link.dataset.noteLink).catch(() => showTemporaryNotification("That note no longer exists", "error"))
+})
+
 document.addEventListener("DOMContentLoaded", () => {
   const originalSelectInvestigation = window.selectInvestigation
   if (originalSelectInvestigation) {
@@ -636,6 +735,11 @@ document.addEventListener("DOMContentLoaded", () => {
       return originalSelectInvestigation(...args)
     }
   }
+})
+
+// A note created from a [[ link elsewhere
+document.addEventListener("notes:changed", () => {
+  if (sidebarIsOpen()) loadSavedNotes()
 })
 
 window.addEventListener("pagehide", () => {

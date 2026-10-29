@@ -12,7 +12,7 @@
             <h1 class="page-title !mb-1">Notes</h1>
             <p class="text-sm text-gray-400" id="investigationInfo">Loading investigation…</p>
         </div>
-        <p class="text-xs text-gray-500">Type <code class="text-purple-300">[[</code> to link a result or identifier,
+        <p class="text-xs text-gray-500">Type <code class="text-purple-300">[[</code> to link a note, result or identifier,
             <code class="text-purple-300">![[</code> to attach a snapshot of a result.</p>
     </div>
 
@@ -99,7 +99,7 @@
     $('newNoteBtn').addEventListener('click', () => pad.newNote());
 
     $('deleteNoteBtn').addEventListener('click', async () => {
-        if (!pad.noteId || !confirm('Delete this note?')) return;
+        if (!pad.noteId || !(await confirmDeleteNote(investigationId, pad.noteId))) return;
         const response = await fetch(`${api}/notes/${encodeURIComponent(pad.noteId)}`, { method: 'DELETE' });
         if (!response.ok) return showTemporaryNotification('Failed to delete note', 'error');
         pad.version = pad.savedVersion;

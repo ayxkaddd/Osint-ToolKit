@@ -132,6 +132,8 @@
     cursor: default;
 }
 .note-chip-missing i { color: #9ca3af; }
+.note-chip-note { background: rgba(16, 185, 129, 0.12); border-color: rgba(52, 211, 153, 0.35); color: #d1fae5; }
+.note-chip-note i { color: #34d399; }
 .note-chip-snapshot { background: rgba(14, 165, 233, 0.12); border-color: rgba(56, 189, 248, 0.35); }
 
 /* Snapshots: ![[snapshot:...]] on a line of their own */
