@@ -121,7 +121,17 @@
                 "API",
                 "Username",
                 "OSINT"
-            ]
+            ],
+            "settings": {
+                "GHUNT_VENV_PATH": {
+                    "type": "text",
+                    "label": "GHunt Virtual Environment Path"
+                },
+                "GHUNT_SCRIPT_PATH": {
+                    "type": "text",
+                    "label": "GHunt Script Path (main.py)"
+                }
+            }
         },
         {
             "name": "Cavalier",

@@ -1,0 +1,14 @@
+# Python plugin: plugin.yaml describes it, plugin.py does the lookup.
+name: Gravatar profile
+description: Gravatar profile of an email address - name, photo, location, job and the accounts the person verified.
+icon: circle-user
+site: gravatar.com
+accepts: [email]
+placeholder: someone@example.com
+
+settings:
+  GRAVATAR_API_KEY:
+    label: Gravatar API key (optional - higher rate limit)
+    secret: true
+    required: false
+    help: https://gravatar.com/developers

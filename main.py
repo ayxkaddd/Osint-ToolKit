@@ -22,6 +22,7 @@ from routes import (
     hlr_routes,
     lookup_routes,
     oi_routes,
+    plugin_routes,
     rosources_routes,
     settings_routes,
     templates,
@@ -33,6 +34,7 @@ from routes import (
     funstat_routes,
 )
 from auth.auth_handler import AuthHandler
+from services import plugin_loader
 from utils.config import get_setting
 
 logging.basicConfig(
@@ -181,6 +183,8 @@ class OsintFrameWork:
             (funstat_routes.bot_router, "Funstat Bot"),
             (sharetrace_routes.router, "ShareTrace"),
             (web_search_routes.osint_router, "OSINT Search"),
+            (plugin_routes.router, "Plugins"),
+            (plugin_routes.page_router, "Plugins"),
         ]
 
         for router, tag in routes_config:
@@ -190,6 +194,7 @@ class OsintFrameWork:
             )
 
         logger.info(f"Registered {len(routes_config)} route groups")
+        plugin_loader.refresh(force=True)
 
 
 app = OsintFrameWork().app

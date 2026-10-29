@@ -44,7 +44,12 @@ async function loadResources() {
                         </a>
                     </div>
                 </div>
-            `).join('')
+            `).join('') + `
+                <a href="/plugins/builder" class="bg-[#14151f] border border-dashed border-[#24283b] hover:border-purple-700/60 rounded-xl p-6 flex flex-col items-center justify-center text-center gap-3 opacity-0 transform translate-y-4 transition-all">
+                    <div class="w-12 h-12 bg-gray-800 rounded-lg flex items-center justify-center"><i class="fas fa-plus text-purple-400 text-2xl"></i></div>
+                    <h3 class="text-xl font-semibold text-white">Build a plugin</h3>
+                    <p class="text-gray-400">Connect another website or service and search it from here - no coding needed.</p>
+                </a>`
 
         const resourcesList = document.getElementById('resourcesList')
         resourcesList.innerHTML = ext_res.map(resource => `
@@ -77,7 +82,7 @@ async function loadResources() {
 
         contentContainer.classList.remove('opacity-0')
 
-        const items = [...document.querySelectorAll('#modulesList > div, #resourcesList > div')]
+        const items = [...document.querySelectorAll('#modulesList > *, #resourcesList > div')]
         items.forEach((item, index) => {
             setTimeout(() => {
                 item.classList.remove('opacity-0', 'translate-y-4')
@@ -209,6 +214,8 @@ function openSettings(moduleName) {
                     <label class="block text-sm font-medium text-gray-400 mb-2">${config.label}</label>
                     <input type="${config.type}"
                            name="${key}"
+                           autocomplete="${config.type === 'password' ? 'new-password' : 'off'}"
+                           data-lpignore="true" data-1p-ignore data-bwignore data-form-type="other"
                            data-module="${moduleName}"
                            class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500"
                            value="${displayValue}"

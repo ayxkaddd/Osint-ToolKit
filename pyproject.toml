@@ -41,7 +41,8 @@ dependencies = [
     "sse-starlette>=2.2.1",
     "pillow>=12.1.0",
     "aiofiles>=25.1.0",
-    "phonenumbers>=8.13.50"
+    "phonenumbers>=8.13.50",
+    "pyyaml>=6.0.2"
 ]
 
 [project.urls]

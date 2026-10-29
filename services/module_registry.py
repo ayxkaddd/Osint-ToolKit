@@ -45,6 +45,8 @@ class Module:
     prefill: Optional[Dict[str, str]] = None
     # service_name its results are saved under (to find earlier lookups)
     service: str = ""
+    plugin: bool = False             # added from plugins/ (services/plugin_loader.py)
+    extra_problems: Optional[Callable[[], List[str]]] = None
 
     def __post_init__(self):
         self.service = self.service or SAVED_SERVICE.get(self.id, self.id)
@@ -79,7 +81,7 @@ MODULES: List[Module] = [
             "gaia_id": RunSpec("GET", "/api/ghunt/gaia", _q("gaia_id")),
             "bssid": RunSpec("GET", "/api/ghunt/geolocate", _q("bssid")),
             "domain": RunSpec("GET", "/api/ghunt/spiderdal", _q("domain"))},
-           speed="medium", tools=["GHUNT_SCRIPT_PATH"], concurrency=1, prefill={"input": "#searchInput"}),
+           speed="medium", concurrency=1, prefill={"input": "#searchInput"}),
     Module("oi", "OSINT Industries", "/api", "shield-alert",
            {t: RunSpec("GET", "/api/oi/query", (lambda kind: lambda v: {"params": {"type": kind, "query": v}})(t))
             for t in ("email", "phone", "username")},
@@ -124,7 +126,7 @@ MODULES_BY_ID = {m.id: m for m in MODULES}
 
 def _tool_available(setting: str) -> Optional[str]:
     """None if the executable/script named by a setting exists, else a message."""
-    defaults = {"GHUNT_SCRIPT_PATH": "ghunt", "SUBFINDER_PATH": "subfinder", "HTTPX_PATH": "httpx-toolkit"}
+    defaults = {"SUBFINDER_PATH": "subfinder", "HTTPX_PATH": "httpx-toolkit"}
     value = get_setting(setting) or defaults.get(setting)
     if not value:
         return f"{setting} is not set"
@@ -157,12 +159,19 @@ async def module_status(module: Module) -> Dict[str, Any]:
             problems.append(f"{key} is not configured")
     if module.id == "hlr" and not Path("assets/sms_logins.json").exists():
         problems.append("assets/sms_logins.json is missing")
+    if module.id == "ghunt":
+        from services.ghunt_service import ghunt_command
+        problem = ghunt_command()[1]
+        if problem:
+            problems.append(problem)
     for tool in module.tools:
         problem = _tool_available(tool)
         if problem:
             problems.append(problem)
     if module.needs_telegram and not await telegram_authorized():
         problems.append("Telegram is not logged in")
+    if module.extra_problems:
+        problems += module.extra_problems()
     missing_optional = [k for k in module.optional_keys if not get_setting(k)]
     missing_optional += [t for t in module.optional_tools if _tool_available(t)]
     return {
@@ -180,10 +189,13 @@ async def module_status(module: Module) -> Dict[str, Any]:
         "settings": module.keys + module.optional_keys + module.tools + module.optional_tools,
         "prefill": module.prefill,
         "service": module.service,
+        "plugin": module.plugin,
     }
 
 
 async def all_module_status() -> List[Dict[str, Any]]:
+    from services import plugin_loader
+    plugin_loader.refresh()
     return list(await asyncio.gather(*(module_status(m) for m in MODULES)))
 
 

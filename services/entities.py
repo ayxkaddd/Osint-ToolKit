@@ -324,6 +324,10 @@ SERVICE_SKIP_KEYS = {
 def extract_entities(result: Any, service: str = "") -> List[Tuple[Entity, str]]:
     """(entity, json path) pairs found in a result payload."""
     out: Dict[str, Tuple[Entity, str]] = {}
+    if isinstance(result, dict) and result.get("kind") == "plugin_result":
+        # card pictures and icons are never leads
+        result = {**result, "items": [{k: v for k, v in item.items() if k not in ("image", "icon")}
+                                      for item in result.get("items") or [] if isinstance(item, dict)]}
 
     def add(entity: Optional[Entity], path: str):
         if entity and entity.key not in out and len(out) < MAX_ENTITIES_PER_RESULT and not is_noise(entity):
@@ -339,6 +343,12 @@ def extract_entities(result: Any, service: str = "") -> List[Tuple[Entity, str]]
                 if SKIP_KEY_RE.search(k) or k in SERVICE_SKIP_KEYS.get(service, ()):
                     continue
                 sub = f"{path}.{k}" if path else k
+                if k == "entities" and isinstance(v, dict) and set(v) <= set(ENTITY_TYPES):
+                    # plugin cards list their identifiers by type
+                    for entity_type, values in v.items():
+                        for i, item in enumerate(values if isinstance(values, list) else [values]):
+                            add(make_entity(entity_type, item), f"{sub}.{entity_type}[{i}]")
+                    continue
                 add(make_entity("email", k), sub)  # emails used as dict keys (GitFive)
                 hint = _service_hints(service, value, k) or _key_hint(k)
                 if hint and not isinstance(v, (dict, list)):
@@ -418,6 +428,11 @@ def entities_from_parameters(parameters: Dict[str, Any], service: str = "") -> L
         for candidate in detect(str(flat.get("query") or flat.get("value"))):
             found.append(candidate)
             break
+    if flat.get("plugin_id") and flat.get("value"):   # plugins: the type is optional
+        if flat.get("type") in ENTITY_TYPES:
+            found.append(make_entity(flat["type"], flat["value"]))
+        else:
+            found.extend(detect(str(flat["value"]))[:1])
     if service == "ns":
         for key in ("ns1", "ns2"):
             if flat.get(key):

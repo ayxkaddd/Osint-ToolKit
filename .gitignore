@@ -23,3 +23,6 @@ media/
 *.session-journal
 .setup_complete
 .setup_state.json
+
+# plugins you enabled or marked as yours (per machine)
+plugins/.trust.json
