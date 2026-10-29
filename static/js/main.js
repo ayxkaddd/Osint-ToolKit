@@ -931,6 +931,82 @@ function pivotChip(type, value, label = null) {
 }
 window.pivotChip = pivotChip
 
+// Identifiers grouped by type, as pivot chips (investigation results and module pages)
+function identifierGroupsHtml(entities, limit = 150) {
+  const byType = {}
+  entities.forEach((e) => (byType[e.type] = byType[e.type] || []).push(e))
+  return Object.entries(byType).map(([type, list]) => `
+      <div class="mb-2">
+        <div class="text-xs text-gray-500 mb-1">${escapeHtml(ENTITY_LABELS[type] || type)} (${list.length})</div>
+        <div class="flex flex-wrap gap-1.5">
+          ${list.slice(0, limit).map((e) => pivotChip(e.type, e.value, e.display || e.value)).join("")}
+          ${list.length > limit ? `<span class="text-xs text-gray-500">+${list.length - limit} more in the investigation's Identifiers tab</span>` : ""}
+        </div>
+      </div>`).join("")
+}
+window.identifierGroupsHtml = identifierGroupsHtml
+
+// Module pages: "Identifiers found" under the results - the emails, phones, usernames,
+// domains... in what a lookup returned, extracted the same way as saved results.
+// showIdentifiers(data) replaces the panel; showIdentifiers(data, { append: true })
+// adds to it (pages that show one lookup in several parts); resetIdentifiers() hides it.
+let identifierSources = []
+let identifierRequest = 0
+
+function identifiersPanel() {
+  let panel = document.getElementById("identifiersPanel")
+  if (!panel) {
+    panel = document.createElement("section")
+    panel.id = "identifiersPanel"
+    panel.className = "hidden mt-8 bg-[#14151f] border border-[#24283b] rounded-xl p-5"
+    const host = document.querySelector("[data-identifiers-host]") || document.querySelector(".page") || document.querySelector("main") || document.body
+    host.appendChild(panel)
+  }
+  return panel
+}
+
+let identifierTimer = null
+
+function showIdentifiers(data, { append = false, service = window.currentService } = {}) {
+  if (data === undefined || data === null) return
+  identifierSources = append ? [...identifierSources, data] : [data]
+  // pages that repaint while results stream in call this often: extract once they settle
+  clearTimeout(identifierTimer)
+  identifierTimer = setTimeout(() => extractIdentifiers(service), 400)
+}
+
+async function extractIdentifiers(service) {
+  const request = ++identifierRequest
+  const panel = identifiersPanel()
+  try {
+    const response = await fetch("/api/entities/extract", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ service: service || "", data: identifierSources.length === 1 ? identifierSources[0] : identifierSources }),
+    })
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+    const { entities } = await response.json()
+    if (request !== identifierRequest) return // a newer lookup replaced this one
+    panel.innerHTML = `
+      <h3 class="text-sm font-bold text-gray-300 mb-3"><i class="fas fa-fingerprint mr-2 text-purple-400"></i>Identifiers found
+        <span class="font-normal text-gray-500">${entities.length ? `(${entities.length}) - click one to look it up with another module` : ""}</span></h3>
+      ${entities.length ? identifierGroupsHtml(entities) : '<p class="text-sm text-gray-500">No emails, phones, usernames, domains or other identifiers recognised in this result.</p>'}`
+    panel.classList.remove("hidden")
+  } catch (e) {
+    if (request === identifierRequest) panel.classList.add("hidden")
+  }
+}
+
+function resetIdentifiers() {
+  identifierSources = []
+  clearTimeout(identifierTimer)
+  identifierRequest++
+  const panel = document.getElementById("identifiersPanel")
+  if (panel) panel.classList.add("hidden")
+}
+window.showIdentifiers = showIdentifiers
+window.resetIdentifiers = resetIdentifiers
+
 // ---------------------------------------------------------------------------
 // Name server pairs -> "find other domains on the same name servers" (NS lookup)
 // ---------------------------------------------------------------------------

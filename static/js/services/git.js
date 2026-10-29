@@ -82,6 +82,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function displayUserData(data) {
+        showIdentifiers(data)
         // Update profile section
         document.getElementById("userAvatar").src = data.avatar_url
         document.getElementById("userName").textContent = data.name || data.username

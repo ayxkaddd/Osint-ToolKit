@@ -14,6 +14,7 @@ function ipField(label, value) {
 }
 
 function renderIp(data) {
+    showIdentifiers(data);
     const basic = data.basic_info || {};
     const abuse = data.abuse_info;
     const shodan = data.shodan_info;

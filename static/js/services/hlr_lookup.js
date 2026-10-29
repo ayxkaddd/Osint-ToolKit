@@ -87,6 +87,7 @@ async function performHLRLookup() {
 }
 
 function displayResults(data) {
+    showIdentifiers(data);
     balanceAmount.textContent = data.balance;
 
     resultsTimeline.innerHTML = data.results.map(result => `

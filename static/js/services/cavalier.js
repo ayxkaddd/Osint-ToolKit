@@ -139,6 +139,7 @@ async function displayResults(input) {
 }
 
 function renderCavalierData(data, isEmailSearch) {
+    showIdentifiers(data);
     const stealerResultsContainer = document.getElementById("stealerResults");
     stealerResultsContainer.innerHTML = "";
 

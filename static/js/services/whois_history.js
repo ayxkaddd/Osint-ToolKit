@@ -134,6 +134,7 @@ function whoisNsSets(records) {
 }
 
 function displayResults(data) {
+    showIdentifiers(data);
     data = data || {};
     const records = data.records || [];
     const a = data.analysis;

@@ -536,6 +536,7 @@ class OSINTSearch {
         if (!result) return;
 
         result.profileData = data.profile_data;
+        showIdentifiers({ results: this.results });   // profiles carry emails, names, links
         this.replaceResultCard(result);
     }
 
@@ -1300,6 +1301,7 @@ class OSINTSearch {
 
     resetResults() {
         this.results = [];
+        resetIdentifiers();
         this.resultsByCategory = {};
         this.stats = { scanned: 0, total: 0, found: 0, unchecked: 0 };
         this.viewMode = 'flat';
@@ -1322,6 +1324,7 @@ class OSINTSearch {
     }
 
     handleSearchCompleted(data) {
+        showIdentifiers({ results: this.results });
         const wasRetry = this.retrying;
         this.stopSearch();
         const errored = [...new Set(this.erroredSites || [])];
@@ -1386,6 +1389,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
         }
+
+        showIdentifiers(data);
 
         // Show results section
         search.elements.resultsContainer.classList.remove('hidden');

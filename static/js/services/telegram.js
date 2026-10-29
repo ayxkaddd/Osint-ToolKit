@@ -52,6 +52,7 @@ async function searchProfile() {
 }
 
 function displayResults(data) {
+    showIdentifiers(data);
     const entriesContainer = document.getElementById('profile-entries');
     const photosContainer = document.getElementById('photos');
 

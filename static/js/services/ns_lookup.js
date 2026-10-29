@@ -136,6 +136,8 @@ function webCard(domain) {
 // ---------------- attribution ----------------
 
 function renderAttribution() {
+    // the WHOIS analysis and fingerprints carry the emails, phones and domains worth pivoting on
+    if (Object.keys(ns.whois).length || Object.keys(ns.web).length) showIdentifiers({ whois: ns.whois, web: ns.web });
     const signals = NsAttribution.buildSignals(ns.whois, ns.web);
     const groups = NsAttribution.clusters(signals);
     ns.clusterOf = {};

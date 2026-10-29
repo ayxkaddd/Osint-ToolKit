@@ -35,6 +35,7 @@ window.loadResultIntoView = function (data) {
         showPdf(data.url);
     } else if (data && Array.isArray(data.modules)) {
         state.view.add(data.modules);
+        showIdentifiers(data);
         if (data.modules_checked != null) state.view.setSites(data.modules_checked);
         const { accounts, breaches } = state.view.counts();
         setStatus('done', `Saved result${data.query ? ` for ${data.query}` : ''}: ${summaryText(accounts, breaches)}`);
@@ -74,6 +75,7 @@ function showError(message) {
 }
 
 function resetResult() {
+    resetIdentifiers();
     els.error.classList.add('hidden');
     els.pdfDownload.classList.add('hidden');
     els.runPremiumOnly.classList.add('hidden');
@@ -162,6 +164,7 @@ async function streamOi({ type, query, premium, premiumModulesOnly, sandbox }) {
         state.controller = null;
     }
 
+    showIdentifiers({ modules: state.view.cards });
     const { accounts, breaches } = state.view.counts();
     const seconds = Math.round((Date.now() - started) / 1000);
     if (finished) {

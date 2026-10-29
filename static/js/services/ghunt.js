@@ -87,6 +87,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function displayResults(module, data) {
+      showIdentifiers(data)
     // Hide all result sections
     document.querySelectorAll('#resultsData > div[id$="Results"]').forEach((section) => {
       section.classList.add("hidden")

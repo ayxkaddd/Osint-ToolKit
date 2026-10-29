@@ -262,6 +262,7 @@ function renderReputation(data) {
 }
 
 function displayResults(data) {
+    showIdentifiers(data);
     data = data || {};
     const warnings = data.warnings || [];
     const warningsBox = document.getElementById('reconWarnings');

@@ -1374,6 +1374,7 @@ function formatNumber(num) {
 
 // Display enriched links section
 function displayEnrichedLinks(results) {
+    showIdentifiers({ links: results }, { append: true });
     window.enrichedLinksData = results;
 
     if (!results || results.length === 0) {
@@ -2066,6 +2067,7 @@ function enableUserActions() {
 }
 
 function displayUserBasicInfo(user) {
+    showIdentifiers(user);
     const html = `
         <div class="result-card border border-gray-800 rounded-xl p-6 card-hover fade-in">
             <div class="flex items-start justify-between mb-4">
@@ -2126,6 +2128,7 @@ async function loadTmeProfile(username) {
 }
 
 function displayUserStats(stats, full = false) {
+    showIdentifiers(stats, { append: true });
     const existingCard = document.querySelector('#userResults .result-card');
 
     const statsHtml = `
@@ -2184,6 +2187,7 @@ function displayUserStats(stats, full = false) {
 }
 
 function displayUserGroups(groups) {
+    showIdentifiers(groups, { append: true });
     const html = `
         <div class="result-card border border-gray-800 rounded-xl p-6 mt-6 fade-in">
             <h4 class="text-xl font-bold mb-4 flex items-center">
@@ -2220,6 +2224,7 @@ function displayUserGroups(groups) {
 }
 
 function displayUserMessages(data) {
+    showIdentifiers(data, { append: true });
     const messages = data.messages || [];
     const paging = data.paging || {};
     const totalPages = paging.totalPages || Math.ceil((paging.total || 0) / (paging.pageSize || 20)) || 1;
@@ -2453,6 +2458,7 @@ async function flushThumbnails() {
 }
 
 function displayAllMessagesWithFilters(messages) {
+    showIdentifiers({ messages }, { append: true });
     messageList.all = messages || [];
     messageList.all.forEach(msg => {
         const group = msg.group || {};
@@ -2703,6 +2709,7 @@ function displayMessagesAnalysis(analysis) {
 }
 
 function displayGroupInfo(group) {
+    showIdentifiers(group);
     const data = group.data || group;
 
     const html = `
@@ -2753,6 +2760,7 @@ function displayGroupInfo(group) {
 }
 
 function displayGroupMembers(members) {
+    showIdentifiers({ members }, { append: true });
     const html = `
         <div class="result-card border border-gray-800 rounded-xl p-6 mt-6">
             <h4 class="text-xl font-bold mb-4 flex items-center">
@@ -2793,6 +2801,7 @@ function displayGroupMembers(members) {
 }
 
 function displayTextResults(data) {
+    showIdentifiers(data);
     const results = data.results || [];
 
     const html = `
@@ -2868,6 +2877,7 @@ function displayTextResults(data) {
 }
 
 function displayUsernameResults(data) {
+    showIdentifiers(data);
     const html = `
         <div class="result-card border border-gray-800 rounded-xl p-6">
             <h4 class="text-xl font-bold mb-4 flex items-center">

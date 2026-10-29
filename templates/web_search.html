@@ -435,6 +435,7 @@
 
         // --- Render Results ---
         function renderResults(data) {
+            showIdentifiers(data);
             const results = data.results || [];
             const enginesUsed = new Set();
             const dorksUsed = new Set();
