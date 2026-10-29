@@ -891,7 +891,9 @@ function renderOi(data) {
                 <a href="${escapeAttr(safeUrl(data.url))}" target="_blank" class="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-semibold"><i data-lucide="download" class="w-4 h-4"></i>Open report</a>
             </div>`;
     }
-    if (data && Array.isArray(data.modules)) return oiCardsHtml(data.modules);
+    if (data && Array.isArray(data.modules)) {
+        return (data.error ? `<p class="text-sm text-red-300 mb-4">${escapeHtml(data.error)}</p>` : '') + oiResultsHtml(data.modules);
+    }
     return renderValue(data);
 }
 

@@ -1,3 +1,4 @@
+import json
 import os
 import re
 import uuid
@@ -8,6 +9,26 @@ from dotenv import load_dotenv
 from utils.config import get_setting
 
 load_dotenv()
+
+API_URL = "https://api.osint.industries"
+STREAM_PATH = "/v2/request/stream"
+# Same response shape as the real API, but deterministic fake data and no credits
+SANDBOX_STREAM_PATH = "/sandbox/request/stream"
+
+
+def _sse(payload: dict) -> str:
+    return f"data: {json.dumps(payload, default=str)}\n\n"
+
+
+def _error_text(body: str) -> str:
+    try:
+        data = json.loads(body)
+    except ValueError:
+        return body.strip()[:300]
+    if isinstance(data, dict):
+        return str(data.get("error") or data.get("detail") or data.get("message") or data)[:300]
+    return str(data)[:300]
+
 
 class OiService:
     @property
@@ -78,6 +99,81 @@ class OiService:
                 with open(filename, 'wb') as f:
                     f.write(await resp.read())
                 return JSONResponse({"url": "/" + filename})
+
+    async def stream_oi(self, type: str, query: str, premium: bool = False,
+                        premium_modules_only: bool = False, sandbox: bool = False):
+        """SSE events as OSINT Industries finishes each module:
+        started -> module (normalized cards) ... -> error? -> done."""
+        query = query.strip()
+        premium = bool(premium or premium_modules_only)
+        yield _sse({"event": "started", "type": type, "query": query,
+                    "premium": premium, "premium_modules_only": premium_modules_only, "sandbox": sandbox})
+        if not self.token:
+            yield _sse({"event": "error", "detail": "OSINT Industries API key is not configured"})
+            yield _sse({"event": "done", "modules": 0, "completed": False})
+            return
+
+        headers = {"content-type": "application/json", "accept": "text/event-stream", "api-key": self.token}
+        params = {
+            "type": type,
+            "query": query,
+            "timeout": 60,
+            "exact_match": True,
+            "premium": premium,
+            "premium_modules_only": premium_modules_only,
+        }
+        modules = 0
+        completed = False
+        timeout = aiohttp.ClientTimeout(total=180, sock_read=120)
+        url = API_URL + (SANDBOX_STREAM_PATH if sandbox else STREAM_PATH)
+        try:
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.post(url, headers=headers, json=params) as resp:
+                    if resp.status >= 400:
+                        detail = _error_text(await resp.text()) or f"OSINT Industries returned HTTP {resp.status}"
+                        yield _sse({"event": "error", "status": resp.status, "detail": detail})
+                        yield _sse({"event": "done", "modules": 0, "completed": False})
+                        return
+                    buffer = ""
+                    # iter_any + own splitting: one module can be a line longer than aiohttp's readline limit
+                    async for chunk in resp.content.iter_any():
+                        buffer += chunk.decode("utf-8", errors="replace")
+                        *lines, buffer = buffer.split("\n")
+                        for line in lines:
+                            for event in self._stream_line(line):
+                                if event.get("event") == "module":
+                                    modules += 1
+                                yield _sse(event)
+                    for event in self._stream_line(buffer):
+                        if event.get("event") == "module":
+                            modules += 1
+                        yield _sse(event)
+                    completed = True
+        except (aiohttp.ClientError, TimeoutError) as e:
+            yield _sse({"event": "error", "detail": f"Connection to OSINT Industries failed: {e.__class__.__name__}"})
+        yield _sse({"event": "done", "modules": modules, "completed": completed})
+
+    @staticmethod
+    def _stream_line(line: str) -> list:
+        """One line of the upstream stream ("data:{json}" or a bare JSON line) -> our events."""
+        line = line.strip()
+        if line.startswith("data:"):
+            line = line[5:].strip()
+        if not line or line[0] not in "[{":
+            return []
+        try:
+            data = json.loads(line)
+        except ValueError:
+            return []
+        events = []
+        for item in data if isinstance(data, list) else [data]:
+            if not isinstance(item, dict):
+                continue
+            if item.get("module"):
+                events.append({"event": "module", "module": item["module"], "cards": normalize_oi([item])})
+            elif item.get("error"):
+                events.append({"event": "error", "detail": str(item["error"])[:300]})
+        return events
 
     async def get_credits(self):
         headers = {
@@ -191,6 +287,9 @@ def normalize_oi(data) -> list:
             if isinstance(spec, dict):
                 front = fronts[i] if i < len(fronts) and isinstance(fronts[i], dict) else {}
                 cards.append(_oi_card(item, spec, front))
-    # Breaches first, then accounts with the most detail
-    cards.sort(key=lambda c: (not c["breach"], -len(c) - len(c["fields"])))
-    return cards
+    return sort_oi_cards(cards)
+
+
+def sort_oi_cards(cards: list) -> list:
+    """Breaches first, then accounts with the most detail."""
+    return sorted(cards, key=lambda c: (not c.get("breach"), -len(c) - len(c.get("fields") or [])))
