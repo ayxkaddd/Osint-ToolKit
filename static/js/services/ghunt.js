@@ -116,7 +116,8 @@ document.addEventListener("DOMContentLoaded", () => {
     // Extract profile data
     const personId = profile.personId || ""
     const email = profile.emails?.PROFILE?.value || ""
-    const name = profile.names?.PROFILE?.displayName || profile.names?.PROFILE?.givenName || "Unknown User"
+    // fullname: GHunt fills it from the public Google Maps profile (the People API no longer returns names)
+    const name = profile.names?.PROFILE?.fullname || profile.names?.PROFILE?.displayName || profile.names?.PROFILE?.givenName || "Unknown User"
     const profilePhoto = profile.profilePhotos?.PROFILE?.url || "/static/avatar_placeholder.png"
     const lastUpdated = profile.sourceIds?.PROFILE?.lastUpdated || ""
 
