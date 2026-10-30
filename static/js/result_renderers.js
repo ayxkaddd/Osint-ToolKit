@@ -109,8 +109,7 @@ const RENDERERS = {
     vk_profile: renderVkProfile,
     oi: renderOi,
     cavalier: renderCavalier,
-    'ghunt.lookup_ghunt_email': renderGhuntProfile,
-    'ghunt.lookup_ghunt_gaia': renderGhuntProfile,
+    ghunt: (data) => ghuntResultHtml(data),   // static/js/ghunt_cards.js
     web_search: renderWebSearch,
     face_search: renderFaceSearch,
     'funstat.lookup_user': renderFunstatUsers,
@@ -505,28 +504,6 @@ function renderCavalier(data) {
                     ${(e.top_passwords || []).length ? `<div><div class="text-xs text-gray-500 mb-1">Top passwords</div>${chips(e.top_passwords)}</div>` : ''}
                     ${(e.credentials || []).length ? `<div><div class="text-xs text-gray-500 mb-1">Credentials</div>${renderTable(e.credentials, ['domain', 'username', 'url'])}</div>` : ''}
                 </div>`).join('')}
-        </div>`;
-}
-
-function renderGhuntProfile(data) {
-    const profile = data && data.PROFILE_CONTAINER && data.PROFILE_CONTAINER.profile;
-    if (!profile) return renderValue(data);
-    const name = profile.names?.PROFILE?.fullname || profile.names?.PROFILE?.displayName || 'Google account';
-    const email = profile.emails?.PROFILE?.value;
-    const avatar = profile.profilePhotos?.PROFILE?.url;
-    const gaiaId = profile.personId;
-    const { profile: _ignored, ...rest } = data.PROFILE_CONTAINER;
-    return `
-        <div class="space-y-4">
-            <div class="flex items-start gap-4 bg-gray-900 p-5 rounded-xl border border-gray-800">
-                ${safeUrl(avatar) ? `<img src="${escapeAttr(safeUrl(avatar))}" alt="" loading="lazy" class="w-16 h-16 rounded-full object-cover border-2 border-purple-500/50 shrink-0">` : ''}
-                <div class="space-y-1 min-w-0">
-                    <h4 class="text-lg font-bold text-white">${escapeHtml(name)}</h4>
-                    ${email ? `<div class="text-sm text-gray-300">${pivotText('email', email)}</div>` : ''}
-                    ${gaiaId ? `<div class="text-xs text-gray-400 font-mono">Gaia ID ${pivotText('gaia_id', gaiaId)} · ${link(`https://www.google.com/maps/contrib/${encodeURIComponent(gaiaId)}/reviews`, 'Maps reviews')}</div>` : ''}
-                </div>
-            </div>
-            ${Object.values(rest).some(Boolean) ? renderValue(rest, 1) : ''}
         </div>`;
 }
 
