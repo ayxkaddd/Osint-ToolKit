@@ -2,73 +2,33 @@
 
 {% block title %}GHunt - OSINT Toolkit{% endblock %}
 
-{% block extra_head %}
-<link rel="stylesheet" href="/static/css/ghunt.css">
-{% endblock %}
-
 {% block content %}
 <div class="page">
     <h1 class="page-title">GHunt</h1>
-    <p class="page-lead">Google account behind an email or Gaia ID: name, profile photo, Gaia ID, Maps reviews and other public Google traces.</p>
+    <p class="page-lead">What Google shows about an account, a Drive file, a Wi-Fi access point or a domain:
+        name, profile photo, Gaia ID, Maps activity, Google services in use, file owners, locations and linked apps.</p>
 
-    <div class="flex flex-col md:flex-row gap-3">
-        <div class="segmented shrink-0">
-            <button type="button" class="module-tab active" data-module="email"><i data-lucide="mail" class="w-4 h-4"></i>Email</button>
-            <button type="button" class="module-tab" data-module="gaia"><i data-lucide="user" class="w-4 h-4"></i>Gaia ID</button>
-        </div>
-        <input type="text" id="searchInput" autocomplete="off" placeholder="Enter email address" class="field flex-1">
+    <div class="segmented mb-3" id="ghuntTypes">
+        <button type="button" data-type="email" class="active"><i data-lucide="mail" class="w-4 h-4"></i>Email</button>
+        <button type="button" data-type="gaia"><i data-lucide="hash" class="w-4 h-4"></i>Gaia ID</button>
+        <button type="button" data-type="drive"><i data-lucide="file-text" class="w-4 h-4"></i>Drive file</button>
+        <button type="button" data-type="geolocate"><i data-lucide="wifi" class="w-4 h-4"></i>Wi-Fi BSSID</button>
+        <button type="button" data-type="spiderdal"><i data-lucide="globe" class="w-4 h-4"></i>Domain</button>
+    </div>
+    <div class="flex gap-3">
+        <input type="text" id="searchInput" autocomplete="off" class="field flex-1" placeholder="someone@gmail.com">
         <button type="button" id="searchButton" class="btn-primary">Search</button>
     </div>
-    <p class="muted-note mt-2" id="moduleHint">Search for information about a Google account using their email address</p>
+    <p class="muted-note mt-2" id="moduleHint"></p>
 
-    <div id="loadingIndicator" class="hidden loading-line"><i class="fas fa-spinner fa-spin mr-2"></i>Querying Google - this takes a few seconds…</div>
-
-    <!-- Results Section -->
-    <div id="resultsData" class="hidden space-y-4 mt-6">
-        <!-- Simplified Email Results to show only essential info -->
-        <div id="emailResults" class="hidden">
-            <!-- Profile Section -->
-            <div class="card">
-                <div class="flex items-start space-x-6">
-                    <img id="userAvatar" class="w-24 h-24 rounded-full border-2 border-gray-700" src="/static/avatar_placeholder.png" alt="Profile picture">
-                    <div class="flex-1">
-                        <h2 id="userName" class="text-2xl font-bold"></h2>
-                        <p id="userEmail" class="text-gray-400 mt-1 flex items-center">
-                            <i data-lucide="mail" class="w-4 h-4 mr-2"></i>
-                            <span id="userEmailText"></span>
-                        </p>
-                        <div id="gaiaContainer" class="hidden mt-3">
-                            <div class="flex items-center text-gray-400">
-                                <i data-lucide="hash" class="w-4 h-4 mr-2"></i>
-                                <span class="text-sm">GAIA ID: </span>
-                                <span id="gaiaId" class="ml-2"></span>
-                            </div>
-                        </div>
-                        <div id="lastEditContainer" class="hidden mt-2">
-                            <div class="flex items-center text-gray-500 text-sm">
-                                <i data-lucide="calendar" class="w-4 h-4 mr-2"></i>
-                                <span>Last Updated: </span>
-                                <span id="lastEdit" class="ml-1"></span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Simplified Gaia Results -->
-        <div id="gaiaResults" class="hidden">
-            <div class="card">
-                <h3 class="text-xl font-bold mb-4 flex items-center">
-                    <i data-lucide="user" class="w-5 h-5 mr-2"></i>
-                    Gaia ID Information
-                </h3>
-                <div id="gaiaDetails"></div>
-            </div>
-        </div>
+    <div id="ghuntStatus" class="hidden mt-6 flex items-center gap-3 text-sm text-gray-300">
+        <i class="fas fa-spinner fa-spin text-purple-300"></i>
+        <span id="ghuntStatusText"></span>
     </div>
-</div>
+    <div id="ghuntError" class="hidden mt-6 px-4 py-3 rounded-lg bg-red-500/10 border border-red-500/30 text-sm text-red-200"></div>
 
+    <div id="resultsData" class="hidden mt-6"></div>
+</div>
 {% endblock %}
 
 {% block scripts %}

@@ -26,6 +26,21 @@ class GHuntError(Exception):
     pass
 
 
+class GHuntNotFound(GHuntError):
+    """GHunt ran fine and Google has nothing for the target."""
+
+
+NOT_FOUND_MESSAGES = {
+    "email": "No Google account uses this email address.",
+    "gaia": "No Google account has this Gaia ID.",
+    "drive": "The file was not found, or it is not shared publicly.",
+    "geolocate": "Google does not know where this Wi-Fi access point is.",
+    "spiderdal": "No Digital Asset Links found for this domain.",
+}
+# GHunt's status lines, not part of an error
+STATUS_LINE_RE = re.compile(r"GHunt \d|Spider Edition|up to date|session loaded|Authenticated|By: |Support my work", re.I)
+
+
 def _venv_python(value: str) -> str:
     """GHUNT_VENV_PATH may be the venv folder or its python."""
     path = Path(value).expanduser()
@@ -109,7 +124,7 @@ class GHuntService:
         for line in (text or "").splitlines():
             stripped = line.strip()
             if not stripped or "888" in stripped or "Y8P" in stripped or "mxrch" in stripped \
-                    or "Sponsors" in stripped or "github.com/sponsors" in stripped:
+                    or "Sponsors" in stripped or "github.com/sponsors" in stripped or STATUS_LINE_RE.search(stripped):
                 continue
             lines.append(stripped)
         return "\n".join(lines[-6:])[-600:]
@@ -132,6 +147,8 @@ class GHuntService:
                 raise GHuntError(f"GHunt did not finish within {GHUNT_TIMEOUT // 60} minutes")
             if not output.exists():
                 summary = self._clean_output(result.stderr or result.stdout) or result.error_summary()
+                if re.search(r"wasn't found|was not found|not found\.|no results|doesn't exist", summary, re.I):
+                    raise GHuntNotFound(NOT_FOUND_MESSAGES.get(module, "Nothing found."))
                 if re.search(r"login|credential|cookies|oauth|master token", summary, re.I):
                     raise GHuntError(f"GHunt is not logged in (run GHunt's `login` on the server). {summary}")
                 raise GHuntError(f"GHunt failed: {summary}")

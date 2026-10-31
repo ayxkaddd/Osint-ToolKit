@@ -6,6 +6,7 @@ let currentInvestigation = null;
 let allResults = [];       // summaries from /results
 const detailCache = {};    // result_id -> full record
 const openCards = new Set();
+const selectedResults = new Set();  // ticked for bulk delete / move / assessment
 // Notes opened on this page (Ctrl+K) belong to this investigation, recording or not
 window.notesForInvestigation = investigationId;
 
@@ -27,6 +28,17 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('sortSelect')?.addEventListener('change', renderResults);
     document.getElementById('triageFilterSelect')?.addEventListener('change', renderResults);
     document.getElementById('resultsContainer').addEventListener('click', onResultsClick);
+    document.getElementById('bulkSelectAll').addEventListener('change', (e) => {
+        selectedResults.clear();
+        if (e.target.checked) filteredResults().forEach(r => selectedResults.add(r.result_id));
+        document.querySelectorAll('[data-action="select"]').forEach(box => { box.checked = e.target.checked; });
+        updateBulkBar();
+    });
+    document.querySelectorAll('[data-bulk-triage]').forEach(button => button.addEventListener('click', () => {
+        bulkSetTriage(button.dataset.bulkTriage || null);
+    }));
+    document.getElementById('bulkMove').addEventListener('click', () => openMoveModal([...selectedResults]));
+    document.getElementById('bulkDelete').addEventListener('click', bulkDelete);
     document.getElementById('resultsContainer').addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && e.target.matches('[data-triage-note]')) {
             e.preventDefault();
@@ -121,7 +133,7 @@ function renderHeader(investigation) {
         <div class="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
             <div class="flex items-start gap-5 min-w-0">
                 ${investigation.picture_url
-                    ? `<img src="${escapeAttr(investigation.picture_url)}" alt="" class="w-20 h-20 rounded-2xl object-cover border border-gray-700 shrink-0">`
+                    ? `<img src="${escapeAttr(investigation.picture_url)}" alt="" data-image-view="" data-image-title="${escapeAttr(investigation.name)}" data-image-note="Investigation picture" class="w-20 h-20 rounded-2xl object-cover border border-gray-700 shrink-0">`
                     : `<div class="w-20 h-20 rounded-2xl bg-purple-950/40 border border-purple-800/60 flex items-center justify-center shrink-0"><i data-lucide="folder-open" class="w-9 h-9 text-purple-400"></i></div>`}
                 <div class="min-w-0">
                     <div class="flex items-center gap-2 flex-wrap mb-1">
@@ -205,6 +217,10 @@ function dayLabel(iso) {
 function renderResults() {
     const container = document.getElementById('resultsContainer');
     const results = filteredResults();
+    // Only what's on screen stays selected, so a filter can't hide what a bulk action touches
+    const shown = new Set(results.map(r => r.result_id));
+    [...selectedResults].forEach(id => { if (!shown.has(id)) selectedResults.delete(id); });
+    updateBulkBar(results.length);
     const badge = document.getElementById('resultsCountBadge');
     if (badge) {
         badge.textContent = results.length === allResults.length ? allResults.length : `${results.length} / ${allResults.length}`;
@@ -228,6 +244,16 @@ function renderResults() {
     refreshIcons();
 }
 
+function updateBulkBar(shownCount = filteredResults().length) {
+    const count = selectedResults.size;
+    document.getElementById('bulkBar').classList.toggle('hidden', !shownCount);
+    document.getElementById('bulkActions').classList.toggle('hidden', !count);
+    document.getElementById('bulkCount').textContent = count ? `${count} selected` : 'Select all';
+    const all = document.getElementById('bulkSelectAll');
+    all.checked = count > 0 && count === shownCount;
+    all.indeterminate = count > 0 && count < shownCount;
+}
+
 function renderCard(r) {
     const info = moduleInfo(r.service_name);
     const time = r.timestamp ? new Date(r.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
@@ -237,7 +263,10 @@ function renderCard(r) {
     return `
         <div class="result-card inv-result-card bg-[#14151f] border border-[#24283b] rounded-xl overflow-hidden hover:border-purple-500/40 ${(r.triage || {}).status === 'false_positive' ? 'opacity-60' : ''}" data-result-id="${id}">
             <div class="p-4 flex items-center justify-between gap-3 cursor-pointer select-none" data-action="toggle">
-                <div class="flex items-center gap-3.5 min-w-0">
+                <div class="flex items-center gap-3 min-w-0">
+                    <label data-action="none" title="Select this result" class="self-stretch shrink-0 flex items-center -my-4 -ml-4 pl-4 pr-3 cursor-pointer hover:bg-purple-500/10">
+                        <input type="checkbox" data-action="select" ${selectedResults.has(r.result_id) ? 'checked' : ''} aria-label="Select this result" class="pick-box">
+                    </label>
                     <div class="p-2.5 rounded-xl bg-purple-950/50 border border-purple-800/40 text-purple-400 shrink-0">
                         <i data-lucide="${escapeAttr(info.icon)}" class="w-5 h-5"></i>
                     </div>
@@ -272,7 +301,11 @@ function onResultsClick(event) {
     const id = card.dataset.resultId;
     const action = event.target.closest('[data-action]')?.dataset.action;
 
-    if (action === 'toggle') {
+    if (action === 'select') {
+        if (event.target.checked) selectedResults.add(id);
+        else selectedResults.delete(id);
+        updateBulkBar();
+    } else if (action === 'toggle') {
         if (openCards.has(id)) collapseCard(id);
         else expandCard(id);
     } else if (action === 'copy-json') {
@@ -283,6 +316,8 @@ function onResultsClick(event) {
         window.addResultToNote(id, { snapshot: action === 'note-attach' }).then(() => loadResultReferences(id));
     } else if (action === 'delete-result') {
         deleteResult(id);
+    } else if (action === 'move-result') {
+        openMoveModal([id]);
     } else if (action === 'triage') {
         const status = event.target.closest('[data-triage-status]').dataset.triageStatus || null;
         const current = ((detailCache[id] || {}).triage || {}).status || null;
@@ -368,6 +403,7 @@ function renderDetail(record) {
                     <button type="button" data-action="note-link" title="Add a link to this result to the open note" class="px-2.5 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 text-xs flex items-center gap-1.5"><i data-lucide="link" class="w-3.5 h-3.5"></i>Link in note</button>
                     <button type="button" data-action="note-attach" title="Attach a copy of this result to the open note - it stays there even if the result is deleted" class="px-2.5 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 text-xs flex items-center gap-1.5"><i data-lucide="paperclip" class="w-3.5 h-3.5"></i>Attach to note</button>
                     <button type="button" data-action="copy-json" class="px-2.5 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 text-xs flex items-center gap-1.5"><i data-lucide="copy" class="w-3.5 h-3.5"></i>Copy JSON</button>
+                    <button type="button" data-action="move-result" class="px-2.5 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 text-xs flex items-center gap-1.5"><i data-lucide="folder-input" class="w-3.5 h-3.5"></i>Move</button>
                     <button type="button" data-action="delete-result" class="px-2.5 py-1.5 rounded-lg bg-gray-800 hover:bg-red-900/60 border border-gray-700 hover:border-red-700 text-gray-300 text-xs flex items-center gap-1.5"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i>Delete</button>
                 </div>
             </div>
@@ -490,16 +526,145 @@ async function deleteResult(resultId) {
     try {
         const response = await fetch(`/api/investigations/${investigationId}/results/${encodeURIComponent(resultId)}`, { method: 'DELETE' });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        allResults = allResults.filter(r => r.result_id !== resultId);
-        openCards.delete(resultId);
-        delete detailCache[resultId];
-        currentInvestigation.results_count = allResults.length;
-        renderHeader(currentInvestigation);
-        populateModuleFilterOptions();
-        renderResults();
+        removeResultsFromView([resultId]);
         showTemporaryNotification('Result deleted', 'success');
     } catch (e) {
         showTemporaryNotification(`Failed to delete result: ${e.message}`, 'error');
+    }
+}
+
+function removeResultsFromView(ids) {
+    const gone = new Set(ids);
+    allResults = allResults.filter(r => !gone.has(r.result_id));
+    ids.forEach(id => {
+        openCards.delete(id);
+        selectedResults.delete(id);
+        delete detailCache[id];
+    });
+    entityState.loaded = false;
+    currentInvestigation.results_count = allResults.length;
+    renderHeader(currentInvestigation);
+    populateModuleFilterOptions();
+    renderResults();
+}
+
+function resultsWord(count) {
+    return `${count} result${count === 1 ? '' : 's'}`;
+}
+
+async function bulkRequest(body) {
+    const response = await fetch(`/api/investigations/${investigationId}/results/bulk`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(typeof data.detail === 'string' ? data.detail : `HTTP ${response.status}`);
+    return data;
+}
+
+// What leaving this investigation means for its notes (best effort, never blocks the action)
+async function referencesWarning(ids, gerund) {
+    const lists = await Promise.all(ids.map(id => fetchResultReferences(id).catch(() => [])));
+    const notes = new Map();
+    lists.flat().forEach(n => notes.set(n.note_id, n));
+    if (!notes.size) return '';
+    const titles = [...notes.values()].map(n => `  • ${n.title}`).join('\n');
+    const all = [...notes.values()];
+    return [
+        `${notes.size} note${notes.size === 1 ? '' : 's'} in this investigation ${notes.size === 1 ? 'mentions' : 'mention'} ${ids.length === 1 ? 'this result' : 'these results'}:\n${titles}`,
+        all.some(n => n.links) ? `\nLinks will show as a deleted result after ${gerund}.` : '',
+        all.some(n => n.snapshots) ? '\nSnapshots attached to notes are kept.' : '',
+    ].join('');
+}
+
+async function bulkDelete() {
+    const ids = [...selectedResults];
+    const warning = await referencesWarning(ids, 'deleting');
+    if (!confirm(`Delete ${resultsWord(ids.length)} (and any follow-ups grouped under them)? This cannot be undone.${warning ? `\n\n${warning}` : ''}`)) return;
+    try {
+        const { done } = await bulkRequest({ action: 'delete', result_ids: ids });
+        removeResultsFromView(done);
+        showTemporaryNotification(`${resultsWord(done.length)} deleted`, done.length === ids.length ? 'success' : 'error');
+    } catch (e) {
+        showTemporaryNotification(`Failed to delete: ${e.message}`, 'error');
+    }
+}
+
+async function bulkSetTriage(status) {
+    const ids = [...selectedResults];
+    try {
+        const { done, triage } = await bulkRequest({ action: 'triage', result_ids: ids, status });
+        done.forEach(id => {
+            if (detailCache[id]) detailCache[id].triage = triage[id];
+            const summary = allResults.find(r => r.result_id === id);
+            if (summary) summary.triage = triage[id];
+        });
+        renderResults();
+        showTemporaryNotification(`Assessment saved for ${resultsWord(done.length)}`, done.length === ids.length ? 'success' : 'error');
+    } catch (e) {
+        showTemporaryNotification(`Failed to save assessment: ${e.message}`, 'error');
+    }
+}
+
+let moveIds = [];
+
+async function openMoveModal(ids) {
+    moveIds = ids;
+    const select = document.getElementById('moveModalTarget');
+    const warning = document.getElementById('moveModalWarning');
+    document.getElementById('moveModalTitle').textContent = `Move ${resultsWord(ids.length)}`;
+    warning.classList.add('hidden');
+    let others = [];
+    try {
+        const response = await fetch('/api/investigations/');
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const data = await response.json();
+        others = data.investigations.filter(i => i.investigation_id !== investigationId);
+    } catch (e) {
+        showTemporaryNotification(`Could not load investigations: ${e.message}`, 'error');
+        return;
+    }
+    select.innerHTML = others.map(i => `<option value="${escapeAttr(i.investigation_id)}">${escapeHtml(i.name)}</option>`).join('');
+    select.classList.toggle('hidden', !others.length);
+    document.getElementById('moveModalEmpty').classList.toggle('hidden', others.length > 0);
+    document.getElementById('moveModalSubmit').disabled = !others.length;
+
+    const modal = document.getElementById('moveResultsModal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    requestAnimationFrame(() => modal.classList.add('modal-open'));
+    refreshIcons();
+
+    const text = await referencesWarning(ids, 'the move');
+    warning.textContent = text;
+    warning.classList.toggle('hidden', !text);
+}
+
+function closeMoveModal() {
+    const modal = document.getElementById('moveResultsModal');
+    modal.classList.remove('modal-open');
+    setTimeout(() => {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    }, 150);
+}
+
+async function submitMoveModal(event) {
+    event.preventDefault();
+    const select = document.getElementById('moveModalTarget');
+    const name = select.selectedOptions[0]?.textContent;
+    const button = document.getElementById('moveModalSubmit');
+    button.disabled = true;
+    try {
+        const { done } = await bulkRequest({ action: 'move', result_ids: moveIds, target_investigation_id: select.value });
+        removeResultsFromView(done);
+        closeMoveModal();
+        showTemporaryNotification(`${resultsWord(done.length)} moved to ${name}`, done.length === moveIds.length ? 'success' : 'error');
+    } catch (e) {
+        showTemporaryNotification(`Failed to move: ${e.message}`, 'error');
+    } finally {
+        button.disabled = false;
     }
 }
 

@@ -298,7 +298,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (queryImage && /^data:image\//.test(queryImage)) {
             resultsGrid.insertAdjacentHTML('beforeend', `
                 <div class="col-span-full flex items-center gap-3 text-sm text-gray-400">
-                    <img src="${escapeAttr(queryImage)}" alt="Searched face" class="w-16 h-16 rounded-lg object-cover border border-gray-700">
+                    <img src="${escapeAttr(queryImage)}" alt="Searched face" data-image-view="" class="w-16 h-16 rounded-lg object-cover border border-gray-700">
                     <span>Searched face · ${results.length} match${results.length === 1 ? '' : 'es'}</span>
                 </div>`);
         }
@@ -319,7 +319,7 @@ document.addEventListener('DOMContentLoaded', () => {
             card.className = 'result-card relative group';
             card.innerHTML = `
                 <div class="relative aspect-square overflow-hidden">
-                    ${image ? `<img src="${escapeAttr(image)}" alt="" loading="lazy" referrerpolicy="no-referrer" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">` : ''}
+                    ${faceImageHtml(image, result.name, 'w-full h-full', 'object-cover group-hover:scale-105 transition-transform duration-300')}
                     <div class="similarity-badge ${similarityClass}">${escapeHtml(result.similarity_rate)}% match</div>
                 </div>
                 <div class="p-4">

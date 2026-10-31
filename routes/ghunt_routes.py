@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
 
-from services.ghunt_service import GHuntError, GHuntModule, GHuntService
+from services.ghunt_service import GHuntError, GHuntModule, GHuntNotFound, GHuntService
 from utils.investigation_decorator import save_investigation
 
 router = APIRouter(prefix="/api/ghunt")
@@ -10,6 +10,8 @@ ghunt_service = GHuntService()
 async def _run(module: GHuntModule, target: str) -> dict:
     try:
         return await ghunt_service.run(module, target)
+    except GHuntNotFound as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except GHuntError as e:
         raise HTTPException(status_code=502, detail=str(e)) from e
 

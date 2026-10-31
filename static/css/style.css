@@ -309,3 +309,35 @@
 .recon-section > summary .count { font-size: 0.75rem; color: #6b7280; font-weight: 400; }
 .panel > .panel-body,
 .recon-section > .recon-body { padding: 0 1.25rem 1.25rem; }
+
+/* Checkboxes across the app */
+.pick-box, .note-editor .cm-md-checkbox {
+    appearance: none;
+    flex-shrink: 0;
+    width: 1rem;
+    height: 1rem;
+    display: inline-grid;
+    place-content: center;
+    border: 1px solid #4b5563;
+    border-radius: 0.25rem;
+    background: #1f2937;
+    cursor: pointer;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+.pick-box:hover, .note-editor .cm-md-checkbox:hover { border-color: #a855f7; }
+.pick-box:focus-visible { outline: 2px solid #a855f7; outline-offset: 2px; }
+.pick-box:checked, .pick-box:indeterminate, .note-editor .cm-md-checkbox:checked { background: #9333ea; border-color: #9333ea; }
+.pick-box:checked::after, .note-editor .cm-md-checkbox:checked::after {
+    content: "";
+    width: 0.3rem;
+    height: 0.55rem;
+    margin-top: -0.1rem;
+    border: solid #fff;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+.pick-box:indeterminate::after { content: ""; width: 0.5rem; height: 2px; background: #fff; }
+.inv-result-card:has(.pick-box:checked) { border-color: rgba(168, 85, 247, 0.6); }
+
+/* Images that open the viewer (openImageViewer in main.js) */
+[data-image-view], img.cm-md-image { cursor: zoom-in; }

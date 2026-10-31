@@ -10,10 +10,10 @@ A self-hosted web workspace for OSINT investigations. Built with FastAPI and Tai
 ## Features
 
 ### Investigations
-- **Investigations**: every lookup is saved to the active investigation, follow-up lookups are grouped under the result they came from
+- **Investigations**: every lookup is saved to the active investigation, follow-up lookups are grouped under the result they came from. Select several results to delete them, set their assessment, or move them to another investigation
 - **Pivots**: emails, phones, usernames, domains, IPs and Telegram IDs found in any result can be sent to the matching modules in one click
-- **Universal lookup**: paste an email, phone, @user, domain or IP in the top bar and pick which modules to run
-- **Triage, notes and reports**: mark results as confirmed or important, keep Markdown notes, export a report of the findings
+- **Universal lookup**: paste an email, phone, @user, domain or IP in the top bar and run a module right from the dropdown, on any page, or open the full list of lookups
+- **Triage, notes and reports**: mark results as confirmed or important, keep Markdown notes with images (drag and drop or paste), export a report of the findings
 - **Dashboard and settings**: each module shows whether it is ready and what it costs; API keys and tool paths are set in the browser
 - **Plugins**: connect any service with an API without writing code - see [Plugins](#plugins)
 

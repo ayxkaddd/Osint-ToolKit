@@ -15,13 +15,13 @@
     </form>
     <div class="flex flex-wrap gap-x-6 gap-y-2 text-sm text-gray-300 mt-3">
         <label class="flex items-center gap-2 cursor-pointer" title="subfinder -all -recursive: slower, finds more">
-            <input type="checkbox" id="deepScan" class="rounded bg-gray-800 border-gray-600"> Deep subdomain search
+            <input type="checkbox" id="deepScan" class="pick-box"> Deep subdomain search
         </label>
         <label class="flex items-center gap-2 cursor-pointer" title="Actively connects to the target - it can see you">
-            <input type="checkbox" id="includePorts" class="rounded bg-gray-800 border-gray-600"> Port scan <span class="text-xs text-yellow-400/80">(active, visible to target)</span>
+            <input type="checkbox" id="includePorts" class="pick-box"> Port scan <span class="text-xs text-yellow-400/80">(active, visible to target)</span>
         </label>
         <label class="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" id="useExternalApis" checked class="rounded bg-gray-800 border-gray-600">
+            <input type="checkbox" id="useExternalApis" checked class="pick-box">
             SecurityTrails / VirusTotal <span id="externalApiNote" class="text-xs text-gray-500"></span>
         </label>
     </div>

@@ -109,8 +109,7 @@ const RENDERERS = {
     vk_profile: renderVkProfile,
     oi: renderOi,
     cavalier: renderCavalier,
-    'ghunt.lookup_ghunt_email': renderGhuntProfile,
-    'ghunt.lookup_ghunt_gaia': renderGhuntProfile,
+    ghunt: (data) => ghuntResultHtml(data),   // static/js/ghunt_cards.js
     web_search: renderWebSearch,
     face_search: renderFaceSearch,
     'funstat.lookup_user': renderFunstatUsers,
@@ -435,7 +434,7 @@ function renderGitFive(data) {
     return `
         <div class="space-y-5">
             <div class="flex items-start gap-5 bg-gray-900 rounded-xl p-5 border border-gray-800">
-                ${safeUrl(data.avatar_url) ? `<img src="${escapeAttr(safeUrl(data.avatar_url))}" alt="" loading="lazy" class="w-16 h-16 rounded-xl border border-gray-700 shrink-0">` : ''}
+                ${safeUrl(data.avatar_url) ? `<img src="${escapeAttr(safeUrl(data.avatar_url))}" alt="" loading="lazy" data-image-view="" data-image-title="Profile picture" class="w-16 h-16 rounded-xl border border-gray-700 shrink-0">` : ''}
                 <div class="min-w-0">
                     <div class="flex items-center gap-2 flex-wrap">
                         <h4 class="text-xl font-bold text-white">${escapeHtml(data.name || data.username)}</h4>
@@ -508,28 +507,6 @@ function renderCavalier(data) {
         </div>`;
 }
 
-function renderGhuntProfile(data) {
-    const profile = data && data.PROFILE_CONTAINER && data.PROFILE_CONTAINER.profile;
-    if (!profile) return renderValue(data);
-    const name = profile.names?.PROFILE?.fullname || profile.names?.PROFILE?.displayName || 'Google account';
-    const email = profile.emails?.PROFILE?.value;
-    const avatar = profile.profilePhotos?.PROFILE?.url;
-    const gaiaId = profile.personId;
-    const { profile: _ignored, ...rest } = data.PROFILE_CONTAINER;
-    return `
-        <div class="space-y-4">
-            <div class="flex items-start gap-4 bg-gray-900 p-5 rounded-xl border border-gray-800">
-                ${safeUrl(avatar) ? `<img src="${escapeAttr(safeUrl(avatar))}" alt="" loading="lazy" class="w-16 h-16 rounded-full object-cover border-2 border-purple-500/50 shrink-0">` : ''}
-                <div class="space-y-1 min-w-0">
-                    <h4 class="text-lg font-bold text-white">${escapeHtml(name)}</h4>
-                    ${email ? `<div class="text-sm text-gray-300">${pivotText('email', email)}</div>` : ''}
-                    ${gaiaId ? `<div class="text-xs text-gray-400 font-mono">Gaia ID ${pivotText('gaia_id', gaiaId)} · ${link(`https://www.google.com/maps/contrib/${encodeURIComponent(gaiaId)}/reviews`, 'Maps reviews')}</div>` : ''}
-                </div>
-            </div>
-            ${Object.values(rest).some(Boolean) ? renderValue(rest, 1) : ''}
-        </div>`;
-}
-
 function renderWebSearch(data) {
     const results = (data && data.results) || [];
     if (!results.length) return renderValue(data);
@@ -553,16 +530,36 @@ function renderWebSearch(data) {
         </div>`;
 }
 
+// Stands in for a photo that can't load (links to target photos often expire).
+// Small avatars show only the icon.
+function imagePlaceholderHtml(sizeClass, iconOnly = false) {
+    return `<div class="${sizeClass} flex flex-col items-center justify-center gap-2 bg-gray-800 text-gray-500 text-xs" title="Image unavailable"><i class="fas fa-user ${iconOnly ? '' : 'text-3xl'}"></i>${iconOnly ? '' : 'Image unavailable'}</div>`;
+}
+
+// onerror of an <img data-placeholder-size="...">: replaces it, or the button around it that opens the viewer
+function imageLoadFailed(img) {
+    img.onerror = null;
+    const target = img.closest('[data-image-view]') || img;
+    target.insertAdjacentHTML('afterend', imagePlaceholderHtml(img.dataset.placeholderSize, 'placeholderIconOnly' in img.dataset));
+    target.remove();
+}
+
+function faceImageHtml(url, name, sizeClass, imageClass) {
+    if (!url) return imagePlaceholderHtml(sizeClass);
+    return `<img src="${escapeAttr(url)}" alt="" loading="lazy" referrerpolicy="no-referrer" data-image-view="" data-image-title="${escapeAttr(name || 'Match')}"
+        data-placeholder-size="${sizeClass}" onerror="imageLoadFailed(this)" class="${sizeClass} ${imageClass}">`;
+}
+
 function renderFaceSearch(data) {
     const list = Array.isArray(data) ? data : (data && data.results) || [];
     const query = !Array.isArray(data) && data && /^data:image\//.test(data.query_image || '') ? data.query_image : '';
-    const queryHtml = query ? `<div class="flex items-center gap-3 text-xs text-gray-400 mb-3"><img src="${escapeAttr(query)}" alt="Searched face" class="w-14 h-14 rounded-lg object-cover border border-gray-700">Searched face</div>` : '';
+    const queryHtml = query ? `<div class="flex items-center gap-3 text-xs text-gray-400 mb-3"><img src="${escapeAttr(query)}" alt="Searched face" data-image-view="" class="w-14 h-14 rounded-lg object-cover border border-gray-700">Searched face</div>` : '';
     if (!list.length) return queryHtml + '<p class="text-sm text-gray-400">No matches.</p>';
     return queryHtml + `
         <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
             ${list.map(f => `
                 <div class="bg-gray-900 rounded-lg border border-gray-800 overflow-hidden">
-                    ${safeUrl(f.image_url) ? `<img src="${escapeAttr(safeUrl(f.image_url))}" alt="" loading="lazy" referrerpolicy="no-referrer" class="w-full h-32 object-cover bg-gray-800">` : ''}
+                    ${faceImageHtml(safeUrl(f.image_url), f.name, 'w-full h-32', 'object-cover bg-gray-800')}
                     <div class="p-2 text-xs space-y-0.5">
                         <div class="font-semibold text-white truncate">${escapeHtml(f.name || 'Match')}</div>
                         ${f.similarity_rate ? `<div class="text-emerald-400">${escapeHtml(f.similarity_rate)}% similar</div>` : ''}
@@ -601,7 +598,7 @@ function renderTmeProfile(p) {
     if (!p || !p.exists) return '<p class="text-gray-500 text-sm">No public t.me profile for this username.</p>';
     return `
         <div class="flex items-start gap-4">
-            ${p.avatar_url ? `<a href="${escapeAttr(p.avatar_url)}" target="_blank"><img src="${escapeAttr(p.avatar_url)}" alt="Avatar" class="w-20 h-20 rounded-full object-cover border border-gray-700"></a>` : ''}
+            ${p.avatar_url ? `<img src="${escapeAttr(p.avatar_url)}" alt="Avatar" data-image-view="" data-image-title="${escapeAttr(p.name || 'Avatar')}" class="w-20 h-20 rounded-full object-cover border border-gray-700">` : ''}
             <div class="min-w-0 text-sm space-y-1">
                 <div class="text-lg font-semibold text-white">${escapeHtml(p.name || '')}</div>
                 <div>${pivotChip('telegram_username', p.username, '@' + p.username)}</div>

@@ -355,12 +355,13 @@ class NotePad {
     this.results = await loadNoteResults(investigation())
     this.notes = await loadNoteList(investigation())
     this.editor = NotesEditor.create(this.container, {
-      placeholder: "Start writing…  Type [[ to link a note, result or identifier, ![[ to attach a snapshot of a result.",
+      placeholder: "Start writing…  Type [[ to link a note, result or identifier, ![[ to attach a snapshot of a result. Drop images here to add them.",
       onChange: () => this.changed(),
       renderChip: (link) => renderNoteChip(investigation(), this.results, this.notes, link),
       renderEmbed: (link, el) => renderNoteEmbed(investigation(), this.results, link, el),
       complete: (query, embed) => completeNoteReference(investigation(), query, embed, this),
       renderInline: renderNoteInline,
+      uploadImage: (file) => uploadNoteImage(investigation(), file),
       openLink: (href) => {
         const url = safeUrl(href)
         if (url) window.open(url, "_blank", "noopener,noreferrer")
@@ -500,6 +501,23 @@ class NotePad {
   }
 }
 
+// Stores an image for the note; returns the markdown that shows it
+async function uploadNoteImage(investigationId, file) {
+  try {
+    if (!investigationId) throw new Error("Select an investigation first")
+    const form = new FormData()
+    form.append("image", file)
+    const response = await fetch(`${notesApi(investigationId)}/note-images`, { method: "POST", body: form })
+    const data = await response.json().catch(() => ({}))
+    if (!response.ok) throw new Error(typeof data.detail === "string" ? data.detail : `HTTP ${response.status}`)
+    const alt = file.name.replace(/\.[^.]*$/, "").replace(/[[\]()\n\r]/g, " ").trim().slice(0, 80)
+    return `![${alt}](${data.url})`
+  } catch (error) {
+    showTemporaryNotification(`Could not add ${file.name}: ${error.message}`, "error")
+    throw error
+  }
+}
+
 // Markdown for use outside the app: links become URLs, snapshots become quoted summaries
 async function exportNoteMarkdown(investigationId, content) {
   const origin = window.location.origin
@@ -519,6 +537,7 @@ async function exportNoteMarkdown(investigationId, content) {
         .filter(Boolean)
         .join("\n")
     })
+    .replace(/(!\[[^\]]*\]\()(\/api\/investigations\/)/g, (m, start, path) => `${start}${origin}${path}`)
     .replace(/\[\[result:([^\]|]+)(?:\|([^\]]*))?\]\]/g, (m, id, label) => `[${label || id}](${origin}${resultUrl(investigationId, id)})`)
     .replace(/\[\[note:([^\]|]+)(?:\|([^\]]*))?\]\]/g, (m, id, label) => `[${label || "note"}](${origin}${noteUrl(investigationId, id)})`)
     .replace(/\[\[[a-z_]+:([^\]|]+)(?:\|([^\]]*))?\]\]/g, (m, value, label) => `\`${label || value}\``)

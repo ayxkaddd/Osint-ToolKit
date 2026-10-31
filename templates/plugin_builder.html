@@ -111,14 +111,14 @@
                     <div id="fQuery" class="space-y-2"></div>
                 </div>
                 <div class="rounded-lg border border-gray-800 p-3 space-y-3">
-                    <label class="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" id="fNeedsKey" class="rounded bg-gray-800 border-gray-600">
+                    <label class="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" id="fNeedsKey" class="pick-box">
                         The service needs an API key <span class="text-gray-500 font-mono text-xs" id="fKeyName"></span></label>
                     <div id="fKeyBox" class="hidden space-y-2">
                         <div class="grid sm:grid-cols-[minmax(0,1fr)_auto] gap-3 items-center">
                             <input id="fKeyValue" type="password" class="field field-sm font-mono" placeholder="Paste your API key"
                                 autocomplete="new-password" data-lpignore="true" data-1p-ignore data-bwignore data-form-type="other">
                             <label class="flex items-center gap-2 text-sm text-gray-300 cursor-pointer" title="Searches also work without a key (e.g. with a lower limit)">
-                                <input type="checkbox" id="fKeyOptional" class="rounded bg-gray-800 border-gray-600">Works without one too</label>
+                                <input type="checkbox" id="fKeyOptional" class="pick-box">Works without one too</label>
                         </div>
                         <p class="text-xs text-gray-500"><i class="fas fa-lock mr-1"></i>Kept in Settings, never inside the plugin - you can share the plugin safely.
                             Use "+ your API key" above to put it where the documentation says (often a setting called <code>api_key</code>, or a header).</p>
@@ -146,7 +146,7 @@
                     <button type="button" id="redetect" class="btn-secondary !py-1 !px-3 text-xs" disabled title="Test it first"><i class="fas fa-magic mr-1"></i>Detect from the answer</button>
                 </div>
                 <label class="flex items-start gap-3 rounded-lg border border-purple-500/30 bg-purple-500/5 p-3 cursor-pointer">
-                    <input type="checkbox" id="fAuto" checked class="mt-1 rounded bg-gray-800 border-gray-600">
+                    <input type="checkbox" id="fAuto" checked class="mt-1 pick-box">
                     <span class="text-sm"><span class="text-white font-medium">Let the toolkit work it out <span class="text-xs font-normal text-purple-300">recommended</span></span>
                         <span class="block text-gray-400 mt-0.5">Every answer is read as it comes in and turned into result cards - names, pictures, links and
                             details - even when the service answers in different ways. You can still change anything below.</span></span>
@@ -191,7 +191,7 @@
                 <details class="text-sm">
                     <summary class="cursor-pointer text-gray-400 hover:text-gray-200">The plugin file <span class="text-xs text-gray-500">(for advanced users)</span></summary>
                     <div class="space-y-2 mt-3">
-                        <label class="flex items-center gap-2 text-sm text-gray-300 cursor-pointer"><input type="checkbox" id="yamlEdit" class="rounded bg-gray-800 border-gray-600">Edit the file directly</label>
+                        <label class="flex items-center gap-2 text-sm text-gray-300 cursor-pointer"><input type="checkbox" id="yamlEdit" class="pick-box">Edit the file directly</label>
                         <p id="yamlNote" class="hidden text-sm text-amber-300/90">Saving uses the file below; the form above is ignored. Untick to go back to the form (your edits here are dropped).</p>
                         <textarea id="yamlText" rows="14" readonly spellcheck="false" class="field field-sm font-mono text-xs !leading-5"></textarea>
                     </div>

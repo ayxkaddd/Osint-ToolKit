@@ -1,11 +1,13 @@
 # routes/investigation_routes.py
-from typing import List, Optional
+from typing import List, Literal, Optional
 from uuid import UUID
 from fastapi import APIRouter, HTTPException, Query, Form, File, UploadFile, Request
 from fastapi.responses import FileResponse, JSONResponse, HTMLResponse
+from fastapi.concurrency import run_in_threadpool
 from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel
-from services.investigation_service import InvestigationService
+from pydantic import BaseModel, Field
+from starlette.datastructures import UploadFile as FormUpload
+from services.investigation_service import InvestigationService, NOTE_IMAGE_MAX_UPLOAD
 
 router = APIRouter(prefix="/api/investigations")
 investigation_service = InvestigationService()
@@ -24,6 +26,13 @@ class NoteCreate(BaseModel):
 
 class SnapshotCreate(BaseModel):
     result_id: str
+
+
+class BulkResultsRequest(BaseModel):
+    action: Literal["delete", "move", "triage"]
+    result_ids: List[str] = Field(min_length=1)
+    target_investigation_id: Optional[UUID] = None
+    status: Optional[str] = None
 
 
 class NoteUpdate(BaseModel):
@@ -214,6 +223,27 @@ async def delete_investigation_result(investigation_id: UUID, result_id: str) ->
     return JSONResponse(content={"status": "success"})
 
 
+@router.post("/{investigation_id}/results/bulk")
+def bulk_update_results(investigation_id: UUID, body: BulkResultsRequest) -> JSONResponse:
+    """Delete, move or set the assessment of several results at once."""
+    _require_investigation(investigation_id)
+    if body.action == "delete":
+        done = investigation_service.delete_results(investigation_id, body.result_ids)
+        return JSONResponse(content={"status": "success", "done": done})
+    if body.action == "move":
+        target = body.target_investigation_id
+        if target is None or target == investigation_id:
+            raise HTTPException(status_code=400, detail="Choose a different investigation to move to")
+        _require_investigation(target)
+        done = investigation_service.move_results(investigation_id, target, body.result_ids)
+        return JSONResponse(content={"status": "success", "done": done})
+    try:
+        triage = investigation_service.set_results_triage(investigation_id, body.result_ids, body.status)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    return JSONResponse(content={"status": "success", "done": list(triage), "triage": triage})
+
+
 @router.get("/{investigation_id}/view", response_class=HTMLResponse)
 async def view_investigation_results(request: Request, investigation_id: UUID):
     """Render investigation results page"""
@@ -260,9 +290,9 @@ async def update_investigation(investigation_id: UUID, request: Request) -> JSON
             raise HTTPException(status_code=400, detail="Invalid JSON body") from None
     else:
         form = await request.form()
-        data = {k: v for k, v in form.items() if not isinstance(v, UploadFile)}
+        data = {k: v for k, v in form.items() if not isinstance(v, FormUpload)}
         upload = form.get("picture")
-        if isinstance(upload, UploadFile):
+        if isinstance(upload, FormUpload):
             picture = await _read_picture(upload)
 
     status = data.get("status")
@@ -346,6 +376,40 @@ async def get_investigation_notes(
         "investigation_id": str(investigation_id),
         "notes_count": len(notes),
         "notes": notes
+    })
+
+
+@router.post("/{investigation_id}/note-images", status_code=201)
+async def upload_note_image(investigation_id: UUID, request: Request) -> JSONResponse:
+    """Add an image for notes. The form field is ``image``; its filename is not used."""
+    _require_investigation(investigation_id)
+    too_large = HTTPException(status_code=413, detail="Image is too large (max 20 MB)")
+    # Room for the multipart wrapping around the file
+    if int(request.headers.get("content-length") or 0) > NOTE_IMAGE_MAX_UPLOAD + 64 * 1024:
+        raise too_large
+    form = await request.form()
+    upload = form.get("image")
+    if not isinstance(upload, FormUpload):
+        raise HTTPException(status_code=400, detail="No image in the request")
+    data = await upload.read(NOTE_IMAGE_MAX_UPLOAD + 1)
+    if len(data) > NOTE_IMAGE_MAX_UPLOAD:
+        raise too_large
+    try:
+        name = await run_in_threadpool(investigation_service.save_note_image, investigation_id, data)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    return JSONResponse(content={"status": "success",
+                                 "url": f"/api/investigations/{investigation_id}/note-images/{name}"}, status_code=201)
+
+
+@router.get("/{investigation_id}/note-images/{name}")
+async def get_note_image(investigation_id: UUID, name: str):
+    path = investigation_service.get_note_image_path(investigation_id, name)
+    if path is None:
+        raise HTTPException(status_code=404, detail="Image not found")
+    return FileResponse(path, media_type="image/webp", headers={
+        "Cache-Control": "private, max-age=31536000, immutable",
+        "X-Content-Type-Options": "nosniff",
     })
 
 

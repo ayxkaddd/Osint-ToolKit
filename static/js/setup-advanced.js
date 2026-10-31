@@ -39,7 +39,7 @@ function getStep2HTML() {
         <form id="features-form" class="space-y-4">
             <div class="feature-card">
                 <label class="flex items-start cursor-pointer">
-                    <input type="checkbox" name="enable_github" class="mt-1 mr-3 rounded bg-gray-700 border-gray-600">
+                    <input type="checkbox" name="enable_github" class="mt-1 mr-3 pick-box">
                     <div class="flex-1">
                         <div class="flex items-center gap-2 mb-1">
                             <span class="text-white font-semibold">GitHub Analysis (GitFive)</span>
@@ -56,7 +56,7 @@ function getStep2HTML() {
 
             <div class="feature-card">
                 <label class="flex items-start cursor-pointer">
-                    <input type="checkbox" name="enable_dns_recon" class="mt-1 mr-3 rounded bg-gray-700 border-gray-600">
+                    <input type="checkbox" name="enable_dns_recon" class="mt-1 mr-3 pick-box">
                     <div class="flex-1">
                         <div class="flex items-center gap-2 mb-1">
                             <span class="text-white font-semibold">DNS Reconnaissance</span>
@@ -73,7 +73,7 @@ function getStep2HTML() {
 
             <div class="feature-card">
                 <label class="flex items-start cursor-pointer">
-                    <input type="checkbox" name="enable_ns_lookup" class="mt-1 mr-3 rounded bg-gray-700 border-gray-600">
+                    <input type="checkbox" name="enable_ns_lookup" class="mt-1 mr-3 pick-box">
                     <div class="flex-1">
                         <div class="flex items-center gap-2 mb-1">
                             <span class="text-white font-semibold">NS Lookup</span>
@@ -89,7 +89,7 @@ function getStep2HTML() {
 
             <div class="feature-card">
                 <label class="flex items-start cursor-pointer">
-                    <input type="checkbox" name="enable_osint_industries" class="mt-1 mr-3 rounded bg-gray-700 border-gray-600">
+                    <input type="checkbox" name="enable_osint_industries" class="mt-1 mr-3 pick-box">
                     <div class="flex-1">
                         <div class="flex items-center gap-2 mb-1">
                             <span class="text-white font-semibold">OSINT Industries</span>
@@ -105,7 +105,7 @@ function getStep2HTML() {
 
             <div class="feature-card">
                 <label class="flex items-start cursor-pointer">
-                    <input type="checkbox" name="enable_whois" class="mt-1 mr-3 rounded bg-gray-700 border-gray-600">
+                    <input type="checkbox" name="enable_whois" class="mt-1 mr-3 pick-box">
                     <div class="flex-1">
                         <div class="flex items-center gap-2 mb-1">
                             <span class="text-white font-semibold">WHOIS History</span>
@@ -121,7 +121,7 @@ function getStep2HTML() {
 
             <div class="feature-card">
                 <label class="flex items-start cursor-pointer">
-                    <input type="checkbox" name="enable_cavalier" class="mt-1 mr-3 rounded bg-gray-700 border-gray-600">
+                    <input type="checkbox" name="enable_cavalier" class="mt-1 mr-3 pick-box">
                     <div class="flex-1">
                         <div class="flex items-center gap-2 mb-1">
                             <span class="text-white font-semibold">Cavalier API</span>

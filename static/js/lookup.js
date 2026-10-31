@@ -58,7 +58,7 @@ function moduleRow(candidate, m) {
     : null
   return `
     <label class="flex items-start gap-3 p-3 rounded-lg border ${m.ready ? "border-gray-800 hover:border-purple-500/40 cursor-pointer" : "border-gray-800/60 opacity-60"} bg-gray-900/60">
-        <input type="checkbox" class="mt-1 rounded bg-gray-800 border-gray-600"
+        <input type="checkbox" class="mt-1 pick-box"
             data-module="${escapeAttr(m.id)}" data-type="${escapeAttr(candidate.type)}" data-value="${escapeAttr(candidate.value)}"
             data-paid="${m.cost === "paid"}" ${checked ? "checked" : ""} ${m.ready ? "" : "disabled"}>
         <div class="min-w-0 flex-1">

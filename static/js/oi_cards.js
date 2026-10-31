@@ -58,10 +58,10 @@ function oiAvatar(url) {
     const encoded = encodeURIComponent(url);
     return `
         <div class="username-card-media">
-            <a href="${escapeAttr(url)}" target="_blank" rel="noopener noreferrer" class="username-avatar-preview-btn" title="Open profile picture">
+            <button type="button" data-image-view="${escapeAttr(url)}" data-image-title="Profile picture" class="username-avatar-preview-btn" title="Preview profile picture">
                 <img src="${escapeAttr(url)}" alt="" loading="lazy" referrerpolicy="no-referrer" class="username-card-avatar"
                     onerror="this.closest('.username-result-card').classList.remove('has-profile-image'); this.closest('.username-card-media').style.display='none';">
-            </a>
+            </button>
             <div class="username-reverse-search" aria-label="Reverse image search">
                 <a href="https://lens.google.com/uploadbyurl?url=${encoded}" target="_blank" rel="noopener noreferrer" title="Google reverse image search"><i class="fab fa-google"></i></a>
                 <a href="https://yandex.com/images/search?rpt=imageview&url=${encoded}" target="_blank" rel="noopener noreferrer" title="Yandex reverse image search"><i class="fas fa-search"></i></a>
@@ -295,9 +295,9 @@ function oiSummaryHtml(cards) {
     return `
         <section class="username-category-section p-4 mb-4">
             ${photos.length ? `<div class="flex items-center gap-2 mb-3 overflow-x-auto pb-1">${photos.map(p => `
-                <a href="${escapeAttr(safeUrl(p.value))}" target="_blank" rel="noopener noreferrer" title="${escapeAttr(p.sources.join(', '))}" class="shrink-0">
-                    <img src="${escapeAttr(safeUrl(p.value))}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.closest('a').remove()"
-                        class="w-14 h-14 rounded-lg object-cover border border-[#293142] hover:border-purple-400/70"></a>`).join('')}
+                <button type="button" data-image-view="${escapeAttr(safeUrl(p.value))}" data-image-title="${escapeAttr(p.sources.join(', ') || 'Photo')}" title="${escapeAttr(p.sources.join(', '))}" class="shrink-0">
+                    <img src="${escapeAttr(safeUrl(p.value))}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.closest('button').remove()"
+                        class="w-14 h-14 rounded-lg object-cover border border-[#293142] hover:border-purple-400/70"></button>`).join('')}
             </div>` : ''}
             ${rows}
             ${timeline}
