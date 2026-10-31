@@ -11,16 +11,42 @@ function faviconFallback(img) {
     img.src = FALLBACK_FAVICON
 }
 
-async function loadResources() {
+// The cards are drawn from the last answer right away, then corrected if the server's differs.
+// It only holds names, icons and setting labels, never setting values.
+const RESOURCES_CACHE_KEY = 'dashboard_resources'
+
+function readResourcesCache() {
     try {
-        const response = await fetch('/api/resources/')
-        const resources = await response.json()
+        return localStorage.getItem(RESOURCES_CACHE_KEY)
+    } catch {
+        return null
+    }
+}
+
+function writeResourcesCache(text) {
+    try {
+        localStorage.setItem(RESOURCES_CACHE_KEY, text)
+    } catch {
+        // Storage blocked or full: the page just loads from the server next time
+    }
+}
+
+// Favicons come through the toolkit's own icon cache, so they only leave the network once
+function resourceIcon(resource) {
+    try {
+        return `/api/oi/icon/${encodeURIComponent(new URL(resource.url).hostname)}`
+    } catch {
+        return safeUrl(resource.favicon)
+    }
+}
+
+function renderResources(resources) {
         modules = resources.modules;
         const { ext_res } = resources
 
         const modulesList = document.getElementById('modulesList')
         modulesList.innerHTML = modules.map(module => `
-                <div class="bg-[#14151f] border border-[#24283b] hover:border-purple-700/60 rounded-xl overflow-hidden flex flex-col opacity-0 transform translate-y-4 transition-all">
+                <div class="bg-[#14151f] border border-[#24283b] hover:border-purple-700/60 rounded-xl overflow-hidden flex flex-col transition-colors">
                     <div class="relative">
                         ${module.settings ? `
                             <button
@@ -45,7 +71,7 @@ async function loadResources() {
                     </div>
                 </div>
             `).join('') + `
-                <a href="/plugins/builder" class="bg-[#14151f] border border-dashed border-[#24283b] hover:border-purple-700/60 rounded-xl p-6 flex flex-col items-center justify-center text-center gap-3 opacity-0 transform translate-y-4 transition-all">
+                <a href="/plugins/builder" class="bg-[#14151f] border border-dashed border-[#24283b] hover:border-purple-700/60 rounded-xl p-6 flex flex-col items-center justify-center text-center gap-3 transition-colors">
                     <div class="w-12 h-12 bg-gray-800 rounded-lg flex items-center justify-center"><i class="fas fa-plus text-purple-400 text-2xl"></i></div>
                     <h3 class="text-xl font-semibold text-white">Build a plugin</h3>
                     <p class="text-gray-400">Connect another website or service and search it from here - no coding needed.</p>
@@ -53,9 +79,9 @@ async function loadResources() {
 
         const resourcesList = document.getElementById('resourcesList')
         resourcesList.innerHTML = ext_res.map(resource => `
-                <div class="bg-[#14151f] border border-[#24283b] hover:border-gray-600 rounded-xl p-4 flex items-start gap-4 group transition-colors opacity-0 transform translate-y-4 transition-all">
+                <div class="bg-[#14151f] border border-[#24283b] hover:border-gray-600 rounded-xl p-4 flex items-start gap-4 group transition-colors">
                     <div class="flex-shrink-0">
-                        <img src="${escapeAttr(safeUrl(resource.favicon))}" alt=""
+                        <img src="${escapeAttr(resourceIcon(resource))}" alt="" loading="lazy"
                             class="w-8 h-8 rounded"
                             onerror="faviconFallback(this)">
                     </div>
@@ -75,32 +101,43 @@ async function loadResources() {
             `).join('')
 
         document.getElementById('loadingState').style.display = 'none'
-        const contentContainer = document.getElementById('contentContainer')
-        contentContainer.style.display = 'block'
-
-        void contentContainer.offsetHeight
-
-        contentContainer.classList.remove('opacity-0')
-
-        const items = [...document.querySelectorAll('#modulesList > *, #resourcesList > div')]
-        items.forEach((item, index) => {
-            setTimeout(() => {
-                item.classList.remove('opacity-0', 'translate-y-4')
-            }, 50 * index)
-        })
-
+        document.getElementById('contentContainer').style.display = 'block'
         lucide.createIcons()
-        annotateReadiness()
-        await loadActiveInvestigation()
+}
+
+async function loadResources() {
+    let shown = readResourcesCache()
+    if (shown) {
+        try {
+            renderResources(JSON.parse(shown))
+        } catch {
+            shown = null
+        }
+    }
+    loadActiveInvestigation()
+
+    try {
+        const response = await fetch('/api/resources/')
+        if (!response.ok) throw new Error(`HTTP ${response.status}`)
+        const text = await response.text()
+        if (text !== shown) {
+            renderResources(JSON.parse(text))
+            writeResourcesCache(text)
+            shown = text
+        }
     } catch (error) {
         console.error('Error loading resources:', error)
-        document.getElementById('loadingState').innerHTML = `
+        if (!shown) {
+            document.getElementById('loadingState').innerHTML = `
                 <div class="text-red-500">
                     <i class="fas fa-exclamation-circle text-2xl mb-2"></i>
                     <p>Error loading resources. Please try again later.</p>
                 </div>
             `
+            return
+        }
     }
+    annotateReadiness()
 }
 
 async function loadActiveInvestigation() {
