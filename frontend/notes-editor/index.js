@@ -67,6 +67,9 @@ class CheckboxWidget extends WidgetType {
     ignoreEvent() { return true; }
 }
 
+// Images added to a note are stored by the toolkit and linked by a path on this server
+const NOTE_IMAGE_URL = /^\/api\/investigations\/[0-9a-f-]+\/note-images\/[0-9a-f]{32}\.webp$/;
+
 class ImageWidget extends WidgetType {
     constructor(src, alt) { super(); this.src = src; this.alt = alt; }
     eq(other) { return other.src === this.src && other.alt === this.alt; }
@@ -223,7 +226,7 @@ function buildDecorations(state, host) {
                 const url = node.node.getChild('URL');
                 const marks = node.node.getChildren('LinkMark');
                 const src = url ? doc.sliceString(url.from, url.to) : '';
-                if (/^https?:\/\//i.test(src) && !touches(node.from, node.to)) {
+                if ((/^https?:\/\//i.test(src) || NOTE_IMAGE_URL.test(src)) && !touches(node.from, node.to)) {
                     const alt = marks.length >= 2 ? doc.sliceString(marks[0].to, marks[1].from) : '';
                     decos.push(Decoration.replace({ widget: new ImageWidget(src, alt) }).range(node.from, node.to));
                 }
@@ -391,6 +394,25 @@ const theme = EditorView.theme({
     '.cm-searchMatch': { backgroundColor: 'rgba(250, 204, 21, 0.25)' },
 }, { dark: true });
 
+// Files dropped or pasted into the note: a placeholder holds the place while each uploads
+function addImages(view, files, pos, options) {
+    if (!options.uploadImage) return;
+    files.forEach((file, index) => {
+        const label = `![Uploading ${file.name.replace(/[[\]()\n\r]/g, ' ')} (${Date.now()}-${index})…]()\n`;
+        view.dispatch({ changes: { from: pos, insert: label } });
+        pos += label.length;
+        const replace = (text) => {
+            const from = view.state.doc.toString().indexOf(label);
+            if (from >= 0) view.dispatch({ changes: { from, to: from + label.length, insert: text } });
+        };
+        options.uploadImage(file).then(markdown => replace(`${markdown}\n`), () => replace(''));
+    });
+}
+
+function fileDrag(event) {
+    return Array.from(event.dataTransfer?.types || []).includes('Files');
+}
+
 function create(parent, options = {}) {
     const host = {
         renderChip: options.renderChip,
@@ -422,6 +444,32 @@ function create(parent, options = {}) {
         }),
         // Rendered links open on click; once the cursor is inside one it is edited instead
         EditorView.domEventHandlers({
+            dragover(event, view) {
+                if (!fileDrag(event)) return false;
+                event.preventDefault();
+                view.dom.classList.add('cm-file-drag');
+                return true;
+            },
+            dragleave(event, view) {
+                if (!view.dom.contains(event.relatedTarget)) view.dom.classList.remove('cm-file-drag');
+                return false;
+            },
+            drop(event, view) {
+                view.dom.classList.remove('cm-file-drag');
+                const files = Array.from(event.dataTransfer?.files || []);
+                if (!files.length) return false;
+                event.preventDefault();
+                const at = view.posAtCoords({ x: event.clientX, y: event.clientY });
+                addImages(view, files, view.state.doc.lineAt(at ?? view.state.selection.main.head).from, options);
+                return true;
+            },
+            paste(event, view) {
+                const files = Array.from(event.clipboardData?.files || []);
+                if (!files.length) return false;
+                event.preventDefault();
+                addImages(view, files, view.state.doc.lineAt(view.state.selection.main.head).from, options);
+                return true;
+            },
             mousedown(event, view) {
                 const link = event.target.closest('.cm-md-link');
                 if (!link || event.button !== 0) return false;

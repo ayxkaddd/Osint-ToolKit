@@ -86,6 +86,12 @@
 .note-editor .cm-md-codeblock-first { border-radius: 6px 6px 0 0; padding-top: 0.3em !important; }
 .note-editor .cm-md-codeblock-last { border-radius: 0 0 6px 6px; padding-bottom: 0.3em !important; }
 .note-editor .cm-md-fence { color: #4b5563; font-size: 0.75em; }
+.note-editor .cm-file-drag {
+    outline: 2px dashed #a855f7;
+    outline-offset: -2px;
+    border-radius: 6px;
+    background: rgba(168, 85, 247, 0.06);
+}
 .note-editor .cm-md-image {
     max-width: 100%;
     max-height: 22rem;

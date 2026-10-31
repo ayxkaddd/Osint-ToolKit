@@ -10,6 +10,7 @@ Layout (all under ``investigation_results/``)::
         results/<result_id>.json.gz full result records (gzip-compressed JSON)
         notes/<note_id>.json        analyst notes (markdown; [[result:<id>]] links a result)
         notes/snapshots/<id>.json.gz  copy of a result attached to a note (![[snapshot:<id>]]),
+        notes/images/<id>.webp        image added to a note
                                     kept when the result itself is deleted
         notes/snapshots/index.json  {snapshot_id: result_id}
         picture.webp                optional case picture (resized)
@@ -52,6 +53,11 @@ TRIAGE_STATUSES = {None, "confirmed", "important", "false_positive"}
 
 PICTURE_MAX_SIDE = 512
 PICTURE_MAX_UPLOAD = 10 * 1024 * 1024
+NOTE_IMAGE_MAX_UPLOAD = 20 * 1024 * 1024
+NOTE_IMAGE_MAX_PIXELS = 50_000_000
+NOTE_IMAGE_MAX_SIDE = 4096
+NOTE_IMAGE_FORMATS = ("PNG", "JPEG", "WEBP", "GIF", "BMP")
+NOTE_IMAGE_NAME = re.compile(r"[0-9a-f]{32}\.webp")
 
 # Old service names that were saved under a different key
 SERVICE_RENAMES = {"username_search": "username"}
@@ -187,6 +193,35 @@ def summarize(result: Any) -> str:
                 return f"{result[key]} {key.replace('total_', '').replace('_', ' ')}"
         return f"{len(result)} fields"
     return str(result)[:160]
+
+
+def process_note_image(data: bytes) -> bytes:
+    """Decode an uploaded image and encode it again as WebP, so only pixels are ever
+    stored: scripts, trailing data and metadata (EXIF, GPS) in the upload are dropped."""
+    from PIL import Image, ImageOps
+
+    if len(data) > NOTE_IMAGE_MAX_UPLOAD:
+        raise ValueError("Image is too large (max 20 MB)")
+    try:
+        img = Image.open(io.BytesIO(data), formats=NOTE_IMAGE_FORMATS)
+        width, height = img.size
+        if width * height > NOTE_IMAGE_MAX_PIXELS:
+            raise ValueError("Image has too many pixels (max 50 megapixels)")
+        img.load()
+        img = ImageOps.exif_transpose(img)
+    except ValueError:
+        raise
+    except Image.DecompressionBombError as e:
+        raise ValueError("Image has too many pixels (max 50 megapixels)") from e
+    except (OSError, SyntaxError) as e:
+        raise ValueError("Only PNG, JPEG, WebP, GIF and BMP images can be added") from e
+
+    if img.mode not in ("RGB", "RGBA"):
+        img = img.convert("RGBA" if "A" in img.getbands() or "transparency" in img.info else "RGB")
+    img.thumbnail((NOTE_IMAGE_MAX_SIDE, NOTE_IMAGE_MAX_SIDE))
+    out = io.BytesIO()
+    img.save(out, format="WEBP", quality=90, method=4)
+    return out.getvalue()
 
 
 class InvestigationService:
@@ -845,6 +880,27 @@ class InvestigationService:
             return True
 
     # ==================== NOTE SNAPSHOTS & REFERENCES ====================
+
+    def _note_images_dir(self, investigation_id) -> Path:
+        return self._notes_dir(investigation_id) / "images"
+
+    def save_note_image(self, investigation_id: UUID, data: bytes) -> str:
+        """Store an image for notes under a generated name, which is returned. Nothing
+        from the upload (its name, its type) is used for the path."""
+        image = process_note_image(data)
+        name = f"{uuid4().hex}.webp"
+        directory = self._note_images_dir(investigation_id)
+        directory.mkdir(parents=True, exist_ok=True)
+        tmp = directory / f"{name}.tmp"
+        tmp.write_bytes(image)
+        os.replace(tmp, directory / name)
+        return name
+
+    def get_note_image_path(self, investigation_id: UUID, name: str) -> Optional[Path]:
+        if not NOTE_IMAGE_NAME.fullmatch(name or ""):
+            return None
+        path = self._note_images_dir(investigation_id) / name
+        return path if path.is_file() else None
 
     def _snapshots_dir(self, investigation_id) -> Path:
         return self._notes_dir(investigation_id) / "snapshots"
