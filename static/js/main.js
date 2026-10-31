@@ -156,7 +156,10 @@ let investigations = []
 function setCurrentInvestigationLocal(id) {
   currentInvestigationId = id || null
   if (currentInvestigationId) localStorage.setItem("currentInvestigationId", currentInvestigationId)
-  else localStorage.removeItem("currentInvestigationId")
+  else {
+    localStorage.removeItem("currentInvestigationId")
+    localStorage.removeItem("currentInvestigationName")
+  }
 }
 
 async function syncCurrentInvestigation() {
@@ -337,6 +340,8 @@ function updateCurrentInvestigationDisplay() {
   }
   if (current) {
     displayElement.textContent = current.name
+    // Shown straight away on the next page load (inline script in base.html)
+    localStorage.setItem("currentInvestigationName", current.name)
     displayElement.classList.add("text-purple-300")
     if (button) {
       button.classList.add("recording")
@@ -1239,7 +1244,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Static data-lucide icons in templates: render them on every page, so a
   // page whose script never calls createIcons() still shows its icons
   refreshIcons()
-  updateCurrentInvestigationDisplay()
   await syncCurrentInvestigation()
   await loadInvestigations()
 

@@ -51,6 +51,18 @@
                                 <i class="fas fa-chevron-down text-sm transition-transform duration-200"
                                     id="dropdownIcon"></i>
                             </button>
+                            <script>
+                                // Last known name, before the first paint; main.js corrects it from the server
+                                try {
+                                    const name = localStorage.getItem("currentInvestigationName");
+                                    if (name && localStorage.getItem("currentInvestigationId")) {
+                                        const label = document.getElementById("currentInvestigationName");
+                                        label.textContent = name;
+                                        label.classList.add("text-purple-300");
+                                        document.getElementById("investigationsDropdown").classList.add("recording");
+                                    }
+                                } catch (e) {}
+                            </script>
 
                             <!-- Dropdown Menu -->
                             <div id="investigationsDropdownMenu"
