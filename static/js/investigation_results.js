@@ -263,8 +263,10 @@ function renderCard(r) {
     return `
         <div class="result-card inv-result-card bg-[#14151f] border border-[#24283b] rounded-xl overflow-hidden hover:border-purple-500/40 ${(r.triage || {}).status === 'false_positive' ? 'opacity-60' : ''}" data-result-id="${id}">
             <div class="p-4 flex items-center justify-between gap-3 cursor-pointer select-none" data-action="toggle">
-                <div class="flex items-center gap-3.5 min-w-0">
-                    <input type="checkbox" data-action="select" ${selectedResults.has(r.result_id) ? 'checked' : ''} aria-label="Select this result" class="pick-box shrink-0">
+                <div class="flex items-center gap-3 min-w-0">
+                    <label data-action="none" title="Select this result" class="self-stretch shrink-0 flex items-center -my-4 -ml-4 pl-4 pr-3 cursor-pointer hover:bg-purple-500/10">
+                        <input type="checkbox" data-action="select" ${selectedResults.has(r.result_id) ? 'checked' : ''} aria-label="Select this result" class="pick-box">
+                    </label>
                     <div class="p-2.5 rounded-xl bg-purple-950/50 border border-purple-800/40 text-purple-400 shrink-0">
                         <i data-lucide="${escapeAttr(info.icon)}" class="w-5 h-5"></i>
                     </div>
