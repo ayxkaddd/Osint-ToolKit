@@ -720,7 +720,8 @@ which made
     color: #8b95a7;
     font-size: 0.78rem;
 }
-.username-image-preview-header button {
+.username-image-preview-header button,
+.username-image-preview-header a {
     width: 2rem;
     height: 2rem;
     flex: 0 0 auto;
@@ -732,7 +733,8 @@ which made
     color: #cbd5e1;
     background: rgba(31, 41, 55, 0.45);
 }
-.username-image-preview-header button:hover {
+.username-image-preview-header button:hover,
+.username-image-preview-header a:hover {
     color: #fff;
     border-color: rgba(192, 132, 252, 0.7);
 }

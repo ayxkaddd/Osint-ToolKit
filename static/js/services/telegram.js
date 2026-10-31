@@ -107,7 +107,7 @@ function displayResults(data) {
                 <div class="flex items-center gap-4">
                     ${entry.avatar ? `
                         <img src="https://api.allorigins.win/raw?url=${encodeURIComponent(entry.avatar)}"
-                             alt="Profile avatar"
+                             alt="Profile avatar" data-image-view="" data-image-title="Profile avatar"
                              class="w-12 h-12 rounded-full object-cover"
                              onerror="this.src='data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'%236b7280\' stroke-width=\'2\'%3E%3Cpath d=\'M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z\'/%3E%3Cpath d=\'M9 10h.01\'/%3E%3Cpath d=\'M15 10h.01\'/%3E%3Cpath d=\'M9.5 15a3.5 3.5 0 0 0 5 0\'/%3E%3C/svg%3E'">`
                 : '<div class="w-12 h-12 rounded-full bg-gray-700 flex items-center justify-center"><i data-lucide="user" class="w-6 h-6"></i></div>'
@@ -149,12 +149,12 @@ function displayResults(data) {
         const photoDiv = document.createElement('div');
         photoDiv.className = 'relative group';
         photoDiv.innerHTML = `
-            <a href="${escapeAttr(safeUrl(photoUrl))}" target="_blank" rel="noopener noreferrer" class="block">
+            <button type="button" data-image-view="https://api.allorigins.win/raw?url=${encodeURIComponent(photoUrl)}" data-image-title="Profile photo" class="block w-full">
                 <img src="https://api.allorigins.win/raw?url=${encodeURIComponent(photoUrl)}"
                      alt="Profile photo"
                      class="w-full h-48 object-cover rounded-lg transition-transform duration-200 group-hover:scale-105"
                      onerror="this.src='data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'%236b7280\' stroke-width=\'2\'%3E%3Cpath d=\'M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z\'/%3E%3Cpath d=\'M9 10h.01\'/%3E%3Cpath d=\'M15 10h.01\'/%3E%3Cpath d=\'M9.5 15a3.5 3.5 0 0 0 5 0\'/%3E%3C/svg%3E'">
-            </a>
+            </button>
         `;
         photosContainer.appendChild(photoDiv);
     });

@@ -67,9 +67,9 @@ function ghuntAvatar(url, isDefault) {
     const encoded = encodeURIComponent(src);
     return `
         <div class="relative shrink-0 group">
-            <a href="${escapeAttr(src)}" target="_blank" rel="noopener noreferrer" title="Open the profile photo">
+            <button type="button" data-image-view="${escapeAttr(src)}" data-image-title="Google profile photo" title="Preview the profile photo" class="block">
                 <img src="${escapeAttr(src)}" alt="" referrerpolicy="no-referrer" class="w-24 h-24 rounded-full object-cover border-2 ${isDefault ? 'border-gray-700' : 'border-purple-500/60'}">
-            </a>
+            </button>
             ${isDefault ? '' : `
             <div class="absolute -bottom-1 left-1/2 -translate-x-1/2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                 <a href="https://lens.google.com/uploadbyurl?url=${encoded}" target="_blank" rel="noopener noreferrer" title="Google reverse image search"
@@ -108,8 +108,8 @@ function ghuntAccountHtml(data) {
 
     const header = `
         <section class="card !p-0 overflow-hidden">
-            ${cover.url && !cover.isDefault ? `<a href="${escapeAttr(safeUrl(cover.url))}" target="_blank" rel="noopener noreferrer" title="Open the cover photo">
-                <img src="${escapeAttr(safeUrl(cover.url))}" alt="" referrerpolicy="no-referrer" class="w-full h-32 object-cover"></a>` : ''}
+            ${cover.url && !cover.isDefault ? `<button type="button" data-image-view="${escapeAttr(safeUrl(cover.url))}" data-image-title="Google cover photo" title="Preview the cover photo" class="block w-full">
+                <img src="${escapeAttr(safeUrl(cover.url))}" alt="" referrerpolicy="no-referrer" class="w-full h-32 object-cover"></button>` : ''}
             <div class="p-5 flex flex-col sm:flex-row gap-5">
                 ${ghuntAvatar(photo.url, photo.isDefault)}
                 <div class="min-w-0 flex-1 space-y-2">

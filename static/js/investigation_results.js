@@ -133,7 +133,7 @@ function renderHeader(investigation) {
         <div class="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
             <div class="flex items-start gap-5 min-w-0">
                 ${investigation.picture_url
-                    ? `<img src="${escapeAttr(investigation.picture_url)}" alt="" class="w-20 h-20 rounded-2xl object-cover border border-gray-700 shrink-0">`
+                    ? `<img src="${escapeAttr(investigation.picture_url)}" alt="" data-image-view="" data-image-title="${escapeAttr(investigation.name)}" data-image-note="Investigation picture" class="w-20 h-20 rounded-2xl object-cover border border-gray-700 shrink-0">`
                     : `<div class="w-20 h-20 rounded-2xl bg-purple-950/40 border border-purple-800/60 flex items-center justify-center shrink-0"><i data-lucide="folder-open" class="w-9 h-9 text-purple-400"></i></div>`}
                 <div class="min-w-0">
                     <div class="flex items-center gap-2 flex-wrap mb-1">

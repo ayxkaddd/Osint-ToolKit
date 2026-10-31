@@ -319,7 +319,7 @@ class OSINTSearch {
                 </div>
                 ${profileImageUrl ? `
                     <div class="username-card-media">
-                        <button type="button" class="username-avatar-preview-btn" data-image-url="${this.escapeHtml(profileImageUrl)}" data-site-name="${this.escapeHtml(result.siteName)}" title="Preview profile picture">
+                        <button type="button" class="username-avatar-preview-btn" data-image-view="${this.escapeHtml(profileImageUrl)}" data-image-title="${this.escapeHtml(result.siteName)}" data-image-note="Profile picture preview" title="Preview profile picture">
                             <img src="${this.escapeHtml(keyInfo.profileImage)}" alt="" class="username-card-avatar" onerror="this.closest('.username-result-card').classList.remove('has-profile-image'); this.closest('.username-card-media').style.display='none';">
                         </button>
                         <div class="username-reverse-search" aria-label="Reverse image search">
@@ -406,13 +406,6 @@ class OSINTSearch {
             });
         }
 
-        const avatarPreviewBtn = card.querySelector('.username-avatar-preview-btn');
-        if (avatarPreviewBtn) {
-            avatarPreviewBtn.addEventListener('click', () => {
-                this.openImagePreview(avatarPreviewBtn.dataset.imageUrl, avatarPreviewBtn.dataset.siteName);
-            });
-        }
-
         return card;
     }
 
@@ -450,53 +443,6 @@ class OSINTSearch {
                 url: `https://yandex.com/images/search?rpt=imageview&url=${encodedUrl}`
             }
         ];
-    }
-
-    openImagePreview(imageUrl, siteName) {
-        if (!imageUrl) return;
-
-        const modal = document.createElement('div');
-        modal.className = 'modal-overlay username-image-preview-overlay';
-        modal.innerHTML = `
-            <div class="username-image-preview-card">
-                <div class="username-image-preview-header">
-                    <div>
-                        <h2>${this.escapeHtml(siteName || 'Profile picture')}</h2>
-                        <p>Profile picture preview</p>
-                    </div>
-                    <button type="button" class="close-modal" title="Close preview">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </div>
-                <div class="username-image-preview-body">
-                    <img src="${this.escapeHtml(imageUrl)}" alt="" onerror="this.closest('.username-image-preview-body').innerHTML='<span>Image could not be loaded.</span>';">
-                </div>
-            </div>
-        `;
-
-        const closeModal = () => {
-            if (modal.parentNode) {
-                document.body.removeChild(modal);
-            }
-            document.removeEventListener('keydown', escapeHandler);
-        };
-
-        const escapeHandler = (e) => {
-            if (e.key === 'Escape') {
-                closeModal();
-            }
-        };
-
-        document.body.appendChild(modal);
-        document.addEventListener('keydown', escapeHandler);
-
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal) {
-                closeModal();
-            }
-        });
-
-        modal.querySelector('.close-modal').addEventListener('click', closeModal);
     }
 
     getCompactRows(keyInfo) {

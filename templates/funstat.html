@@ -39,6 +39,9 @@
     .loading-pulse {
         animation: pulse-glow 2s infinite;
     }
+    #mediaModal.hidden { display: none; }
+    #mediaStage { flex: 1; min-height: 0; align-items: flex-start; }
+    #mediaVideo { max-height: calc(90vh - 6rem); }
     #mediaImage.zoomed {
         max-width: none;
         max-height: none;
@@ -646,16 +649,23 @@
     </div>
 
     <!-- Media Modal -->
-    <div id="mediaModal" class="hidden fixed inset-0 bg-black/90 z-[60] flex flex-col">
-        <div class="flex items-center gap-3 px-4 py-3 border-b border-gray-800 bg-gray-950/80 text-sm">
-            <span id="mediaStatus" class="text-gray-400 flex-1 min-w-0 truncate"></span>
-            <a id="mediaDownload" class="hidden text-gray-300 hover:text-white" download title="Save the original"><i class="fas fa-download mr-1"></i>Save</a>
-            <a id="mediaTelegramLink" class="text-gray-300 hover:text-white" target="_blank" rel="noopener noreferrer"><i class="fab fa-telegram mr-1"></i>Telegram</a>
-            <button type="button" onclick="closeMediaModal()" class="text-gray-300 hover:text-white" title="Close (Esc)"><i class="fas fa-times text-xl"></i></button>
-        </div>
-        <div id="mediaStage" class="flex-1 min-h-0 overflow-auto flex p-4">
-            <img id="mediaImage" alt="Media" class="hidden m-auto max-w-full max-h-full object-contain rounded-lg cursor-zoom-in">
-            <video id="mediaVideo" controls playsinline class="hidden m-auto max-w-full max-h-full rounded-lg"></video>
+    <div id="mediaModal" class="modal-overlay username-image-preview-overlay hidden">
+        <div class="username-image-preview-card">
+            <div class="username-image-preview-header">
+                <div class="min-w-0">
+                    <h2>Telegram media</h2>
+                    <p id="mediaStatus" class="truncate"></p>
+                </div>
+                <div class="flex gap-2 shrink-0">
+                    <a id="mediaDownload" class="hidden" download title="Save the original"><i class="fas fa-download"></i></a>
+                    <a id="mediaTelegramLink" target="_blank" rel="noopener noreferrer" title="Open in Telegram"><i class="fab fa-telegram"></i></a>
+                    <button type="button" onclick="closeMediaModal()" title="Close (Esc)"><i class="fas fa-times"></i></button>
+                </div>
+            </div>
+            <div id="mediaStage" class="username-image-preview-body overflow-auto">
+                <img id="mediaImage" alt="Media" class="hidden m-auto cursor-zoom-in">
+                <video id="mediaVideo" controls playsinline class="hidden m-auto max-w-full rounded-lg"></video>
+            </div>
         </div>
     </div>
 
@@ -842,13 +852,13 @@ function hideLoading() {
 // downloaded by the server through the Telegram session.
 let mediaViewToken = 0;
 
-async function openMediaModal({ preview = '', chat, id, link }) {
+async function openMediaModal({ preview = '', chat, id }) {
     const token = ++mediaViewToken;
     const img = document.getElementById('mediaImage');
     const video = document.getElementById('mediaVideo');
     const status = document.getElementById('mediaStatus');
     const download = document.getElementById('mediaDownload');
-    document.getElementById('mediaTelegramLink').href = link || `https://t.me/${encodeURIComponent(chat)}/${encodeURIComponent(id)}`;
+    document.getElementById('mediaTelegramLink').href = `https://t.me/${encodeURIComponent(chat)}/${encodeURIComponent(id)}`;
     download.classList.add('hidden');
     video.pause();
     video.classList.add('hidden');
@@ -858,13 +868,6 @@ async function openMediaModal({ preview = '', chat, id, link }) {
     if (preview) img.src = preview;
     status.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Loading the original…';
     document.getElementById('mediaModal').classList.remove('hidden');
-    if (!chat) {
-        status.textContent = 'Profile photo from t.me';
-        download.href = preview;
-        download.classList.remove('hidden');
-        return;
-    }
-
     try {
         const response = await fetch(`/funstat/media/full?chat_identifier=${encodeURIComponent(chat)}&message_id=${encodeURIComponent(id)}`);
         const media = await funstatJson(response);
@@ -903,10 +906,10 @@ function closeMediaModal() {
 
 // Media buttons/thumbnails anywhere on the page carry data-media-chat + data-media-id
 document.addEventListener('click', (event) => {
-    const el = event.target.closest('[data-media-chat], [data-media-link]');
+    const el = event.target.closest('[data-media-chat]');
     if (el) {
         event.preventDefault();
-        openMediaModal({ preview: el.dataset.mediaPreview || '', chat: el.dataset.mediaChat, id: el.dataset.mediaId, link: el.dataset.mediaLink });
+        openMediaModal({ preview: el.dataset.mediaPreview || '', chat: el.dataset.mediaChat, id: el.dataset.mediaId });
         return;
     }
     const modal = document.getElementById('mediaModal');
@@ -1469,7 +1472,7 @@ function renderTikTokCard(data) {
         <div class="enriched-link-card rounded-xl p-4">
             <div class="flex items-start gap-4">
                 ${data.avatar_url ? `
-                    <img src="${escapeAttr(safeUrl(data.avatar_url))}" alt="${escapeAttr(data.username)}" class="enriched-avatar" onerror="this.style.display='none'">
+                    <img src="${escapeAttr(safeUrl(data.avatar_url))}" alt="${escapeAttr(data.username)}" data-image-view="" class="enriched-avatar" onerror="this.style.display='none'">
                 ` : `
                     <div class="enriched-avatar bg-gradient-to-br from-pink-500 to-purple-600 flex items-center justify-center text-2xl">
                         <i class="fab fa-tiktok"></i>
@@ -1537,7 +1540,7 @@ function renderInstagramCard(data) {
         <div class="enriched-link-card rounded-xl p-4">
             <div class="flex items-start gap-4">
                 ${data.avatar_url || data.profile_pic_url ? `
-                    <img src="${escapeAttr(safeUrl(data.avatar_url || data.profile_pic_url))}" alt="${escapeAttr(data.username)}" class="enriched-avatar" onerror="this.style.display='none'">
+                    <img src="${escapeAttr(safeUrl(data.avatar_url || data.profile_pic_url))}" alt="${escapeAttr(data.username)}" data-image-view="" class="enriched-avatar" onerror="this.style.display='none'">
                 ` : `
                     <div class="enriched-avatar bg-gradient-to-br from-pink-500 via-red-500 to-yellow-500 flex items-center justify-center text-2xl">
                         <i class="fab fa-instagram"></i>
@@ -1582,7 +1585,7 @@ function renderDiscordCard(data) {
         <div class="enriched-link-card rounded-xl p-4">
             <div class="flex items-start gap-4">
                 ${data.icon_url || data.avatar_url ? `
-                    <img src="${escapeAttr(safeUrl(data.icon_url || data.avatar_url))}" alt="${escapeAttr(data.name)}" class="enriched-avatar" onerror="this.style.display='none'">
+                    <img src="${escapeAttr(safeUrl(data.icon_url || data.avatar_url))}" alt="${escapeAttr(data.name)}" data-image-view="" class="enriched-avatar" onerror="this.style.display='none'">
                 ` : `
                     <div class="enriched-avatar bg-[#5865f2] flex items-center justify-center text-2xl">
                         <i class="fab fa-discord"></i>
@@ -1619,7 +1622,7 @@ function renderTelegramCard(data) {
         <div class="enriched-link-card rounded-xl p-4">
             <div class="flex items-start gap-4">
                 ${data.avatar_url || data.photo_url ? `
-                    <img src="${escapeAttr(safeUrl(data.avatar_url || data.photo_url))}" alt="${escapeAttr(data.title)}" class="enriched-avatar" onerror="this.style.display='none'">
+                    <img src="${escapeAttr(safeUrl(data.avatar_url || data.photo_url))}" alt="${escapeAttr(data.title)}" data-image-view="" class="enriched-avatar" onerror="this.style.display='none'">
                 ` : `
                     <div class="enriched-avatar bg-[#0088cc] flex items-center justify-center text-2xl">
                         <i class="fab fa-telegram"></i>
@@ -1658,7 +1661,7 @@ function renderGenericCard(data, platform) {
         <div class="enriched-link-card rounded-xl p-4">
             <div class="flex items-start gap-4">
                 ${data.avatar_url || data.icon_url || data.image_url ? `
-                    <img src="${escapeAttr(safeUrl(data.avatar_url || data.icon_url || data.image_url))}" alt="${escapeAttr(title)}" class="enriched-avatar" onerror="this.style.display='none'">
+                    <img src="${escapeAttr(safeUrl(data.avatar_url || data.icon_url || data.image_url))}" alt="${escapeAttr(title)}" data-image-view="" class="enriched-avatar" onerror="this.style.display='none'">
                 ` : `
                     <div class="enriched-avatar bg-gray-700 flex items-center justify-center text-2xl">
                         <i class="${getPlatformIcon(platform)}"></i>
@@ -2123,8 +2126,8 @@ async function loadTmeProfile(username) {
         }
         if (profile.avatar_url) {
             document.getElementById('tmeAvatar').innerHTML = `<img src="${escapeAttr(profile.avatar_url)}" alt="Avatar"
-                class="w-full h-full object-cover cursor-zoom-in" title="Open the avatar"
-                data-media-preview="${escapeAttr(profile.avatar_url)}" data-media-link="${escapeAttr(profile.link)}">`;
+                class="w-full h-full object-cover" title="Preview the avatar"
+                data-image-view="" data-image-title="Telegram avatar">`;
         }
         box.innerHTML = `
             <div class="text-gray-300 mt-1"><span class="text-gray-500">t.me name:</span> ${escapeHtml(profile.name || '')}</div>

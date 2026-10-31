@@ -246,7 +246,7 @@ function openDashboardInvestigationDetails(investigationId) {
     const pictureContainer = document.getElementById('dashboardModalInvestigationPicture');
     if (pictureContainer) {
         if (investigation.picture_url) {
-            pictureContainer.innerHTML = `<img src="${escapeAttr(investigation.picture_url)}" alt="" class="w-full h-full object-cover">`;
+            pictureContainer.innerHTML = `<img src="${escapeAttr(investigation.picture_url)}" alt="" data-image-view="" data-image-title="${escapeAttr(investigation.name)}" data-image-note="Investigation picture" class="w-full h-full object-cover">`;
         } else {
             pictureContainer.innerHTML = `<i data-lucide="folder-open" class="w-8 h-8 text-purple-400"></i>`;
         }

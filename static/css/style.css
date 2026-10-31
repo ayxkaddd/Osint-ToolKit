@@ -338,3 +338,6 @@
 }
 .pick-box:indeterminate::after { content: ""; width: 0.5rem; height: 2px; background: #fff; }
 .inv-result-card:has(.pick-box:checked) { border-color: rgba(168, 85, 247, 0.6); }
+
+/* Images that open the viewer (openImageViewer in main.js) */
+[data-image-view], img.cm-md-image { cursor: zoom-in; }

@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, Query, Form, File, UploadFile, Req
 from fastapi.responses import FileResponse, JSONResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
+from starlette.datastructures import UploadFile as FormUpload
 from services.investigation_service import InvestigationService
 
 router = APIRouter(prefix="/api/investigations")
@@ -288,9 +289,9 @@ async def update_investigation(investigation_id: UUID, request: Request) -> JSON
             raise HTTPException(status_code=400, detail="Invalid JSON body") from None
     else:
         form = await request.form()
-        data = {k: v for k, v in form.items() if not isinstance(v, UploadFile)}
+        data = {k: v for k, v in form.items() if not isinstance(v, FormUpload)}
         upload = form.get("picture")
-        if isinstance(upload, UploadFile):
+        if isinstance(upload, FormUpload):
             picture = await _read_picture(upload)
 
     status = data.get("status")
