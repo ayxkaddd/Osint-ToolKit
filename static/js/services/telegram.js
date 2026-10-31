@@ -106,7 +106,7 @@ function displayResults(data) {
             <div class="flex items-center justify-between border-b border-gray-700 pb-2 mb-3">
                 <div class="flex items-center gap-4">
                     ${entry.avatar ? `
-                        <img src="https://api.allorigins.win/raw?url=${encodeURIComponent(entry.avatar)}"
+                        <img src="${escapeAttr(safeUrl(entry.avatar))}" referrerpolicy="no-referrer"
                              alt="Profile avatar" data-image-view="" data-image-title="Profile avatar"
                              class="w-12 h-12 rounded-full object-cover"
                              data-placeholder-size="w-12 h-12 rounded-full shrink-0" data-placeholder-icon-only onerror="imageLoadFailed(this)">`
@@ -149,8 +149,8 @@ function displayResults(data) {
         const photoDiv = document.createElement('div');
         photoDiv.className = 'relative group';
         photoDiv.innerHTML = `
-            <button type="button" data-image-view="https://api.allorigins.win/raw?url=${encodeURIComponent(photoUrl)}" data-image-title="Profile photo" class="block w-full">
-                <img src="https://api.allorigins.win/raw?url=${encodeURIComponent(photoUrl)}"
+            <button type="button" data-image-view="${escapeAttr(safeUrl(photoUrl))}" data-image-title="Profile photo" class="block w-full">
+                <img src="${escapeAttr(safeUrl(photoUrl))}" referrerpolicy="no-referrer"
                      alt="Profile photo"
                      class="w-full h-48 object-cover rounded-lg transition-transform duration-200 group-hover:scale-105"
                      data-placeholder-size="w-full h-48 rounded-lg" onerror="imageLoadFailed(this)">
