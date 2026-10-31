@@ -3,6 +3,7 @@ from auth.auth_handler import TelegramAuthHandler
 from fastapi.responses import JSONResponse
 from models.telegram_models import VKProfileHistoryResponse
 from services.telegram_service import TelegramService
+from utils import telegram_client
 from utils.investigation_decorator import save_investigation
 
 auth_router = APIRouter(prefix="/auth/tg")
@@ -52,8 +53,10 @@ async def verify_password(request: Request):
 
 @auth_router.get("/status")
 async def auth_status():
+    if not telegram_client.is_configured():
+        return {"authorized": False, "configured": False}
     status = await auth_handler.connect()
-    return {"authorized": status}
+    return {"authorized": status, "configured": True}
 
 telegram_service = TelegramService()
 

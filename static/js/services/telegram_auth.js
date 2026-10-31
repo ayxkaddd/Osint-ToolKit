@@ -24,9 +24,12 @@ function showError(message) {
 async function checkAuth() {
     try {
         const response = await fetch('/auth/tg/status');
-        const { authorized } = await response.json();
+        const { authorized, configured } = await response.json();
 
-        if (authorized) {
+        if (configured === false) {
+            showStatus('Telegram API ID and hash are not set. Add them under VK Profile History in <a href="/settings" class="underline">Settings</a>, then come back here to log in.');
+            document.getElementById('phoneForm').classList.add('hidden');
+        } else if (authorized) {
             showStatus("✅ Authenticated successfully!");
             document.getElementById('phoneForm').classList.add('hidden');
             document.getElementById('codeForm').classList.add('hidden');

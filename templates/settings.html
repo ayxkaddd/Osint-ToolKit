@@ -97,7 +97,8 @@
             const status = await fetch('/auth/tg/status').then(r => r.json());
             box.innerHTML = `<div class="bg-[#14151f] border border-[#24283b] rounded-xl p-4 flex items-center justify-between">
                 <span><i class="fab fa-telegram text-sky-400 mr-2"></i>Telegram account (VK history, Funstat media)</span>
-                ${status.authorized ? '<span class="text-sm text-emerald-300"><i class="fas fa-check mr-1"></i>logged in</span>'
+                ${status.configured === false ? '<span class="text-sm text-gray-400">Add the API ID and hash under VK Profile History below</span>'
+                    : status.authorized ? '<span class="text-sm text-emerald-300"><i class="fas fa-check mr-1"></i>logged in</span>'
                     : '<a href="/telegram_auth" class="text-sm bg-sky-700 hover:bg-sky-600 px-3 py-1.5 rounded">Log in</a>'}
             </div>`;
         } catch (e) { box.innerHTML = ''; }

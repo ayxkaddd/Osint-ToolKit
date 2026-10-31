@@ -168,8 +168,12 @@ async def module_status(module: Module) -> Dict[str, Any]:
         problem = _tool_available(tool)
         if problem:
             problems.append(problem)
-    if module.needs_telegram and not await telegram_authorized():
-        problems.append("Telegram is not logged in")
+    if module.needs_telegram:
+        from utils import telegram_client
+        if not telegram_client.is_configured():
+            problems.append("Telegram API ID and hash are not set")
+        elif not await telegram_authorized():
+            problems.append("Telegram is not logged in")
     if module.extra_problems:
         problems += module.extra_problems()
     missing_optional = [k for k in module.optional_keys if not get_setting(k)]

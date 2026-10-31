@@ -8,11 +8,11 @@ session, so everything goes through this module instead.
 import asyncio
 import inspect
 import logging
-import os
-from typing import Optional
+from typing import Optional, Tuple
 
-from dotenv import load_dotenv
 from telethon import TelegramClient
+
+from utils.config import get_setting
 
 logger = logging.getLogger(__name__)
 
@@ -26,15 +26,30 @@ class TelegramNotAuthorized(Exception):
     """The session exists but nobody has logged in (use the Telegram auth page)."""
 
 
+class TelegramNotConfigured(ValueError):
+    """TG_API_ID / TG_API_HASH are missing or invalid (set them in Settings)."""
+
+
+def _credentials() -> Optional[Tuple[int, str]]:
+    api_id = (get_setting("TG_API_ID") or "").strip()
+    api_hash = (get_setting("TG_API_HASH") or "").strip()
+    if not api_id.isdecimal() or int(api_id) == 0 or not api_hash:
+        return None
+    return int(api_id), api_hash
+
+
+def is_configured() -> bool:
+    return _credentials() is not None
+
+
 def get_client() -> TelegramClient:
     """Return the shared client (created on first use, not necessarily connected)."""
     global _client
     if _client is None:
-        load_dotenv()
-        api_id = int(os.getenv("TG_API_ID") or 0)
-        api_hash = os.getenv("TG_API_HASH") or ""
-        if not api_id or not api_hash:
-            logger.warning("TG_API_ID / TG_API_HASH are not configured; Telegram features will fail")
+        credentials = _credentials()
+        if credentials is None:
+            raise TelegramNotConfigured("Telegram API ID and hash are not set - add them in Settings")
+        api_id, api_hash = credentials
         _client = TelegramClient(SESSION_NAME, api_id, api_hash, flood_sleep_threshold=60)
     return _client
 
