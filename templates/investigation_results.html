@@ -65,21 +65,20 @@
             </div>
         </div>
 
-        <div id="bulkBar" class="hidden sticky top-16 z-30 bg-[#14151f] border border-[#24283b] rounded-xl px-4 py-2.5 flex flex-wrap items-center gap-3 text-sm">
-            <label class="flex items-center gap-2 text-gray-300 cursor-pointer select-none">
-                <input type="checkbox" id="bulkSelectAll" class="rounded bg-gray-800 border-gray-600">
+        <div id="bulkBar" class="hidden sticky top-16 z-30 bg-[#14151f] border border-[#24283b] rounded-xl px-4 py-2.5 flex flex-wrap items-center gap-x-4 gap-y-2">
+            <label class="flex items-center gap-3 text-sm text-gray-400 cursor-pointer select-none">
+                <input type="checkbox" id="bulkSelectAll" class="pick-box">
                 <span id="bulkCount">Select all</span>
             </label>
             <div id="bulkActions" class="hidden flex flex-wrap items-center gap-2 ml-auto">
-                <select id="bulkTriage" class="bg-gray-900 border border-gray-700 rounded-lg py-1.5 px-3 text-white text-sm">
-                    <option value="">Set assessment…</option>
-                    <option value="confirmed">Confirmed</option>
-                    <option value="important">Important</option>
-                    <option value="false_positive">False positive</option>
-                    <option value="clear">Not assessed</option>
-                </select>
-                <button type="button" id="bulkMove" class="px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 flex items-center gap-1.5"><i data-lucide="folder-input" class="w-4 h-4"></i>Move</button>
-                <button type="button" id="bulkDelete" class="px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-red-900/60 border border-gray-700 hover:border-red-700 text-gray-300 flex items-center gap-1.5"><i data-lucide="trash-2" class="w-4 h-4"></i>Delete</button>
+                <span class="text-xs text-gray-500 mr-1">Assessment</span>
+                <button type="button" data-bulk-triage="confirmed" class="px-2.5 py-1 rounded-lg border border-gray-700 text-xs text-gray-400 hover:text-white hover:border-gray-500"><i class="fas fa-check-circle mr-1"></i>Confirmed</button>
+                <button type="button" data-bulk-triage="important" class="px-2.5 py-1 rounded-lg border border-gray-700 text-xs text-gray-400 hover:text-white hover:border-gray-500"><i class="fas fa-star mr-1"></i>Important</button>
+                <button type="button" data-bulk-triage="false_positive" class="px-2.5 py-1 rounded-lg border border-gray-700 text-xs text-gray-400 hover:text-white hover:border-gray-500"><i class="fas fa-times-circle mr-1"></i>False positive</button>
+                <button type="button" data-bulk-triage="" class="px-2.5 py-1 rounded-lg border border-gray-700 text-xs text-gray-400 hover:text-white hover:border-gray-500">Clear</button>
+                <span class="w-px h-5 bg-gray-800 mx-1"></span>
+                <button type="button" id="bulkMove" class="px-2.5 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 text-xs flex items-center gap-1.5"><i data-lucide="folder-input" class="w-3.5 h-3.5"></i>Move</button>
+                <button type="button" id="bulkDelete" class="px-2.5 py-1.5 rounded-lg bg-gray-800 hover:bg-red-900/60 border border-gray-700 hover:border-red-700 text-gray-300 text-xs flex items-center gap-1.5"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i>Delete</button>
             </div>
         </div>
 

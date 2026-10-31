@@ -34,11 +34,9 @@ document.addEventListener('DOMContentLoaded', () => {
         document.querySelectorAll('[data-action="select"]').forEach(box => { box.checked = e.target.checked; });
         updateBulkBar();
     });
-    document.getElementById('bulkTriage').addEventListener('change', (e) => {
-        const value = e.target.value;
-        e.target.value = '';
-        if (value) bulkSetTriage(value === 'clear' ? null : value);
-    });
+    document.querySelectorAll('[data-bulk-triage]').forEach(button => button.addEventListener('click', () => {
+        bulkSetTriage(button.dataset.bulkTriage || null);
+    }));
     document.getElementById('bulkMove').addEventListener('click', () => openMoveModal([...selectedResults]));
     document.getElementById('bulkDelete').addEventListener('click', bulkDelete);
     document.getElementById('resultsContainer').addEventListener('keydown', (e) => {
@@ -266,7 +264,7 @@ function renderCard(r) {
         <div class="result-card inv-result-card bg-[#14151f] border border-[#24283b] rounded-xl overflow-hidden hover:border-purple-500/40 ${(r.triage || {}).status === 'false_positive' ? 'opacity-60' : ''}" data-result-id="${id}">
             <div class="p-4 flex items-center justify-between gap-3 cursor-pointer select-none" data-action="toggle">
                 <div class="flex items-center gap-3.5 min-w-0">
-                    <input type="checkbox" data-action="select" ${selectedResults.has(r.result_id) ? 'checked' : ''} aria-label="Select this result" class="rounded bg-gray-800 border-gray-600 shrink-0">
+                    <input type="checkbox" data-action="select" ${selectedResults.has(r.result_id) ? 'checked' : ''} aria-label="Select this result" class="pick-box shrink-0">
                     <div class="p-2.5 rounded-xl bg-purple-950/50 border border-purple-800/40 text-purple-400 shrink-0">
                         <i data-lucide="${escapeAttr(info.icon)}" class="w-5 h-5"></i>
                     </div>
