@@ -934,6 +934,102 @@ document.addEventListener("click", (event) => {
 })
 window.addEventListener("scroll", closePivotMenu, { passive: true })
 
+// ---------------------------------------------------------------------------
+// Lookup box dropdown: run a module on what's typed, without leaving the page.
+// Enter still opens the full /lookup page.
+// ---------------------------------------------------------------------------
+let quickLookupTimer = null
+let quickLookupRequest = 0 // answers to anything but the latest request are dropped
+
+function closeQuickLookup() {
+  clearTimeout(quickLookupTimer)
+  quickLookupRequest += 1
+  document.getElementById("globalLookupMenu")?.classList.add("hidden")
+}
+
+function quickLookupRow(candidate, m, canRun) {
+  const last = (m.previous || [])[(m.previous || []).length - 1]
+  const problems = (m.problems || []).join("; ")
+  const openUrl = `${m.page}?q=${encodeURIComponent(candidate.value)}&t=${encodeURIComponent(candidate.type)}`
+  return `
+    <div class="px-3 py-2 flex items-center justify-between gap-2 hover:bg-gray-800/70">
+        <div class="min-w-0">
+            <div class="text-white truncate">${escapeHtml(m.name)}</div>
+            <div class="flex items-center gap-1.5 mt-0.5">${moduleBadges(m)}${m.ready ? "" : `<span class="text-[10px] text-red-300 truncate" title="${escapeAttr(problems)}">not ready</span>`}</div>
+            ${last ? `<div class="text-[11px] text-amber-300 mt-0.5"><i class="fas fa-history mr-1"></i>Already looked up ${escapeHtml(timeAgo(last.timestamp))}</div>` : ""}
+        </div>
+        <div class="flex gap-1.5 shrink-0">
+            <button type="button" data-quick-run="${escapeAttr(m.id)}" data-quick-type="${escapeAttr(candidate.type)}" data-quick-value="${escapeAttr(candidate.value)}"
+                ${m.ready && canRun ? "" : "disabled"}
+                class="px-2 py-1 rounded bg-purple-700 hover:bg-purple-600 disabled:opacity-40 disabled:cursor-not-allowed text-xs"
+                title="${m.ready ? (canRun ? "Run in the background" : "Select an investigation first") : escapeAttr(problems)}">Run</button>
+            <a href="${escapeAttr(openUrl)}" class="px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 text-xs" title="Open the module with this value">Open</a>
+        </div>
+    </div>`
+}
+
+function renderQuickLookup(data) {
+  const menu = document.getElementById("globalLookupMenu")
+  const canRun = Boolean(data.investigation_id)
+  const sections = data.candidates.map((c) => `
+    <div class="px-3 pt-2.5 pb-1 text-[11px] uppercase tracking-wider text-gray-500">${escapeHtml(c.label)} · <span class="font-mono normal-case text-purple-200">${escapeHtml(c.display || c.value)}</span></div>
+    ${c.modules.length
+      ? c.modules.map((m) => quickLookupRow(c, m, canRun)).join("")
+      : '<div class="px-3 py-2 text-gray-500">No module looks up this type yet.</div>'}`).join("")
+  menu.innerHTML = `
+    ${canRun ? "" : '<div class="px-3 py-2 border-b border-gray-700 text-xs text-yellow-200">Select or create an investigation to run lookups. Results are saved there.</div>'}
+    <div class="max-h-96 overflow-y-auto custom-scrollbar pb-1">${sections || '<div class="px-3 py-3 text-gray-500">Try an email, phone with country code, @username, domain or IP.</div>'}</div>
+    <div class="px-3 py-2 border-t border-gray-700 text-right text-xs">
+        <a href="/lookup?q=${encodeURIComponent(data.query)}" class="text-purple-300 hover:text-white">All lookups for this →</a>
+    </div>`
+  menu.classList.remove("hidden")
+}
+
+async function updateQuickLookup(query) {
+  const request = ++quickLookupRequest
+  try {
+    const response = await fetch(`/api/lookup/detect?q=${encodeURIComponent(query)}`)
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+    const data = await response.json()
+    if (request === quickLookupRequest) renderQuickLookup(data)
+  } catch (error) {
+    console.error("Lookup detection failed:", error)
+  }
+}
+
+function setupQuickLookup() {
+  const input = document.getElementById("globalLookupInput")
+  const menu = document.getElementById("globalLookupMenu")
+  if (!input || !menu) return
+  const schedule = () => {
+    clearTimeout(quickLookupTimer)
+    const query = input.value.trim()
+    if (query.length < 2) {
+      closeQuickLookup()
+      return
+    }
+    quickLookupTimer = setTimeout(() => updateQuickLookup(query), 200)
+  }
+  input.addEventListener("input", schedule)
+  input.addEventListener("focus", schedule)
+  document.getElementById("globalLookupForm").addEventListener("keydown", (event) => {
+    if (event.key === "Escape") closeQuickLookup()
+  })
+  document.getElementById("globalLookupForm").addEventListener("submit", closeQuickLookup)
+  document.addEventListener("click", (event) => {
+    if (!event.target.closest("#globalLookupForm")) closeQuickLookup()
+  })
+  // Stays open after a run, so several modules can be started in a row
+  menu.addEventListener("click", async (event) => {
+    const run = event.target.closest("[data-quick-run]")
+    if (!run) return
+    run.disabled = true
+    const job = await startJob(run.dataset.quickRun, run.dataset.quickType, run.dataset.quickValue)
+    if (job) run.textContent = "Started"
+    else run.disabled = false
+  })
+}
+
 
 // Chip for an identifier that opens the pivot menu
 function pivotChip(type, value, label = null) {
@@ -1157,6 +1253,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   checkExistingResults()
   prefillFromQuery()
   refreshJobs()
+  setupQuickLookup()
   const lookupInput = document.getElementById("globalLookupInput")
   if (lookupInput && window.location.pathname === "/lookup") lookupInput.value = params.get("q") || ""
 })
