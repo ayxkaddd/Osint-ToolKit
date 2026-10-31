@@ -771,6 +771,8 @@ window.loadResultIntoView = function (data, record) {
     }
 };
 
+document.getElementById('userSearchInput').addEventListener('input', detectUserSearchType);
+
 // Platform patterns for link detection
 const PLATFORM_PATTERNS = [
     { pattern: /(vm\.tiktok\.com|vt\.tiktok\.com|tiktok\.com\/t)\/[A-Za-z0-9]+/, platform: 'tiktok' },
@@ -1771,11 +1773,22 @@ function hideInlineError(errorId) {
     document.getElementById(errorId).classList.add('hidden');
 }
 
+// What was typed or pivoted here decides the search: digits are a user ID, anything else a username
+function cleanUserSearch(value) {
+    return value.trim().replace(/^(https?:\/\/)?(www\.)?(t|telegram)\.me\//i, '').replace(/^@/, '').replace(/\/.*$/, '');
+}
+
+function detectUserSearchType() {
+    const value = cleanUserSearch(document.getElementById('userSearchInput').value);
+    if (value) document.getElementById('userSearchType').value = /^\d+$/.test(value) ? 'id' : 'username';
+}
+
 async function searchUser() {
     hideInlineError('userSearchError');
-    
+
+    detectUserSearchType();
     const searchType = document.getElementById('userSearchType').value;
-    const searchValue = document.getElementById('userSearchInput').value.trim();
+    const searchValue = cleanUserSearch(document.getElementById('userSearchInput').value);
 
     if (!searchValue) {
         showInlineError('userSearchError', 'Please enter a search value');
@@ -1792,9 +1805,8 @@ async function searchUser() {
             endpoint = '/funstat/users/basic_info_by_id';
             params = `id=${encodeURIComponent(searchValue)}`;
         } else {
-            const username = searchValue.replace('@', '');
             endpoint = '/funstat/users/resolve_username';
-            params = `name=${encodeURIComponent(username)}`;
+            params = `name=${encodeURIComponent(searchValue)}`;
         }
 
         const response = await fetch(`${endpoint}?${params}`);
@@ -2006,7 +2018,7 @@ async function getGroupMembers() {
     }
 }
 
-async function searchText() {
+async function searchText(page = 1) {
     const searchText = document.getElementById('textSearchInput').value.trim();
 
     if (!searchText) {
@@ -2017,7 +2029,7 @@ async function searchText() {
     showLoading('Searching text...');
 
     try {
-        const response = await fetch(`/funstat/search/text?input=${encodeURIComponent(searchText)}&page=1&pageSize=50`);
+        const response = await fetch(`/funstat/search/text?input=${encodeURIComponent(searchText)}&page=${page}&pageSize=50`);
         const data = await funstatJson(response);
         displayTextResults(data);
         showToast(`Found ${data.total || data.results?.length || 0} results`, 'success');
@@ -2292,6 +2304,27 @@ function highlightText(text, query) {
     return out + escapeHtml(text.slice(last));
 }
 
+// Emails, phones, @usernames and t.me links inside a message, as pivot chips
+// (built on first use: this script runs before main.js)
+let messageIdentifierRe = null;
+
+function messageTextHtml(text, query = '') {
+    messageIdentifierRe ||= new RegExp(
+        `${TEXT_IDENTIFIER_RE.source}|(?<![\\w@.])@[A-Za-z]\\w{3,31}\\b|(?<![\\w.])(?:https?:\\/\\/)?t\\.me\\/(?!joinchat\\b|addstickers\\b|share\\b|proxy\\b)[A-Za-z]\\w{3,31}\\b`, 'gi');
+    const source = String(text ?? '');
+    let out = '';
+    let last = 0;
+    for (const match of source.matchAll(messageIdentifierRe)) {
+        const found = match[0];
+        out += highlightText(source.slice(last, match.index), query);
+        const handle = found.match(/^@(.+)$|t\.me\/(.+)$/i);
+        if (handle) out += pivotText('telegram_username', handle[1] || handle[2], found);
+        else out += found.includes('@') ? pivotText('email', found) : pivotText('phone', found.replace(/[\s().-]/g, ''), found);
+        last = match.index + found.length;
+    }
+    return out + highlightText(source.slice(last), query);
+}
+
 function thumbnailImg(url, chat, id) {
     return `<img src="${escapeAttr(url)}" alt="Media preview" loading="lazy" class="media-thumbnail cursor-pointer" title="Open the original"
         data-media-preview="${escapeAttr(url)}" data-media-chat="${escapeAttr(chat)}" data-media-id="${escapeAttr(id)}">`;
@@ -2325,12 +2358,12 @@ function messageRowHtml(msg) {
             <div class="flex justify-between items-start gap-3 mb-2">
                 <div class="min-w-0">
                     <a href="${escapeAttr(chatLink)}" target="_blank" rel="noopener noreferrer" class="text-sm font-medium text-purple-400 hover:text-purple-300 break-words">${escapeHtml(group.title || 'Unknown chat')}</a>
-                    <p class="text-xs text-gray-500">ID: ${escapeHtml(group.id)}</p>
+                    <p class="text-xs text-gray-500">ID: ${escapeHtml(group.id)}${group.username ? ` · ${pivotText('telegram_username', group.username, '@' + group.username)}` : ''}</p>
                 </div>
                 <span class="text-xs text-gray-500 shrink-0">${escapeHtml(formatMessageDate(msg.date))}</span>
             </div>
             ${media}
-            ${msg.text ? `<p class="text-white mb-2 whitespace-pre-wrap break-words">${highlightText(msg.text, messageList.query)}</p>` : ''}
+            ${msg.text ? `<p class="text-white mb-2 whitespace-pre-wrap break-words">${messageTextHtml(msg.text, messageList.query)}</p>` : ''}
             <div class="flex items-center gap-3">
                 <a href="${escapeAttr(messageLink)}" target="_blank" rel="noopener noreferrer" class="text-xs text-purple-400 hover:text-purple-300">
                     <i class="fas fa-external-link-alt mr-1"></i>Open in Telegram
@@ -2530,6 +2563,85 @@ function displayAllMessagesWithFilters(messages) {
     applyMessageFilters();
 }
 
+// What the analyzer's data types can be pivoted as
+const ANALYSIS_PIVOT_TYPES = {
+    email: 'email', phone: 'phone', domain: 'domain', url: 'url',
+    telegram_username: 'telegram_username', fragment_username: 'telegram_username',
+    btc_wallet: 'crypto_btc', eth_wallet: 'crypto_eth',
+};
+
+function analysisPivotHtml(type, value) {
+    const telegram = type === 'url' && String(value).match(/t\.me\/([A-Za-z]\w{3,31})\/?$/i);
+    const html = telegram ? pivotText('telegram_username', telegram[1], String(value))
+        : ANALYSIS_PIVOT_TYPES[type] ? pivotText(ANALYSIS_PIVOT_TYPES[type], value) : '';
+    return html.startsWith('<button') ? html : '';
+}
+
+function analysisValueHtml(type, value) {
+    return analysisPivotHtml(type, value) || `<span class="text-xs bg-gray-700 px-2 py-1 rounded text-gray-300 break-all">${escapeHtml(value)}</span>`;
+}
+
+// Long lists draw in chunks as they scroll into view, so everything is reachable without freezing the page
+function appendRowsOnScroll(scroller, list, items, rowHtml, size) {
+    let done = 0;
+    const sentinel = document.createElement('div');
+    sentinel.className = 'h-px w-full';
+    scroller.appendChild(sentinel);
+    const more = () => {
+        const template = document.createElement('template');
+        template.innerHTML = items.slice(done, done + size).map(rowHtml).join('');
+        list.appendChild(template.content);
+        done += size;
+        observer.unobserve(sentinel);
+        if (done >= items.length) {
+            observer.disconnect();
+            sentinel.remove();
+        } else {
+            observer.observe(sentinel);
+        }
+    };
+    const observer = new IntersectionObserver(
+        (entries) => { if (entries.some(e => e.isIntersecting)) more(); },
+        { root: scroller, rootMargin: '200px' });
+    more();
+}
+
+function analysisMessageHtml(msg, riskClass, formatDataType) {
+    const messageLink = buildTelegramLink(msg.group?.id, msg.message_id, msg.group?.username);
+    const chatLink = buildTelegramChatLink(msg.group?.id, msg.group?.username);
+    const textHtml = msg.text ? messageTextHtml(msg.text) : '<i class="text-gray-500">No text</i>';
+    const chips = [...new Set(Object.entries(msg.extracted_data || {}).flatMap(([type, values]) =>
+        (values || []).map(v => analysisPivotHtml(type, v)).filter(Boolean)))]
+        // Not what the text below already shows as a chip
+        .filter(chip => !textHtml.includes(chip.match(/data-pivot-value="[^"]*"/)[0]));
+    return `
+        <div class="bg-gray-800/50 p-3 rounded-lg sensitive-message-card hover:bg-gray-800 transition-all">
+            <div class="flex justify-between items-start mb-2">
+                <div class="flex-1">
+                    <a href="${escapeAttr(chatLink)}" target="_blank" rel="noopener noreferrer" class="text-sm font-medium text-purple-400 hover:text-purple-300">
+                        ${escapeHtml(msg.group?.title || 'Unknown Group')}
+                    </a>
+                    <div class="flex items-center gap-2 mt-1">
+                        <span class="px-2 py-0.5 rounded text-xs ${riskClass(msg.risk_level)}">
+                            ${escapeHtml(msg.risk_level?.toUpperCase() || 'LOW')} (Score: ${escapeHtml(msg.risk_score || 0)})
+                        </span>
+                    </div>
+                </div>
+                <span class="text-xs text-gray-500">${escapeHtml(msg.date ? new Date(msg.date).toLocaleString() : '')}</span>
+            </div>
+            <p class="text-sm text-white mb-2 whitespace-pre-wrap break-words">${textHtml}</p>
+            <div class="flex flex-wrap items-center gap-1 mb-2">
+                ${(msg.data_types_found || []).map(t => `
+                    <span class="text-xs bg-purple-900/30 text-purple-300 px-2 py-0.5 rounded">${escapeHtml(formatDataType(t))}</span>
+                `).join('')}
+                ${chips.join('')}
+            </div>
+            <a href="${escapeAttr(messageLink)}" target="_blank" rel="noopener noreferrer" class="text-xs text-purple-400 hover:text-purple-300">
+                <i class="fas fa-external-link-alt mr-1"></i>Open in Telegram
+            </a>
+        </div>`;
+}
+
 function displayMessagesAnalysis(analysis) {
     if (!analysis) return;
 
@@ -2555,7 +2667,7 @@ function displayMessagesAnalysis(analysis) {
     };
 
     const html = `
-        <div class="result-card border border-gray-800 rounded-xl p-6 mt-6">
+        <div id="messagesAnalysisCard" class="result-card border border-gray-800 rounded-xl p-6 mt-6">
             <h4 class="text-xl font-bold mb-4 flex items-center">
                 <i class="fas fa-shield-alt text-purple-400 mr-2"></i>
                 Messages Analysis
@@ -2636,11 +2748,8 @@ function displayMessagesAnalysis(analysis) {
                         ${Object.entries(aggregatedData).map(([type, values]) => `
                             <div class="bg-gray-800/50 p-3 rounded-lg">
                                 <div class="text-xs text-gray-400 mb-2 font-semibold uppercase">${formatDataType(type)} (${values.length})</div>
-                                <div class="flex flex-wrap gap-1">
-                                    ${values.slice(0, 10).map(v => `
-                                        <span class="text-xs bg-gray-700 px-2 py-1 rounded text-gray-300">${escapeHtml(v)}</span>
-                                    `).join('')}
-                                    ${values.length > 10 ? `<span class="text-xs text-gray-500">+${values.length - 10} more</span>` : ''}
+                                <div class="max-h-56 overflow-y-auto custom-scrollbar" data-analysis-values="${escapeAttr(type)}">
+                                    <div class="flex flex-wrap items-center gap-1"></div>
                                 </div>
                             </div>
                         `).join('')}
@@ -2655,47 +2764,27 @@ function displayMessagesAnalysis(analysis) {
                         <i class="fas fa-list mr-2 text-yellow-500"></i>
                         Messages with Sensitive Data (${messageAnalyses.length})
                     </h5>
-                    <div class="space-y-2 max-h-96 overflow-y-auto custom-scrollbar">
-                        ${messageAnalyses.slice(0, 20).map(msg => {
-                            const messageLink = buildTelegramLink(msg.group?.id, msg.message_id, msg.group?.username);
-                            const chatLink = buildTelegramChatLink(msg.group?.id, msg.group?.username);
-                            return `
-                                <div class="bg-gray-800/50 p-3 rounded-lg sensitive-message-card hover:bg-gray-800 transition-all">
-                                    <div class="flex justify-between items-start mb-2">
-                                        <div class="flex-1">
-                                            <a href="${chatLink}" target="_blank" class="text-sm font-medium text-purple-400 hover:text-purple-300">
-                                                ${escapeHtml(msg.group?.title || 'Unknown Group')}
-                                            </a>
-                                            <div class="flex items-center gap-2 mt-1">
-                                                <span class="px-2 py-0.5 rounded text-xs ${getRiskBadgeClass(msg.risk_level)}">
-                                                    ${escapeHtml(msg.risk_level?.toUpperCase() || 'LOW')} (Score: ${escapeHtml(msg.risk_score || 0)})
-                                                </span>
-                                            </div>
-                                        </div>
-                                        <span class="text-xs text-gray-500">${escapeHtml(msg.date ? new Date(msg.date).toLocaleString() : '')}</span>
-                                    </div>
-                                    <p class="text-sm text-white mb-2 line-clamp-2">${msg.text ? escapeHtml(msg.text) : '<i class="text-gray-500">No text</i>'}</p>
-                                    <div class="flex flex-wrap gap-1 mb-2">
-                                        ${(msg.data_types_found || []).map(t => `
-                                            <span class="text-xs bg-purple-900/30 text-purple-300 px-2 py-0.5 rounded">${formatDataType(t)}</span>
-                                        `).join('')}
-                                    </div>
-                                    <a href="${messageLink}" target="_blank" class="text-xs text-purple-400 hover:text-purple-300">
-                                        <i class="fas fa-external-link-alt mr-1"></i>Open in Telegram
-                                    </a>
-                                </div>
-                            `;
-                        }).join('')}
-                        ${messageAnalyses.length > 20 ? `
-                            <p class="text-center text-gray-500 text-sm py-2">Showing 20 of ${messageAnalyses.length} messages</p>
-                        ` : ''}
+                    <div class="max-h-[32rem] overflow-y-auto custom-scrollbar" id="analysisMessagesScroller">
+                        <div class="space-y-2" id="analysisMessages"></div>
                     </div>
                 </div>
             ` : ''}
         </div>
     `;
 
+    document.getElementById('messagesAnalysisCard')?.remove();
     appendResultCard('userResults', html);
+
+    const card = document.getElementById('messagesAnalysisCard');
+    card.querySelectorAll('[data-analysis-values]').forEach(scroller => {
+        const type = scroller.dataset.analysisValues;
+        appendRowsOnScroll(scroller, scroller.firstElementChild, aggregatedData[type], v => analysisValueHtml(type, v), 100);
+    });
+    const scroller = document.getElementById('analysisMessagesScroller');
+    if (scroller) {
+        appendRowsOnScroll(scroller, document.getElementById('analysisMessages'), messageAnalyses,
+            msg => analysisMessageHtml(msg, getRiskBadgeClass, formatDataType), 50);
+    }
 }
 
 function displayGroupInfo(group) {
@@ -2820,7 +2909,7 @@ function displayTextResults(data) {
                                 </p>
                             ` : ''}
 
-                            <p class="text-white bg-gray-900/50 p-3 rounded mb-2">${escapeHtml(result.text || '')}</p>
+                            <p class="text-white bg-gray-900/50 p-3 rounded mb-2 whitespace-pre-wrap break-words">${messageTextHtml(result.text || '')}</p>
 
                             ${result.group ? `
                                 <div class="flex items-center gap-3">
@@ -2846,11 +2935,11 @@ function displayTextResults(data) {
 
             ${data.totalPages > 1 ? `
                 <div class="mt-4 flex justify-center items-center gap-2">
-                    <button class="pagination-btn" ${escapeHtml(data.currentPage === 1 ? 'disabled' : '')}>
+                    <button type="button" onclick="searchText(${Number(data.currentPage) - 1})" class="pagination-btn" ${data.currentPage === 1 ? 'disabled' : ''}>
                         <i class="fas fa-chevron-left mr-1"></i>Previous
                     </button>
                     <span class="text-sm text-gray-400">Page ${escapeHtml(data.currentPage)} of ${escapeHtml(data.totalPages)}</span>
-                    <button class="pagination-btn" ${escapeHtml(data.isLastPage ? 'disabled' : '')}>
+                    <button type="button" onclick="searchText(${Number(data.currentPage) + 1})" class="pagination-btn" ${data.isLastPage ? 'disabled' : ''}>
                         Next<i class="fas fa-chevron-right ml-1"></i>
                     </button>
                 </div>
