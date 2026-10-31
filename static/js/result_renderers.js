@@ -530,21 +530,24 @@ function renderWebSearch(data) {
         </div>`;
 }
 
-// A match's photo. Links to these photos often expire, so a placeholder takes its place.
-function facePlaceholderHtml(sizeClass) {
-    return `<div class="${sizeClass} flex flex-col items-center justify-center gap-2 bg-gray-800 text-gray-500 text-xs"><i class="fas fa-user text-3xl"></i>Image unavailable</div>`;
+// Stands in for a photo that can't load (links to target photos often expire).
+// Small avatars show only the icon.
+function imagePlaceholderHtml(sizeClass, iconOnly = false) {
+    return `<div class="${sizeClass} flex flex-col items-center justify-center gap-2 bg-gray-800 text-gray-500 text-xs" title="Image unavailable"><i class="fas fa-user ${iconOnly ? '' : 'text-3xl'}"></i>${iconOnly ? '' : 'Image unavailable'}</div>`;
 }
 
-function faceImageFailed(img) {
+// onerror of an <img data-placeholder-size="...">: replaces it, or the button around it that opens the viewer
+function imageLoadFailed(img) {
     img.onerror = null;
-    img.insertAdjacentHTML('afterend', facePlaceholderHtml(img.dataset.faceSize));
-    img.remove();
+    const target = img.closest('[data-image-view]') || img;
+    target.insertAdjacentHTML('afterend', imagePlaceholderHtml(img.dataset.placeholderSize, 'placeholderIconOnly' in img.dataset));
+    target.remove();
 }
 
 function faceImageHtml(url, name, sizeClass, imageClass) {
-    if (!url) return facePlaceholderHtml(sizeClass);
+    if (!url) return imagePlaceholderHtml(sizeClass);
     return `<img src="${escapeAttr(url)}" alt="" loading="lazy" referrerpolicy="no-referrer" data-image-view="" data-image-title="${escapeAttr(name || 'Match')}"
-        data-face-size="${sizeClass}" onerror="faceImageFailed(this)" class="${sizeClass} ${imageClass}">`;
+        data-placeholder-size="${sizeClass}" onerror="imageLoadFailed(this)" class="${sizeClass} ${imageClass}">`;
 }
 
 function renderFaceSearch(data) {
