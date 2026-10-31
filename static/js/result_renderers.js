@@ -530,6 +530,23 @@ function renderWebSearch(data) {
         </div>`;
 }
 
+// A match's photo. Links to these photos often expire, so a placeholder takes its place.
+function facePlaceholderHtml(sizeClass) {
+    return `<div class="${sizeClass} flex flex-col items-center justify-center gap-2 bg-gray-800 text-gray-500 text-xs"><i class="fas fa-user text-3xl"></i>Image unavailable</div>`;
+}
+
+function faceImageFailed(img) {
+    img.onerror = null;
+    img.insertAdjacentHTML('afterend', facePlaceholderHtml(img.dataset.faceSize));
+    img.remove();
+}
+
+function faceImageHtml(url, name, sizeClass, imageClass) {
+    if (!url) return facePlaceholderHtml(sizeClass);
+    return `<img src="${escapeAttr(url)}" alt="" loading="lazy" referrerpolicy="no-referrer" data-image-view="" data-image-title="${escapeAttr(name || 'Match')}"
+        data-face-size="${sizeClass}" onerror="faceImageFailed(this)" class="${sizeClass} ${imageClass}">`;
+}
+
 function renderFaceSearch(data) {
     const list = Array.isArray(data) ? data : (data && data.results) || [];
     const query = !Array.isArray(data) && data && /^data:image\//.test(data.query_image || '') ? data.query_image : '';
@@ -539,7 +556,7 @@ function renderFaceSearch(data) {
         <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
             ${list.map(f => `
                 <div class="bg-gray-900 rounded-lg border border-gray-800 overflow-hidden">
-                    ${safeUrl(f.image_url) ? `<img src="${escapeAttr(safeUrl(f.image_url))}" alt="" loading="lazy" referrerpolicy="no-referrer" data-image-view="" data-image-title="${escapeAttr(f.name || 'Match')}" class="w-full h-32 object-cover bg-gray-800">` : ''}
+                    ${faceImageHtml(safeUrl(f.image_url), f.name, 'w-full h-32', 'object-cover bg-gray-800')}
                     <div class="p-2 text-xs space-y-0.5">
                         <div class="font-semibold text-white truncate">${escapeHtml(f.name || 'Match')}</div>
                         ${f.similarity_rate ? `<div class="text-emerald-400">${escapeHtml(f.similarity_rate)}% similar</div>` : ''}

@@ -319,7 +319,7 @@ document.addEventListener('DOMContentLoaded', () => {
             card.className = 'result-card relative group';
             card.innerHTML = `
                 <div class="relative aspect-square overflow-hidden">
-                    ${image ? `<img src="${escapeAttr(image)}" alt="" loading="lazy" referrerpolicy="no-referrer" data-image-view="" data-image-title="${escapeAttr(result.name || 'Match')}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">` : ''}
+                    ${faceImageHtml(image, result.name, 'w-full h-full', 'object-cover group-hover:scale-105 transition-transform duration-300')}
                     <div class="similarity-badge ${similarityClass}">${escapeHtml(result.similarity_rate)}% match</div>
                 </div>
                 <div class="p-4">
