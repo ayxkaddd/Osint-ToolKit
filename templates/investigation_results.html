@@ -65,6 +65,24 @@
             </div>
         </div>
 
+        <div id="bulkBar" class="hidden sticky top-16 z-30 bg-[#14151f] border border-[#24283b] rounded-xl px-4 py-2.5 flex flex-wrap items-center gap-3 text-sm">
+            <label class="flex items-center gap-2 text-gray-300 cursor-pointer select-none">
+                <input type="checkbox" id="bulkSelectAll" class="rounded bg-gray-800 border-gray-600">
+                <span id="bulkCount">Select all</span>
+            </label>
+            <div id="bulkActions" class="hidden flex flex-wrap items-center gap-2 ml-auto">
+                <select id="bulkTriage" class="bg-gray-900 border border-gray-700 rounded-lg py-1.5 px-3 text-white text-sm">
+                    <option value="">Set assessment…</option>
+                    <option value="confirmed">Confirmed</option>
+                    <option value="important">Important</option>
+                    <option value="false_positive">False positive</option>
+                    <option value="clear">Not assessed</option>
+                </select>
+                <button type="button" id="bulkMove" class="px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 flex items-center gap-1.5"><i data-lucide="folder-input" class="w-4 h-4"></i>Move</button>
+                <button type="button" id="bulkDelete" class="px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-red-900/60 border border-gray-700 hover:border-red-700 text-gray-300 flex items-center gap-1.5"><i data-lucide="trash-2" class="w-4 h-4"></i>Delete</button>
+            </div>
+        </div>
+
         <div id="resultsContainer" class="space-y-2"></div>
 
         <div id="loadingResults" class="text-center py-12">
@@ -101,6 +119,36 @@
         </div>
         <div id="entitiesList" class="space-y-1.5"></div>
         <div class="text-center mt-4"><button type="button" id="entitiesMore" class="hidden text-sm text-purple-300 hover:text-white">Show more</button></div>
+    </div>
+</div>
+
+<!-- Move Results Modal -->
+<div id="moveResultsModal" class="modal fixed inset-0 bg-black/70 hidden items-center justify-center z-50"
+    onclick="if (event.target === this) closeMoveModal()">
+    <div class="modal-panel bg-gray-900 rounded-xl p-6 max-w-lg w-full mx-4 border border-gray-800 shadow-2xl">
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="text-xl font-bold text-white flex items-center gap-2">
+                <i data-lucide="folder-input" class="w-5 h-5 text-purple-400"></i> <span id="moveModalTitle">Move result</span>
+            </h2>
+            <button type="button" onclick="closeMoveModal()" class="text-gray-400 hover:text-white">
+                <i data-lucide="x" class="w-6 h-6"></i>
+            </button>
+        </div>
+        <form onsubmit="submitMoveModal(event)" class="space-y-4">
+            <div>
+                <label for="moveModalTarget" class="block text-sm text-gray-300 mb-1">Move to</label>
+                <select id="moveModalTarget" required
+                    class="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-white"></select>
+                <p id="moveModalEmpty" class="hidden text-sm text-gray-400 mt-2">There is no other investigation yet. <a href="/investigations" class="text-purple-300 hover:underline">Create one</a> first.</p>
+            </div>
+            <p id="moveModalWarning" class="hidden text-xs text-amber-200/80 whitespace-pre-line"></p>
+            <div class="flex justify-end gap-3">
+                <button type="button" onclick="closeMoveModal()"
+                    class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg">Cancel</button>
+                <button type="submit" id="moveModalSubmit"
+                    class="px-5 py-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-medium rounded-lg">Move</button>
+            </div>
+        </form>
     </div>
 </div>
 

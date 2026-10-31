@@ -537,6 +537,29 @@ class InvestigationService:
             self._touch(investigation_id)
             return True
 
+    def delete_results(self, investigation_id: UUID, result_ids: List[str]) -> List[str]:
+        """Delete several results; returns the ids that were deleted."""
+        return [result_id for result_id in result_ids if self.delete_result(investigation_id, result_id)]
+
+    def move_results(self, investigation_id: UUID, target_id: UUID, result_ids: List[str]) -> List[str]:
+        """Move results (with their follow-ups) to another investigation; returns the
+        ids that were moved. The copy is written first, so a crash can't lose a result.
+        Snapshots stay with the notes that hold them."""
+        moved = []
+        with _STORE_LOCK:
+            target_index = self._load_index(target_id)
+            for result_id in result_ids:
+                record = self.get_result(investigation_id, result_id)
+                if record is None or result_id in target_index:
+                    continue
+                record["investigation_id"] = str(target_id)
+                self._write_result(target_id, record)
+                self.delete_result(investigation_id, result_id)
+                moved.append(result_id)
+            if moved:
+                self._touch(target_id)
+        return moved
+
     # ==================== TRIAGE ====================
 
     def set_result_triage(self, investigation_id: UUID, result_id: str,
@@ -553,6 +576,20 @@ class InvestigationService:
             record["triage"] = triage if (triage["status"] or triage["note"]) else None
             self._write_result(investigation_id, record)
             return record["triage"]
+
+    def set_results_triage(self, investigation_id: UUID, result_ids: List[str],
+                           status: Optional[str]) -> Dict[str, Any]:
+        """Set the same assessment on several results, keeping each one's own note.
+        Returns {result_id: triage} for the results that exist."""
+        updated = {}
+        with _STORE_LOCK:
+            for result_id in result_ids:
+                record = self.get_result(investigation_id, result_id)
+                if record is None:
+                    continue
+                note = (record.get("triage") or {}).get("note")
+                updated[result_id] = self.set_result_triage(investigation_id, result_id, status, note)
+        return updated
 
     # ==================== ENTITIES ====================
 

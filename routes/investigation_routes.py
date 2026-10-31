@@ -1,10 +1,10 @@
 # routes/investigation_routes.py
-from typing import List, Optional
+from typing import List, Literal, Optional
 from uuid import UUID
 from fastapi import APIRouter, HTTPException, Query, Form, File, UploadFile, Request
 from fastapi.responses import FileResponse, JSONResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from services.investigation_service import InvestigationService
 
 router = APIRouter(prefix="/api/investigations")
@@ -24,6 +24,13 @@ class NoteCreate(BaseModel):
 
 class SnapshotCreate(BaseModel):
     result_id: str
+
+
+class BulkResultsRequest(BaseModel):
+    action: Literal["delete", "move", "triage"]
+    result_ids: List[str] = Field(min_length=1)
+    target_investigation_id: Optional[UUID] = None
+    status: Optional[str] = None
 
 
 class NoteUpdate(BaseModel):
@@ -212,6 +219,27 @@ async def delete_investigation_result(investigation_id: UUID, result_id: str) ->
     if not investigation_service.delete_result(investigation_id, result_id):
         raise HTTPException(status_code=404, detail="Result not found")
     return JSONResponse(content={"status": "success"})
+
+
+@router.post("/{investigation_id}/results/bulk")
+def bulk_update_results(investigation_id: UUID, body: BulkResultsRequest) -> JSONResponse:
+    """Delete, move or set the assessment of several results at once."""
+    _require_investigation(investigation_id)
+    if body.action == "delete":
+        done = investigation_service.delete_results(investigation_id, body.result_ids)
+        return JSONResponse(content={"status": "success", "done": done})
+    if body.action == "move":
+        target = body.target_investigation_id
+        if target is None or target == investigation_id:
+            raise HTTPException(status_code=400, detail="Choose a different investigation to move to")
+        _require_investigation(target)
+        done = investigation_service.move_results(investigation_id, target, body.result_ids)
+        return JSONResponse(content={"status": "success", "done": done})
+    try:
+        triage = investigation_service.set_results_triage(investigation_id, body.result_ids, body.status)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    return JSONResponse(content={"status": "success", "done": list(triage), "triage": triage})
 
 
 @router.get("/{investigation_id}/view", response_class=HTMLResponse)
