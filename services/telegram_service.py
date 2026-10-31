@@ -89,7 +89,7 @@ class TelegramService:
             raise
 
     async def _converse(self, user_id: str) -> VKProfileHistoryResponse:
-        bot_username = 'VKHistoryRobot'
+        bot_username = 'VKInfoRobot'
         bot_entity = await self.client.get_entity(bot_username)
         response = VKProfileHistoryResponse()
 
