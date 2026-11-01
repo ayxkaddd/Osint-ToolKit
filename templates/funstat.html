@@ -740,6 +740,7 @@ window.currentService = 'funstat';
 // the follow-up data that was fetched for it.
 window.loadResultIntoView = function (data, record) {
     const method = record ? record.method_name : null;
+    funstatSavedInvestigationId = (record && record.investigation_id) || new URLSearchParams(location.search).get('investigation');
     const children = (record && record.children) || [];
     const child = (name) => children.filter(c => c.method_name === name).pop();
 
@@ -747,7 +748,8 @@ window.loadResultIntoView = function (data, record) {
         switchTab('user');
         currentUserId = data[0].id;
         funstatUserResultId = record.result_id;
-        displayUserBasicInfo(data[0]);
+        const tme = child('tme_profile');
+        displayUserBasicInfo(data[0], tme && tme.result);
         enableUserActions();
         const stats = child('stats') || child('stats_min');
         if (stats) displayUserStats(stats.result, stats.method_name === 'stats');
@@ -807,9 +809,15 @@ let currentGroupId = null;
 // them as X-Parent-Result-ID so the investigation keeps one group per target.
 let funstatUserResultId = null;
 let funstatGroupResultId = null;
+// A saved lookup belongs to its own investigation, which may not be the one being recorded:
+// its follow-ups are saved there too
+let funstatSavedInvestigationId = null;
 
 function funstatFetch(url, parentId) {
-    return fetch(url, parentId ? { headers: { 'X-Parent-Result-ID': parentId } } : undefined);
+    if (!parentId) return fetch(url);
+    const headers = { 'X-Parent-Result-ID': parentId };
+    if (funstatSavedInvestigationId) headers['X-Investigation-ID'] = funstatSavedInvestigationId;
+    return fetch(url, { headers });
 }
 
 async function funstatJson(response) {
@@ -1352,6 +1360,7 @@ async function enrichLinks(links) {
         // Group the enrichment under the Funstat user it came from
         const headers = { 'Content-Type': 'application/json' };
         if (funstatUserResultId) headers['X-Parent-Result-ID'] = funstatUserResultId;
+        if (funstatUserResultId && funstatSavedInvestigationId) headers['X-Investigation-ID'] = funstatSavedInvestigationId;
         const response = await fetch('/api/sharetrace/enrich_links', {
             method: 'POST',
             headers,
@@ -1818,6 +1827,7 @@ async function searchUser() {
         if (users && users.length > 0) {
             currentUserId = users[0].id;
             funstatUserResultId = window.savedResultId(response);
+            funstatSavedInvestigationId = null;
             displayUserBasicInfo(users[0]);
             enableUserActions();
 
@@ -1990,6 +2000,7 @@ async function searchGroup() {
 
         currentGroupId = groupId;
         funstatGroupResultId = window.savedResultId(response);
+        funstatSavedInvestigationId = null;
         displayGroupInfo(group);
         document.getElementById('getMembersBtn').disabled = false;
         showToast('Group found successfully', 'success');
@@ -2077,7 +2088,7 @@ function enableUserActions() {
     document.getElementById('getUsernameHistoryBtn').disabled = false; // NEW
 }
 
-function displayUserBasicInfo(user) {
+function displayUserBasicInfo(user, savedTmeProfile = null) {
     const html = `
         <div class="result-card border border-gray-800 rounded-xl p-6 card-hover fade-in">
             <div class="flex items-start justify-between mb-4">
@@ -2109,7 +2120,8 @@ function displayUserBasicInfo(user) {
     `;
 
     document.getElementById('userResults').innerHTML = html;
-    if (user.username) loadTmeProfile(user.username);
+    if (savedTmeProfile) showTmeProfile(savedTmeProfile);
+    else if (user.username) loadTmeProfile(user.username);
 }
 
 // Public profile from t.me/<username>: current avatar, display name and bio
@@ -2120,21 +2132,26 @@ async function loadTmeProfile(username) {
         const response = await funstatFetch(`/funstat/users/tme_profile?username=${encodeURIComponent(username)}`, funstatUserResultId);
         const profile = await funstatJson(response);
         if (!document.body.contains(box)) return;  // another user was searched meanwhile
-        if (!profile.exists) {
-            box.innerHTML = '<span class="text-gray-500">t.me: no public profile for this username</span>';
-            return;
-        }
-        if (profile.avatar_url) {
-            document.getElementById('tmeAvatar').innerHTML = `<img src="${escapeAttr(profile.avatar_url)}" alt="Avatar"
-                class="w-full h-full object-cover" title="Preview the avatar"
-                data-image-view="" data-image-title="Telegram avatar">`;
-        }
-        box.innerHTML = `
-            <div class="text-gray-300 mt-1"><span class="text-gray-500">t.me name:</span> ${escapeHtml(profile.name || '')}</div>
-            ${profile.bio ? `<div class="text-gray-300 whitespace-pre-wrap break-words max-w-xl"><span class="text-gray-500">Bio:</span> ${escapeHtml(profile.bio)}</div>` : ''}`;
+        showTmeProfile(profile);
     } catch (error) {
         if (document.body.contains(box)) box.innerHTML = `<span class="text-gray-500">t.me profile unavailable: ${escapeHtml(error.message)}</span>`;
     }
+}
+
+function showTmeProfile(profile) {
+    const box = document.getElementById('tmeProfile');
+    if (!profile.exists) {
+        box.innerHTML = '<span class="text-gray-500">t.me: no public profile for this username</span>';
+        return;
+    }
+    if (profile.avatar_url) {
+        document.getElementById('tmeAvatar').innerHTML = `<img src="${escapeAttr(profile.avatar_url)}" alt="Avatar"
+            class="w-full h-full object-cover" title="Preview the avatar"
+            data-image-view="" data-image-title="Telegram avatar">`;
+    }
+    box.innerHTML = `
+        <div class="text-gray-300 mt-1"><span class="text-gray-500">t.me name:</span> ${escapeHtml(profile.name || '')}</div>
+        ${profile.bio ? `<div class="text-gray-300 whitespace-pre-wrap break-words max-w-xl"><span class="text-gray-500">Bio:</span> ${escapeHtml(profile.bio)}</div>` : ''}`;
 }
 
 function displayUserStats(stats, full = false) {
