@@ -777,7 +777,7 @@ window.loadResultIntoView = function (data, record) {
         switchTab('text');
         displayTextResults(data);
     } else {
-        showToast('This saved lookup can be viewed on the investigation page', 'info');
+        window.showSavedResultFallback(record);
     }
 };
 

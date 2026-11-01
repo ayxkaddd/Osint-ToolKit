@@ -39,6 +39,15 @@ window.loadResultIntoView = function (data) {
         const { accounts, breaches } = state.view.counts();
         setStatus('done', `Saved result${data.query ? ` for ${data.query}` : ''}: ${summaryText(accounts, breaches)}`);
         if (data.error) showError(data.error);
+    } else if (Array.isArray(data)) {
+        // Older saved reports: just the list of modules
+        state.view.add(data);
+        const { accounts, breaches } = state.view.counts();
+        setStatus('done', `Saved result: ${summaryText(accounts, breaches)}`);
+    } else if (data && (data.detail || data.error)) {
+        showError(String(data.detail || data.error));
+    } else {
+        throw new Error('Unknown saved result format');
     }
     els.result.classList.remove('hidden');
 };
