@@ -14,7 +14,7 @@ from services.investigation_service import InvestigationService
 from services.ip_service import IPLookupError, IPService
 from services.job_manager import job_manager
 from services.module_registry import MODULES_BY_ID, all_module_status, balances, modules_for, module_status
-from services.phone_service import PhoneParseError, phone_info
+from services.phone_service import PhoneLookupFailed, PhoneParseError, lookup_phone
 from utils.investigation_decorator import save_investigation
 
 router = APIRouter()
@@ -193,9 +193,11 @@ async def triage_result(investigation_id: UUID, result_id: str, body: TriageRequ
 async def phone_lookup(phone: str = Query(..., min_length=1, max_length=40)) -> dict:
     """Free offline analysis: validity, country, original carrier, line type, messenger links."""
     try:
-        return phone_info(phone)
+        return await lookup_phone(phone)
     except PhoneParseError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+    except PhoneLookupFailed as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
 
 
 @router.get("/api/ip/lookup")
