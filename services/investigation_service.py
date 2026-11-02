@@ -574,7 +574,24 @@ class InvestigationService:
 
     def delete_results(self, investigation_id: UUID, result_ids: List[str]) -> List[str]:
         """Delete several results; returns the ids that were deleted."""
-        return [result_id for result_id in result_ids if self.delete_result(investigation_id, result_id)]
+        with _STORE_LOCK:
+            index = self._load_index(investigation_id)
+            deleted = list(dict.fromkeys(r for r in result_ids if r in index))
+            if deleted:
+                self._remove_from_store(investigation_id, index, deleted)
+            return deleted
+
+    def _remove_from_store(self, investigation_id, index: Dict[str, Any], result_ids: List[str]) -> None:
+        """Take results out of an investigation, writing its index and entities once."""
+        for result_id in result_ids:
+            del index[result_id]
+        self._save_index(investigation_id, index)
+        for result_id in result_ids:
+            self._result_file(investigation_id, result_id).unlink(missing_ok=True)
+        entities = self._load_entities(investigation_id)
+        self._drop_entity_sources(entities, set(result_ids))
+        self._save_entities(investigation_id, entities)
+        self._touch(investigation_id)
 
     def move_results(self, investigation_id: UUID, target_id: UUID, result_ids: List[str]) -> List[str]:
         """Move results (with their follow-ups) to another investigation; returns the
@@ -582,17 +599,24 @@ class InvestigationService:
         Snapshots stay with the notes that hold them."""
         moved = []
         with _STORE_LOCK:
+            source_index = self._load_index(investigation_id)
             target_index = self._load_index(target_id)
-            for result_id in result_ids:
+            target_entities = self._load_entities(target_id)
+            for result_id in dict.fromkeys(result_ids):
                 record = self.get_result(investigation_id, result_id)
                 if record is None or result_id in target_index:
                     continue
                 record["investigation_id"] = str(target_id)
-                self._write_result(target_id, record)
-                self.delete_result(investigation_id, result_id)
+                size = _write_gz_atomic(self._result_file(target_id, result_id), record)
+                target_index[result_id] = self._index_entry(record, size)
+                self._apply_record_entities(target_entities, record)
                 moved.append(result_id)
             if moved:
+                # The copies are complete before anything is removed from the source
+                self._save_index(target_id, target_index)
+                self._save_entities(target_id, target_entities)
                 self._touch(target_id)
+                self._remove_from_store(investigation_id, source_index, [r for r in moved if r in source_index])
         return moved
 
     # ==================== TRIAGE ====================
@@ -616,14 +640,23 @@ class InvestigationService:
                            status: Optional[str]) -> Dict[str, Any]:
         """Set the same assessment on several results, keeping each one's own note.
         Returns {result_id: triage} for the results that exist."""
+        if status not in TRIAGE_STATUSES:
+            raise ValueError(f"status must be one of {sorted(s for s in TRIAGE_STATUSES if s)}")
         updated = {}
         with _STORE_LOCK:
-            for result_id in result_ids:
+            index = self._load_index(investigation_id)
+            for result_id in dict.fromkeys(result_ids):
                 record = self.get_result(investigation_id, result_id)
                 if record is None:
                     continue
                 note = (record.get("triage") or {}).get("note")
-                updated[result_id] = self.set_result_triage(investigation_id, result_id, status, note)
+                triage = {"status": status, "note": note, "updated_at": datetime.now().isoformat()}
+                record["triage"] = triage if (status or note) else None
+                size = _write_gz_atomic(self._result_file(investigation_id, result_id), record)
+                index[result_id] = self._index_entry(record, size)
+                updated[result_id] = record["triage"]
+            if updated:
+                self._save_index(investigation_id, index)
         return updated
 
     # ==================== ENTITIES ====================
@@ -638,15 +671,19 @@ class InvestigationService:
         _write_json_atomic(self._entities_file(investigation_id), entities, compact=True)
 
     @staticmethod
+    def _drop_entity_sources(entities: Dict[str, Any], result_ids: set) -> None:
+        for key in list(entities):
+            entity = entities[key]
+            entity["sources"] = [src for src in entity.get("sources", []) if src.get("result_id") not in result_ids]
+            if not entity["sources"] and not entity.get("status") and not entity.get("note"):
+                del entities[key]
+
+    @staticmethod
     def _apply_record_entities(entities: Dict[str, Any], record: Dict[str, Any], remove_only: bool = False) -> None:
         """Replace the sources one result contributes (idempotent: results are
         rewritten when follow-ups are attached)."""
         result_id = record.get("result_id")
-        for key in list(entities):
-            entity = entities[key]
-            entity["sources"] = [src for src in entity.get("sources", []) if src.get("result_id") != result_id]
-            if not entity["sources"] and not entity.get("status") and not entity.get("note"):
-                del entities[key]
+        InvestigationService._drop_entity_sources(entities, {result_id})
         if remove_only:
             return
 

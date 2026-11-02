@@ -3,15 +3,6 @@ import jwt
 from fastapi import HTTPException, Security
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from passlib.context import CryptContext
-from telethon.errors import (
-    SessionPasswordNeededError,
-    PhoneNumberInvalidError,
-    PhoneCodeInvalidError,
-    PhoneCodeExpiredError,
-    PhoneCodeEmptyError,
-    PasswordHashInvalidError,
-)
-
 from utils import telegram_client
 from utils.config import get_setting
 
@@ -83,6 +74,8 @@ class TelegramAuthHandler:
         return await client.is_user_authorized()
 
     async def send_verification_code(self, phone_number: str):
+        from telethon.errors import PhoneNumberInvalidError
+
         try:
             await telegram_client.ensure_connected(require_authorized=False)
             sent_code = await self.client.send_code_request(phone_number)
@@ -94,6 +87,8 @@ class TelegramAuthHandler:
             return {"status": "error", "message": str(e)}
 
     async def verify_code(self, phone_number: str, code: str):
+        from telethon.errors import PhoneCodeEmptyError, PhoneCodeExpiredError, PhoneCodeInvalidError, SessionPasswordNeededError
+
         if not self.phone_code_hash:
             return {"status": "error", "message": "No active verification session"}
 
@@ -114,6 +109,8 @@ class TelegramAuthHandler:
 
     async def verify_password(self, password: str):
         """Second step for accounts with two-step verification enabled."""
+        from telethon.errors import PasswordHashInvalidError
+
         try:
             await telegram_client.ensure_connected(require_authorized=False)
             await self.client.sign_in(password=password)

@@ -32,9 +32,10 @@ logger = logging.getLogger(__name__)
 
 funstat_service = FunstatService()
 
+# Telegram keys are read by utils.telegram_client when the client is first used
 telethon_service = TelethonMediaService(
-    api_id=int(os.getenv("TG_API_ID", 123)),
-    api_hash=os.getenv("TG_API_HASH", "your_api_hash"),
+    api_id=0,
+    api_hash="",
     phone=os.getenv("TG_PHONE_NUMBER", "your_phone_number")
 )
 

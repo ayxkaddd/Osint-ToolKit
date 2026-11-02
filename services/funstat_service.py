@@ -1,4 +1,5 @@
 import asyncio
+from functools import lru_cache
 import re
 import httpx
 from typing import List, Optional, Dict, Any
@@ -379,6 +380,13 @@ class FunstatService:
 from typing import Dict, List, Optional
 
 
+@lru_cache(maxsize=None)
+def _rx(pattern: str, flags: int = 0) -> "re.Pattern":
+    """Compiled regex for a fixed pattern. The analyzer runs dozens of these per message,
+    so this skips the lookup in re.search and re.match. Not for patterns built from text."""
+    return re.compile(pattern, flags)
+
+
 class MessageAnalyzer:
     """
     Advanced Telegram message analyzer for sensitive data and patterns.
@@ -744,7 +752,7 @@ class MessageAnalyzer:
 
         for network, patterns in VALID_BINS.items():
             for pattern in patterns:
-                if re.match(pattern, bin_prefix):
+                if _rx(pattern).match(bin_prefix):
                     return True
 
         return False
@@ -761,7 +769,7 @@ class MessageAnalyzer:
             True if likely a phone number
         """
         original = phone.strip()
-        digits_only = re.sub(r'\D', '', phone)
+        digits_only = _rx(r'\D').sub('', phone)
 
         # PRIORITY 1: Reject dates IMMEDIATELY (most common false positive)
         # This must be first and absolute - but DON'T reject international phones
@@ -778,11 +786,11 @@ class MessageAnalyzer:
         # Only apply date rejection if it doesn't start with + (international phone indicator)
         if not original.startswith('+'):
             for pattern in DATE_REJECTION_PATTERNS:
-                if re.search(pattern, original):
+                if _rx(pattern).search(original):
                     return False
 
         # PRIORITY 2: Reject IP addresses
-        if re.match(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$', original):
+        if _rx(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$').match(original):
             return False
 
         # PRIORITY 3: Reject if contains multiple dots (IP-like or date-like)
@@ -796,7 +804,7 @@ class MessageAnalyzer:
             return False
 
         # Reject if ends with space and 2 digits (hour indicator)
-        if re.search(r'\s+\d{2}$', original):
+        if _rx(r'\s+\d{2}$').search(original):
             return False
 
         # Reject if has newline followed by digits (common in logs/data)
@@ -813,13 +821,13 @@ class MessageAnalyzer:
         ]
 
         for pattern in NON_PHONE_PATTERNS:
-            if re.match(pattern, original):
+            if _rx(pattern).match(original):
                 return False
 
         # Phone numbers with + are usually legitimate (international format)
         if original.startswith('+'):
             # But check it's not +YYYY (year)
-            if re.match(r'^\+\d{4}$', original):
+            if _rx(r'^\+\d{4}$').match(original):
                 return False
             # Must have at least 10 digits for international
             if len(digits_only) >= 10:
@@ -848,13 +856,13 @@ class MessageAnalyzer:
         ]
 
         for indicator in PHONE_INDICATORS:
-            if re.search(indicator, original):
+            if _rx(indicator).search(original):
                 return True
 
         # Without clear phone context, be very strict
         if not has_phone_context:
             # Must have proper phone separators
-            if not re.search(r'[\s\-\(\)]', original):
+            if not _rx(r'[\s\-\(\)]').search(original):
                 return False
             # Must have reasonable length
             if len(digits_only) < 10:
@@ -877,7 +885,7 @@ class MessageAnalyzer:
         Returns:
             True if likely a card number
         """
-        digits_only = re.sub(r'[\s\-\*]', '', card)
+        digits_only = _rx(r'[\s\-\*]').sub('', card)
 
         # Remove asterisks for length check of visible digits
         visible_digits = digits_only.replace('*', '')
@@ -896,7 +904,7 @@ class MessageAnalyzer:
             return False
 
         # Reject sequential patterns
-        if re.match(r'^(0123|1234|2345|3456|4567|5678|6789)', visible_digits):
+        if _rx(r'^(0123|1234|2345|3456|4567|5678|6789)').match(visible_digits):
             return False
 
         # Context checks
@@ -970,12 +978,12 @@ class MessageAnalyzer:
 
         # Check anti-patterns first (faster rejection)
         for pattern in ANTI_PATTERNS:
-            if re.search(pattern, text_lower, re.IGNORECASE):
+            if _rx(pattern, re.IGNORECASE).search(text_lower):
                 return False
 
         # Check strong indicators
         for pattern in AGE_INDICATORS['strong']:
-            if re.search(pattern, text_lower, re.IGNORECASE):
+            if _rx(pattern, re.IGNORECASE).search(text_lower):
                 return True
 
         # Extract local context (50 chars before/after)
@@ -1006,7 +1014,7 @@ class MessageAnalyzer:
         # Weak indicators only count if person context exists
         if has_person_marker:
             for pattern in AGE_INDICATORS['weak']:
-                if re.search(pattern, text_lower, re.IGNORECASE):
+                if _rx(pattern, re.IGNORECASE).search(text_lower):
                     return True
 
         return False
@@ -1035,18 +1043,18 @@ class MessageAnalyzer:
         ]
 
         for marker in EXAMPLE_MARKERS:
-            if re.search(marker, text_lower):
+            if _rx(marker).search(text_lower):
                 return True
 
         # Check if numbers are too perfect (all same, sequential)
-        numbers = re.findall(r'\d{4,}', text)
+        numbers = _rx(r'\d{4,}').findall(text)
         for num in numbers:
             if len(set(num)) == 1:  # all same digit
                 return True
             if num in ['1234567890', '0123456789', '1111111111', '0000000000']:
                 return True
             # Check for sequential patterns
-            if re.match(r'^(?:0123|1234|2345|3456|4567|5678|6789)', num):
+            if _rx(r'^(?:0123|1234|2345|3456|4567|5678|6789)').match(num):
                 return True
 
         return False
@@ -1104,7 +1112,7 @@ class MessageAnalyzer:
 
         for intent, patterns in INTENT_PATTERNS.items():
             for pattern in patterns:
-                if re.search(pattern, text_lower):
+                if _rx(pattern).search(text_lower):
                     return intent
 
         return 'unknown'
@@ -1153,7 +1161,7 @@ class MessageAnalyzer:
         for category, patterns in self.TELEGRAM_SCAM_PATTERNS.items():
             matches = []
             for pattern in patterns:
-                if re.search(pattern, text_lower):
+                if _rx(pattern).search(text_lower):
                     matches.append(pattern)
 
             if matches:
@@ -1539,12 +1547,17 @@ class MessageAnalyzer:
         analyzed_messages = []
         all_extracted_data = {}
 
+        # Accounts often repeat the same message; each distinct text is analyzed once
+        analyzed_texts: Dict[str, Dict] = {}
+
         for msg in messages:
             text = msg.get("text", "")
             if not text:
                 continue
 
-            msg_analysis = self.analyze_message(text, extended=True)
+            msg_analysis = analyzed_texts.get(text)
+            if msg_analysis is None:
+                msg_analysis = analyzed_texts[text] = self.analyze_message(text, extended=True)
 
             if not msg_analysis.get("has_sensitive_data"):
                 continue

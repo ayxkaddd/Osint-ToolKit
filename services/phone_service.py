@@ -4,7 +4,7 @@ from typing import Any, Dict
 from urllib.parse import quote
 
 import phonenumbers
-from phonenumbers import PhoneNumberType, carrier, geocoder, timezone
+from phonenumbers import PhoneNumberType, timezone
 
 LINE_TYPES = {
     PhoneNumberType.MOBILE: "mobile",
@@ -28,6 +28,9 @@ class PhoneParseError(ValueError):
 
 def phone_info(raw: str, default_region: str = "") -> Dict[str, Any]:
     """Parse a number in any format; numbers without + are tried as international."""
+    # About 110 MB of location and carrier data: loaded by the first lookup, not at startup
+    from phonenumbers import carrier, geocoder
+
     text = (raw or "").strip()
     digits = re.sub(r"[^\d+]", "", text)
     if len(re.sub(r"\D", "", digits)) < 6:
