@@ -1,5 +1,5 @@
 """Funstat message analysis."""
-from services.funstat_service import MessageAnalyzer
+from services.message_analyzer import MessageAnalyzer
 
 
 def test_finds_identifiers():
