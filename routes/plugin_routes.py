@@ -1,5 +1,5 @@
 """Plugins (services/plugin_loader.py): list, run, review/enable, pages."""
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Literal, Optional
 
 from fastapi import APIRouter, Body, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
@@ -26,7 +26,7 @@ def _plugin(plugin_id: str) -> plugin_loader.Plugin:
     return plugin
 
 
-async def _stream(plugin_id: str, value: str, type: Optional[str], actions: Optional[List[str]] = None):
+async def _stream(plugin_id: str, value: str, type: Optional[str], actions: Optional[list[str]] = None):
     try:
         run = await plugin_loader.prepare(plugin_id, value, type, actions)
     except RunRefused as e:
@@ -67,16 +67,16 @@ class CurlRequest(BaseModel):
 
 class DraftRequest(BaseModel):
     id: str
-    manifest: Dict[str, Any]
+    manifest: dict[str, Any]
     value: str = ""
     type: Optional[str] = None
-    settings: Dict[str, Optional[str]] = {}   # API keys typed in the builder (not saved by test)
+    settings: dict[str, Optional[str]] = {}   # API keys typed in the builder (not saved by test)
     detect: bool = False
 
 
 class PreviewRequest(BaseModel):
     id: str
-    manifest: Dict[str, Any]
+    manifest: dict[str, Any]
     raw: Any = None
     value: str = ""
     type: str = ""
@@ -84,9 +84,9 @@ class PreviewRequest(BaseModel):
 
 class SaveRequest(BaseModel):
     id: str
-    manifest: Optional[Dict[str, Any]] = None
+    manifest: Optional[dict[str, Any]] = None
     yaml: Optional[str] = None
-    settings: Dict[str, Optional[str]] = {}
+    settings: dict[str, Optional[str]] = {}
     editing: bool = False
 
 
@@ -172,14 +172,14 @@ def delete_plugin(plugin_id: str):
 @save_investigation(service_name=lambda kwargs: kwargs["plugin_id"], method_name="run",
                     stream_reducer=reduce_plugin_stream)
 async def run_plugin(plugin_id: str, value: str = Body(..., max_length=2000), type: Optional[str] = Body(None),
-                     actions: Optional[List[str]] = Body(None)):
+                     actions: Optional[list[str]] = Body(None)):
     """Run a plugin (only the lookups in actions, if given); NDJSON events, saved to the investigation."""
     return await _stream(plugin_id, value, type, actions)
 
 
 @router.post("/{plugin_id}/test")
 async def test_plugin(plugin_id: str, value: str = Body(..., max_length=2000), type: Optional[str] = Body(None),
-                      actions: Optional[List[str]] = Body(None)):
+                      actions: Optional[list[str]] = Body(None)):
     """Same as run, but not saved (trying a plugin out)."""
     return await _stream(plugin_id, value, type, actions)
 

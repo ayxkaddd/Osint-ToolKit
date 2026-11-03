@@ -1,5 +1,4 @@
 from fastapi import UploadFile
-from typing import List
 import httpx
 from fastapi import HTTPException
 import io
@@ -18,7 +17,7 @@ class FaceCoordinates(BaseModel):
     y2: float
 
 class DetectFacesResponse(BaseModel):
-    faces: List[FaceCoordinates]
+    faces: list[FaceCoordinates]
 
 class SearchResult(BaseModel):
     name: str
@@ -31,7 +30,7 @@ class SearchResult(BaseModel):
 class FaceSearchResponse(BaseModel):
     # The searched face (small JPEG data URL): the saved result shows what was searched
     query_image: Optional[str] = None
-    results: List[SearchResult]
+    results: list[SearchResult]
 
 
 def thumbnail_data_url(image_data: bytes, size: int = 256) -> Optional[str]:

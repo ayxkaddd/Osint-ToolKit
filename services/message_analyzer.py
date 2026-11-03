@@ -5,7 +5,6 @@ links, ages and more, with validation, risk scores and per-conversation summarie
 """
 import re
 from functools import lru_cache
-from typing import Dict, List
 
 
 @lru_cache(maxsize=None)
@@ -655,7 +654,7 @@ class MessageAnalyzer:
 
         return False
 
-    def _detect_intent(self, text: str, extracted_data: Dict) -> str:
+    def _detect_intent(self, text: str, extracted_data: dict) -> str:
         """
         Detect user intent with the extracted sensitive data.
 
@@ -713,7 +712,7 @@ class MessageAnalyzer:
 
         return 'unknown'
 
-    def _analyze_emoji_context(self, text: str) -> Dict:
+    def _analyze_emoji_context(self, text: str) -> dict:
         """
         Analyze emojis in the message for context (Telegram users use emojis heavily).
 
@@ -741,7 +740,7 @@ class MessageAnalyzer:
 
         return emoji_context
 
-    def _detect_scam_patterns(self, text: str) -> Dict[str, List[str]]:
+    def _detect_scam_patterns(self, text: str) -> dict[str, list[str]]:
         """
         Detect Telegram-specific scam patterns in message.
 
@@ -765,7 +764,7 @@ class MessageAnalyzer:
 
         return detected
 
-    def _calculate_risk_score(self, extracted_data: Dict, context: Dict = None) -> int:
+    def _calculate_risk_score(self, extracted_data: dict, context: dict = None) -> int:
         """
         Calculate risk score based on extracted data and context.
 
@@ -854,7 +853,7 @@ class MessageAnalyzer:
 
         return min(int(score), 100)
 
-    def _analyze_keywords(self, text: str) -> Dict[str, List[str]]:
+    def _analyze_keywords(self, text: str) -> dict[str, list[str]]:
         """
         Find suspicious keywords in text.
 
@@ -874,7 +873,7 @@ class MessageAnalyzer:
 
         return found_keywords
 
-    def _analyze_context(self, text: str, extracted_data: Dict) -> Dict:
+    def _analyze_context(self, text: str, extracted_data: dict) -> dict:
         """
         Analyze message context and patterns.
 
@@ -928,7 +927,7 @@ class MessageAnalyzer:
 
         return context
 
-    def _generate_warnings(self, analysis: Dict, context: Dict = None) -> List[str]:
+    def _generate_warnings(self, analysis: dict, context: dict = None) -> list[str]:
         """
         Generate human-readable warnings for detected data.
 
@@ -1000,7 +999,7 @@ class MessageAnalyzer:
 
         return warnings
 
-    def analyze_message(self, text: str, extended: bool = True) -> Dict:
+    def analyze_message(self, text: str, extended: bool = True) -> dict:
         """
         Analyze a single message text for sensitive data and patterns.
 
@@ -1115,9 +1114,9 @@ class MessageAnalyzer:
 
     def analyze_conversation(
         self,
-        messages: List[Dict],
+        messages: list[dict],
         include_message_analysis: bool = True
-    ) -> Dict:
+    ) -> dict:
         """
         Analyze entire conversation for patterns.
 
@@ -1129,11 +1128,11 @@ class MessageAnalyzer:
             Conversation-level analysis (only includes messages with sensitive data)
         """
         risk_summary = {"critical": 0, "high": 0, "medium": 0, "low": 0, "example": 0}
-        data_type_frequency: Dict[str, int] = {}
-        all_extracted_data: Dict[str, set] = {}
+        data_type_frequency: dict[str, int] = {}
+        all_extracted_data: dict[str, set] = {}
         analyzed_messages = []
         # Accounts often repeat the same message; each distinct text is analyzed once
-        analyzed_texts: Dict[str, Dict] = {}
+        analyzed_texts: dict[str, dict] = {}
 
         for msg in messages:
             text = msg.get("text", "")
@@ -1164,7 +1163,7 @@ class MessageAnalyzer:
         return summary
 
     @staticmethod
-    def _message_entry(msg: Dict, text: str, msg_analysis: Dict) -> Dict:
+    def _message_entry(msg: dict, text: str, msg_analysis: dict) -> dict:
         """One flagged message as listed in the conversation analysis."""
         entry = {
             "has_sensitive_data": True,
@@ -1183,8 +1182,8 @@ class MessageAnalyzer:
             entry["group"] = msg["group"]
         return entry
 
-    def _conversation_summary(self, total_messages: int, flagged: int, risk_summary: Dict,
-                              data_type_frequency: Dict, all_extracted_data: Dict[str, set]) -> Dict:
+    def _conversation_summary(self, total_messages: int, flagged: int, risk_summary: dict,
+                              data_type_frequency: dict, all_extracted_data: dict[str, set]) -> dict:
         """Totals, the identifiers found across all messages and an overall risk level."""
         aggregated_data_list = {k: list(v) for k, v in all_extracted_data.items()}
         overall_risk = self._calculate_conversation_risk({
@@ -1212,7 +1211,7 @@ class MessageAnalyzer:
             "overall_risk_level": level,
         }
 
-    def _calculate_conversation_risk(self, conv_analysis: Dict) -> int:
+    def _calculate_conversation_risk(self, conv_analysis: dict) -> int:
         """
         Calculate overall conversation risk score.
 
@@ -1253,9 +1252,9 @@ class MessageAnalyzer:
 
     def analyze_user_pattern(
         self,
-        user_messages: List[Dict],
+        user_messages: list[dict],
         user_id: int
-    ) -> Dict:
+    ) -> dict:
         """
         Analyze a user's messaging patterns for suspicious behavior.
 

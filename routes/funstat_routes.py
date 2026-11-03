@@ -3,7 +3,7 @@ import re
 import os
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse
-from typing import List, Optional
+from typing import Optional
 from services.funstat_service import FunstatService
 from models.funstat_models import (
     CombinedUserHistory,
@@ -57,16 +57,16 @@ def funstat_balance():
 @user_router.get("/basic_info_by_id")
 @save_investigation(service_name="funstat", method_name="lookup_user", skip_if=lambda users: not users)
 async def get_user_basic_info_by_id(
-    id: List[int] = Query(...)
-) -> List[ResolvedUser]:
+    id: list[int] = Query(...)
+) -> list[ResolvedUser]:
     """Get user info by telegram ID. Cost 0.10 per success found user info"""
     return await funstat_service.get_user_basic_info_by_id(id)
 
 @user_router.get("/resolve_username")
 @save_investigation(service_name="funstat", method_name="lookup_user", skip_if=lambda users: not users)
 async def resolve_username(
-    name: List[str] = Query(...)
-) -> List[ResolvedUser]:
+    name: list[str] = Query(...)
+) -> list[ResolvedUser]:
     """Resolve username to user info. Cost 0.10 per success"""
     return await funstat_service.resolve_username(name)
 
@@ -93,7 +93,7 @@ async def get_user_stats(user_id: int) -> UserStats:
 
 @user_router.get("/{user_id}/groups")
 @save_investigation(service_name="funstat", method_name="groups")
-async def get_user_groups(user_id: int) -> List[UsrChatInfo]:
+async def get_user_groups(user_id: int) -> list[UsrChatInfo]:
     """Get user's groups (COST: 5)"""
     return await funstat_service.get_user_groups(user_id)
 
@@ -156,7 +156,7 @@ async def get_all_user_messages(
 
 @user_router.get("/{user_id}/names")
 @save_investigation(service_name="funstat", method_name="names_history")
-async def get_user_names_history(user_id: int) -> List[UserNamesHistory]:
+async def get_user_names_history(user_id: int) -> list[UserNamesHistory]:
     """Get user's name history (COST: 3)"""
     return await funstat_service.get_user_names_history(user_id)
 
@@ -164,7 +164,7 @@ async def get_user_names_history(user_id: int) -> List[UserNamesHistory]:
 @save_investigation(service_name="funstat", method_name="names_and_usernames_history")
 async def get_user_names_and_usernames_history(
     user_id: int,
-) -> List[CombinedUserHistory]:
+) -> list[CombinedUserHistory]:
     """Get user's name and @username history (COST: 6)"""
 
     names_history = await funstat_service.get_user_names_history(user_id)
@@ -190,13 +190,13 @@ async def get_user_names_and_usernames_history(
 
 @user_router.get("/{user_id}/usernames")
 @save_investigation(service_name="funstat", method_name="usernames_history")
-async def get_user_usernames_history(user_id: int) -> List[UserNamesHistory]:
+async def get_user_usernames_history(user_id: int) -> list[UserNamesHistory]:
     """Get user's @username history (COST: 3)"""
     return await funstat_service.get_user_usernames_history(user_id)
 
 @user_router.get("/{user_id}/common_groups_stat")
 @save_investigation(service_name="funstat", method_name="common_groups_stat")
-async def get_user_common_groups_stat(user_id: int) -> List[UCommonGroupInfo]:
+async def get_user_common_groups_stat(user_id: int) -> list[UCommonGroupInfo]:
     """Get users who share common groups (COST: 5)"""
     return await funstat_service.get_user_common_groups_stat(user_id)
 
@@ -207,7 +207,7 @@ async def get_user_reputation(id: int = Query(...)) -> dict:
     return await funstat_service.get_user_reputation(id)
 
 @user_router.get("/{user_id}/stickers")
-async def get_user_stickers(user_id: int) -> List[StickerInfo]:
+async def get_user_stickers(user_id: int) -> list[StickerInfo]:
     """Get sticker packs created by user (COST: 1 if found)"""
     return await funstat_service.get_user_stickers(user_id)
 
@@ -224,8 +224,8 @@ async def search_username_usage(username: str = Query(...)) -> UsernameUsageMode
 @group_router.get("/common_groups")
 @save_investigation(service_name="funstat", method_name="common_groups")
 async def get_common_groups(
-    id: List[int] = Query(...)
-) -> List[ChatInfoExt]:
+    id: list[int] = Query(...)
+) -> list[ChatInfoExt]:
     """Get common groups for specified users (COST: 0.5)"""
     return await funstat_service.get_common_groups(id)
 
@@ -237,7 +237,7 @@ async def get_group_info(group_id: int) -> dict:
 
 @group_router.get("/{group_id}/members")
 @save_investigation(service_name="funstat", method_name="group_members")
-async def get_group_members(group_id: int) -> List[GroupMember]:
+async def get_group_members(group_id: int) -> list[GroupMember]:
     """Get group members (COST: 15)"""
     return await funstat_service.get_group_members(group_id)
 
@@ -325,8 +325,8 @@ async def create_thumbnail(
 @media_router.post("/thumbnail/batch")
 async def create_thumbnails_batch(
     chat_identifier: str = Query(..., description="Chat username (without @) or chat ID"),
-    message_ids: List[int] = Query(...)
-) -> List[ThumbnailResult]:
+    message_ids: list[int] = Query(...)
+) -> list[ThumbnailResult]:
     """Create thumbnails for multiple messages (supports username or ID)"""
     result = await telethon_service.batch_create_thumbnails(chat_identifier, message_ids)
     return result
@@ -336,7 +336,7 @@ async def get_chat_media_messages(
     chat_identifier: str = Query(..., description="Chat username (without @) or chat ID"),
     limit: int = Query(100, ge=1, le=1000),
     offset_id: int = Query(0, ge=0)
-) -> List[dict]:
+) -> list[dict]:
     """Get all messages with media from a chat (supports username or ID)"""
     return await telethon_service.get_chat_media_messages(
         chat_identifier=chat_identifier,
@@ -506,10 +506,10 @@ async def get_message_context(
 @media_router.get("/context/batch")
 async def get_batch_message_contexts(
     chat_identifier: str = Query(..., description="Chat username (without @) or chat ID"),
-    message_ids: List[int] = Query(..., description="List of message IDs"),
+    message_ids: list[int] = Query(..., description="List of message IDs"),
     context_size: int = Query(5, ge=1, le=20, description="Number of messages before and after"),
     fetch_replies: bool = Query(True, description="Fetch reply chains")
-) -> List[dict]:
+) -> list[dict]:
     """
     Get conversation contexts for multiple messages
     Useful for analyzing multiple conversations at once

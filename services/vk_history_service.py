@@ -1,7 +1,6 @@
 import asyncio
 import re
 import time
-from typing import List
 from utils import telegram_client
 import logging
 
@@ -186,7 +185,7 @@ class VkHistoryService:
             raise
 
 
-    def parse_photo_urls(self, text: str) -> List[str]:
+    def parse_photo_urls(self, text: str) -> list[str]:
         try:
             urls = []
             lines = text.split('\n')[1:]  # Skip the header line

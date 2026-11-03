@@ -5,7 +5,7 @@ import logging
 import asyncio
 import aiofiles
 import re
-from typing import TYPE_CHECKING, Dict, List, Optional, Tuple, Any, Union
+from typing import TYPE_CHECKING, Optional, Any, Union
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, asdict
@@ -26,10 +26,10 @@ logger = logging.getLogger(__name__)
 class MessageContext:
     """Structured message context data"""
     chat_id: str
-    target_message: Dict[str, Any]
-    previous_messages: List[Dict[str, Any]]
-    next_messages: List[Dict[str, Any]]
-    reply_chain: List[Dict[str, Any]]
+    target_message: dict[str, Any]
+    previous_messages: list[dict[str, Any]]
+    next_messages: list[dict[str, Any]]
+    reply_chain: list[dict[str, Any]]
     context_size: int
     total_messages: int
 
@@ -146,7 +146,7 @@ class TelethonMediaService:
         self.thumbnail_dir = THUMBNAIL_DIR
         os.makedirs(self.thumbnail_dir, exist_ok=True)
         os.makedirs(FULL_MEDIA_DIR, exist_ok=True)
-        self._full_downloads: Dict[str, asyncio.Task] = {}
+        self._full_downloads: dict[str, asyncio.Task] = {}
         self._migrate_public_thumbnails()
 
         # Caching layers
@@ -371,7 +371,7 @@ class TelethonMediaService:
         message,
         include_sender_details: bool = True,
         include_media_details: bool = False
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Convert a Telegram message to a serializable dictionary
 
@@ -550,7 +550,7 @@ class TelethonMediaService:
         include_sender_details: bool = False,
         include_media_details: bool = False,
         max_depth: int = 10
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Fetch reply chain with batching optimization
 
@@ -643,7 +643,7 @@ class TelethonMediaService:
         context_size: int = 5,
         include_sender_details: bool = False,
         include_media_details: bool = False
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Optional[dict[str, Any]]:
         """
         Get a complete conversation thread including context and reply chain
 
@@ -678,9 +678,9 @@ class TelethonMediaService:
 
     def _group_message_ids_into_ranges(
         self,
-        sorted_ids: List[int],
+        sorted_ids: list[int],
         context_size: int
-    ) -> List[Tuple[int, int, List[int]]]:
+    ) -> list[tuple[int, int, list[int]]]:
         """
         Group message IDs into overlapping ranges
 
@@ -743,13 +743,13 @@ class TelethonMediaService:
     async def get_batch_message_contexts(
         self,
         chat_identifier: Union[int, str],
-        message_ids: List[int],
+        message_ids: list[int],
         context_size: int = 5,
         fetch_replies: bool = True,
         include_sender_details: bool = False,
         include_media_details: bool = False,
         max_concurrent: int = 3
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Get conversation contexts for multiple messages
 
@@ -985,7 +985,7 @@ class TelethonMediaService:
     def _create_thumbnail_sync(
         self,
         image_bytes: bytes,
-        size: Tuple[int, int] = (THUMBNAIL_SIZE, THUMBNAIL_SIZE)
+        size: tuple[int, int] = (THUMBNAIL_SIZE, THUMBNAIL_SIZE)
     ) -> bytes:
         """
         Create thumbnail from image bytes (CPU-bound, runs in thread pool)
@@ -1028,7 +1028,7 @@ class TelethonMediaService:
         self,
         chat_identifier: Union[int, str],
         message_id: int,
-        size: Tuple[int, int] = (THUMBNAIL_SIZE, THUMBNAIL_SIZE),
+        size: tuple[int, int] = (THUMBNAIL_SIZE, THUMBNAIL_SIZE),
         force_regenerate: bool = False
     ) -> Optional[ThumbnailResult]:
         """
@@ -1150,7 +1150,7 @@ class TelethonMediaService:
                 )
                 raise
 
-    def _full_media_info(self, message) -> Tuple[str, str, Optional[int]]:
+    def _full_media_info(self, message) -> tuple[str, str, Optional[int]]:
         """(media type, file extension, size in bytes) of a message's original media."""
         from telethon.tl.types import MessageMediaDocument, MessageMediaPhoto
 
@@ -1164,7 +1164,7 @@ class TelethonMediaService:
             raise MediaUnavailable(f"{doc.mime_type} can't be shown in the browser")
         raise MediaUnavailable("This message has no photo or video")
 
-    async def download_full_media(self, chat_identifier: Union[int, str], message_id: int) -> Dict[str, Any]:
+    async def download_full_media(self, chat_identifier: Union[int, str], message_id: int) -> dict[str, Any]:
         """Download a message's original photo or video (cached on disk by media id)."""
         if not self._client_started:
             await self.start()
@@ -1210,10 +1210,10 @@ class TelethonMediaService:
     async def batch_create_thumbnails(
         self,
         chat_identifier: Union[int, str],
-        message_ids: List[int],
-        size: Tuple[int, int] = (THUMBNAIL_SIZE, THUMBNAIL_SIZE),
+        message_ids: list[int],
+        size: tuple[int, int] = (THUMBNAIL_SIZE, THUMBNAIL_SIZE),
         max_concurrent: int = 5
-    ) -> List[ThumbnailResult]:
+    ) -> list[ThumbnailResult]:
         """
         Create thumbnails for multiple messages with bounded concurrency
 
@@ -1266,8 +1266,8 @@ class TelethonMediaService:
         chat_identifier: Union[int, str],
         limit: int = 100,
         offset_id: int = 0,
-        media_types: Optional[List[str]] = None
-    ) -> List[Dict[str, Any]]:
+        media_types: Optional[list[str]] = None
+    ) -> list[dict[str, Any]]:
         """
         Get messages with media from a chat
 
@@ -1328,7 +1328,7 @@ class TelethonMediaService:
     # UTILITY METHODS
     # ============================================================================
 
-    async def get_chat_info(self, chat_identifier: Union[int, str]) -> Dict[str, Any]:
+    async def get_chat_info(self, chat_identifier: Union[int, str]) -> dict[str, Any]:
         """
         Get information about a chat
 
@@ -1367,7 +1367,7 @@ class TelethonMediaService:
         await self._message_cache.clear()
         logger.info("Cleared all caches")
 
-    def get_cache_stats(self) -> Dict[str, Any]:
+    def get_cache_stats(self) -> dict[str, Any]:
         """Get statistics about cache usage"""
         return {
             "entity_cache_size": len(self._entity_cache.cache),

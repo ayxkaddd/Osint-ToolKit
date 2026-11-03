@@ -5,7 +5,6 @@ import threading
 import time
 import httpx
 import logging
-from typing import Dict
 from fastapi import HTTPException
 import os
 
@@ -40,7 +39,7 @@ class HLRService:
         self.login = self.current_creds.get('login')
         self.password = self.current_creds.get('psw')
 
-    def load_credentials(self) -> Dict:
+    def load_credentials(self) -> dict:
         """Load credentials from JSON file"""
         try:
             json_path = os.path.join(os.path.dirname(__file__), '..', 'assets', 'sms_logins.json')
@@ -90,7 +89,7 @@ class HLRService:
         logger.info(f"Balance check successful: {response.text}")
         return response.text
 
-    def fetch_status(self, phone: str, sms_id: str) -> Dict:
+    def fetch_status(self, phone: str, sms_id: str) -> dict:
         """Fetch HLR status for a specific phone number"""
         logger.info(f"Fetching status for phone: {phone} with SMS ID: {sms_id}")
         data = {
@@ -168,11 +167,11 @@ class HLRService:
 
         return result
 
-    async def lookup_numbers(self, phones: str) -> Dict:
+    async def lookup_numbers(self, phones: str) -> dict:
         """Perform HLR lookup, running the blocking HTTP/sleep work off the event loop."""
         return await asyncio.to_thread(self._lookup_locked, phones)
 
-    def _lookup_locked(self, phones: str) -> Dict:
+    def _lookup_locked(self, phones: str) -> dict:
         with self._lock:
             self._ensure_credentials()
             numbers = [normalize_phone(p) for p in re.split(r"[,;\n]+", phones or "")]
@@ -181,7 +180,7 @@ class HLRService:
                 raise HTTPException(status_code=400, detail="Enter at least one phone number")
             return self._lookup_numbers_sync(",".join(dict.fromkeys(numbers)))
 
-    def _lookup_numbers_sync(self, phones: str) -> Dict:
+    def _lookup_numbers_sync(self, phones: str) -> dict:
         """Perform HLR lookup for multiple phone numbers"""
         logger.info(f"Starting HLR lookup for phones: {phones}")
 

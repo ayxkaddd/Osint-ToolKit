@@ -3,7 +3,7 @@ reports (AbuseIPDB) and exposed services (Shodan) when keys are configured."""
 import asyncio
 import ipaddress
 import socket
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 import httpx
 
@@ -15,7 +15,7 @@ class IPLookupError(ValueError):
 
 
 class IPService:
-    async def lookup_ip(self, ip: str) -> Dict[str, Any]:
+    async def lookup_ip(self, ip: str) -> dict[str, Any]:
         ip = (ip or "").strip()
         try:
             address = ipaddress.ip_address(ip)
@@ -29,7 +29,7 @@ class IPService:
             "is_loopback": address.is_loopback,
             "is_multicast": address.is_multicast,
         }
-        result: Dict[str, Any] = {"ip": str(address), "ip_type": ip_type, "warnings": []}
+        result: dict[str, Any] = {"ip": str(address), "ip_type": ip_type, "warnings": []}
         if not address.is_global:
             result["warnings"].append("This is not a public address - external sources have nothing on it")
             return result
@@ -47,7 +47,7 @@ class IPService:
                 result["warnings"].append(f"{name}: {data['error']}")
         return result
 
-    async def _ipinfo(self, client: httpx.AsyncClient, ip: str) -> Dict[str, Any]:
+    async def _ipinfo(self, client: httpx.AsyncClient, ip: str) -> dict[str, Any]:
         params = {}
         token = get_setting("IPINFO_API_TOKEN")
         if token:
@@ -63,7 +63,7 @@ class IPService:
         except (httpx.HTTPError, ValueError) as e:
             return {"error": str(e) or type(e).__name__}
 
-    async def _abuseipdb(self, client: httpx.AsyncClient, ip: str) -> Optional[Dict[str, Any]]:
+    async def _abuseipdb(self, client: httpx.AsyncClient, ip: str) -> Optional[dict[str, Any]]:
         key = get_setting("ABUSEIPDB_API_KEY")
         if not key:
             return None
@@ -80,7 +80,7 @@ class IPService:
         except (httpx.HTTPError, ValueError) as e:
             return {"error": str(e) or type(e).__name__}
 
-    async def _shodan(self, client: httpx.AsyncClient, ip: str) -> Optional[Dict[str, Any]]:
+    async def _shodan(self, client: httpx.AsyncClient, ip: str) -> Optional[dict[str, Any]]:
         key = get_setting("SHODAN_API_KEY")
         if not key:
             return None

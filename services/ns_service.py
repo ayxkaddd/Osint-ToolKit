@@ -1,5 +1,4 @@
 import httpx
-from typing import List
 from utils.config import get_setting
 
 
@@ -17,7 +16,7 @@ class NsService:
     def api_key(self):
         return get_setting("HACKER_TARGET_API_KEY")
 
-    def get_domains_api(self, ns: str) -> List[str]:
+    def get_domains_api(self, ns: str) -> list[str]:
         params = {"q": ns}
         if self.api_key:
             params["apikey"] = self.api_key
@@ -31,7 +30,7 @@ class NsService:
             raise NsLookupError(f"HackerTarget: {lines[0]}")
         return [line.lower() for line in lines if " " not in line]
 
-    def get_shared_domains(self, ns1: str, ns2: str) -> List[str]:
+    def get_shared_domains(self, ns1: str, ns2: str) -> list[str]:
         domains_1 = self.get_domains_api(ns1)
         domains_2 = self.get_domains_api(ns2)
         return sorted(set(domains_1).intersection(domains_2))

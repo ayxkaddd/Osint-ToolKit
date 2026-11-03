@@ -13,7 +13,8 @@ phone numbers) - usernames and bare numbers are never guessed from free text.
 import ipaddress
 import re
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Optional
+from collections.abc import Iterable
 from urllib.parse import urlparse
 
 import phonenumbers
@@ -203,12 +204,12 @@ def make_entity(entity_type: str, value: Any, display: Optional[str] = None) -> 
 # Detection of a search-box query
 # ---------------------------------------------------------------------------
 
-def detect(query: str) -> List[Entity]:
+def detect(query: str) -> list[Entity]:
     """Likely interpretations of a pasted query, most likely first."""
     q = (query or "").strip()
     if not q:
         return []
-    found: List[Entity] = []
+    found: list[Entity] = []
 
     def add(entity_type: str, value: Any, display: Optional[str] = None):
         entity = make_entity(entity_type, value, display)
@@ -291,7 +292,7 @@ def _key_hint(key: str) -> Optional[str]:
     return None
 
 
-def _service_hints(service: str, parent: Dict[str, Any], key: str) -> Optional[str]:
+def _service_hints(service: str, parent: dict[str, Any], key: str) -> Optional[str]:
     """Context that turns an ambiguous value into a typed identifier."""
     k = key.lower()
     if service == "funstat":
@@ -325,9 +326,9 @@ SERVICE_SKIP_KEYS = {
 }
 
 
-def extract_entities(result: Any, service: str = "") -> List[Tuple[Entity, str]]:
+def extract_entities(result: Any, service: str = "") -> list[tuple[Entity, str]]:
     """(entity, json path) pairs found in a result payload."""
-    out: Dict[str, Tuple[Entity, str]] = {}
+    out: dict[str, tuple[Entity, str]] = {}
     if isinstance(result, dict) and result.get("kind") == "plugin_result":
         # card pictures and icons are never leads
         result = {**result, "items": [{k: v for k, v in item.items() if k not in ("image", "icon")}
@@ -394,12 +395,12 @@ def extract_entities(result: Any, service: str = "") -> List[Tuple[Entity, str]]
     return list(out.values())
 
 
-def entities_from_parameters(parameters: Dict[str, Any], service: str = "") -> List[Entity]:
+def entities_from_parameters(parameters: dict[str, Any], service: str = "") -> list[Entity]:
     """The identifier(s) a lookup was run on (its query/target)."""
     kwargs = (parameters or {}).get("kwargs", parameters or {})
     if not isinstance(kwargs, dict):
         return []
-    flat: Dict[str, Any] = {}
+    flat: dict[str, Any] = {}
     for k, v in kwargs.items():
         if isinstance(v, dict):
             flat.update(v)
@@ -410,7 +411,7 @@ def entities_from_parameters(parameters: Dict[str, Any], service: str = "") -> L
         "email": "email", "phone": "phone", "phones": "phone", "domain": "domain", "ip": "ip",
         "gaia_id": "gaia_id", "bssid": "bssid", "drive_url": "url", "link": "url", "url": "url",
     }
-    found: List[Optional[Entity]] = []
+    found: list[Optional[Entity]] = []
     for key, entity_type in typed.items():
         value = flat.get(key)
         if value:
@@ -459,5 +460,5 @@ def type_label(entity_type: str) -> str:
     return ENTITY_TYPES.get(entity_type, entity_type)
 
 
-def iter_types() -> Iterable[Tuple[str, str]]:
+def iter_types() -> Iterable[tuple[str, str]]:
     return ENTITY_TYPES.items()

@@ -1,4 +1,4 @@
-from typing import List, Dict, Optional, Union, Any
+from typing import Optional, Union, Any
 from pydantic import BaseModel, Field, ConfigDict
 
 class Repo(BaseModel):
@@ -14,26 +14,26 @@ class Repo(BaseModel):
     is_private: bool
 
 class ContributorName(BaseModel):
-    repos: List[str]
+    repos: list[str]
 
 class ContributorEntry(BaseModel):
-    names: Dict[str, ContributorName]
+    names: dict[str, ContributorName]
     handle: str
     domain: str
 
 class NameEntry(BaseModel):
-    repos: List[str]
+    repos: list[str]
 
 class UsernameHistoryEntry(BaseModel):
-    names: Dict[str, NameEntry]
+    names: dict[str, NameEntry]
 
 class RelatedDataEntry(BaseModel):
-    names: Dict[str, NameEntry]
+    names: dict[str, NameEntry]
     handle: str
     domain: str
 
 class NearNamesEntry(BaseModel):
-    related_data: Dict[str, RelatedDataEntry]
+    related_data: dict[str, RelatedDataEntry]
 
 class RegisteredEmail(BaseModel):
     avatar: str
@@ -42,8 +42,8 @@ class RegisteredEmail(BaseModel):
     is_target: bool
 
 class InternalContribs(BaseModel):
-    all: Dict = Field(default_factory=dict)
-    no_github: Dict = Field(default_factory=dict)
+    all: dict = Field(default_factory=dict)
+    no_github: dict = Field(default_factory=dict)
 
 class Org(BaseModel):
     handle: str
@@ -70,23 +70,23 @@ class User(BaseModel):
     avatar_url: str
     is_default_avatar: bool
     nb_ext_contribs: int = Field(alias="nb_ext_contribs")
-    potential_friends: Dict = Field(default_factory=dict)
-    repos: List[Repo]
-    languages_stats: Dict[str, float]
-    usernames: List[str]
-    fullnames: List[str] = Field(default_factory=list)
-    domains: List[str]
-    ssh_keys: List[str]
-    all_contribs: Dict[str, ContributorEntry]
-    ext_contribs: Dict[str, ContributorEntry]
+    potential_friends: dict = Field(default_factory=dict)
+    repos: list[Repo]
+    languages_stats: dict[str, float]
+    usernames: list[str]
+    fullnames: list[str] = Field(default_factory=list)
+    domains: list[str]
+    ssh_keys: list[str]
+    all_contribs: dict[str, ContributorEntry]
+    ext_contribs: dict[str, ContributorEntry]
     internal_contribs: InternalContribs
-    usernames_history: Dict[str, UsernameHistoryEntry]
-    near_names: Dict[str, NearNamesEntry]
-    emails: List[str]
-    generated_emails: List[str]
-    registered_emails: Dict[str, RegisteredEmail]
+    usernames_history: dict[str, UsernameHistoryEntry]
+    near_names: dict[str, NearNamesEntry]
+    emails: list[str]
+    generated_emails: list[str]
+    registered_emails: dict[str, RegisteredEmail]
     type: str
     hireable: Optional[Any] = None
-    orgs: List[Org] = Field(default_factory=list)
+    orgs: list[Org] = Field(default_factory=list)
 
     model_config = ConfigDict(populate_by_name=True)

@@ -1,5 +1,5 @@
 # routes/investigation_routes.py
-from typing import List, Literal, Optional
+from typing import Literal, Optional
 from uuid import UUID
 from fastapi import APIRouter, HTTPException, Query, Form, File, UploadFile, Request
 from fastapi.responses import FileResponse, JSONResponse, HTMLResponse
@@ -20,7 +20,7 @@ class NoteCreate(BaseModel):
     content: str
     note_type: str = "manual"
     related_result_id: Optional[str] = None
-    tags: Optional[List[str]] = None
+    tags: Optional[list[str]] = None
 
 
 class SnapshotCreate(BaseModel):
@@ -29,7 +29,7 @@ class SnapshotCreate(BaseModel):
 
 class BulkResultsRequest(BaseModel):
     action: Literal["delete", "move", "triage"]
-    result_ids: List[str] = Field(min_length=1)
+    result_ids: list[str] = Field(min_length=1)
     target_investigation_id: Optional[UUID] = None
     status: Optional[str] = None
 
@@ -37,7 +37,7 @@ class BulkResultsRequest(BaseModel):
 class NoteUpdate(BaseModel):
     title: Optional[str] = None
     content: Optional[str] = None
-    tags: Optional[List[str]] = None
+    tags: Optional[list[str]] = None
 
 
 def _require_investigation(investigation_id: UUID) -> dict:

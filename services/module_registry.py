@@ -7,7 +7,8 @@ import shutil
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Optional
+from collections.abc import Callable
 
 import httpx
 
@@ -21,7 +22,7 @@ class RunSpec:
     """How to call the module's API for one input type."""
     method: str
     path: str
-    build: Callable[[str], Dict[str, Any]]   # value -> {"params": {...}} or {"json": ...}
+    build: Callable[[str], dict[str, Any]]   # value -> {"params": {...}} or {"json": ...}
     stream: bool = False                      # SSE / NDJSON response
 
 
@@ -31,22 +32,22 @@ class Module:
     name: str
     page: str
     icon: str
-    accepts: Dict[str, RunSpec]
+    accepts: dict[str, RunSpec]
     cost: str = FREE                 # free / paid
     cost_note: str = ""              # e.g. "1 OSINT Industries credit"
     speed: str = "fast"              # fast (<10s) / medium (<1 min) / slow (minutes)
-    keys: List[str] = field(default_factory=list)          # required settings
-    optional_keys: List[str] = field(default_factory=list)
-    tools: List[str] = field(default_factory=list)          # settings that name executables
-    optional_tools: List[str] = field(default_factory=list)  # executables that only add results
+    keys: list[str] = field(default_factory=list)          # required settings
+    optional_keys: list[str] = field(default_factory=list)
+    tools: list[str] = field(default_factory=list)          # settings that name executables
+    optional_tools: list[str] = field(default_factory=list)  # executables that only add results
     needs_telegram: bool = False
     concurrency: int = 2
     # module page prefill: CSS selector of the main input (+ optional select value)
-    prefill: Optional[Dict[str, str]] = None
+    prefill: Optional[dict[str, str]] = None
     # service_name its results are saved under (to find earlier lookups)
     service: str = ""
     plugin: bool = False             # added from plugins/ (services/plugin_loader.py)
-    extra_problems: Optional[Callable[[], List[str]]] = None
+    extra_problems: Optional[Callable[[], list[str]]] = None
 
     def __post_init__(self):
         self.service = self.service or SAVED_SERVICE.get(self.id, self.id)
@@ -55,11 +56,11 @@ class Module:
 SAVED_SERVICE = {"whois_history": "whois", "ip_info": "ip", "phone_info": "phone"}
 
 
-def _q(name: str) -> Callable[[str], Dict[str, Any]]:
+def _q(name: str) -> Callable[[str], dict[str, Any]]:
     return lambda v: {"params": {name: v}}
 
 
-MODULES: List[Module] = [
+MODULES: list[Module] = [
     Module("phone_info", "Phone number info", "/phone", "phone",
            {"phone": RunSpec("GET", "/api/phone/info", _q("phone"))},
            cost_note="Offline - country, carrier, line type", prefill={"input": "#phoneInput"}),
@@ -135,7 +136,7 @@ def _tool_available(setting: str) -> Optional[str]:
     return None if shutil.which(value) else f"{value} is not installed"
 
 
-_telegram_cache: Dict[str, Any] = {"at": 0.0, "ok": None}
+_telegram_cache: dict[str, Any] = {"at": 0.0, "ok": None}
 
 
 async def telegram_authorized() -> bool:
@@ -152,8 +153,8 @@ async def telegram_authorized() -> bool:
     return ok
 
 
-async def module_status(module: Module) -> Dict[str, Any]:
-    problems: List[str] = []
+async def module_status(module: Module) -> dict[str, Any]:
+    problems: list[str] = []
     for key in module.keys:
         if not get_setting(key):
             problems.append(f"{key} is not configured")
@@ -197,7 +198,7 @@ async def module_status(module: Module) -> Dict[str, Any]:
     }
 
 
-async def all_module_status() -> List[Dict[str, Any]]:
+async def all_module_status() -> list[dict[str, Any]]:
     from services import plugin_loader
     plugin_loader.refresh()
     return list(await asyncio.gather(*(module_status(m) for m in MODULES)))
@@ -207,16 +208,16 @@ async def all_module_status() -> List[Dict[str, Any]]:
 # Balances (cheap calls only, cached)
 # ---------------------------------------------------------------------------
 
-_balance_cache: Dict[str, Any] = {}
+_balance_cache: dict[str, Any] = {}
 
 
-async def balances() -> Dict[str, Any]:
+async def balances() -> dict[str, Any]:
     """Remaining credits where a free balance endpoint exists (cached 5 min)."""
     from services.funstat_service import last_tech
     funstat = {"funstat": f"{last_tech['balance']} credits"} if last_tech.get("balance") is not None else {}
     if _balance_cache and time.monotonic() - _balance_cache.get("_at", 0) < 300:
         return {**{k: v for k, v in _balance_cache.items() if k != "_at"}, **funstat}
-    result: Dict[str, Any] = {}
+    result: dict[str, Any] = {}
     async with httpx.AsyncClient(timeout=8) as client:
         async def oi():
             key = get_setting("OSINT_INDUSTRIES_API_KEY")
@@ -245,5 +246,5 @@ async def balances() -> Dict[str, Any]:
     return {**result, **funstat}
 
 
-def modules_for(entity_type: str) -> List[Module]:
+def modules_for(entity_type: str) -> list[Module]:
     return [m for m in MODULES if entity_type in m.accepts]

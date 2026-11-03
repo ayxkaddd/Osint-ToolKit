@@ -13,7 +13,7 @@ import socket
 import tempfile
 import datetime
 import xml.etree.ElementTree as ET
-from typing import List, Dict, Any, Optional
+from typing import Any, Optional
 
 from models.dnsrecon_models import ReconResults
 import httpx
@@ -57,7 +57,7 @@ class DNSReconService:
         # One client per recon run: the service object is shared by all requests
         return httpx.AsyncClient(timeout=30.0, follow_redirects=True)
 
-    async def run_subfinder(self, domain: str, deep_scan: bool, warnings: List[str]) -> List[str]:
+    async def run_subfinder(self, domain: str, deep_scan: bool, warnings: list[str]) -> list[str]:
         """Enumerate subdomains with subfinder (the domain itself is always included)."""
         cmd = [self.SUBFINDER_PATH, '-d', domain, '-silent']
         if deep_scan:
@@ -75,7 +75,7 @@ class DNSReconService:
         found.add(domain)
         return sorted(found, key=lambda d: (d != domain, d))
 
-    async def run_httpx_toolkit(self, subdomains: List[str], warnings: List[str]) -> List[Dict[str, Any]]:
+    async def run_httpx_toolkit(self, subdomains: list[str], warnings: list[str]) -> list[dict[str, Any]]:
         """Probe HTTP services with ProjectDiscovery httpx (JSON lines on stdout)."""
         with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
             f.write("\n".join(subdomains))
@@ -106,7 +106,7 @@ class DNSReconService:
             warnings.append(f"httpx-toolkit failed: {result.error_summary(200)}")
         return results
 
-    async def get_securitytrails_data(self, domain: str, client: httpx.AsyncClient) -> Dict[str, Any]:
+    async def get_securitytrails_data(self, domain: str, client: httpx.AsyncClient) -> dict[str, Any]:
         """Subdomains and A/MX/NS history from SecurityTrails (4 API calls -
         the free plan has 50 a month, so nothing else is requested)."""
         if not self.SECURITY_TRAILS_API_KEY:
@@ -114,9 +114,9 @@ class DNSReconService:
 
         headers = {"APIKEY": self.SECURITY_TRAILS_API_KEY}
         base_url = "https://api.securitytrails.com/v1"
-        out: Dict[str, Any] = {"subdomains": [], "history": {}, "errors": []}
+        out: dict[str, Any] = {"subdomains": [], "history": {}, "errors": []}
 
-        async def call(path: str) -> Optional[Dict[str, Any]]:
+        async def call(path: str) -> Optional[dict[str, Any]]:
             try:
                 response = await client.get(f"{base_url}{path}", headers=headers)
             except httpx.HTTPError as e:
@@ -147,7 +147,7 @@ class DNSReconService:
             } for record in data.get("records") or []]
         return out
 
-    async def get_virustotal_data(self, domain: str, client: httpx.AsyncClient) -> Dict[str, Any]:
+    async def get_virustotal_data(self, domain: str, client: httpx.AsyncClient) -> dict[str, Any]:
         """Passive DNS, subdomains and flagged URLs from VirusTotal (1 API call)."""
         if not self.VIRUSTOTAL_API_KEY:
             return {"error": "VirusTotal API key not configured"}
@@ -180,7 +180,7 @@ class DNSReconService:
                                "scan_date": u.get("scan_date")} for u in detected[:50]],
         }
 
-    async def get_crtsh(self, domain: str, client: httpx.AsyncClient, warnings: List[str]):
+    async def get_crtsh(self, domain: str, client: httpx.AsyncClient, warnings: list[str]):
         """Every name that ever appeared in a TLS certificate (free, no key)."""
         last_error = ""
         for attempt in range(2):
@@ -196,8 +196,8 @@ class DNSReconService:
         warnings.append(f"crt.sh (certificate transparency) is unavailable right now ({last_error}) - try again later")
         return {}, []
 
-    async def resolve(self, name: str, record_type: str) -> List[str]:
-        def run() -> List[str]:
+    async def resolve(self, name: str, record_type: str) -> list[str]:
+        def run() -> list[str]:
             try:
                 return [str(a) for a in dns.resolver.resolve(name, record_type, lifetime=8)]
             except dns.exception.DNSException:
@@ -207,10 +207,10 @@ class DNSReconService:
                 return []
         return await asyncio.to_thread(run)
 
-    async def asn_lookup(self, ips: List[str]) -> Dict[str, Dict[str, str]]:
+    async def asn_lookup(self, ips: list[str]) -> dict[str, dict[str, str]]:
         """Network owner per IP via Team Cymru's DNS interface (free, no key)."""
         sem = asyncio.Semaphore(16)
-        names: Dict[str, str] = {}
+        names: dict[str, str] = {}
 
         async def one(ip: str):
             query = cymru_query_name(ip)
@@ -235,13 +235,13 @@ class DNSReconService:
                 info["as_name"] = names.get(info["asn"], "")
         return results
 
-    async def get_dns_records_fallback(self, domain: str) -> Dict[str, List[str]]:
+    async def get_dns_records_fallback(self, domain: str) -> dict[str, list[str]]:
         """DNS records via dnspython (blocking resolver -> worker threads)."""
         record_types = ['A', 'AAAA', 'MX', 'NS', 'TXT', 'CNAME', 'SOA', 'CAA']
         values = await asyncio.gather(*(self.resolve(domain, rt) for rt in record_types))
         return dict(zip(record_types, values))
 
-    async def resolve_many(self, names: List[str]) -> Dict[str, List[str]]:
+    async def resolve_many(self, names: list[str]) -> dict[str, list[str]]:
         """A records for many names (which subdomains still exist, and where)."""
         sem = asyncio.Semaphore(32)
 
@@ -250,7 +250,7 @@ class DNSReconService:
                 return name, await self.resolve(name, "A")
         return dict(await asyncio.gather(*(one(n) for n in names)))
 
-    async def get_whois_info(self, domain: str) -> Dict[str, Any]:
+    async def get_whois_info(self, domain: str) -> dict[str, Any]:
         """Get WHOIS information"""
         try:
             w = await asyncio.to_thread(whois.whois, domain)
@@ -270,7 +270,7 @@ class DNSReconService:
         except Exception as e:
             return {'error': str(e)}
 
-    async def run_nmap_scan(self, domain: str, warnings: List[str]) -> List[Dict[str, Any]]:
+    async def run_nmap_scan(self, domain: str, warnings: list[str]) -> list[dict[str, Any]]:
         """Port scan with nmap (XML output - nmap has no JSON output format).
 
         SYN scans and OS detection need root; without it use a TCP connect scan.
@@ -292,7 +292,7 @@ class DNSReconService:
             return await self.basic_port_scan(domain)
 
     @staticmethod
-    def parse_nmap_xml(xml_text: str) -> List[Dict[str, Any]]:
+    def parse_nmap_xml(xml_text: str) -> list[dict[str, Any]]:
         root = ET.fromstring(xml_text)
         results = []
         for host in root.findall('host'):
@@ -313,7 +313,7 @@ class DNSReconService:
                 })
         return results
 
-    async def basic_port_scan(self, domain: str) -> List[Dict[str, Any]]:
+    async def basic_port_scan(self, domain: str) -> list[dict[str, Any]]:
         """Fallback: async TCP connect check of common ports."""
         common_ports = [21, 22, 23, 25, 53, 80, 110, 143, 443, 993, 995, 1433, 3306, 5432, 6379, 8080, 8443, 27017]
         try:
@@ -342,7 +342,7 @@ class DNSReconService:
         }
         return services.get(port, 'Unknown')
 
-    def analyze_security(self, httpx_results: List[Dict], external_data: Dict) -> Dict[str, Any]:
+    def analyze_security(self, httpx_results: list[dict], external_data: dict) -> dict[str, Any]:
         """Analyze security based on httpx and external API results"""
         analysis = {
             'ssl_analysis': {
@@ -404,7 +404,7 @@ class DNSReconService:
         """Main reconnaissance function. Independent steps run concurrently;
         tool problems are reported in ``warnings`` instead of failing silently."""
         timestamp = datetime.datetime.now().isoformat()
-        warnings: List[str] = []
+        warnings: list[str] = []
         logger.info("Starting reconnaissance for %s", domain)
 
         async with self._client() as client:
@@ -447,7 +447,7 @@ class DNSReconService:
             resolved[domain] = dns_records.get('A', []) + dns_records.get('AAAA', [])
 
             # Hosting map: which names share an IP, and whose network it is
-            by_ip: Dict[str, List[str]] = {}
+            by_ip: dict[str, list[str]] = {}
             for name, ips in resolved.items():
                 for ip in ips:
                     by_ip.setdefault(ip, []).append(name)
@@ -497,7 +497,7 @@ class DNSReconService:
         )
 
     @staticmethod
-    def _external_api_warnings(securitytrails: Dict[str, Any], virustotal: Dict[str, Any]) -> List[str]:
+    def _external_api_warnings(securitytrails: dict[str, Any], virustotal: dict[str, Any]) -> list[str]:
         warnings = []
         for data, source in ((securitytrails, 'SecurityTrails'), (virustotal, 'VirusTotal')):
             if data.get('error') and 'not configured' not in data['error']:
@@ -506,10 +506,10 @@ class DNSReconService:
         return warnings
 
     @staticmethod
-    def _name_sources(domain: str, subfinder_names, crt_names, securitytrails: Dict[str, Any],
-                      virustotal: Dict[str, Any]) -> Dict[str, List[str]]:
+    def _name_sources(domain: str, subfinder_names, crt_names, securitytrails: dict[str, Any],
+                      virustotal: dict[str, Any]) -> dict[str, list[str]]:
         """Every name under the domain, with where it was seen."""
-        sources: Dict[str, List[str]] = {domain: ['target']}
+        sources: dict[str, list[str]] = {domain: ['target']}
         for names, source in ((subfinder_names, 'subfinder'), (crt_names, 'certificates'),
                               (securitytrails.get('subdomains') or [], 'SecurityTrails'),
                               (virustotal.get('subdomains') or [], 'VirusTotal')):
@@ -521,14 +521,14 @@ class DNSReconService:
         return sources
 
     @staticmethod
-    def _subdomain_rows(names: List[str], sources: Dict[str, List[str]], resolved: Dict[str, List[str]],
-                        httpx_results: List[Dict[str, Any]], crt_names: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def _subdomain_rows(names: list[str], sources: dict[str, list[str]], resolved: dict[str, list[str]],
+                        httpx_results: list[dict[str, Any]], crt_names: dict[str, Any]) -> list[dict[str, Any]]:
         # httpx's "host" field is the resolved IP; the probed name is "input"
-        def probed_name(result: Dict[str, Any]) -> str:
+        def probed_name(result: dict[str, Any]) -> str:
             name = result.get('input') or result.get('url', '')
             return re.sub(r'^https?://', '', name).split('/')[0].split(':')[0].lower()
 
-        httpx_by_host: Dict[str, Dict[str, Any]] = {}
+        httpx_by_host: dict[str, dict[str, Any]] = {}
         for result in httpx_results:
             httpx_by_host.setdefault(probed_name(result), result)
 
@@ -554,7 +554,7 @@ class DNSReconService:
         return rows
 
     @staticmethod
-    def _external_summary(securitytrails: Dict[str, Any], virustotal: Dict[str, Any]) -> Dict[str, Any]:
+    def _external_summary(securitytrails: dict[str, Any], virustotal: dict[str, Any]) -> dict[str, Any]:
         return {
             'securitytrails': {'error': securitytrails['error']} if securitytrails.get('error') else
             {'subdomains': len(securitytrails.get('subdomains') or []), 'errors': securitytrails.get('errors') or []},
@@ -564,7 +564,7 @@ class DNSReconService:
         }
 
     def _recon_summary(self, subdomains_data, by_ip, security_analysis, use_external_apis: bool,
-                       include_ports: bool, port_results) -> Dict[str, Any]:
+                       include_ports: bool, port_results) -> dict[str, Any]:
         alive_subdomains = [s for s in subdomains_data if s['is_alive']]
         all_technologies = [t for s in alive_subdomains for t in (s['technologies'] or [])]
         summary = {
@@ -583,7 +583,7 @@ class DNSReconService:
             summary['open_ports_found'] = len([p for p in port_results if p.get('state') == 'open'])
         return summary
 
-    def calculate_security_score(self, security_analysis: Dict) -> int:
+    def calculate_security_score(self, security_analysis: dict) -> int:
         """Calculate overall security score"""
         score = 100
 

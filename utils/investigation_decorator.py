@@ -30,7 +30,8 @@ import inspect
 import json
 import logging
 from functools import wraps
-from typing import Any, Callable, Optional, Union
+from typing import Any, Optional, Union
+from collections.abc import Callable
 from uuid import UUID
 
 import anyio

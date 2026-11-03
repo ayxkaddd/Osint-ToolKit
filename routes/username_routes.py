@@ -4,7 +4,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from services.username_service import StreamingUsernameSearchService
 import asyncio
 import logging
-from typing import List, Optional
+from typing import Optional
 
 from utils.investigation_decorator import save_investigation
 from utils.stream_reducers import reduce_username_search
@@ -24,9 +24,9 @@ async def stream_search_sse(
     username: str = Query(..., min_length=1, max_length=100, description="Username to search"),
     include_duckduckgo: bool = Query(False, description="Include DuckDuckGo results"),
     extract_profile: bool = Query(False, description="Extract profile data"),
-    categories: Optional[List[str]] = Query(None, description="Filter by categories"),
-    priority_sites: Optional[List[str]] = Query(None, description="Priority sites to check first"),
-    only_sites: Optional[List[str]] = Query(None, description="Check only these sites (retry errors)"),
+    categories: Optional[list[str]] = Query(None, description="Filter by categories"),
+    priority_sites: Optional[list[str]] = Query(None, description="Priority sites to check first"),
+    only_sites: Optional[list[str]] = Query(None, description="Check only these sites (retry errors)"),
 ):
     """
     Server-Sent Events endpoint for streaming search results.

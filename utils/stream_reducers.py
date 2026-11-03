@@ -6,7 +6,8 @@ parsed into events here and a module-specific reducer turns the event log into
 the result that gets saved (e.g. only the sites where a username was found).
 """
 import json
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Optional
+from collections.abc import Callable
 
 
 def _maybe_json(text: str) -> Any:
@@ -16,7 +17,7 @@ def _maybe_json(text: str) -> Any:
         return text
 
 
-def parse_sse(text: str) -> List[Any]:
+def parse_sse(text: str) -> list[Any]:
     """Split a text/event-stream body into event payloads.
 
     Each event's ``data:`` lines are joined; JSON payloads are decoded. Named
@@ -37,7 +38,7 @@ def parse_sse(text: str) -> List[Any]:
     return events
 
 
-def parse_ndjson(text: str) -> List[Any]:
+def parse_ndjson(text: str) -> list[Any]:
     return [_maybe_json(line) for line in text.splitlines() if line.strip()]
 
 
@@ -57,14 +58,14 @@ def parse_stream(text: str, media_type: Optional[str]) -> Any:
 # Reducers: (events) -> stored result
 # ---------------------------------------------------------------------------
 
-def reduce_username_search(events: List[Any]) -> Dict[str, Any]:
+def reduce_username_search(events: list[Any]) -> dict[str, Any]:
     """Keep only found profiles (with extracted profile data) and the summary."""
     username = None
     total_sites = None
-    completed: Dict[str, Any] = {}
-    found: Dict[str, Dict[str, Any]] = {}
-    profiles: Dict[str, Any] = {}
-    web_mentions: List[Dict[str, Any]] = []
+    completed: dict[str, Any] = {}
+    found: dict[str, dict[str, Any]] = {}
+    profiles: dict[str, Any] = {}
+    web_mentions: list[dict[str, Any]] = []
     checked = 0
 
     for event in events:
@@ -108,9 +109,9 @@ def reduce_username_search(events: List[Any]) -> Dict[str, Any]:
     }
 
 
-def reduce_whois_analysis(events: List[Any]) -> Dict[str, Any]:
+def reduce_whois_analysis(events: list[Any]) -> dict[str, Any]:
     """NDJSON events from the NS WHOIS analysis -> {domains: {domain: whois}}."""
-    domains: Dict[str, Any] = {}
+    domains: dict[str, Any] = {}
     for event in events:
         if isinstance(event, dict) and event.get("type") == "domain":
             domains[event.get("domain")] = event.get("whois") if event.get("ok") else {"error": event.get("error")}
@@ -126,10 +127,10 @@ def legacy_username_result(result: Any) -> Any:
     return result
 
 
-def reduce_fingerprints(events: List[Any]) -> Dict[str, Any]:
+def reduce_fingerprints(events: list[Any]) -> dict[str, Any]:
     """NDJSON events from the NS fingerprint run -> {domains: {domain: fingerprint}, no_response: [...]}."""
-    domains: Dict[str, Any] = {}
-    no_response: List[str] = []
+    domains: dict[str, Any] = {}
+    no_response: list[str] = []
     for event in events:
         if not isinstance(event, dict):
             continue
@@ -142,14 +143,14 @@ def reduce_fingerprints(events: List[Any]) -> Dict[str, Any]:
     return {"domains": domains, "no_response": no_response}
 
 
-Reducer = Callable[[List[Any]], Any]
+Reducer = Callable[[list[Any]], Any]
 
 
-def reduce_oi_stream(events: List[Any]) -> Dict[str, Any]:
+def reduce_oi_stream(events: list[Any]) -> dict[str, Any]:
     """OSINT Industries stream -> the same shape as a JSON lookup: {type, query, modules: [cards]}."""
     from services.oi_service import sort_oi_cards
 
-    result: Dict[str, Any] = {"modules": [], "modules_checked": 0, "completed": False}
+    result: dict[str, Any] = {"modules": [], "modules_checked": 0, "completed": False}
     for event in events:
         if not isinstance(event, dict):
             continue
@@ -170,10 +171,10 @@ def reduce_oi_stream(events: List[Any]) -> Dict[str, Any]:
     return result
 
 
-def reduce_plugin_stream(events: List[Any]) -> Dict[str, Any]:
+def reduce_plugin_stream(events: list[Any]) -> dict[str, Any]:
     """Plugin run (services/plugin_loader.py events) -> {kind: plugin_result, plugin, items, data, ...}."""
-    result: Dict[str, Any] = {"kind": "plugin_result", "items": [], "completed": False}
-    data: List[Any] = []
+    result: dict[str, Any] = {"kind": "plugin_result", "items": [], "completed": False}
+    data: list[Any] = []
     for event in events:
         if not isinstance(event, dict):
             continue

@@ -8,7 +8,8 @@ import asyncio
 import errno
 import logging
 from dataclasses import dataclass
-from typing import Optional, Sequence
+from typing import Optional
+from collections.abc import Sequence
 
 logger = logging.getLogger(__name__)
 

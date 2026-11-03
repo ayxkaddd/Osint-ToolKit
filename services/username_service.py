@@ -5,7 +5,8 @@ import json
 import time
 import os
 import logging
-from typing import List, Optional, AsyncGenerator
+from typing import Optional
+from collections.abc import AsyncGenerator
 from urllib.parse import parse_qsl, urlparse, parse_qs, quote
 from bs4 import BeautifulSoup
 from fastapi import HTTPException
@@ -363,7 +364,7 @@ class StreamingUsernameSearchService:
                                    response_status: int,
                                    text: str,
                                    site: dict,
-                                   redirect_statuses: Optional[List[int]] = None) -> tuple[bool, bool]:
+                                   redirect_statuses: Optional[list[int]] = None) -> tuple[bool, bool]:
         """Check if response matches expected patterns"""
         redirect_statuses = redirect_statuses or []
 
@@ -574,7 +575,7 @@ class StreamingUsernameSearchService:
             logger.error(f"DuckDuckGo search error: {str(e)}")
 
     @staticmethod
-    def _select_sites(sites: List[dict], categories, only_sites, priority_sites) -> List[dict]:
+    def _select_sites(sites: list[dict], categories, only_sites, priority_sites) -> list[dict]:
         if categories:
             categories_set = set(categories)
             sites = [s for s in sites if s.get("cat") in categories_set]
@@ -638,9 +639,9 @@ class StreamingUsernameSearchService:
                            username: str,
                            include_duckduckgo: bool = False,
                            extract_profile: bool = False,
-                           categories: Optional[List[str]] = None,
-                           priority_sites: Optional[List[str]] = None,
-                           only_sites: Optional[List[str]] = None) -> AsyncGenerator[StreamEvent, None]:
+                           categories: Optional[list[str]] = None,
+                           priority_sites: Optional[list[str]] = None,
+                           only_sites: Optional[list[str]] = None) -> AsyncGenerator[StreamEvent, None]:
         """Stream search results as they become available."""
         search_id = str(uuid.uuid4())
         start_time = time.time()

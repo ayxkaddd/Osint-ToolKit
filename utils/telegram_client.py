@@ -8,7 +8,7 @@ session, so everything goes through this module instead.
 import asyncio
 import inspect
 import logging
-from typing import TYPE_CHECKING, Optional, Tuple
+from typing import TYPE_CHECKING, Optional
 
 from utils.config import get_setting
 
@@ -31,7 +31,7 @@ class TelegramNotConfigured(ValueError):
     """TG_API_ID / TG_API_HASH are missing or invalid (set them in Settings)."""
 
 
-def _credentials() -> Optional[Tuple[int, str]]:
+def _credentials() -> Optional[tuple[int, str]]:
     api_id = (get_setting("TG_API_ID") or "").strip()
     api_hash = (get_setting("TG_API_HASH") or "").strip()
     if not api_id.isdecimal() or int(api_id) == 0 or not api_hash:

@@ -1,6 +1,6 @@
 import asyncio
 import httpx
-from typing import List, Optional, Dict, Any
+from typing import Optional, Any
 from fastapi import HTTPException
 import logging
 from services.message_analyzer import MessageAnalyzer
@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 # requestCost / currentBalance from the latest response: every call reports
 # them, so the balance is known without spending anything
-last_tech: Dict[str, Any] = {}
+last_tech: dict[str, Any] = {}
 
 
 class FunstatService:
@@ -45,16 +45,16 @@ class FunstatService:
         return self._base_url or get_setting("FUNSTAT_BASE_URL", "") or "https://telelog.org"
 
     @property
-    def headers(self) -> Dict[str, str]:
+    def headers(self) -> dict[str, str]:
         return {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
 
     async def _make_request(
         self,
         method: str,
         endpoint: str,
-        params: Optional[Dict] = None,
-        json_data: Optional[Dict] = None
-    ) -> Dict[str, Any]:
+        params: Optional[dict] = None,
+        json_data: Optional[dict] = None
+    ) -> dict[str, Any]:
         """Make HTTP request to Funstat API"""
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
@@ -100,7 +100,7 @@ class FunstatService:
 
     # ==================== USER ENDPOINTS ====================
 
-    async def get_user_basic_info_by_id(self, user_ids: List[int]) -> List[ResolvedUser]:
+    async def get_user_basic_info_by_id(self, user_ids: list[int]) -> list[ResolvedUser]:
         """Get user info by telegram ID. Cost 0.10 per success found user info"""
         response = await self._make_request(
             "GET",
@@ -109,7 +109,7 @@ class FunstatService:
         )
         return [ResolvedUser(**user) for user in response.get("data", [])]
 
-    async def resolve_username(self, usernames: List[str]) -> List[ResolvedUser]:
+    async def resolve_username(self, usernames: list[str]) -> list[ResolvedUser]:
         """Cost 0.10 per success found user info"""
         response = await self._make_request(
             "GET",
@@ -134,7 +134,7 @@ class FunstatService:
         )
         return UserStats(**response.get("data", {}))
 
-    async def get_user_groups(self, user_id: int) -> List[UsrChatInfo]:
+    async def get_user_groups(self, user_id: int) -> list[UsrChatInfo]:
         """Known user groups (COST: 5)"""
         response = await self._make_request(
             "GET",
@@ -167,7 +167,7 @@ class FunstatService:
         group_id: Optional[int] = None,
         text_contains: Optional[str] = None,
         media_code: Optional[int] = None
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Get user messages (COST: 10 per user if found and user has MORE THAN 100 messages)"""
         params = {
             "page": page,
@@ -200,7 +200,7 @@ class FunstatService:
         text_contains: Optional[str] = None,
         media_code: Optional[int] = None,
         max_messages: Optional[int] = None
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Get ALL user messages by fetching all pages"""
         all_messages = []
         page = 1
@@ -253,7 +253,7 @@ class FunstatService:
             "tech": tech
         }
 
-    async def get_user_names_history(self, user_id: int) -> List[UserNamesHistory]:
+    async def get_user_names_history(self, user_id: int) -> list[UserNamesHistory]:
         """User (firstname + lastname) history COST: 3"""
         response = await self._make_request(
             "GET",
@@ -261,7 +261,7 @@ class FunstatService:
         )
         return [UserNamesHistory(**item) for item in response.get("data", [])]
 
-    async def get_user_usernames_history(self, user_id: int) -> List[UserNamesHistory]:
+    async def get_user_usernames_history(self, user_id: int) -> list[UserNamesHistory]:
         """@usernames history COST: 3"""
         response = await self._make_request(
             "GET",
@@ -269,7 +269,7 @@ class FunstatService:
         )
         return [UserNamesHistory(**item) for item in response.get("data", [])]
 
-    async def get_user_common_groups_stat(self, user_id: int) -> List[UCommonGroupInfo]:
+    async def get_user_common_groups_stat(self, user_id: int) -> list[UCommonGroupInfo]:
         """Return users who has common groups with specified user [cost 5]"""
         response = await self._make_request(
             "GET",
@@ -277,7 +277,7 @@ class FunstatService:
         )
         return [UCommonGroupInfo(**item) for item in response.get("data", [])]
 
-    async def get_user_reputation(self, user_id: int) -> Dict[str, Any]:
+    async def get_user_reputation(self, user_id: int) -> dict[str, Any]:
         """Return user reputation information [FREE]"""
         response = await self._make_request(
             "GET",
@@ -286,7 +286,7 @@ class FunstatService:
         )
         return response
 
-    async def get_user_stickers(self, user_id: int) -> List[StickerInfo]:
+    async def get_user_stickers(self, user_id: int) -> list[StickerInfo]:
         """Sticker packs created by user [COST 1 if success found any]"""
         response = await self._make_request(
             "GET",
@@ -305,7 +305,7 @@ class FunstatService:
 
     # ==================== GROUP ENDPOINTS ====================
 
-    async def get_group_info(self, group_id: int) -> Dict[str, Any]:
+    async def get_group_info(self, group_id: int) -> dict[str, Any]:
         """Group basic info, links and today stats COST 0.01"""
         response = await self._make_request(
             "GET",
@@ -313,7 +313,7 @@ class FunstatService:
         )
         return response
 
-    async def get_group_members(self, group_id: int) -> List[GroupMember]:
+    async def get_group_members(self, group_id: int) -> list[GroupMember]:
         """Group members [COST 15 each request]"""
         response = await self._make_request(
             "GET",
@@ -321,7 +321,7 @@ class FunstatService:
         )
         return [GroupMember(**member) for member in response.get("data", [])]
 
-    async def get_common_groups(self, user_ids: List[int]) -> List[ChatInfoExt]:
+    async def get_common_groups(self, user_ids: list[int]) -> list[ChatInfoExt]:
         """Return common groups specified users [COST 0.5 each request]"""
         response = await self._make_request(
             "GET",
@@ -337,7 +337,7 @@ class FunstatService:
         search_input: str,
         page: int = 1,
         page_size: int = 20
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Search who/when/where wrote specified text message [COST 0.1 each request]"""
         response = await self._make_request(
             "GET",
@@ -362,7 +362,7 @@ class FunstatService:
 
     # ==================== BOT ENDPOINTS ====================
 
-    async def get_random_bot(self) -> Dict[str, Any]:
+    async def get_random_bot(self) -> dict[str, Any]:
         """Get random bot"""
         response = await self._make_request(
             "GET",

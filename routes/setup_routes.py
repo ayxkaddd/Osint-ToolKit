@@ -11,7 +11,7 @@ import subprocess
 import shutil
 import httpx
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Optional, Any
 import json
 import platform
 
@@ -34,7 +34,7 @@ class SetupState(BaseModel):
     features_selected: bool = False
     apis_configured: bool = False
     tools_installed: bool = False
-    selected_features: Dict[str, bool] = {}
+    selected_features: dict[str, bool] = {}
 
 
 class AdminCredentials(BaseModel):
@@ -90,7 +90,7 @@ def get_go_path() -> Optional[Path]:
     return home / "go" / "bin"
 
 
-def check_go_tools() -> Dict[str, Dict[str, Any]]:
+def check_go_tools() -> dict[str, dict[str, Any]]:
     """Check if Go tools are installed with detailed info"""
     tools = {}
 
@@ -148,7 +148,7 @@ def check_go_tools() -> Dict[str, Dict[str, Any]]:
     return tools
 
 
-def check_gitfive_detailed() -> Dict[str, Any]:
+def check_gitfive_detailed() -> dict[str, Any]:
     """Check GitFive installation with detailed information"""
     possible_paths = [
         Path("../GitFive"),
@@ -195,7 +195,7 @@ def check_gitfive_detailed() -> Dict[str, Any]:
     }
 
 
-def check_python_packages() -> Dict[str, bool]:
+def check_python_packages() -> dict[str, bool]:
     """Check if required Python packages are installed"""
     packages = {
         "fastapi": "Web framework",
@@ -219,7 +219,7 @@ def check_python_packages() -> Dict[str, bool]:
     return results
 
 
-def validate_hacker_target_api(api_key: str) -> Dict[str, Any]:
+def validate_hacker_target_api(api_key: str) -> dict[str, Any]:
     """Validate HackerTarget API key with actual request"""
     try:
         response = httpx.get(
@@ -241,7 +241,7 @@ def validate_hacker_target_api(api_key: str) -> Dict[str, Any]:
         return {"valid": False, "message": f"Connection error: {str(e)}"}
 
 
-def validate_osint_industries_api(api_key: str) -> Dict[str, Any]:
+def validate_osint_industries_api(api_key: str) -> dict[str, Any]:
     """Validate OSINT Industries API key"""
     try:
         headers = {"api-key": api_key}
@@ -266,7 +266,7 @@ def validate_osint_industries_api(api_key: str) -> Dict[str, Any]:
         return {"valid": False, "message": f"Connection error: {str(e)}"}
 
 
-def validate_whois_history_api(api_key: str) -> Dict[str, Any]:
+def validate_whois_history_api(api_key: str) -> dict[str, Any]:
     """Validate WhoisXML API key"""
     try:
         response = httpx.get(
@@ -289,7 +289,7 @@ def validate_whois_history_api(api_key: str) -> Dict[str, Any]:
         return {"valid": False, "message": f"Connection error: {str(e)}"}
 
 
-def validate_securitytrails_api(api_key: str) -> Dict[str, Any]:
+def validate_securitytrails_api(api_key: str) -> dict[str, Any]:
     """Validate SecurityTrails API key"""
     try:
         headers = {"APIKEY": api_key}
@@ -314,7 +314,7 @@ def validate_securitytrails_api(api_key: str) -> Dict[str, Any]:
         return {"valid": False, "message": f"Connection error: {str(e)}"}
 
 
-def validate_virustotal_api(api_key: str) -> Dict[str, Any]:
+def validate_virustotal_api(api_key: str) -> dict[str, Any]:
     """Validate VirusTotal API key"""
     try:
         headers = {"x-apikey": api_key}
@@ -336,7 +336,7 @@ def validate_virustotal_api(api_key: str) -> Dict[str, Any]:
         return {"valid": False, "message": f"Connection error: {str(e)}"}
 
 
-def validate_api_key(service: str, api_key: str) -> Dict[str, Any]:
+def validate_api_key(service: str, api_key: str) -> dict[str, Any]:
     validators = {
         "hacker_target": validate_hacker_target_api,
         "osint_industries": validate_osint_industries_api,
@@ -355,7 +355,7 @@ def validate_api_key(service: str, api_key: str) -> Dict[str, Any]:
         return {"valid": False, "message": f"Validation error: {str(e)}"}
 
 
-def save_env_config(config: Dict[str, str]):
+def save_env_config(config: dict[str, str]):
     """Save configuration to the .env file, preserving existing keys and comments."""
     try:
         update_env({k: v for k, v in config.items() if v not in (None, "")})
@@ -363,7 +363,7 @@ def save_env_config(config: Dict[str, str]):
         raise HTTPException(status_code=400, detail=str(e)) from e
 
 
-def install_go_tool(tool_name: str, package: str) -> Dict[str, Any]:
+def install_go_tool(tool_name: str, package: str) -> dict[str, Any]:
     """Install a single Go tool with detailed logging"""
     try:
         # Check if Go is installed
@@ -420,7 +420,7 @@ def install_go_tool(tool_name: str, package: str) -> Dict[str, Any]:
         }
 
 
-def install_go_tools() -> Dict[str, Any]:
+def install_go_tools() -> dict[str, Any]:
     """Install all required Go tools"""
     if not check_dependency("go"):
         return {
@@ -447,7 +447,7 @@ def install_go_tools() -> Dict[str, Any]:
     }
 
 
-def setup_gitfive_guide() -> Dict[str, Any]:
+def setup_gitfive_guide() -> dict[str, Any]:
     """Provide detailed GitFive setup instructions"""
     return {
         "steps": [
