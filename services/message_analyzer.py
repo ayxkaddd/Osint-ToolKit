@@ -385,79 +385,52 @@ class MessageAnalyzer:
 
         return False
 
+    # Dates look like numbers: rejected unless the number starts with + (international)
+    _PHONE_DATE_PATTERNS = (
+        r'^\d{4}[-/\.]\d{2}[-/\.]',  # YYYY-MM- (but not +XXXX which is phone)
+        r'^\d{2}[-/\.]\d{2}[-/\.]\d{4}',  # DD-MM-YYYY
+        r'^\d{2}[-/\.]\d{2}[-/\.]\d{2}',  # DD-MM-YY
+        r'^\d{1,2}[-/\.]\d{1,2}[-/\.]\d{2,4}',  # Any date format
+        r'^(19|20)\d{2}[-/]',  # Starts with year 19xx or 20xx
+        r'[-/\.]\d{2}[-/\.]\d{2,4}$',  # Ends like a date
+        r'\d{4}.*\d{2}.*\d{2}.*\d{2}$',  # Year-month-day-hour pattern
+    )
+    _NON_PHONE_PATTERNS = (
+        r'^\d{4}$',  # 4 digits = year
+        r'^\d{6,7}$',  # 6-7 digits without separators
+        r'^\d{8}$',  # 8 digits without separators or context
+        r'^[0-9a-f]{8,}$',  # hex-like
+        r'^\d{4}-\d{4}$',  # simple range
+    )
+    _PHONE_CONTEXT = (
+        'phone', 'tel', 'номер', 'телефон', 'телефону', 'contact',
+        'call', 'whatsapp', 'viber', 'signal', 'звони', 'звоні',
+        'пиши', 'write me', 'dm me', 'писати', 'mobile', 'сотовый',
+        'мобильный', 'мобільний', 'позвони', 'подзвони'
+    )
+    _PHONE_INDICATORS = (
+        r'\(\d{3,4}\)',  # Area code in parentheses
+        r'^\+\d',  # Starts with +
+        r'\d{3}[-\s]\d{3}[-\s]\d{4}',  # US-style
+        r'\d{3}[-\s]\d{2}[-\s]\d{2}',  # Common format
+    )
+
     def _validate_phone(self, phone: str, context: str = '') -> bool:
-        """
-        Validate if a string is actually a phone number with Telegram-aware logic.
+        """Whether a matched string is likely a phone number (Telegram-aware).
 
         Args:
             phone: Potential phone number string
-            context: Surrounding text for context validation
-
-        Returns:
-            True if likely a phone number
+            context: Surrounding text, for phone keywords
         """
         original = phone.strip()
         digits_only = _rx(r'\D').sub('', phone)
-
-        # PRIORITY 1: Reject dates IMMEDIATELY (most common false positive)
-        # This must be first and absolute - but DON'T reject international phones
-        DATE_REJECTION_PATTERNS = [
-            r'^\d{4}[-/\.]\d{2}[-/\.]',  # YYYY-MM- (but not +XXXX which is phone)
-            r'^\d{2}[-/\.]\d{2}[-/\.]\d{4}',  # DD-MM-YYYY
-            r'^\d{2}[-/\.]\d{2}[-/\.]\d{2}',  # DD-MM-YY
-            r'^\d{1,2}[-/\.]\d{1,2}[-/\.]\d{2,4}',  # Any date format
-            r'^(19|20)\d{2}[-/]',  # Starts with year 19xx or 20xx
-            r'[-/\.]\d{2}[-/\.]\d{2,4}$',  # Ends like a date
-            r'\d{4}.*\d{2}.*\d{2}.*\d{2}$',  # Year-month-day-hour pattern
-        ]
-
-        # Only apply date rejection if it doesn't start with + (international phone indicator)
-        if not original.startswith('+'):
-            for pattern in DATE_REJECTION_PATTERNS:
-                if _rx(pattern).search(original):
-                    return False
-
-        # PRIORITY 2: Reject IP addresses
-        if _rx(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$').match(original):
+        if self._clearly_not_phone(original, digits_only):
             return False
-
-        # PRIORITY 3: Reject if contains multiple dots (IP-like or date-like)
-        if original.count('.') >= 2:
-            return False
-
-        # Basic length checks
-        if len(digits_only) < 7:
-            return False
-        if len(digits_only) > 15:
-            return False
-
-        # Reject if ends with space and 2 digits (hour indicator)
-        if _rx(r'\s+\d{2}$').search(original):
-            return False
-
-        # Reject if has newline followed by digits (common in logs/data)
-        if '\n' in original:
-            return False
-
-        # NON-PHONE PATTERNS
-        NON_PHONE_PATTERNS = [
-            r'^\d{4}$',  # 4 digits = year
-            r'^\d{6,7}$',  # 6-7 digits without separators
-            r'^\d{8}$',  # 8 digits without separators or context
-            r'^[0-9a-f]{8,}$',  # hex-like
-            r'^\d{4}-\d{4}$',  # simple range
-        ]
-
-        for pattern in NON_PHONE_PATTERNS:
-            if _rx(pattern).match(original):
-                return False
 
         # Phone numbers with + are usually legitimate (international format)
         if original.startswith('+'):
-            # But check it's not +YYYY (year)
-            if _rx(r'^\+\d{4}$').match(original):
+            if _rx(r'^\+\d{4}$').match(original):  # +YYYY is a year
                 return False
-            # Must have at least 10 digits for international
             if len(digits_only) >= 10:
                 return True
 
@@ -465,42 +438,37 @@ class MessageAnalyzer:
         if '*' in original:
             return True
 
-        # Check for phone context keywords
-        PHONE_CONTEXT = [
-            'phone', 'tel', 'номер', 'телефон', 'телефону', 'contact',
-            'call', 'whatsapp', 'viber', 'signal', 'звони', 'звоні',
-            'пиши', 'write me', 'dm me', 'писати', 'mobile', 'сотовый',
-            'мобильный', 'мобільний', 'позвони', 'подзвони'
-        ]
+        if any(_rx(indicator).search(original) for indicator in self._PHONE_INDICATORS):
+            return True
 
-        has_phone_context = any(word in context.lower() for word in PHONE_CONTEXT)
-
-        # Strong phone indicators
-        PHONE_INDICATORS = [
-            r'\(\d{3,4}\)',  # Area code in parentheses
-            r'^\+\d',  # Starts with +
-            r'\d{3}[-\s]\d{3}[-\s]\d{4}',  # US-style
-            r'\d{3}[-\s]\d{2}[-\s]\d{2}',  # Common format
-        ]
-
-        for indicator in PHONE_INDICATORS:
-            if _rx(indicator).search(original):
-                return True
-
-        # Without clear phone context, be very strict
+        # Without phone words around it, be strict: separators and a full length
+        has_phone_context = any(word in context.lower() for word in self._PHONE_CONTEXT)
         if not has_phone_context:
-            # Must have proper phone separators
             if not _rx(r'[\s\-\(\)]').search(original):
                 return False
-            # Must have reasonable length
             if len(digits_only) < 10:
                 return False
 
         # Final safety check: if digits start with year pattern, reject
         if digits_only.startswith(('19', '20')) and len(digits_only) >= 8:
             return False
-
         return True
+
+    def _clearly_not_phone(self, original: str, digits_only: str) -> bool:
+        """Dates, IP addresses, years, hex strings and wrong lengths."""
+        if not original.startswith('+') and any(_rx(p).search(original) for p in self._PHONE_DATE_PATTERNS):
+            return True
+        if _rx(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$').match(original):
+            return True
+        if original.count('.') >= 2:  # IP-like or date-like
+            return True
+        if not 7 <= len(digits_only) <= 15:
+            return True
+        if _rx(r'\s+\d{2}$').search(original):  # ends with an hour
+            return True
+        if '\n' in original:
+            return True
+        return any(_rx(p).match(original) for p in self._NON_PHONE_PATTERNS)
 
     def _validate_card(self, card: str, context: str = '') -> bool:
         """
@@ -1160,21 +1128,10 @@ class MessageAnalyzer:
         Returns:
             Conversation-level analysis (only includes messages with sensitive data)
         """
-        total_messages = len(messages)
-        messages_with_sensitive_data = 0
-
-        risk_summary = {
-            "critical": 0,
-            "high": 0,
-            "medium": 0,
-            "low": 0,
-            "example": 0,
-        }
-        data_type_frequency = {}
-
+        risk_summary = {"critical": 0, "high": 0, "medium": 0, "low": 0, "example": 0}
+        data_type_frequency: Dict[str, int] = {}
+        all_extracted_data: Dict[str, set] = {}
         analyzed_messages = []
-        all_extracted_data = {}
-
         # Accounts often repeat the same message; each distinct text is analyzed once
         analyzed_texts: Dict[str, Dict] = {}
 
@@ -1182,97 +1139,78 @@ class MessageAnalyzer:
             text = msg.get("text", "")
             if not text:
                 continue
-
             msg_analysis = analyzed_texts.get(text)
             if msg_analysis is None:
                 msg_analysis = analyzed_texts[text] = self.analyze_message(text, extended=True)
-
             if not msg_analysis.get("has_sensitive_data"):
                 continue
 
-            messages_with_sensitive_data += 1
-
-            # Build message analysis object
-            message_obj = {
-                "has_sensitive_data": True,
-                "extracted_data": msg_analysis.get("extracted_data", {}),
-                "data_types_found": msg_analysis.get("data_types_found", []),
-                "risk_score": msg_analysis.get("risk_score", 0),
-                "risk_level": msg_analysis.get("risk_level", "low"),
-                "message_id": msg.get("messageId"),
-                "date": msg.get("date"),
-                "text": text,
-            }
-
-            # Add optional fields if present
-            if "intent" in msg_analysis:
-                message_obj["intent"] = msg_analysis["intent"]
-            if "scam_patterns" in msg_analysis:
-                message_obj["scam_patterns"] = msg_analysis["scam_patterns"]
-            if "warnings" in msg_analysis:
-                message_obj["warnings"] = msg_analysis["warnings"]
-
-            # Add group info if available
-            if "group" in msg:
-                message_obj["group"] = msg["group"]
-
-            analyzed_messages.append(message_obj)
-
-            # Update risk summary
-            risk_level = msg_analysis.get("risk_level", "low")
-            risk_summary[risk_level] += 1
-
-            # Aggregate data
-            extracted = msg_analysis.get("extracted_data", {})
-            for data_type, items in extracted.items():
-                if data_type not in all_extracted_data:
-                    all_extracted_data[data_type] = set()
-                all_extracted_data[data_type].update(items)
-
+            analyzed_messages.append(self._message_entry(msg, text, msg_analysis))
+            risk_summary[msg_analysis.get("risk_level", "low")] += 1
+            for data_type, items in msg_analysis.get("extracted_data", {}).items():
+                all_extracted_data.setdefault(data_type, set()).update(items)
                 data_type_frequency[data_type] = data_type_frequency.get(data_type, 0) + 1
 
-        if messages_with_sensitive_data == 0:
+        if not analyzed_messages:
             return {
                 "has_sensitive_data": False,
-                "total_messages": total_messages,
+                "total_messages": len(messages),
                 "messages_with_sensitive_data": 0
             }
+        summary = self._conversation_summary(len(messages), len(analyzed_messages), risk_summary,
+                                             data_type_frequency, all_extracted_data)
+        if include_message_analysis:
+            summary["message_analyses"] = analyzed_messages
+        return summary
 
-        # Convert sets to lists for JSON serialization
+    @staticmethod
+    def _message_entry(msg: Dict, text: str, msg_analysis: Dict) -> Dict:
+        """One flagged message as listed in the conversation analysis."""
+        entry = {
+            "has_sensitive_data": True,
+            "extracted_data": msg_analysis.get("extracted_data", {}),
+            "data_types_found": msg_analysis.get("data_types_found", []),
+            "risk_score": msg_analysis.get("risk_score", 0),
+            "risk_level": msg_analysis.get("risk_level", "low"),
+            "message_id": msg.get("messageId"),
+            "date": msg.get("date"),
+            "text": text,
+        }
+        for key in ("intent", "scam_patterns", "warnings"):
+            if key in msg_analysis:
+                entry[key] = msg_analysis[key]
+        if "group" in msg:
+            entry["group"] = msg["group"]
+        return entry
+
+    def _conversation_summary(self, total_messages: int, flagged: int, risk_summary: Dict,
+                              data_type_frequency: Dict, all_extracted_data: Dict[str, set]) -> Dict:
+        """Totals, the identifiers found across all messages and an overall risk level."""
         aggregated_data_list = {k: list(v) for k, v in all_extracted_data.items()}
-
-        # Calculate overall conversation risk
         overall_risk = self._calculate_conversation_risk({
             "total_messages": total_messages,
-            "messages_with_sensitive_data": messages_with_sensitive_data,
+            "messages_with_sensitive_data": flagged,
             "risk_summary": risk_summary,
             "aggregated_data": aggregated_data_list,
         })
-
-        conversation_analysis = {
+        if overall_risk >= 70:
+            level = "critical"
+        elif overall_risk >= 50:
+            level = "high"
+        elif overall_risk >= 25:
+            level = "medium"
+        else:
+            level = "low"
+        return {
             "has_sensitive_data": True,
             "total_messages": total_messages,
-            "messages_with_sensitive_data": messages_with_sensitive_data,
+            "messages_with_sensitive_data": flagged,
             "aggregated_data": aggregated_data_list,
             "risk_summary": risk_summary,
             "data_type_frequency": data_type_frequency,
             "overall_risk_score": overall_risk,
+            "overall_risk_level": level,
         }
-
-        # Add overall risk level
-        if overall_risk >= 70:
-            conversation_analysis["overall_risk_level"] = "critical"
-        elif overall_risk >= 50:
-            conversation_analysis["overall_risk_level"] = "high"
-        elif overall_risk >= 25:
-            conversation_analysis["overall_risk_level"] = "medium"
-        else:
-            conversation_analysis["overall_risk_level"] = "low"
-
-        if include_message_analysis and analyzed_messages:
-            conversation_analysis["message_analyses"] = analyzed_messages
-
-        return conversation_analysis
 
     def _calculate_conversation_risk(self, conv_analysis: Dict) -> int:
         """
