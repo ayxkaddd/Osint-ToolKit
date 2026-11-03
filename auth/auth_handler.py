@@ -2,7 +2,7 @@ from datetime import datetime, timedelta, timezone
 import jwt
 from fastapi import HTTPException, Security
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from passlib.context import CryptContext
+import bcrypt
 from utils import telegram_client
 from utils.config import get_setting
 
@@ -11,7 +11,6 @@ TOKEN_TTL = timedelta(hours=24)
 
 class AuthHandler:
     security = HTTPBearer()
-    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
     @property
     def secret(self) -> str:
@@ -21,14 +20,20 @@ class AuthHandler:
             raise HTTPException(status_code=503, detail='JWT_SECRET is not configured')
         return secret
 
+    @staticmethod
+    def _password_bytes(password: str) -> bytes:
+        # bcrypt only uses the first 72 bytes; passlib and bcrypt 4 cut them silently,
+        # newer bcrypt refuses longer input, so cut them here to keep old hashes working
+        return password.encode()[:72]
+
     def get_password_hash(self, password):
-        return self.pwd_context.hash(password)
+        return bcrypt.hashpw(self._password_bytes(password), bcrypt.gensalt()).decode()
 
     def verify_password(self, plain_password, hashed_password):
         if not hashed_password:
             return False
         try:
-            return self.pwd_context.verify(plain_password, hashed_password)
+            return bcrypt.checkpw(self._password_bytes(plain_password), hashed_password.encode())
         except ValueError:
             # Malformed hash in .env
             return False

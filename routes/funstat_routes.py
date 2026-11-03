@@ -596,13 +596,13 @@ async def get_user_messages_with_context(
             )
 
             enriched_messages.append({
-                "funstat_data": msg.dict(),
+                "funstat_data": msg.model_dump(),
                 "context": context
             })
         except Exception as e:
             print(f"Failed to get context for message {msg.messageId}: {e}")
             enriched_messages.append({
-                "funstat_data": msg.dict(),
+                "funstat_data": msg.model_dump(),
                 "context": None,
                 "error": str(e)
             })

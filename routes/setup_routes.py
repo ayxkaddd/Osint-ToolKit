@@ -3,7 +3,7 @@ import re
 from fastapi import APIRouter, Request, Form, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel, EmailStr, validator
+from pydantic import BaseModel, EmailStr, field_validator
 import bcrypt
 import secrets
 import os
@@ -41,7 +41,8 @@ class AdminCredentials(BaseModel):
     email: EmailStr
     password: str
 
-    @validator('password')
+    @field_validator('password')
+    @classmethod
     def password_strength(cls, v):
         if len(v) < 8:
             raise ValueError('Password must be at least 8 characters')
@@ -66,7 +67,7 @@ def get_setup_state() -> SetupState:
 def save_setup_state(state: SetupState):
     """Save setup state to file"""
     with open(SETUP_STATE_PATH, 'w') as f:
-        json.dump(state.dict(), f, indent=2)
+        json.dump(state.model_dump(), f, indent=2)
 
 
 def check_setup_complete() -> bool:
@@ -542,7 +543,7 @@ def setup_page(request: Request):
             {
                 "step": state.step,
                 "system_status": system_status,
-                "state": state.dict()
+                "state": state.model_dump()
             }
         )
     except Exception as e:
@@ -565,7 +566,7 @@ def setup_admin(
         creds = AdminCredentials(email=email, password=password)
         
         # Hash password with bcrypt
-        hashed = bcrypt.hashpw(password.encode(), bcrypt.gensalt(rounds=12))
+        hashed = bcrypt.hashpw(password.encode()[:72], bcrypt.gensalt(rounds=12))  # bcrypt uses 72 bytes
         
         # Generate secure JWT secret
         jwt_secret = secrets.token_urlsafe(32)
@@ -834,7 +835,7 @@ def setup_status():
     return JSONResponse({
         "setup_complete": check_setup_complete(),
         "config_exists": CONFIG_PATH.exists(),
-        "state": state.dict(),
+        "state": state.model_dump(),
         "system_status": {
             "go_installed": check_dependency("go"),
             "go_tools": check_go_tools(),

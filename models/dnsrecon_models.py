@@ -1,4 +1,4 @@
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, field_validator
 from typing import List, Dict, Any, Optional
 import re
 
@@ -8,7 +8,8 @@ class DomainRequest(BaseModel):
     include_ports: bool = False
     use_external_apis: bool = True
 
-    @validator('domain')
+    @field_validator('domain')
+    @classmethod
     def validate_domain(cls, v):
         pattern = re.compile(
             r'^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$'

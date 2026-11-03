@@ -1,5 +1,5 @@
 from typing import List, Dict, Optional, Union, Any
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 class Repo(BaseModel):
     name: str
@@ -89,5 +89,4 @@ class User(BaseModel):
     hireable: Optional[Any] = None
     orgs: List[Org] = Field(default_factory=list)
 
-    class Config:
-        populate_by_name = True
+    model_config = ConfigDict(populate_by_name=True)

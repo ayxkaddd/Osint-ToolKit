@@ -2,7 +2,7 @@
 Pydantic models for OSINT Search Service
 """
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 from typing import List, Optional
 from enum import Enum
 
@@ -43,7 +43,8 @@ class SearchRequest(BaseModel):
         description="Delay between requests in seconds"
     )
 
-    @validator('value')
+    @field_validator('value')
+    @classmethod
     def value_not_empty(cls, v):
         if not v or not v.strip():
             raise ValueError('Value cannot be empty')
@@ -52,7 +53,7 @@ class SearchRequest(BaseModel):
 
 class CustomDorksRequest(BaseModel):
     """Request model for custom dorks search"""
-    dorks: List[str] = Field(..., description="List of custom dork queries", min_items=1)
+    dorks: List[str] = Field(..., description="List of custom dork queries", min_length=1)
     engines: List[SearchEngineEnum] = Field(
         default=[SearchEngineEnum.GOOGLE],
         description="Search engines to use"
@@ -70,7 +71,8 @@ class CustomDorksRequest(BaseModel):
         description="Delay between requests in seconds"
     )
 
-    @validator('dorks')
+    @field_validator('dorks')
+    @classmethod
     def dorks_not_empty(cls, v):
         if not v:
             raise ValueError('Dorks list cannot be empty')
@@ -89,7 +91,8 @@ class GetDorksRequest(BaseModel):
         description="Search engines to generate dorks for"
     )
 
-    @validator('value')
+    @field_validator('value')
+    @classmethod
     def value_not_empty(cls, v):
         if not v or not v.strip():
             raise ValueError('Value cannot be empty')

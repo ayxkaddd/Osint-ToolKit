@@ -5,7 +5,6 @@
 #   uv pip compile requirements.txt -c <(pip freeze) --no-header --no-annotate -o requirements-lock.txt
 aiofiles==25.1.0
 aiohappyeyeballs==2.6.1
-aiohttp==3.13.3
 aiosignal==1.4.0
 annotated-doc==0.0.4
 annotated-types==0.7.0
@@ -30,7 +29,6 @@ idna==3.11
 jinja2==3.1.6
 markupsafe==3.0.3
 multidict==6.7.1
-passlib==1.7.4
 phonenumbers==8.13.50
 pillow==12.1.0
 propcache==0.4.1
@@ -43,7 +41,6 @@ pyjwt==2.11.0
 pynacl==1.6.2
 python-dateutil==2.9.0.post0
 python-dotenv==1.2.1
-python-jose==3.5.0
 python-multipart==0.0.22
 python-whois==0.9.6
 pyyaml==6.0.2
