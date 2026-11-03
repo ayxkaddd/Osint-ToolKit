@@ -4,7 +4,8 @@
   "scripts": {
     "build:css": "tailwindcss -c tailwind.config.js -i static/css/tailwind.src.css -o static/css/tailwind.css --minify",
     "watch:css": "tailwindcss -c tailwind.config.js -i static/css/tailwind.src.css -o static/css/tailwind.css --watch",
-    "build:notes": "esbuild frontend/notes-editor/index.js --bundle --minify --format=iife --target=es2020 --legal-comments=none --outfile=static/vendor/notes-editor.js"
+    "build:notes": "esbuild frontend/notes-editor/index.js --bundle --minify --format=iife --target=es2020 --legal-comments=none --outfile=static/vendor/notes-editor.js",
+    "format": "npx --yes prettier@3.3.3 --write \"static/js/**/*.js\" frontend/notes-editor/index.js"
   },
   "devDependencies": {
     "@codemirror/autocomplete": "6.20.4",

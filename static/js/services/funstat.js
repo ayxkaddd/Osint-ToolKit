@@ -1,24 +1,28 @@
 // Funstat page (templates/funstat.html)
 
-    // Balance badge: refreshed after every Funstat call (the API reports it in each response)
-    (function () {
-        const nativeFetch = window.fetch.bind(window);
-        async function refreshBalance() {
-            try {
-                const t = await nativeFetch('/funstat/bot/balance').then(r => r.json());
-                if (t.balance === null || t.balance === undefined) return;
-                document.getElementById('apiBalance').textContent = Number(t.balance).toLocaleString(undefined, { maximumFractionDigits: 2 });
-                document.getElementById('apiLastCost').textContent = t.last_cost ? `last request: ${t.last_cost}` : '';
-            } catch (e) { /* badge is informational */ }
+// Balance badge: refreshed after every Funstat call (the API reports it in each response)
+(function () {
+    const nativeFetch = window.fetch.bind(window);
+    async function refreshBalance() {
+        try {
+            const t = await nativeFetch('/funstat/bot/balance').then((r) => r.json());
+            if (t.balance === null || t.balance === undefined) return;
+            document.getElementById('apiBalance').textContent = Number(t.balance).toLocaleString(undefined, {
+                maximumFractionDigits: 2,
+            });
+            document.getElementById('apiLastCost').textContent = t.last_cost ? `last request: ${t.last_cost}` : '';
+        } catch (e) {
+            /* badge is informational */
         }
-        window.fetch = async (...args) => {
-            const response = await nativeFetch(...args);
-            const url = String(args[0] && args[0].url || args[0]);
-            if (url.includes('/funstat/') && !url.includes('/balance') && !url.includes('/media')) refreshBalance();
-            return response;
-        };
-        refreshBalance();
-    })();
+    }
+    window.fetch = async (...args) => {
+        const response = await nativeFetch(...args);
+        const url = String((args[0] && args[0].url) || args[0]);
+        if (url.includes('/funstat/') && !url.includes('/balance') && !url.includes('/media')) refreshBalance();
+        return response;
+    };
+    refreshBalance();
+})();
 
 // Set current service for result loading
 window.currentService = 'funstat';
@@ -27,9 +31,10 @@ window.currentService = 'funstat';
 // the follow-up data that was fetched for it.
 window.loadResultIntoView = function (data, record) {
     const method = record ? record.method_name : null;
-    funstatSavedInvestigationId = (record && record.investigation_id) || new URLSearchParams(location.search).get('investigation');
+    funstatSavedInvestigationId =
+        (record && record.investigation_id) || new URLSearchParams(location.search).get('investigation');
     const children = (record && record.children) || [];
-    const child = (name) => children.filter(c => c.method_name === name).pop();
+    const child = (name) => children.filter((c) => c.method_name === name).pop();
 
     if (method === 'lookup_user' && Array.isArray(data) && data.length) {
         switchTab('user');
@@ -111,7 +116,7 @@ async function funstatJson(response) {
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
         // FastAPI validation errors carry a list; proxied API errors can be long
-        const detail = Array.isArray(data.detail) ? data.detail.map(d => d.msg).join('; ') : data.detail;
+        const detail = Array.isArray(data.detail) ? data.detail.map((d) => d.msg).join('; ') : data.detail;
         throw new Error(detail ? String(detail).slice(0, 300) : `Request failed (HTTP ${response.status})`);
     }
     return data;
@@ -119,7 +124,7 @@ async function funstatJson(response) {
 let messagesPaginationState = {
     page: 1,
     pageSize: 20,
-    totalPages: 1
+    totalPages: 1,
 };
 
 // Store all messages globally for filtering
@@ -127,11 +132,10 @@ window.allMessages = [];
 window.currentUserGroups = [];
 window.thumbnailCache = {};
 
-
 function switchTab(tab) {
-    document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+    document.querySelectorAll('.tab-content').forEach((el) => el.classList.add('hidden'));
     document.getElementById(`${tab}SearchTab`).classList.remove('hidden');
-    document.querySelectorAll('.funstat-tab').forEach(btn => btn.classList.toggle('active', btn.id === `${tab}Tab`));
+    document.querySelectorAll('.funstat-tab').forEach((btn) => btn.classList.toggle('active', btn.id === `${tab}Tab`));
 }
 
 function showLoading(text = 'Processing request...') {
@@ -153,7 +157,8 @@ async function openMediaModal({ preview = '', chat, id }) {
     const video = document.getElementById('mediaVideo');
     const status = document.getElementById('mediaStatus');
     const download = document.getElementById('mediaDownload');
-    document.getElementById('mediaTelegramLink').href = `https://t.me/${encodeURIComponent(chat)}/${encodeURIComponent(id)}`;
+    document.getElementById('mediaTelegramLink').href =
+        `https://t.me/${encodeURIComponent(chat)}/${encodeURIComponent(id)}`;
     download.classList.add('hidden');
     video.pause();
     video.classList.add('hidden');
@@ -164,7 +169,9 @@ async function openMediaModal({ preview = '', chat, id }) {
     status.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Loading the original…';
     document.getElementById('mediaModal').classList.remove('hidden');
     try {
-        const response = await fetch(`/funstat/media/full?chat_identifier=${encodeURIComponent(chat)}&message_id=${encodeURIComponent(id)}`);
+        const response = await fetch(
+            `/funstat/media/full?chat_identifier=${encodeURIComponent(chat)}&message_id=${encodeURIComponent(id)}`
+        );
         const media = await funstatJson(response);
         if (token !== mediaViewToken) return;
         if (media.media_type === 'video') {
@@ -221,11 +228,11 @@ function closeContextModal() {
 function showToast(message, type = 'info') {
     const container = document.getElementById('toastContainer');
     const toast = document.createElement('div');
-    
+
     const icons = {
         success: 'fa-check-circle text-green-400',
         error: 'fa-exclamation-circle text-red-400',
-        info: 'fa-info-circle text-blue-400'
+        info: 'fa-info-circle text-blue-400',
     };
 
     toast.className = `toast toast-${type}`;
@@ -250,20 +257,23 @@ function showToast(message, type = 'info') {
 
 // NEW: Copy to clipboard function
 function copyToClipboard(text, sourceElement) {
-    navigator.clipboard.writeText(text).then(() => {
-        const icon = sourceElement.querySelector('i');
-        const originalClass = icon.className;
-        
-        icon.className = 'fas fa-check copy-success';
-        
-        setTimeout(() => {
-            icon.className = originalClass;
-        }, 2000);
-        
-        showToast('Copied to clipboard', 'success');
-    }).catch(() => {
-        showToast('Failed to copy', 'error');
-    });
+    navigator.clipboard
+        .writeText(text)
+        .then(() => {
+            const icon = sourceElement.querySelector('i');
+            const originalClass = icon.className;
+
+            icon.className = 'fas fa-check copy-success';
+
+            setTimeout(() => {
+                icon.className = originalClass;
+            }, 2000);
+
+            showToast('Copied to clipboard', 'success');
+        })
+        .catch(() => {
+            showToast('Failed to copy', 'error');
+        });
 }
 
 // NEW: Close History Modal
@@ -322,26 +332,24 @@ function renderUserHistoryModal(data) {
     }
 
     // Sort by date (newest first)
-    const sorted = [...data].sort((a, b) => 
-        new Date(b.date_time) - new Date(a.date_time)
-    );
+    const sorted = [...data].sort((a, b) => new Date(b.date_time) - new Date(a.date_time));
 
     // Group by type
-    const names = sorted.filter(entry => entry.type === 'name');
-    const usernames = sorted.filter(entry => entry.type === 'username');
+    const names = sorted.filter((entry) => entry.type === 'name');
+    const usernames = sorted.filter((entry) => entry.type === 'username');
 
     function formatDate(dateStr) {
         const date = new Date(dateStr);
-        const formatted = date.toLocaleDateString('en-US', { 
-            month: 'short', 
-            day: 'numeric', 
-            year: 'numeric' 
+        const formatted = date.toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
         });
-        
+
         const now = new Date();
         const diffMs = now - date;
         const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-        
+
         let relative;
         if (diffDays === 0) relative = 'today';
         else if (diffDays === 1) relative = 'yesterday';
@@ -358,9 +366,10 @@ function renderUserHistoryModal(data) {
 
         return `
             <div class="timeline-container">
-                ${entries.map((entry, index) => {
-                    const { formatted, relative } = formatDate(entry.date_time);
-                    return `
+                ${entries
+                    .map((entry, index) => {
+                        const { formatted, relative } = formatDate(entry.date_time);
+                        return `
                         <div class="timeline-entry" style="animation-delay: ${index * 0.1}s">
                             <div class="flex items-start justify-between gap-4">
                                 <div class="flex-1">
@@ -387,13 +396,16 @@ function renderUserHistoryModal(data) {
                             </div>
                         </div>
                     `;
-                }).join('')}
+                    })
+                    .join('')}
             </div>
         `;
     }
 
     content.innerHTML = `
-        ${names.length > 0 ? `
+        ${
+            names.length > 0
+                ? `
             <div class="mb-8">
                 <h4 class="text-lg font-bold mb-4 flex items-center text-purple-300">
                     <i class="fas fa-user mr-2"></i>
@@ -401,9 +413,13 @@ function renderUserHistoryModal(data) {
                 </h4>
                 ${renderTimeline(names, 'history-badge-name', 'fa-user')}
             </div>
-        ` : ''}
+        `
+                : ''
+        }
 
-        ${usernames.length > 0 ? `
+        ${
+            usernames.length > 0
+                ? `
             <div>
                 <h4 class="text-lg font-bold mb-4 flex items-center text-blue-300">
                     <i class="fas fa-at mr-2"></i>
@@ -411,7 +427,9 @@ function renderUserHistoryModal(data) {
                 </h4>
                 ${renderTimeline(usernames, 'history-badge-username', 'fa-at')}
             </div>
-        ` : ''}
+        `
+                : ''
+        }
     `;
 
     modal.classList.remove('hidden');
@@ -419,10 +437,10 @@ function renderUserHistoryModal(data) {
 }
 
 // NEW: Add Enter key support for search input
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
     const searchInput = document.getElementById('userSearchInput');
     if (searchInput) {
-        searchInput.addEventListener('keypress', function(e) {
+        searchInput.addEventListener('keypress', function (e) {
             if (e.key === 'Enter') {
                 searchUser();
             }
@@ -431,7 +449,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     const textSearchInput = document.getElementById('textSearchInput');
     if (textSearchInput) {
-        textSearchInput.addEventListener('keypress', function(e) {
+        textSearchInput.addEventListener('keypress', function (e) {
             if (e.key === 'Enter') {
                 searchText();
             }
@@ -440,7 +458,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     const groupIdInput = document.getElementById('groupIdInput');
     if (groupIdInput) {
-        groupIdInput.addEventListener('keypress', function(e) {
+        groupIdInput.addEventListener('keypress', function (e) {
             if (e.key === 'Enter') {
                 searchGroup();
             }
@@ -448,7 +466,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // ESC key to close modals
-    document.addEventListener('keydown', function(e) {
+    document.addEventListener('keydown', function (e) {
         if (e.key === 'Escape') {
             closeHistoryModal();
             closeContextModal();
@@ -457,7 +475,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // Click outside modal to close
-    document.getElementById('nameHistoryModal')?.addEventListener('click', function(e) {
+    document.getElementById('nameHistoryModal')?.addEventListener('click', function (e) {
         if (e.target.id === 'nameHistoryModal') {
             closeHistoryModal();
         }
@@ -486,7 +504,7 @@ async function getMessageContext(chatUsername, messageId, contextSize = 5) {
             chat_identifier: cleanUsername,
             message_id: messageId,
             context_size: contextSize,
-            fetch_replies: true
+            fetch_replies: true,
         });
 
         const response = await fetch(`/funstat/media/context/message?${params}`);
@@ -542,14 +560,18 @@ function displayContextModal(context, chatUsername) {
                     <span class="text-xs text-gray-500">${date}</span>
                 </div>
                 ${text ? `<p class="text-white text-sm mb-2">${escapeHtml(text)}</p>` : ''}
-                ${hasMedia ? `
+                ${
+                    hasMedia
+                        ? `
                     <div class="flex items-center gap-2 mb-2">
                         <span class="text-xs bg-blue-900/50 text-blue-400 px-2 py-1 rounded">
                             <i class="fas fa-paperclip mr-1"></i>${escapeHtml(msg.media_type || 'Media')}
                         </span>
                         ${chatUsername && messageId ? viewMediaButton(chatUsername, messageId) : ''}
                     </div>
-                ` : ''}
+                `
+                        : ''
+                }
                 <a href="${messageLink}" target="_blank" class="text-xs text-purple-400 hover:text-purple-300">
                     <i class="fas fa-external-link-alt mr-1"></i>Open in Telegram
                 </a>
@@ -576,7 +598,7 @@ function displayContextModal(context, chatUsername) {
     // Reply chain section (if any)
     if (context.reply_chain && context.reply_chain.length > 0) {
         html += `<div class="context-section-header"><i class="fas fa-reply mr-1"></i> Reply Chain (${escapeHtml(context.reply_chain.length)})</div>`;
-        context.reply_chain.forEach(msg => {
+        context.reply_chain.forEach((msg) => {
             html += formatContextMessage(msg, 'reply');
         });
     }
@@ -584,7 +606,7 @@ function displayContextModal(context, chatUsername) {
     // Previous messages
     if (context.previous_messages && context.previous_messages.length > 0) {
         html += `<div class="context-section-header"><i class="fas fa-arrow-up mr-1"></i> Previous Messages (${escapeHtml(context.previous_messages.length)})</div>`;
-        context.previous_messages.forEach(msg => {
+        context.previous_messages.forEach((msg) => {
             html += formatContextMessage(msg);
         });
     }
@@ -598,13 +620,17 @@ function displayContextModal(context, chatUsername) {
     // Next messages
     if (context.next_messages && context.next_messages.length > 0) {
         html += `<div class="context-section-header"><i class="fas fa-arrow-down mr-1"></i> Following Messages (${escapeHtml(context.next_messages.length)})</div>`;
-        context.next_messages.forEach(msg => {
+        context.next_messages.forEach((msg) => {
             html += formatContextMessage(msg);
         });
     }
 
     // No messages found
-    if (!context.target_message && (!context.previous_messages || context.previous_messages.length === 0) && (!context.next_messages || context.next_messages.length === 0)) {
+    if (
+        !context.target_message &&
+        (!context.previous_messages || context.previous_messages.length === 0) &&
+        (!context.next_messages || context.next_messages.length === 0)
+    ) {
         html += `
             <div class="text-center py-8">
                 <i class="fas fa-inbox text-4xl text-gray-600 mb-3"></i>
@@ -622,11 +648,11 @@ function extractLinksFromMessages(messages) {
     const links = new Set();
     const urlRegex = /https?:\/\/[^\s<>"{}|\\^`\[\]]+/gi;
 
-    messages.forEach(msg => {
+    messages.forEach((msg) => {
         const text = msg.text || msg.message || '';
         const matches = text.match(urlRegex) || [];
 
-        matches.forEach(url => {
+        matches.forEach((url) => {
             for (const { pattern, platform } of PLATFORM_PATTERNS) {
                 if (pattern.test(url)) {
                     links.add(url);
@@ -647,11 +673,12 @@ async function enrichLinks(links) {
         // Group the enrichment under the Funstat user it came from
         const headers = { 'Content-Type': 'application/json' };
         if (funstatUserResultId) headers['X-Parent-Result-ID'] = funstatUserResultId;
-        if (funstatUserResultId && funstatSavedInvestigationId) headers['X-Investigation-ID'] = funstatSavedInvestigationId;
+        if (funstatUserResultId && funstatSavedInvestigationId)
+            headers['X-Investigation-ID'] = funstatSavedInvestigationId;
         const response = await fetch('/api/sharetrace/enrich_links', {
             method: 'POST',
             headers,
-            body: JSON.stringify(links)
+            body: JSON.stringify(links),
         });
 
         if (!response.ok) {
@@ -683,7 +710,7 @@ function displayEnrichedLinks(results) {
 
     // Group results by platform
     const groupedByPlatform = {};
-    results.forEach(result => {
+    results.forEach((result) => {
         const platform = result.platform || 'unknown';
         if (!groupedByPlatform[platform]) {
             groupedByPlatform[platform] = [];
@@ -712,7 +739,7 @@ function displayEnrichedLinks(results) {
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         `;
 
-        platformResults.forEach(result => {
+        platformResults.forEach((result) => {
             html += renderEnrichedCard(result);
         });
 
@@ -732,16 +759,16 @@ function displayEnrichedLinks(results) {
 
 function getPlatformIcon(platform) {
     const icons = {
-        'tiktok': 'fab fa-tiktok',
-        'instagram': 'fab fa-instagram',
-        'discord': 'fab fa-discord',
-        'telegram': 'fab fa-telegram',
-        'pinterest': 'fab fa-pinterest',
-        'chatgpt': 'fas fa-robot',
-        'perplexity': 'fas fa-brain',
-        'microsoft': 'fab fa-microsoft',
-        'substack': 'fas fa-newspaper',
-        'suno': 'fas fa-music'
+        tiktok: 'fab fa-tiktok',
+        instagram: 'fab fa-instagram',
+        discord: 'fab fa-discord',
+        telegram: 'fab fa-telegram',
+        pinterest: 'fab fa-pinterest',
+        chatgpt: 'fas fa-robot',
+        perplexity: 'fas fa-brain',
+        microsoft: 'fab fa-microsoft',
+        substack: 'fas fa-newspaper',
+        suno: 'fas fa-music',
     };
     return icons[platform] || 'fas fa-link';
 }
@@ -767,13 +794,17 @@ function renderTikTokCard(data) {
     return `
         <div class="enriched-link-card rounded-xl p-4">
             <div class="flex items-start gap-4">
-                ${data.avatar_url ? `
+                ${
+                    data.avatar_url
+                        ? `
                     <img src="${escapeAttr(safeUrl(data.avatar_url))}" alt="${escapeAttr(data.username)}" data-image-view="" class="enriched-avatar" onerror="this.style.display='none'">
-                ` : `
+                `
+                        : `
                     <div class="enriched-avatar bg-gradient-to-br from-pink-500 to-purple-600 flex items-center justify-center text-2xl">
                         <i class="fab fa-tiktok"></i>
                     </div>
-                `}
+                `
+                }
                 <div class="flex-1 min-w-0">
                     <div class="flex items-center gap-2 mb-1">
                         <h6 class="font-bold text-white truncate">${escapeHtml(data.nickname || data.username || 'Unknown')}</h6>
@@ -781,15 +812,23 @@ function renderTikTokCard(data) {
                     </div>
                     <span class="text-sm text-purple-400 hover:text-purple-300">${data.username ? pivotText('username', data.username, '@' + data.username) : '@unknown'}</span>
                         <a href="${escapeAttr(safeUrl(data.profile || '#'))}" target="_blank" rel="noopener noreferrer" class="text-sm text-purple-400 hover:text-purple-300 ml-1" title="Open profile"><i class="fas fa-external-link-alt text-[10px]"></i></a>
-                    ${data.country ? `
+                    ${
+                        data.country
+                            ? `
                         <div class="flex items-center gap-1 mt-1 text-xs text-gray-500">
                             <i class="fas fa-map-marker-alt"></i>
                             <span>${escapeHtml(data.country)}</span>
                         </div>
-                    ` : ''}
-                    ${data.signature ? `
+                    `
+                            : ''
+                    }
+                    ${
+                        data.signature
+                            ? `
                         <p class="text-sm text-gray-400 mt-2 line-clamp-2">${escapeHtml(data.signature)}</p>
-                    ` : ''}
+                    `
+                            : ''
+                    }
                 </div>
             </div>
             
@@ -812,21 +851,31 @@ function renderTikTokCard(data) {
                 </div>
             </div>
 
-            ${data.device || data.share_method || data.shared_at ? `
+            ${
+                data.device || data.share_method || data.shared_at
+                    ? `
                 <div class="mt-4 pt-3 border-t border-gray-700/50 flex flex-wrap gap-3 text-xs text-gray-500">
                     ${data.device ? `<span><i class="fas fa-mobile-alt mr-1"></i>${escapeHtml(data.device)}</span>` : ''}
                     ${data.share_method ? `<span><i class="fas fa-share mr-1"></i>${escapeHtml(data.share_method)}</span>` : ''}
                     ${data.shared_at ? `<span><i class="fas fa-clock mr-1"></i>${new Date(data.shared_at).toLocaleString()}</span>` : ''}
                 </div>
-            ` : ''}
+            `
+                    : ''
+            }
             
-            ${data.dm_available !== undefined ? `
+            ${
+                data.dm_available !== undefined
+                    ? `
                 <div class="mt-2 text-xs">
-                    ${data.dm_available ? 
-                        '<span class="text-green-400"><i class="fas fa-envelope mr-1"></i>DMs Open</span>' : 
-                        '<span class="text-gray-500"><i class="fas fa-envelope-slash mr-1"></i>DMs Closed</span>'}
+                    ${
+                        data.dm_available
+                            ? '<span class="text-green-400"><i class="fas fa-envelope mr-1"></i>DMs Open</span>'
+                            : '<span class="text-gray-500"><i class="fas fa-envelope-slash mr-1"></i>DMs Closed</span>'
+                    }
                 </div>
-            ` : ''}
+            `
+                    : ''
+            }
         </div>
     `;
 }
@@ -835,42 +884,62 @@ function renderInstagramCard(data) {
     return `
         <div class="enriched-link-card rounded-xl p-4">
             <div class="flex items-start gap-4">
-                ${data.avatar_url || data.profile_pic_url ? `
+                ${
+                    data.avatar_url || data.profile_pic_url
+                        ? `
                     <img src="${escapeAttr(safeUrl(data.avatar_url || data.profile_pic_url))}" alt="${escapeAttr(data.username)}" data-image-view="" class="enriched-avatar" onerror="this.style.display='none'">
-                ` : `
+                `
+                        : `
                     <div class="enriched-avatar bg-gradient-to-br from-pink-500 via-red-500 to-yellow-500 flex items-center justify-center text-2xl">
                         <i class="fab fa-instagram"></i>
                     </div>
-                `}
+                `
+                }
                 <div class="flex-1 min-w-0">
                     <h6 class="font-bold text-white truncate">${escapeHtml(data.full_name || data.username || 'Unknown')}</h6>
                     <span class="text-sm text-purple-400 hover:text-purple-300">${data.username ? pivotText('username', data.username, '@' + data.username) : '@unknown'}</span>
                         <a href="https://instagram.com/${escapeAttr(data.username)}" target="_blank" rel="noopener noreferrer" class="text-sm text-purple-400 hover:text-purple-300 ml-1" title="Open profile"><i class="fas fa-external-link-alt text-[10px]"></i></a>
-                    ${data.biography || data.bio ? `
+                    ${
+                        data.biography || data.bio
+                            ? `
                         <p class="text-sm text-gray-400 mt-2 line-clamp-2">${escapeHtml(data.biography || data.bio)}</p>
-                    ` : ''}
+                    `
+                            : ''
+                    }
                 </div>
             </div>
             
             <div class="flex flex-wrap gap-2 mt-4">
-                ${data.follower_count !== undefined ? `
+                ${
+                    data.follower_count !== undefined
+                        ? `
                     <div class="enriched-stat">
                         <span class="enriched-stat-value">${formatNumber(data.follower_count)}</span>
                         <span class="enriched-stat-label">Followers</span>
                     </div>
-                ` : ''}
-                ${data.following_count !== undefined ? `
+                `
+                        : ''
+                }
+                ${
+                    data.following_count !== undefined
+                        ? `
                     <div class="enriched-stat">
                         <span class="enriched-stat-value">${formatNumber(data.following_count)}</span>
                         <span class="enriched-stat-label">Following</span>
                     </div>
-                ` : ''}
-                ${data.media_count !== undefined ? `
+                `
+                        : ''
+                }
+                ${
+                    data.media_count !== undefined
+                        ? `
                     <div class="enriched-stat">
                         <span class="enriched-stat-value">${formatNumber(data.media_count)}</span>
                         <span class="enriched-stat-label">Posts</span>
                     </div>
-                ` : ''}
+                `
+                        : ''
+                }
             </div>
         </div>
     `;
@@ -880,34 +949,50 @@ function renderDiscordCard(data) {
     return `
         <div class="enriched-link-card rounded-xl p-4">
             <div class="flex items-start gap-4">
-                ${data.icon_url || data.avatar_url ? `
+                ${
+                    data.icon_url || data.avatar_url
+                        ? `
                     <img src="${escapeAttr(safeUrl(data.icon_url || data.avatar_url))}" alt="${escapeAttr(data.name)}" data-image-view="" class="enriched-avatar" onerror="this.style.display='none'">
-                ` : `
+                `
+                        : `
                     <div class="enriched-avatar bg-[#5865f2] flex items-center justify-center text-2xl">
                         <i class="fab fa-discord"></i>
                     </div>
-                `}
+                `
+                }
                 <div class="flex-1 min-w-0">
                     <h6 class="font-bold text-white truncate">${escapeHtml(data.name || data.guild_name || 'Unknown Server')}</h6>
-                    ${data.description ? `
+                    ${
+                        data.description
+                            ? `
                         <p class="text-sm text-gray-400 mt-2 line-clamp-2">${escapeHtml(data.description)}</p>
-                    ` : ''}
+                    `
+                            : ''
+                    }
                 </div>
             </div>
             
             <div class="flex flex-wrap gap-2 mt-4">
-                ${data.member_count !== undefined ? `
+                ${
+                    data.member_count !== undefined
+                        ? `
                     <div class="enriched-stat">
                         <span class="enriched-stat-value">${formatNumber(data.member_count)}</span>
                         <span class="enriched-stat-label">Members</span>
                     </div>
-                ` : ''}
-                ${data.online_count !== undefined ? `
+                `
+                        : ''
+                }
+                ${
+                    data.online_count !== undefined
+                        ? `
                     <div class="enriched-stat">
                         <span class="enriched-stat-value">${formatNumber(data.online_count)}</span>
                         <span class="enriched-stat-label">Online</span>
                     </div>
-                ` : ''}
+                `
+                        : ''
+                }
             </div>
         </div>
     `;
@@ -917,32 +1002,48 @@ function renderTelegramCard(data) {
     return `
         <div class="enriched-link-card rounded-xl p-4">
             <div class="flex items-start gap-4">
-                ${data.avatar_url || data.photo_url ? `
+                ${
+                    data.avatar_url || data.photo_url
+                        ? `
                     <img src="${escapeAttr(safeUrl(data.avatar_url || data.photo_url))}" alt="${escapeAttr(data.title)}" data-image-view="" class="enriched-avatar" onerror="this.style.display='none'">
-                ` : `
+                `
+                        : `
                     <div class="enriched-avatar bg-[#0088cc] flex items-center justify-center text-2xl">
                         <i class="fab fa-telegram"></i>
                     </div>
-                `}
+                `
+                }
                 <div class="flex-1 min-w-0">
                     <h6 class="font-bold text-white truncate">${escapeHtml(data.title || data.name || 'Unknown')}</h6>
-                    ${data.username ? `
+                    ${
+                        data.username
+                            ? `
                         <span class="text-sm text-purple-400 hover:text-purple-300">${pivotText('telegram_username', data.username, '@' + data.username)}</span>
                             <a href="https://t.me/${escapeAttr(data.username)}" target="_blank" rel="noopener noreferrer" class="text-sm text-purple-400 hover:text-purple-300 ml-1" title="Open profile"><i class="fas fa-external-link-alt text-[10px]"></i></a>
-                    ` : ''}
-                    ${data.description || data.about ? `
+                    `
+                            : ''
+                    }
+                    ${
+                        data.description || data.about
+                            ? `
                         <p class="text-sm text-gray-400 mt-2 line-clamp-2">${escapeHtml(data.description || data.about)}</p>
-                    ` : ''}
+                    `
+                            : ''
+                    }
                 </div>
             </div>
             
             <div class="flex flex-wrap gap-2 mt-4">
-                ${data.member_count !== undefined ? `
+                ${
+                    data.member_count !== undefined
+                        ? `
                     <div class="enriched-stat">
                         <span class="enriched-stat-value">${formatNumber(data.member_count)}</span>
                         <span class="enriched-stat-label">Members</span>
                     </div>
-                ` : ''}
+                `
+                        : ''
+                }
             </div>
         </div>
     `;
@@ -956,23 +1057,35 @@ function renderGenericCard(data, platform) {
     return `
         <div class="enriched-link-card rounded-xl p-4">
             <div class="flex items-start gap-4">
-                ${data.avatar_url || data.icon_url || data.image_url ? `
+                ${
+                    data.avatar_url || data.icon_url || data.image_url
+                        ? `
                     <img src="${escapeAttr(safeUrl(data.avatar_url || data.icon_url || data.image_url))}" alt="${escapeAttr(title)}" data-image-view="" class="enriched-avatar" onerror="this.style.display='none'">
-                ` : `
+                `
+                        : `
                     <div class="enriched-avatar bg-gray-700 flex items-center justify-center text-2xl">
                         <i class="${getPlatformIcon(platform)}"></i>
                     </div>
-                `}
+                `
+                }
                 <div class="flex-1 min-w-0">
                     <h6 class="font-bold text-white truncate">${escapeHtml(title)}</h6>
-                    ${url !== '#' ? `
+                    ${
+                        url !== '#'
+                            ? `
                         <a href="${escapeAttr(safeUrl(url))}" target="_blank" class="text-sm text-purple-400 hover:text-purple-300 truncate block">
                             <i class="fas fa-external-link-alt mr-1"></i>View
                         </a>
-                    ` : ''}
-                    ${description ? `
+                    `
+                            : ''
+                    }
+                    ${
+                        description
+                            ? `
                         <p class="text-sm text-gray-400 mt-2 line-clamp-2">${escapeHtml(description)}</p>
-                    ` : ''}
+                    `
+                            : ''
+                    }
                 </div>
             </div>
         </div>
@@ -1072,7 +1185,11 @@ function hideInlineError(errorId) {
 
 // What was typed or pivoted here decides the search: digits are a user ID, anything else a username
 function cleanUserSearch(value) {
-    return value.trim().replace(/^(https?:\/\/)?(www\.)?(t|telegram)\.me\//i, '').replace(/^@/, '').replace(/\/.*$/, '');
+    return value
+        .trim()
+        .replace(/^(https?:\/\/)?(www\.)?(t|telegram)\.me\//i, '')
+        .replace(/^@/, '')
+        .replace(/\/.*$/, '');
 }
 
 function detectUserSearchType() {
@@ -1198,13 +1315,16 @@ async function getUserMessages(page = 1) {
     btn.innerHTML = '<span class="btn-spinner"></span><span class="ml-2">Loading...</span>';
 
     try {
-        const response = await funstatFetch(`/funstat/users/${currentUserId}/messages?page=${page}&pageSize=20`, funstatUserResultId);
+        const response = await funstatFetch(
+            `/funstat/users/${currentUserId}/messages?page=${page}&pageSize=20`,
+            funstatUserResultId
+        );
         const data = await funstatJson(response);
 
         messagesPaginationState = {
             page: page,
             pageSize: 20,
-            totalPages: data.paging?.totalPages || Math.ceil((data.paging?.total || 0) / 20) || 1
+            totalPages: data.paging?.totalPages || Math.ceil((data.paging?.total || 0) / 20) || 1,
         };
 
         displayUserMessages(data);
@@ -1236,13 +1356,13 @@ async function getAllUserMessages() {
 
         // Store all messages globally for filtering
         window.allMessages = data.messages || [];
-        
+
         // Store the messages analysis data
         window.messagesAnalysis = data.messages_analysis || null;
 
         // Deduplicate groups by ID
         const groupMap = new Map();
-        window.allMessages.forEach(msg => {
+        window.allMessages.forEach((msg) => {
             if (msg.group && msg.group.id) {
                 groupMap.set(msg.group.id, msg.group);
             }
@@ -1328,7 +1448,9 @@ async function searchText(page = 1) {
     showLoading('Searching text...');
 
     try {
-        const response = await fetch(`/funstat/search/text?input=${encodeURIComponent(searchText)}&page=${page}&pageSize=50`);
+        const response = await fetch(
+            `/funstat/search/text?input=${encodeURIComponent(searchText)}&page=${page}&pageSize=50`
+        );
         const data = await funstatJson(response);
         displayTextResults(data);
         showToast(`Found ${data.total || data.results?.length || 0} results`, 'success');
@@ -1414,12 +1536,16 @@ async function loadTmeProfile(username) {
     const box = document.getElementById('tmeProfile');
     box.innerHTML = '<span class="text-gray-500"><i class="fas fa-spinner fa-spin mr-1"></i>t.me profile…</span>';
     try {
-        const response = await funstatFetch(`/funstat/users/tme_profile?username=${encodeURIComponent(username)}`, funstatUserResultId);
+        const response = await funstatFetch(
+            `/funstat/users/tme_profile?username=${encodeURIComponent(username)}`,
+            funstatUserResultId
+        );
         const profile = await funstatJson(response);
-        if (!document.body.contains(box)) return;  // another user was searched meanwhile
+        if (!document.body.contains(box)) return; // another user was searched meanwhile
         showTmeProfile(profile);
     } catch (error) {
-        if (document.body.contains(box)) box.innerHTML = `<span class="text-gray-500">t.me profile unavailable: ${escapeHtml(error.message)}</span>`;
+        if (document.body.contains(box))
+            box.innerHTML = `<span class="text-gray-500">t.me profile unavailable: ${escapeHtml(error.message)}</span>`;
     }
 }
 
@@ -1468,14 +1594,20 @@ function displayUserStats(stats, full = false) {
                 </div>
             </div>
 
-            ${full && stats.favorite_chat ? `
+            ${
+                full && stats.favorite_chat
+                    ? `
                 <div class="mt-6 p-4 bg-gray-800/50 rounded-lg">
                     <p class="text-sm text-gray-400 mb-2">Favorite Chat:</p>
                     <p class="text-white font-medium">${escapeHtml(stats.favorite_chat.title)}</p>
                 </div>
-            ` : ''}
+            `
+                    : ''
+            }
 
-            ${stats.first_msg_date ? `
+            ${
+                stats.first_msg_date
+                    ? `
                 <div class="mt-4 grid grid-cols-2 gap-4">
                     <div class="text-sm">
                         <span class="text-gray-400">First Message:</span>
@@ -1486,7 +1618,9 @@ function displayUserStats(stats, full = false) {
                         <span class="ml-2 text-white">${new Date(stats.last_msg_date).toLocaleDateString()}</span>
                     </div>
                 </div>
-            ` : ''}
+            `
+                    : ''
+            }
         </div>
     `;
 
@@ -1506,15 +1640,21 @@ function displayUserGroups(groups) {
             </h4>
 
             <div class="space-y-3 max-h-96 overflow-y-auto custom-scrollbar">
-                ${groups.map(g => `
+                ${groups
+                    .map(
+                        (g) => `
                     <div class="bg-gray-800/50 p-4 rounded-lg hover:bg-gray-800 transition-all">
                         <div class="flex justify-between items-start">
                             <div class="flex-1">
                                 <p class="font-semibold text-white">${escapeHtml(g.chat.title)}</p>
-                                ${g.chat.username ? `
+                                ${
+                                    g.chat.username
+                                        ? `
                                     <span class="text-sm text-purple-400 hover:text-purple-300">${pivotText('telegram_username', g.chat.username, '@' + g.chat.username)}</span>
                                         <a href="https://t.me/${escapeAttr(g.chat.username)}" target="_blank" rel="noopener noreferrer" class="text-sm text-purple-400 hover:text-purple-300 ml-1" title="Open profile"><i class="fas fa-external-link-alt text-[10px]"></i></a>
-                                ` : ''}
+                                `
+                                        : ''
+                                }
                                 <p class="text-xs text-gray-500">ID: ${escapeHtml(g.chat.id)}</p>
                                 <div class="flex items-center gap-4 mt-2 text-xs text-gray-400">
                                     <span><i class="fas fa-comments mr-1"></i>${escapeHtml(g.messages_count || 0)} messages</span>
@@ -1524,7 +1664,9 @@ function displayUserGroups(groups) {
                             </div>
                         </div>
                     </div>
-                `).join('')}
+                `
+                    )
+                    .join('')}
             </div>
         </div>
     `;
@@ -1548,7 +1690,9 @@ function displayUserMessages(data) {
                 ${messages.map(messageRowHtml).join('') || '<p class="text-gray-500">No messages</p>'}
             </div>
 
-            ${totalPages > 1 ? `
+            ${
+                totalPages > 1
+                    ? `
                 <div class="mt-4 flex justify-center items-center gap-2">
                     <button onclick="getUserMessages(${Math.max(1, messagesPaginationState.page - 1)})"
                             class="pagination-btn" ${messagesPaginationState.page === 1 ? 'disabled' : ''}>
@@ -1562,7 +1706,9 @@ function displayUserMessages(data) {
                         Next<i class="fas fa-chevron-right ml-1"></i>
                     </button>
                 </div>
-            ` : ''}
+            `
+                    : ''
+            }
         </div>
     `;
 
@@ -1584,7 +1730,7 @@ const MESSAGE_CHUNK = 60;
 const messageList = { all: [], filtered: [], rendered: 0, query: '', listObserver: null, thumbObserver: null };
 const messageSearchText = new WeakMap();
 const messageDateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'short', timeStyle: 'short' });
-const thumbQueue = new Map();   // chat username -> Set(message ids)
+const thumbQueue = new Map(); // chat username -> Set(message ids)
 let thumbFlushTimer = null;
 
 function formatMessageDate(value) {
@@ -1599,9 +1745,12 @@ function thumbKey(chat, messageId) {
 function highlightText(text, query) {
     if (!query) return escapeHtml(text);
     const re = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
-    let out = '', last = 0, match;
+    let out = '',
+        last = 0,
+        match;
     while ((match = re.exec(text))) {
-        out += escapeHtml(text.slice(last, match.index)) +
+        out +=
+            escapeHtml(text.slice(last, match.index)) +
             `<mark class="bg-yellow-600/40 text-yellow-100 rounded px-0.5">${escapeHtml(match[0])}</mark>`;
         last = match.index + match[0].length;
         if (!match[0].length) re.lastIndex++;
@@ -1615,7 +1764,9 @@ let messageIdentifierRe = null;
 
 function messageTextHtml(text, query = '') {
     messageIdentifierRe ||= new RegExp(
-        `${TEXT_IDENTIFIER_RE.source}|(?<![\\w@.])@[A-Za-z]\\w{3,31}\\b|(?<![\\w.])(?:https?:\\/\\/)?t\\.me\\/(?!joinchat\\b|addstickers\\b|share\\b|proxy\\b)[A-Za-z]\\w{3,31}\\b`, 'gi');
+        `${TEXT_IDENTIFIER_RE.source}|(?<![\\w@.])@[A-Za-z]\\w{3,31}\\b|(?<![\\w.])(?:https?:\\/\\/)?t\\.me\\/(?!joinchat\\b|addstickers\\b|share\\b|proxy\\b)[A-Za-z]\\w{3,31}\\b`,
+        'gi'
+    );
     const source = String(text ?? '');
     let out = '';
     let last = 0;
@@ -1624,7 +1775,10 @@ function messageTextHtml(text, query = '') {
         out += highlightText(source.slice(last, match.index), query);
         const handle = found.match(/^@(.+)$|t\.me\/(.+)$/i);
         if (handle) out += pivotText('telegram_username', handle[1] || handle[2], found);
-        else out += found.includes('@') ? pivotText('email', found) : pivotText('phone', found.replace(/[\s().-]/g, ''), found);
+        else
+            out += found.includes('@')
+                ? pivotText('email', found)
+                : pivotText('phone', found.replace(/[\s().-]/g, ''), found);
         last = match.index + found.length;
     }
     return out + highlightText(source.slice(last), query);
@@ -1673,16 +1827,20 @@ function messageRowHtml(msg) {
                 <a href="${escapeAttr(messageLink)}" target="_blank" rel="noopener noreferrer" class="text-xs text-purple-400 hover:text-purple-300">
                     <i class="fas fa-external-link-alt mr-1"></i>Open in Telegram
                 </a>
-                ${group.username ? `
+                ${
+                    group.username
+                        ? `
                     <button type="button" data-context-chat="${escapeAttr(group.username)}" data-context-id="${escapeAttr(msg.messageId)}"
                         class="context-btn text-xs text-blue-400 hover:text-blue-300 bg-blue-900/30 px-2 py-1 rounded">
                         <i class="fas fa-comments mr-1"></i>Get Context
                     </button>
-                ` : `
+                `
+                        : `
                     <span class="text-xs text-gray-600" title="Context unavailable - no public username">
                         <i class="fas fa-comments mr-1"></i>No context
                     </span>
-                `}
+                `
+                }
             </div>
         </div>`;
 }
@@ -1699,7 +1857,7 @@ function renderMessageChunk() {
     template.innerHTML = html;
     const placeholders = template.content.querySelectorAll('[data-thumb-id]');
     list.appendChild(template.content);
-    placeholders.forEach(el => messageList.thumbObserver.observe(el));
+    placeholders.forEach((el) => messageList.thumbObserver.observe(el));
     messageList.rendered = end;
 
     // IntersectionObserver only reports changes: if the sentinel is still in
@@ -1720,7 +1878,7 @@ function applyMessageFilters() {
     const mediaType = document.getElementById('messageMediaFilter').value;
 
     messageList.query = query;
-    messageList.filtered = messageList.all.filter(msg => {
+    messageList.filtered = messageList.all.filter((msg) => {
         if (groupId && String(msg.group && msg.group.id) !== groupId) return false;
         const hasMedia = msg.mediaCode !== null && msg.mediaCode !== undefined;
         if (mediaType === 'no-media' && hasMedia) return false;
@@ -1762,25 +1920,39 @@ async function flushThumbnails() {
             const chunk = ids.slice(i, i + 20);
             let results = [];
             try {
-                const response = await fetch(`/funstat/media/thumbnail/batch?chat_identifier=${encodeURIComponent(chat)}&${chunk.map(id => `message_ids=${encodeURIComponent(id)}`).join('&')}`, { method: 'POST' });
+                const response = await fetch(
+                    `/funstat/media/thumbnail/batch?chat_identifier=${encodeURIComponent(chat)}&${chunk.map((id) => `message_ids=${encodeURIComponent(id)}`).join('&')}`,
+                    { method: 'POST' }
+                );
                 if (response.ok) results = await response.json();
             } catch (err) {
                 console.error(`Thumbnail batch failed for ${chat}:`, err);
             }
-            const found = new Map((Array.isArray(results) ? results : []).filter(r => r && r.thumbnail_url).map(r => [String(r.message_id), r.thumbnail_url]));
-            chunk.forEach(id => {
+            const found = new Map(
+                (Array.isArray(results) ? results : [])
+                    .filter((r) => r && r.thumbnail_url)
+                    .map((r) => [String(r.message_id), r.thumbnail_url])
+            );
+            chunk.forEach((id) => {
                 const url = found.get(String(id));
                 if (url) window.thumbnailCache[thumbKey(chat, id)] = url;
-                document.querySelectorAll(`[data-thumb-chat="${CSS.escape(chat)}"][data-thumb-id="${CSS.escape(String(id))}"]`).forEach(el => {
-                    if (url) {
-                        el.outerHTML = thumbnailImg(url, chat, id);
-                    } else {
-                        // No preview (e.g. a video without one) - the original may still open
-                        el.classList.remove('animate-pulse');
-                        el.removeAttribute('data-thumb-id');
-                        el.insertAdjacentHTML('beforeend', `<span class="text-xs text-gray-600">no preview</span>${viewMediaButton(chat, id)}`);
-                    }
-                });
+                document
+                    .querySelectorAll(
+                        `[data-thumb-chat="${CSS.escape(chat)}"][data-thumb-id="${CSS.escape(String(id))}"]`
+                    )
+                    .forEach((el) => {
+                        if (url) {
+                            el.outerHTML = thumbnailImg(url, chat, id);
+                        } else {
+                            // No preview (e.g. a video without one) - the original may still open
+                            el.classList.remove('animate-pulse');
+                            el.removeAttribute('data-thumb-id');
+                            el.insertAdjacentHTML(
+                                'beforeend',
+                                `<span class="text-xs text-gray-600">no preview</span>${viewMediaButton(chat, id)}`
+                            );
+                        }
+                    });
             });
         }
     }
@@ -1788,9 +1960,12 @@ async function flushThumbnails() {
 
 function displayAllMessagesWithFilters(messages) {
     messageList.all = messages || [];
-    messageList.all.forEach(msg => {
+    messageList.all.forEach((msg) => {
         const group = msg.group || {};
-        messageSearchText.set(msg, `${msg.text || ''}\n${group.title || ''}\n${group.username || ''}\n${msg.mediaName || ''}`.toLowerCase());
+        messageSearchText.set(
+            msg,
+            `${msg.text || ''}\n${group.title || ''}\n${group.username || ''}\n${msg.mediaName || ''}`.toLowerCase()
+        );
     });
     const groups = window.currentUserGroups || [];
 
@@ -1813,7 +1988,11 @@ function displayAllMessagesWithFilters(messages) {
                         <select id="messageGroupFilter"
                             class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-purple-500">
                             <option value="">All groups</option>
-                            ${groups.slice().sort((a, b) => String(a.title || '').localeCompare(String(b.title || ''))).map(g => `<option value="${escapeAttr(g.id)}">${escapeHtml(g.title)}</option>`).join('')}
+                            ${groups
+                                .slice()
+                                .sort((a, b) => String(a.title || '').localeCompare(String(b.title || '')))
+                                .map((g) => `<option value="${escapeAttr(g.id)}">${escapeHtml(g.title)}</option>`)
+                                .join('')}
                         </select>
                     </div>
                     <div>
@@ -1845,13 +2024,21 @@ function displayAllMessagesWithFilters(messages) {
     appendResultCard('userResults', html);
 
     const container = document.getElementById('filteredMessagesContainer');
-    messageList.listObserver = new IntersectionObserver(entries => {
-        if (entries[0].isIntersecting) renderMessageChunk();
-    }, { root: container, rootMargin: '400px' });
+    messageList.listObserver = new IntersectionObserver(
+        (entries) => {
+            if (entries[0].isIntersecting) renderMessageChunk();
+        },
+        { root: container, rootMargin: '400px' }
+    );
     messageList.listObserver.observe(document.getElementById('messageListSentinel'));
-    messageList.thumbObserver = new IntersectionObserver(entries => {
-        entries.forEach(entry => { if (entry.isIntersecting) queueThumbnail(entry.target); });
-    }, { root: container, rootMargin: '200px' });
+    messageList.thumbObserver = new IntersectionObserver(
+        (entries) => {
+            entries.forEach((entry) => {
+                if (entry.isIntersecting) queueThumbnail(entry.target);
+            });
+        },
+        { root: container, rootMargin: '200px' }
+    );
 
     let searchTimer = null;
     document.getElementById('messageKeywordSearch').addEventListener('input', () => {
@@ -1870,20 +2057,31 @@ function displayAllMessagesWithFilters(messages) {
 
 // What the analyzer's data types can be pivoted as
 const ANALYSIS_PIVOT_TYPES = {
-    email: 'email', phone: 'phone', domain: 'domain', url: 'url',
-    telegram_username: 'telegram_username', fragment_username: 'telegram_username',
-    btc_wallet: 'crypto_btc', eth_wallet: 'crypto_eth',
+    email: 'email',
+    phone: 'phone',
+    domain: 'domain',
+    url: 'url',
+    telegram_username: 'telegram_username',
+    fragment_username: 'telegram_username',
+    btc_wallet: 'crypto_btc',
+    eth_wallet: 'crypto_eth',
 };
 
 function analysisPivotHtml(type, value) {
     const telegram = type === 'url' && String(value).match(/t\.me\/([A-Za-z]\w{3,31})\/?$/i);
-    const html = telegram ? pivotText('telegram_username', telegram[1], String(value))
-        : ANALYSIS_PIVOT_TYPES[type] ? pivotText(ANALYSIS_PIVOT_TYPES[type], value) : '';
+    const html = telegram
+        ? pivotText('telegram_username', telegram[1], String(value))
+        : ANALYSIS_PIVOT_TYPES[type]
+          ? pivotText(ANALYSIS_PIVOT_TYPES[type], value)
+          : '';
     return html.startsWith('<button') ? html : '';
 }
 
 function analysisValueHtml(type, value) {
-    return analysisPivotHtml(type, value) || `<span class="text-xs bg-gray-700 px-2 py-1 rounded text-gray-300 break-all">${escapeHtml(value)}</span>`;
+    return (
+        analysisPivotHtml(type, value) ||
+        `<span class="text-xs bg-gray-700 px-2 py-1 rounded text-gray-300 break-all">${escapeHtml(value)}</span>`
+    );
 }
 
 // Long lists draw in chunks as they scroll into view, so everything is reachable without freezing the page
@@ -1894,7 +2092,10 @@ function appendRowsOnScroll(scroller, list, items, rowHtml, size) {
     scroller.appendChild(sentinel);
     const more = () => {
         const template = document.createElement('template');
-        template.innerHTML = items.slice(done, done + size).map(rowHtml).join('');
+        template.innerHTML = items
+            .slice(done, done + size)
+            .map(rowHtml)
+            .join('');
         list.appendChild(template.content);
         done += size;
         observer.unobserve(sentinel);
@@ -1906,8 +2107,11 @@ function appendRowsOnScroll(scroller, list, items, rowHtml, size) {
         }
     };
     const observer = new IntersectionObserver(
-        (entries) => { if (entries.some(e => e.isIntersecting)) more(); },
-        { root: scroller, rootMargin: '200px' });
+        (entries) => {
+            if (entries.some((e) => e.isIntersecting)) more();
+        },
+        { root: scroller, rootMargin: '200px' }
+    );
     more();
 }
 
@@ -1915,10 +2119,15 @@ function analysisMessageHtml(msg, riskClass, formatDataType) {
     const messageLink = buildTelegramLink(msg.group?.id, msg.message_id, msg.group?.username);
     const chatLink = buildTelegramChatLink(msg.group?.id, msg.group?.username);
     const textHtml = msg.text ? messageTextHtml(msg.text) : '<i class="text-gray-500">No text</i>';
-    const chips = [...new Set(Object.entries(msg.extracted_data || {}).flatMap(([type, values]) =>
-        (values || []).map(v => analysisPivotHtml(type, v)).filter(Boolean)))]
+    const chips = [
+        ...new Set(
+            Object.entries(msg.extracted_data || {}).flatMap(([type, values]) =>
+                (values || []).map((v) => analysisPivotHtml(type, v)).filter(Boolean)
+            )
+        ),
+    ]
         // Not what the text below already shows as a chip
-        .filter(chip => !textHtml.includes(chip.match(/data-pivot-value="[^"]*"/)[0]));
+        .filter((chip) => !textHtml.includes(chip.match(/data-pivot-value="[^"]*"/)[0]));
     return `
         <div class="bg-gray-800/50 p-3 rounded-lg sensitive-message-card hover:bg-gray-800 transition-all">
             <div class="flex justify-between items-start mb-2">
@@ -1936,9 +2145,13 @@ function analysisMessageHtml(msg, riskClass, formatDataType) {
             </div>
             <p class="text-sm text-white mb-2 whitespace-pre-wrap break-words">${textHtml}</p>
             <div class="flex flex-wrap items-center gap-1 mb-2">
-                ${(msg.data_types_found || []).map(t => `
+                ${(msg.data_types_found || [])
+                    .map(
+                        (t) => `
                     <span class="text-xs bg-purple-900/30 text-purple-300 px-2 py-0.5 rounded">${escapeHtml(formatDataType(t))}</span>
-                `).join('')}
+                `
+                    )
+                    .join('')}
                 ${chips.join('')}
             </div>
             <a href="${escapeAttr(messageLink)}" target="_blank" rel="noopener noreferrer" class="text-xs text-purple-400 hover:text-purple-300">
@@ -1957,17 +2170,22 @@ function displayMessagesAnalysis(analysis) {
 
     // Format data type names for display
     const formatDataType = (type) => {
-        return type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        return type.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
     };
 
     // Get risk level color class
     const getRiskBadgeClass = (level) => {
-        switch(level) {
-            case 'critical': return 'risk-badge-critical';
-            case 'high': return 'risk-badge-high';
-            case 'medium': return 'risk-badge-medium';
-            case 'low': return 'risk-badge-low';
-            default: return 'risk-badge-low';
+        switch (level) {
+            case 'critical':
+                return 'risk-badge-critical';
+            case 'high':
+                return 'risk-badge-high';
+            case 'medium':
+                return 'risk-badge-medium';
+            case 'low':
+                return 'risk-badge-low';
+            default:
+                return 'risk-badge-low';
         }
     };
 
@@ -1990,7 +2208,7 @@ function displayMessagesAnalysis(analysis) {
                     <div class="text-xs text-gray-400 mt-1">With Sensitive Data</div>
                 </div>
                 <div class="stat-badge p-4 rounded-lg text-center">
-                    <div class="text-3xl font-bold text-green-400">${((analysis.total_messages - analysis.messages_with_sensitive_data) / analysis.total_messages * 100).toFixed(1)}%</div>
+                    <div class="text-3xl font-bold text-green-400">${(((analysis.total_messages - analysis.messages_with_sensitive_data) / analysis.total_messages) * 100).toFixed(1)}%</div>
                     <div class="text-xs text-gray-400 mt-1">Clean Messages</div>
                 </div>
                 <div class="stat-badge p-4 rounded-lg text-center">
@@ -2026,44 +2244,62 @@ function displayMessagesAnalysis(analysis) {
             </div>
 
             <!-- Data Type Frequency -->
-            ${Object.keys(dataTypeFreq).length > 0 ? `
+            ${
+                Object.keys(dataTypeFreq).length > 0
+                    ? `
                 <div class="mb-6">
                     <h5 class="text-sm font-semibold text-gray-300 mb-3 flex items-center">
                         <i class="fas fa-tags mr-2 text-blue-500"></i>
                         Data Types Found
                     </h5>
                     <div class="flex flex-wrap gap-2">
-                        ${Object.entries(dataTypeFreq).map(([type, count]) => `
+                        ${Object.entries(dataTypeFreq)
+                            .map(
+                                ([type, count]) => `
                             <span class="analysis-tag">
                                 ${formatDataType(type)}: <strong>${count}</strong>
                             </span>
-                        `).join('')}
+                        `
+                            )
+                            .join('')}
                     </div>
                 </div>
-            ` : ''}
+            `
+                    : ''
+            }
 
             <!-- Aggregated Data -->
-            ${Object.keys(aggregatedData).length > 0 ? `
+            ${
+                Object.keys(aggregatedData).length > 0
+                    ? `
                 <div class="mb-6">
                     <h5 class="text-sm font-semibold text-gray-300 mb-3 flex items-center">
                         <i class="fas fa-database mr-2 text-green-500"></i>
                         Extracted Data Summary
                     </h5>
                     <div class="space-y-3">
-                        ${Object.entries(aggregatedData).map(([type, values]) => `
+                        ${Object.entries(aggregatedData)
+                            .map(
+                                ([type, values]) => `
                             <div class="bg-gray-800/50 p-3 rounded-lg">
                                 <div class="text-xs text-gray-400 mb-2 font-semibold uppercase">${formatDataType(type)} (${values.length})</div>
                                 <div class="max-h-56 overflow-y-auto custom-scrollbar" data-analysis-values="${escapeAttr(type)}">
                                     <div class="flex flex-wrap items-center gap-1"></div>
                                 </div>
                             </div>
-                        `).join('')}
+                        `
+                            )
+                            .join('')}
                     </div>
                 </div>
-            ` : ''}
+            `
+                    : ''
+            }
 
             <!-- Sensitive Messages List -->
-            ${messageAnalyses.length > 0 ? `
+            ${
+                messageAnalyses.length > 0
+                    ? `
                 <div>
                     <h5 class="text-sm font-semibold text-gray-300 mb-3 flex items-center">
                         <i class="fas fa-list mr-2 text-yellow-500"></i>
@@ -2073,7 +2309,9 @@ function displayMessagesAnalysis(analysis) {
                         <div class="space-y-2" id="analysisMessages"></div>
                     </div>
                 </div>
-            ` : ''}
+            `
+                    : ''
+            }
         </div>
     `;
 
@@ -2081,14 +2319,25 @@ function displayMessagesAnalysis(analysis) {
     appendResultCard('userResults', html);
 
     const card = document.getElementById('messagesAnalysisCard');
-    card.querySelectorAll('[data-analysis-values]').forEach(scroller => {
+    card.querySelectorAll('[data-analysis-values]').forEach((scroller) => {
         const type = scroller.dataset.analysisValues;
-        appendRowsOnScroll(scroller, scroller.firstElementChild, aggregatedData[type], v => analysisValueHtml(type, v), 100);
+        appendRowsOnScroll(
+            scroller,
+            scroller.firstElementChild,
+            aggregatedData[type],
+            (v) => analysisValueHtml(type, v),
+            100
+        );
     });
     const scroller = document.getElementById('analysisMessagesScroller');
     if (scroller) {
-        appendRowsOnScroll(scroller, document.getElementById('analysisMessages'), messageAnalyses,
-            msg => analysisMessageHtml(msg, getRiskBadgeClass, formatDataType), 50);
+        appendRowsOnScroll(
+            scroller,
+            document.getElementById('analysisMessages'),
+            messageAnalyses,
+            (msg) => analysisMessageHtml(msg, getRiskBadgeClass, formatDataType),
+            50
+        );
     }
 }
 
@@ -2104,22 +2353,32 @@ function displayGroupInfo(group) {
                     </div>
                     <div>
                         <h3 class="text-2xl font-bold text-white">${escapeHtml(data.title || 'Unknown Group')}</h3>
-                        ${data.username ? `
+                        ${
+                            data.username
+                                ? `
                             <span class="text-blue-400 hover:text-blue-300">${pivotText('telegram_username', data.username, '@' + data.username)}</span>
                                 <a href="https://t.me/${escapeAttr(data.username)}" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:text-blue-300 ml-1" title="Open profile"><i class="fas fa-external-link-alt text-[10px]"></i></a>
-                        ` : ''}
+                        `
+                                : ''
+                        }
                         <p class="text-gray-500 text-sm">ID: ${currentGroupId}</p>
                     </div>
                 </div>
             </div>
 
-            ${data.description ? `
+            ${
+                data.description
+                    ? `
                 <div class="mt-4 p-4 bg-gray-800/50 rounded-lg">
                     <p class="text-sm text-gray-300">${escapeHtml(data.description)}</p>
                 </div>
-            ` : ''}
+            `
+                    : ''
+            }
 
-            ${data.stats ? `
+            ${
+                data.stats
+                    ? `
                 <div class="mt-4 grid grid-cols-3 gap-4">
                     <div class="stat-badge p-3 rounded-lg text-center">
                         <div class="text-2xl font-bold text-purple-400">${escapeHtml(data.stats.members || 0)}</div>
@@ -2134,7 +2393,9 @@ function displayGroupInfo(group) {
                         <div class="text-xs text-gray-400">Active Members</div>
                     </div>
                 </div>
-            ` : ''}
+            `
+                    : ''
+            }
         </div>
     `;
 
@@ -2150,7 +2411,9 @@ function displayGroupMembers(members) {
             </h4>
 
             <div class="space-y-2 max-h-96 overflow-y-auto custom-scrollbar">
-                ${members.map(member => `
+                ${members
+                    .map(
+                        (member) => `
                     <div class="bg-gray-800/50 p-3 rounded-lg hover:bg-gray-800 transition-all flex justify-between items-center">
                         <div class="flex items-center space-x-3">
                             <div class="w-10 h-10 bg-purple-600 rounded-full flex items-center justify-center">
@@ -2160,10 +2423,14 @@ function displayGroupMembers(members) {
                                 <p class="font-medium text-white">
                                     ${escapeHtml(member.first_name || '')} ${escapeHtml(member.last_name || '')}
                                 </p>
-                                ${member.username ? `
+                                ${
+                                    member.username
+                                        ? `
                                     <span class="text-sm text-purple-400 hover:text-purple-300">${pivotText('telegram_username', member.username, '@' + member.username)}</span>
                                         <a href="https://t.me/${escapeAttr(member.username)}" target="_blank" rel="noopener noreferrer" class="text-sm text-purple-400 hover:text-purple-300 ml-1" title="Open profile"><i class="fas fa-external-link-alt text-[10px]"></i></a>
-                                ` : ''}
+                                `
+                                        : ''
+                                }
                             </div>
                         </div>
                         <div class="flex items-center gap-2">
@@ -2172,7 +2439,9 @@ function displayGroupMembers(members) {
                             <span class="text-xs text-gray-400">${escapeHtml(member.today_msg || 0)} msgs today</span>
                         </div>
                     </div>
-                `).join('')}
+                `
+                    )
+                    .join('')}
             </div>
         </div>
     `;
@@ -2191,11 +2460,16 @@ function displayTextResults(data) {
             </h4>
 
             <div class="space-y-3 max-h-[600px] overflow-y-auto custom-scrollbar">
-                ${results.map(result => {
-                    const messageLink = result.group ? buildTelegramLink(result.group.id, result.message_id, result.group.username) : '#';
-                    const chatLink = result.group ? buildTelegramChatLink(result.group.id, result.group.username) : '#';
+                ${results
+                    .map((result) => {
+                        const messageLink = result.group
+                            ? buildTelegramLink(result.group.id, result.message_id, result.group.username)
+                            : '#';
+                        const chatLink = result.group
+                            ? buildTelegramChatLink(result.group.id, result.group.username)
+                            : '#';
 
-                    return `
+                        return `
                         <div class="bg-gray-800/50 p-4 rounded-lg hover:bg-gray-800 transition-all">
                             <div class="flex justify-between items-start mb-2">
                                 <div class="flex items-center gap-2">
@@ -2205,40 +2479,55 @@ function displayTextResults(data) {
                                 <span class="text-xs text-gray-500">${escapeHtml(result.date ? new Date(result.date).toLocaleString() : '')}</span>
                             </div>
 
-                            ${result.group ? `
+                            ${
+                                result.group
+                                    ? `
                                 <p class="text-sm text-gray-400 mb-2">
                                     <i class="fas fa-users mr-1"></i>
                                     <a href="${chatLink}" target="_blank" class="hover:text-purple-400">
                                         ${escapeHtml(result.group.title)}
                                     </a>
                                 </p>
-                            ` : ''}
+                            `
+                                    : ''
+                            }
 
                             <p class="text-white bg-gray-900/50 p-3 rounded mb-2 whitespace-pre-wrap break-words">${messageTextHtml(result.text || '')}</p>
 
-                            ${result.group ? `
+                            ${
+                                result.group
+                                    ? `
                                 <div class="flex items-center gap-3">
                                     <a href="${messageLink}" target="_blank" class="text-xs text-purple-400 hover:text-purple-300">
                                         <i class="fas fa-external-link-alt mr-1"></i>Open in Telegram
                                     </a>
-                                    ${result.group.username ? `
+                                    ${
+                                        result.group.username
+                                            ? `
                                         <button onclick="getMessageContext(${jsArg(result.group.username)}, ${escapeHtml(result.message_id)})"
                                             class="context-btn text-xs text-blue-400 hover:text-blue-300 bg-blue-900/30 px-2 py-1 rounded">
                                             <i class="fas fa-comments mr-1"></i>Get Context
                                         </button>
-                                    ` : `
+                                    `
+                                            : `
                                         <span class="text-xs text-gray-600" title="Context unavailable - no public username">
                                             <i class="fas fa-comments mr-1"></i>No context
                                         </span>
-                                    `}
+                                    `
+                                    }
                                 </div>
-                            ` : ''}
+                            `
+                                    : ''
+                            }
                         </div>
                     `;
-                }).join('')}
+                    })
+                    .join('')}
             </div>
 
-            ${data.totalPages > 1 ? `
+            ${
+                data.totalPages > 1
+                    ? `
                 <div class="mt-4 flex justify-center items-center gap-2">
                     <button type="button" onclick="searchText(${Number(data.currentPage) - 1})" class="pagination-btn" ${data.currentPage === 1 ? 'disabled' : ''}>
                         <i class="fas fa-chevron-left mr-1"></i>Previous
@@ -2248,7 +2537,9 @@ function displayTextResults(data) {
                         Next<i class="fas fa-chevron-right ml-1"></i>
                     </button>
                 </div>
-            ` : ''}
+            `
+                    : ''
+            }
         </div>
     `;
 
@@ -2263,11 +2554,15 @@ function displayUsernameResults(data) {
                 Username Usage Results
             </h4>
 
-            ${data.actual_users && data.actual_users.length > 0 ? `
+            ${
+                data.actual_users && data.actual_users.length > 0
+                    ? `
                 <div class="mb-6">
                     <h5 class="text-lg font-semibold mb-3 text-green-400">Current Users</h5>
                     <div class="space-y-2">
-                        ${data.actual_users.map(user => `
+                        ${data.actual_users
+                            .map(
+                                (user) => `
                             <div class="bg-gray-800/50 p-3 rounded-lg flex justify-between items-center">
                                 <div>
                                     <p class="font-medium text-white">${escapeHtml(user.first_name || '')} ${escapeHtml(user.last_name || '')}</p>
@@ -2275,44 +2570,70 @@ function displayUsernameResults(data) {
                                 </div>
                                 ${user.is_active ? '<span class="stat-badge px-2 py-1 rounded text-xs text-green-400">Active</span>' : ''}
                             </div>
-                        `).join('')}
+                        `
+                            )
+                            .join('')}
                     </div>
                 </div>
-            ` : ''}
+            `
+                    : ''
+            }
 
-            ${data.usage_by_users_in_the_past && data.usage_by_users_in_the_past.length > 0 ? `
+            ${
+                data.usage_by_users_in_the_past && data.usage_by_users_in_the_past.length > 0
+                    ? `
                 <div class="mb-6">
                     <h5 class="text-lg font-semibold mb-3 text-yellow-400">Previously Used By</h5>
                     <div class="space-y-2">
-                        ${data.usage_by_users_in_the_past.map(user => `
+                        ${data.usage_by_users_in_the_past
+                            .map(
+                                (user) => `
                             <div class="bg-gray-800/50 p-3 rounded-lg">
                                 <p class="font-medium text-white">${escapeHtml(user.first_name || '')} ${escapeHtml(user.last_name || '')}</p>
                                 <p class="text-sm text-gray-400">ID: ${pivotText('telegram_id', user.id)}</p>
                             </div>
-                        `).join('')}
+                        `
+                            )
+                            .join('')}
                     </div>
                 </div>
-            ` : ''}
+            `
+                    : ''
+            }
 
-            ${data.actual_groups_or_channels && data.actual_groups_or_channels.length > 0 ? `
+            ${
+                data.actual_groups_or_channels && data.actual_groups_or_channels.length > 0
+                    ? `
                 <div class="mb-6">
                     <h5 class="text-lg font-semibold mb-3 text-blue-400">Groups/Channels</h5>
                     <div class="space-y-2">
-                        ${data.actual_groups_or_channels.map(group => `
+                        ${data.actual_groups_or_channels
+                            .map(
+                                (group) => `
                             <div class="bg-gray-800/50 p-3 rounded-lg">
                                 <a href="https://t.me/${escapeAttr(group.username)}" target="_blank" class="font-medium text-white hover:text-purple-400">
                                     ${escapeHtml(group.title)}
                                 </a>
                                 ${group.username ? `<p class="text-sm text-purple-400">${pivotText('telegram_username', group.username, '@' + group.username)}</p>` : ''}
                             </div>
-                        `).join('')}
+                        `
+                            )
+                            .join('')}
                     </div>
                 </div>
-            ` : ''}
+            `
+                    : ''
+            }
 
-            ${!data.actual_users?.length && !data.usage_by_users_in_the_past?.length && !data.actual_groups_or_channels?.length ? `
+            ${
+                !data.actual_users?.length &&
+                !data.usage_by_users_in_the_past?.length &&
+                !data.actual_groups_or_channels?.length
+                    ? `
                 <p class="text-center text-gray-500 py-8">No usage found for this username</p>
-            ` : ''}
+            `
+                    : ''
+            }
         </div>
     `;
 

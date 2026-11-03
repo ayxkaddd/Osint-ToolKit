@@ -6,7 +6,20 @@
 // a timeline), then breaches, accounts with profile data, and sites where an account just exists.
 
 const OI_STAT_LABEL = /follower|following|friend|subscriber|post|repo|review|connection|like|karma|\bxp\b/i;
-const OI_INFO_KEYS = ['name', 'username', 'email', 'phone', 'picture', 'bio', 'location', 'account_id', 'age', 'website', 'created', 'last_seen'];
+const OI_INFO_KEYS = [
+    'name',
+    'username',
+    'email',
+    'phone',
+    'picture',
+    'bio',
+    'location',
+    'account_id',
+    'age',
+    'website',
+    'created',
+    'last_seen',
+];
 const OI_SENSITIVE = /password|credit|ssn|security|bank/i;
 const OI_ROWS_SHOWN = 8;
 
@@ -22,8 +35,10 @@ function oiValue(value) {
 
 function oiKind(card) {
     if (card.breach) return 'breach';
-    return OI_INFO_KEYS.some(k => card[k] !== undefined && card[k] !== null && card[k] !== '') || (card.fields || []).length
-        ? 'profile' : 'registered';
+    return OI_INFO_KEYS.some((k) => card[k] !== undefined && card[k] !== null && card[k] !== '') ||
+        (card.fields || []).length
+        ? 'profile'
+        : 'registered';
 }
 
 function oiWebsiteUrl(site) {
@@ -36,19 +51,28 @@ function oiIconUrl(card) {
 
 // OSINT Industries' own module icon; modules named after a domain get its favicon instead
 function oiModuleIcons(card) {
-    const slug = String(card.slug || card.module || '').trim().toLowerCase();
+    const slug = String(card.slug || card.module || '')
+        .trim()
+        .toLowerCase();
     if (slug.includes('.')) return [`/api/oi/icon/${encodeURIComponent(slug)}`, oiIconUrl(card)];
     return [slug ? `https://cdn.osint.industries/modules/${encodeURIComponent(slug)}.png` : '', oiIconUrl(card)];
 }
 
 // Site icon like the username cards: the first image that loads, else two letters
 function oiSiteMark(urls, label) {
-    const [src, next] = urls.map(u => safeUrl(u)).filter(Boolean);
-    const letters = escapeHtml(String(label || '').replace(/[^\p{L}\p{N}]/gu, '').slice(0, 2).toUpperCase() || '?');
+    const [src, next] = urls.map((u) => safeUrl(u)).filter(Boolean);
+    const letters = escapeHtml(
+        String(label || '')
+            .replace(/[^\p{L}\p{N}]/gu, '')
+            .slice(0, 2)
+            .toUpperCase() || '?'
+    );
     const fallback = `<div class="platform-icon bg-gray-600${src ? ' username-site-mark-fallback' : ''}">${letters}</div>`;
     if (!src) return `<div class="username-site-mark">${fallback}</div>`;
     const giveUp = "this.style.display='none';this.nextElementSibling.style.display='flex'";
-    const onerror = next ? `if(this.dataset.next){this.src=this.dataset.next;this.removeAttribute('data-next')}else{${giveUp}}` : giveUp;
+    const onerror = next
+        ? `if(this.dataset.next){this.src=this.dataset.next;this.removeAttribute('data-next')}else{${giveUp}}`
+        : giveUp;
     return `<div class="username-site-mark">
         <img src="${escapeAttr(src)}" ${next ? `data-next="${escapeAttr(next)}"` : ''} alt="" loading="lazy" referrerpolicy="no-referrer" onerror="${onerror}">
         ${fallback}</div>`;
@@ -73,8 +97,11 @@ function oiAvatar(url) {
 function oiRow(label, value, type = null) {
     const text = oiValue(value);
     // emails, phones, usernames... open the "look up with" menu (OI and plugin cards)
-    const shown = type ? pivotText(type, value, text)
-        : typeof value === 'string' ? pivotField(label, value, text) : escapeHtml(text);
+    const shown = type
+        ? pivotText(type, value, text)
+        : typeof value === 'string'
+          ? pivotField(label, value, text)
+          : escapeHtml(text);
     return `<div class="username-data-row"><strong>${escapeHtml(label)}</strong><span title="${escapeAttr(text)}">${shown}</span></div>`;
 }
 
@@ -83,8 +110,11 @@ function oiRows(rows) {
     const shown = rows.length > OI_ROWS_SHOWN + 1 ? rows.slice(0, OI_ROWS_SHOWN) : rows;
     const hidden = rows.slice(shown.length);
     return {
-        html: shown.map(([label, value, type]) => oiRow(label, value, type)).join('')
-            + (hidden.length ? `<div data-oi-more class="hidden">${hidden.map(([label, value, type]) => oiRow(label, value, type)).join('')}</div>` : ''),
+        html:
+            shown.map(([label, value, type]) => oiRow(label, value, type)).join('') +
+            (hidden.length
+                ? `<div data-oi-more class="hidden">${hidden.map(([label, value, type]) => oiRow(label, value, type)).join('')}</div>`
+                : ''),
         hidden: hidden.length,
     };
 }
@@ -94,21 +124,38 @@ function oiActions(url, label, hiddenRows) {
     if (!safe && !hiddenRows) return '';
     return `
         <div class="username-card-actions">
-            ${safe ? `<a href="${escapeAttr(safe)}" target="_blank" rel="noopener noreferrer" title="${escapeAttr(url)}">
-                <i class="fas fa-external-link-alt"></i><span>${label}</span></a>` : '<span></span>'}
+            ${
+                safe
+                    ? `<a href="${escapeAttr(safe)}" target="_blank" rel="noopener noreferrer" title="${escapeAttr(url)}">
+                <i class="fas fa-external-link-alt"></i><span>${label}</span></a>`
+                    : '<span></span>'
+            }
             ${hiddenRows ? `<button type="button" data-oi-more-toggle data-count="${hiddenRows}"><i class="fas fa-chevron-down"></i><span>${hiddenRows} more</span></button>` : ''}
         </div>`;
 }
 
 function oiFilterText(card) {
-    return [card.module, card.slug, card.name, card.username, card.email, card.phone, card.location, card.bio, card.website,
-        ...(card.fields || []).map(f => f.value)].filter(v => v !== undefined && v !== null).join(' ').toLowerCase();
+    return [
+        card.module,
+        card.slug,
+        card.name,
+        card.username,
+        card.email,
+        card.phone,
+        card.location,
+        card.bio,
+        card.website,
+        ...(card.fields || []).map((f) => f.value),
+    ]
+        .filter((v) => v !== undefined && v !== null)
+        .join(' ')
+        .toLowerCase();
 }
 
 function oiShell(card, kind, picture, inner) {
     return `
         <div class="result-card username-result-card fade-in${picture ? ' has-profile-image' : ''}${kind === 'breach' ? ' !border-red-500/30' : ''}"
-            data-oi-text="${escapeAttr(oiFilterText(card))}" data-oi-category="${escapeAttr(card.breach ? 'Data breaches' : (card.category || 'Other'))}">
+            data-oi-text="${escapeAttr(oiFilterText(card))}" data-oi-category="${escapeAttr(card.breach ? 'Data breaches' : card.category || 'Other')}">
             ${inner}
         </div>`;
 }
@@ -129,58 +176,98 @@ function oiHeader(title, subtitle, iconUrls, picture, subtitleClass = '') {
 
 function oiProfileCard(card) {
     const fields = card.fields || [];
-    const stats = fields.filter(f => typeof f.value === 'number' && OI_STAT_LABEL.test(f.label));
+    const stats = fields.filter((f) => typeof f.value === 'number' && OI_STAT_LABEL.test(f.label));
     // false flags ("private: no") say nothing worth a row
-    const rest = fields.filter(f => !stats.includes(f) && f.value !== false);
+    const rest = fields.filter((f) => !stats.includes(f) && f.value !== false);
     const rows = [
-        ['Name', card.name], ['Email', card.email], ['Phone', card.phone], ['Location', card.location],
-        ['Age', card.age], ['Gender', card.gender],
+        ['Name', card.name],
+        ['Email', card.email],
+        ['Phone', card.phone],
+        ['Location', card.location],
+        ['Age', card.age],
+        ['Gender', card.gender],
         ['Joined', card.created && String(card.created).slice(0, 10)],
         ['Last seen', card.last_seen && String(card.last_seen).slice(0, 10)],
-        ['Website', card.website], ['ID', card.account_id],
-        ...rest.map(f => [f.label, f.value]),
+        ['Website', card.website],
+        ['ID', card.account_id],
+        ...rest.map((f) => [f.label, f.value]),
     ].filter(([, value]) => value !== undefined && value !== null && value !== '');
     const { html, hidden } = oiRows(rows);
     const picture = safeUrl(card.picture);
-    return oiShell(card, oiKind(card), picture, `
+    return oiShell(
+        card,
+        oiKind(card),
+        picture,
+        `
         ${oiHeader(card.module, card.category || 'account', oiModuleIcons(card), picture)}
-        ${card.username ? `
+        ${
+            card.username
+                ? `
             <div class="username-handle-row">
                 <span title="@${escapeAttr(String(card.username))}">${pivotText('username', String(card.username), '@' + card.username)}</span>
                 <button type="button" class="copy-username-btn" data-oi-copy="${escapeAttr(String(card.username))}" title="Copy username"><i class="fas fa-copy"></i></button>
-            </div>` : ''}
-        ${card.bio || html || stats.length ? `
+            </div>`
+                : ''
+        }
+        ${
+            card.bio || html || stats.length
+                ? `
             <div class="username-card-content">
                 ${card.bio ? `<p class="username-card-bio" title="${escapeAttr(card.bio)}">${pivotInText(card.bio)}</p>` : ''}
                 ${html}
-                ${stats.length ? `<div class="username-mini-stats">${stats.slice(0, 6).map(f => `
-                    <div title="${escapeAttr(oiValue(f.value))}"><span>${escapeHtml(f.label)}</span><strong>${escapeHtml(oiCompact(f.value))}</strong></div>`).join('')}
-                </div>` : ''}
-            </div>` : ''}
-        ${oiActions(card.profile_url, 'View', hidden)}`);
+                ${
+                    stats.length
+                        ? `<div class="username-mini-stats">${stats
+                              .slice(0, 6)
+                              .map(
+                                  (f) => `
+                    <div title="${escapeAttr(oiValue(f.value))}"><span>${escapeHtml(f.label)}</span><strong>${escapeHtml(oiCompact(f.value))}</strong></div>`
+                              )
+                              .join('')}
+                </div>`
+                        : ''
+                }
+            </div>`
+                : ''
+        }
+        ${oiActions(card.profile_url, 'View', hidden)}`
+    );
 }
 
 function oiBreachCard(card) {
     const fields = card.fields || [];
-    const count = fields.find(f => /count|records/i.test(f.label) && typeof f.value === 'number');
-    const classes = fields.find(f => /data classes/i.test(f.label));
+    const count = fields.find((f) => /count|records/i.test(f.label) && typeof f.value === 'number');
+    const classes = fields.find((f) => /data classes/i.test(f.label));
     const tags = classes ? String(classes.value).split(/,\s*/).filter(Boolean) : [];
     const name = card.name || card.module;
     const rows = [
         ['Breached', card.created && String(card.created).slice(0, 10)],
         ['Accounts leaked', count && oiCompact(count.value)],
         ['Website', card.website],
-        ...fields.filter(f => f !== count && f !== classes).map(f => [f.label, f.value]),
+        ...fields.filter((f) => f !== count && f !== classes).map((f) => [f.label, f.value]),
     ].filter(([, value]) => value !== undefined && value !== null && value !== '');
     const { html, hidden } = oiRows(rows);
-    return oiShell(card, 'breach', '', `
+    return oiShell(
+        card,
+        'breach',
+        '',
+        `
         ${oiHeader(name, 'data breach', [card.picture, oiIconUrl(card)], '', '!text-red-300')}
         <div class="username-card-content">
-            ${tags.length ? `<div class="flex flex-wrap gap-1.5 mb-3">${tags.map(t =>
-                `<span class="px-2 py-0.5 rounded-md text-xs ${OI_SENSITIVE.test(t) ? 'bg-red-500/15 text-red-300' : 'bg-gray-800/60 text-gray-300'}">${escapeHtml(t)}</span>`).join('')}</div>` : ''}
+            ${
+                tags.length
+                    ? `<div class="flex flex-wrap gap-1.5 mb-3">${tags
+                          .map(
+                              (t) =>
+                                  `<span class="px-2 py-0.5 rounded-md text-xs ${OI_SENSITIVE.test(t) ? 'bg-red-500/15 text-red-300' : 'bg-gray-800/60 text-gray-300'}">${escapeHtml(t)}</span>`
+                          )
+                          .join('')}</div>`
+                    : ''
+            }
             ${html}
         </div>
-        ${oiActions(oiWebsiteUrl(card.website), 'Website', hidden)}`);
+        ${oiActions(oiWebsiteUrl(card.website), 'Website', hidden)}`
+    );
 }
 
 function oiCardHtml(card) {
@@ -191,10 +278,15 @@ function oiCardHtml(card) {
 document.addEventListener('click', (event) => {
     const copy = event.target.closest('[data-oi-copy]');
     if (copy) {
-        navigator.clipboard.writeText(copy.dataset.oiCopy).then(() => {
-            copy.innerHTML = '<i class="fas fa-check"></i>';
-            setTimeout(() => { copy.innerHTML = '<i class="fas fa-copy"></i>'; }, 1500);
-        }).catch(() => {});
+        navigator.clipboard
+            .writeText(copy.dataset.oiCopy)
+            .then(() => {
+                copy.innerHTML = '<i class="fas fa-check"></i>';
+                setTimeout(() => {
+                    copy.innerHTML = '<i class="fas fa-copy"></i>';
+                }, 1500);
+            })
+            .catch(() => {});
         return;
     }
     const toggle = event.target.closest('[data-oi-more-toggle]');
@@ -246,28 +338,32 @@ function oiTimeline(cards) {
         const year = Number(String(card.created || '').slice(0, 4));
         if (!year || year < 1990 || year > 2100) continue;
         const entry = years.get(year) || { accounts: [], breaches: [] };
-        (card.breach ? entry.breaches : entry.accounts).push(card.breach ? (card.name || card.module) : card.module);
+        (card.breach ? entry.breaches : entry.accounts).push(card.breach ? card.name || card.module : card.module);
         years.set(year, entry);
     }
     if (years.size < 2) return '';
     const last = Math.max(...years.keys());
     const first = Math.max(Math.min(...years.keys()), last - 19);
-    const peak = Math.max(...[...years.values()].map(e => e.accounts.length + e.breaches.length));
-    const pct = n => (n ? Math.max(6, Math.round((n / peak) * 100)) : 0);
+    const peak = Math.max(...[...years.values()].map((e) => e.accounts.length + e.breaches.length));
+    const pct = (n) => (n ? Math.max(6, Math.round((n / peak) * 100)) : 0);
     const columns = [];
     for (let year = first; year <= last; year++) {
         const e = years.get(year) || { accounts: [], breaches: [] };
         const title = [
-            e.accounts.length && `${e.accounts.length} account${e.accounts.length === 1 ? '' : 's'} created: ${e.accounts.slice(0, 12).join(', ')}`,
-            e.breaches.length && `${e.breaches.length} breach${e.breaches.length === 1 ? '' : 'es'}: ${e.breaches.slice(0, 12).join(', ')}`,
-        ].filter(Boolean).join('\n');
+            e.accounts.length &&
+                `${e.accounts.length} account${e.accounts.length === 1 ? '' : 's'} created: ${e.accounts.slice(0, 12).join(', ')}`,
+            e.breaches.length &&
+                `${e.breaches.length} breach${e.breaches.length === 1 ? '' : 'es'}: ${e.breaches.slice(0, 12).join(', ')}`,
+        ]
+            .filter(Boolean)
+            .join('\n');
         columns.push(`
             <div class="flex-1 min-w-0 flex flex-col items-center gap-1" title="${escapeAttr(`${year}${title ? '\n' + title : ''}`)}">
                 <div class="w-full h-16 flex flex-col justify-end items-center">
                     ${e.breaches.length ? `<div class="w-full max-w-[18px] rounded-t-sm bg-red-400/70" style="height:${pct(e.breaches.length)}%"></div>` : ''}
                     ${e.accounts.length ? `<div class="w-full max-w-[18px] ${e.breaches.length ? '' : 'rounded-t-sm'} bg-purple-400/80" style="height:${pct(e.accounts.length)}%"></div>` : ''}
                 </div>
-                <div class="text-[10px] text-gray-500 tabular-nums">${(year === first || year === last || year % 5 === 0) ? year : '&nbsp;'}</div>
+                <div class="text-[10px] text-gray-500 tabular-nums">${year === first || year === last || year % 5 === 0 ? year : '&nbsp;'}</div>
             </div>`);
     }
     return `
@@ -281,24 +377,58 @@ function oiTimeline(cards) {
 }
 
 function oiSummaryHtml(cards) {
-    const accounts = cards.filter(c => !c.breach && c.registered !== false);
-    const photos = oiTally(accounts, c => (safeUrl(c.picture) ? c.picture : null)).slice(0, 10);
+    const accounts = cards.filter((c) => !c.breach && c.registered !== false);
+    const photos = oiTally(accounts, (c) => (safeUrl(c.picture) ? c.picture : null)).slice(0, 10);
     const rows = [
-        oiSummaryRow('user-round', 'Names', oiTally(accounts, c => c.name), oiTag),
-        oiSummaryRow('at-sign', 'Usernames', oiTally(accounts, c => c.username), e => pivotChip('username', e.value)),
-        oiSummaryRow('mail', 'Emails', oiTally(accounts, c => c.email), e => pivotChip('email', e.value)),
-        oiSummaryRow('phone', 'Phones', oiTally(accounts, c => c.phone || (c.fields || []).find(f => /phone hint/i.test(f.label))?.value), oiTag),
-        oiSummaryRow('map-pin', 'Places', oiTally(accounts, c => c.location), oiTag, 6),
+        oiSummaryRow(
+            'user-round',
+            'Names',
+            oiTally(accounts, (c) => c.name),
+            oiTag
+        ),
+        oiSummaryRow(
+            'at-sign',
+            'Usernames',
+            oiTally(accounts, (c) => c.username),
+            (e) => pivotChip('username', e.value)
+        ),
+        oiSummaryRow(
+            'mail',
+            'Emails',
+            oiTally(accounts, (c) => c.email),
+            (e) => pivotChip('email', e.value)
+        ),
+        oiSummaryRow(
+            'phone',
+            'Phones',
+            oiTally(accounts, (c) => c.phone || (c.fields || []).find((f) => /phone hint/i.test(f.label))?.value),
+            oiTag
+        ),
+        oiSummaryRow(
+            'map-pin',
+            'Places',
+            oiTally(accounts, (c) => c.location),
+            oiTag,
+            6
+        ),
     ].join('');
     const timeline = oiTimeline(cards);
     if (!photos.length && !rows && !timeline) return '';
     return `
         <section class="username-category-section p-4 mb-4">
-            ${photos.length ? `<div class="flex items-center gap-2 mb-3 overflow-x-auto pb-1">${photos.map(p => `
+            ${
+                photos.length
+                    ? `<div class="flex items-center gap-2 mb-3 overflow-x-auto pb-1">${photos
+                          .map(
+                              (p) => `
                 <button type="button" data-image-view="${escapeAttr(safeUrl(p.value))}" data-image-title="${escapeAttr(p.sources.join(', ') || 'Photo')}" title="${escapeAttr(p.sources.join(', '))}" class="shrink-0">
                     <img src="${escapeAttr(safeUrl(p.value))}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.closest('button').remove()"
-                        class="w-14 h-14 rounded-lg object-cover border border-[#293142] hover:border-purple-400/70"></button>`).join('')}
-            </div>` : ''}
+                        class="w-14 h-14 rounded-lg object-cover border border-[#293142] hover:border-purple-400/70"></button>`
+                          )
+                          .join('')}
+            </div>`
+                    : ''
+            }
             ${rows}
             ${timeline}
         </section>`;
@@ -315,7 +445,8 @@ const OI_GROUPS = [
 ];
 
 function oiStatsHtml({ accounts = 0, profile = 0, breach = 0, sites = '—' } = {}) {
-    const stat = (key, label, value) => `<div class="username-stat"><span>${label}</span><strong data-oi-stat="${key}">${escapeHtml(String(value))}</strong></div>`;
+    const stat = (key, label, value) =>
+        `<div class="username-stat"><span>${label}</span><strong data-oi-stat="${key}">${escapeHtml(String(value))}</strong></div>`;
     return `<div class="username-status-row">
         ${stat('accounts', 'Accounts', accounts)}${stat('profile', 'With profile data', profile)}${stat('breach', 'Breaches', breach)}${stat('sites', 'Sites answered', sites)}
     </div>`;
@@ -332,17 +463,21 @@ function oiGroupHtml(group, inner, count, attrs = '') {
 
 // Saved results: all cards at once; masonryPackAll() lays out the columns after insertion
 function oiResultsHtml(cards, sitesAnswered) {
-    const found = (cards || []).filter(c => c.registered !== false);
+    const found = (cards || []).filter((c) => c.registered !== false);
     if (!found.length) return '<p class="text-sm text-gray-400">No accounts found.</p>';
-    const byKind = kind => found.filter(c => oiKind(c) === kind);
+    const byKind = (kind) => found.filter((c) => oiKind(c) === kind);
     const profile = byKind('profile').length;
     const breach = byKind('breach').length;
-    return oiStatsHtml({ accounts: found.length - breach, profile, breach, sites: sitesAnswered ?? '—' })
-        + oiSummaryHtml(found)
-        + OI_GROUPS.map(group => {
+    return (
+        oiStatsHtml({ accounts: found.length - breach, profile, breach, sites: sitesAnswered ?? '—' }) +
+        oiSummaryHtml(found) +
+        OI_GROUPS.map((group) => {
             const items = byKind(group.kind);
-            return items.length ? oiGroupHtml(group, items.map(oiCardHtml).join(''), items.length, 'data-masonry-pack') : '';
-        }).join('');
+            return items.length
+                ? oiGroupHtml(group, items.map(oiCardHtml).join(''), items.length, 'data-masonry-pack')
+                : '';
+        }).join('')
+    );
 }
 
 // Live results: cards are added as modules finish; text and category filters apply to all.
@@ -366,7 +501,7 @@ class OiResultsView {
                 <div data-oi-categories class="flex flex-wrap gap-2"></div>
             </div>
             <p data-oi-empty class="hidden text-sm text-gray-400">No accounts match the filter.</p>
-            ${OI_GROUPS.map(g => oiGroupHtml(g, '', 0)).join('')}`;
+            ${OI_GROUPS.map((g) => oiGroupHtml(g, '', 0)).join('')}`;
         this.filterInput = root.querySelector('[data-oi-filter]');
         this.filterInput.addEventListener('input', () => this.applyFilter());
         root.querySelector('[data-oi-categories]').addEventListener('click', (event) => {
@@ -426,12 +561,16 @@ class OiResultsView {
 
     matches(el) {
         const text = this.filterInput.value.trim().toLowerCase();
-        return (!text || el.dataset.oiText.includes(text)) && (!this.category || el.dataset.oiCategory === this.category);
+        return (
+            (!text || el.dataset.oiText.includes(text)) && (!this.category || el.dataset.oiCategory === this.category)
+        );
     }
 
     applyFilter() {
         for (const { kind } of OI_GROUPS) {
-            const shown = this.items.filter(item => item.kind === kind && this.matches(item.el)).map(item => item.el);
+            const shown = this.items
+                .filter((item) => item.kind === kind && this.matches(item.el))
+                .map((item) => item.el);
             this.group(kind).classList.toggle('hidden', !shown.length);
             masonryLayout(this.grid(kind), shown);
         }
@@ -441,17 +580,20 @@ class OiResultsView {
     updateCounts() {
         let visible = 0;
         for (const { kind } of OI_GROUPS) {
-            const total = this.items.filter(item => item.kind === kind).length;
+            const total = this.items.filter((item) => item.kind === kind).length;
             const shown = this.grid(kind).querySelectorAll('.username-result-card').length;
             visible += shown;
-            this.group(kind).querySelector('[data-oi-count]').textContent = shown === total ? total : `${shown} of ${total}`;
+            this.group(kind).querySelector('[data-oi-count]').textContent =
+                shown === total ? total : `${shown} of ${total}`;
             this.group(kind).classList.toggle('hidden', !shown);
         }
         this.root.querySelector('[data-oi-empty]').classList.toggle('hidden', !this.cards.length || visible > 0);
         const { accounts, breaches } = this.counts();
-        const set = (key, value) => { this.root.querySelector(`[data-oi-stat="${key}"]`).textContent = value; };
+        const set = (key, value) => {
+            this.root.querySelector(`[data-oi-stat="${key}"]`).textContent = value;
+        };
         set('accounts', accounts);
-        set('profile', this.items.filter(item => item.kind === 'profile').length);
+        set('profile', this.items.filter((item) => item.kind === 'profile').length);
         set('breach', breaches);
         set('sites', this.sites);
     }
@@ -464,13 +606,15 @@ class OiResultsView {
             return `<button type="button" data-oi-cat="${escapeAttr(value)}" class="username-category-pill${active ? ' !border-purple-400/60 !bg-purple-500/15' : ''}">
                 <span>${escapeHtml(label)}</span><strong>${n}</strong></button>`;
         };
-        const sorted = [...counts.entries()].sort((a, b) => (b[0] === 'Data breaches') - (a[0] === 'Data breaches') || b[1] - a[1]);
+        const sorted = [...counts.entries()].sort(
+            (a, b) => (b[0] === 'Data breaches') - (a[0] === 'Data breaches') || b[1] - a[1]
+        );
         this.root.querySelector('[data-oi-categories]').innerHTML =
             pill('', 'All', this.items.length) + sorted.map(([name, n]) => pill(name, name, n)).join('');
     }
 
     counts() {
-        const breaches = this.items.filter(item => item.kind === 'breach').length;
+        const breaches = this.items.filter((item) => item.kind === 'breach').length;
         return { breaches, accounts: this.items.length - breaches };
     }
 }

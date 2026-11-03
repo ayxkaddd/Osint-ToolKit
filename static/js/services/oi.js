@@ -70,9 +70,10 @@ function summaryText(accounts, breaches) {
 
 function setStatus(kind, text) {
     els.status.classList.remove('hidden');
-    els.statusIcon.innerHTML = kind === 'running'
-        ? '<span class="block w-2.5 h-2.5 rounded-full bg-purple-400 animate-pulse"></span>'
-        : `<i data-lucide="${kind === 'done' ? 'check-circle-2' : 'circle-alert'}" class="w-4 h-4 ${kind === 'done' ? 'text-emerald-400' : 'text-amber-400'}"></i>`;
+    els.statusIcon.innerHTML =
+        kind === 'running'
+            ? '<span class="block w-2.5 h-2.5 rounded-full bg-purple-400 animate-pulse"></span>'
+            : `<i data-lucide="${kind === 'done' ? 'check-circle-2' : 'circle-alert'}" class="w-4 h-4 ${kind === 'done' ? 'text-emerald-400' : 'text-amber-400'}"></i>`;
     els.statusText.textContent = text;
     lucide.createIcons();
 }
@@ -122,7 +123,10 @@ async function streamOi({ type, query, premium, premiumModulesOnly, sandbox }) {
     let finished = false;
     const progress = () => {
         const { accounts, breaches } = state.view.counts();
-        setStatus('running', `Searching${sandbox ? ' the sandbox' : ''}… ${modules} sites answered, ${summaryText(accounts, breaches)} so far`);
+        setStatus(
+            'running',
+            `Searching${sandbox ? ' the sandbox' : ''}… ${modules} sites answered, ${summaryText(accounts, breaches)} so far`
+        );
     };
     progress();
 
@@ -140,10 +144,12 @@ async function streamOi({ type, query, premium, premiumModulesOnly, sandbox }) {
     };
 
     try {
-        const response = await fetch(`/api/oi/${sandbox ? 'sandbox/' : ''}stream?${params}`, { signal: state.controller.signal });
+        const response = await fetch(`/api/oi/${sandbox ? 'sandbox/' : ''}stream?${params}`, {
+            signal: state.controller.signal,
+        });
         if (!response.ok) {
             const data = await response.json().catch(() => ({}));
-            const detail = Array.isArray(data.detail) ? data.detail.map(d => d.msg).join(', ') : data.detail;
+            const detail = Array.isArray(data.detail) ? data.detail.map((d) => d.msg).join(', ') : data.detail;
             throw new Error(detail || `Request failed (${response.status})`);
         }
         const reader = response.body.getReader();
@@ -156,7 +162,11 @@ async function streamOi({ type, query, premium, premiumModulesOnly, sandbox }) {
             const blocks = buffer.split('\n\n');
             buffer = blocks.pop();
             for (const block of blocks) {
-                const data = block.split('\n').filter(l => l.startsWith('data:')).map(l => l.slice(5).trimStart()).join('\n');
+                const data = block
+                    .split('\n')
+                    .filter((l) => l.startsWith('data:'))
+                    .map((l) => l.slice(5).trimStart())
+                    .join('\n');
                 if (!data) continue;
                 try {
                     handle(JSON.parse(data));
@@ -247,7 +257,13 @@ async function submitPremiumOnlyReport() {
     els.runPremiumOnly.classList.add('hidden');
     setBusy(true);
     try {
-        await streamOi({ type: state.lastReport.type, query: state.lastReport.query, premium: true, premiumModulesOnly: true, sandbox: false });
+        await streamOi({
+            type: state.lastReport.type,
+            query: state.lastReport.query,
+            premium: true,
+            premiumModulesOnly: true,
+            sandbox: false,
+        });
         await updateCredits();
     } catch (error) {
         showError(error.message);

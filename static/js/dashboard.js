@@ -1,31 +1,34 @@
-lucide.createIcons()
+lucide.createIcons();
 
 let modules = [];
 
 // Neutral icon when a favicon can't load (offline, blocked); onerror cleared so it can't loop
-const FALLBACK_FAVICON = 'data:image/svg+xml,' + encodeURIComponent(
-    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2">' +
-    '<path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/><path d="M9 10h.01"/><path d="M15 10h.01"/><path d="M9.5 15a3.5 3.5 0 0 0 5 0"/></svg>')
+const FALLBACK_FAVICON =
+    'data:image/svg+xml,' +
+    encodeURIComponent(
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2">' +
+            '<path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/><path d="M9 10h.01"/><path d="M15 10h.01"/><path d="M9.5 15a3.5 3.5 0 0 0 5 0"/></svg>'
+    );
 function faviconFallback(img) {
-    img.onerror = null
-    img.src = FALLBACK_FAVICON
+    img.onerror = null;
+    img.src = FALLBACK_FAVICON;
 }
 
 // The cards are drawn from the last answer right away, then corrected if the server's differs.
 // It only holds names, icons and setting labels, never setting values.
-const RESOURCES_CACHE_KEY = 'dashboard_resources'
+const RESOURCES_CACHE_KEY = 'dashboard_resources';
 
 function readResourcesCache() {
     try {
-        return localStorage.getItem(RESOURCES_CACHE_KEY)
+        return localStorage.getItem(RESOURCES_CACHE_KEY);
     } catch {
-        return null
+        return null;
     }
 }
 
 function writeResourcesCache(text) {
     try {
-        localStorage.setItem(RESOURCES_CACHE_KEY, text)
+        localStorage.setItem(RESOURCES_CACHE_KEY, text);
     } catch {
         // Storage blocked or full: the page just loads from the server next time
     }
@@ -34,28 +37,35 @@ function writeResourcesCache(text) {
 // Favicons come through the toolkit's own icon cache, so they only leave the network once
 function resourceIcon(resource) {
     try {
-        return `/api/oi/icon/${encodeURIComponent(new URL(resource.url).hostname)}`
+        return `/api/oi/icon/${encodeURIComponent(new URL(resource.url).hostname)}`;
     } catch {
-        return safeUrl(resource.favicon)
+        return safeUrl(resource.favicon);
     }
 }
 
 function renderResources(resources) {
-        modules = resources.modules;
-        const { ext_res } = resources
+    modules = resources.modules;
+    const { ext_res } = resources;
 
-        const modulesList = document.getElementById('modulesList')
-        modulesList.innerHTML = modules.map(module => `
+    const modulesList = document.getElementById('modulesList');
+    modulesList.innerHTML =
+        modules
+            .map(
+                (module) => `
                 <div class="bg-[#14151f] border border-[#24283b] hover:border-purple-700/60 rounded-xl overflow-hidden flex flex-col transition-colors">
                     <div class="relative">
-                        ${module.settings ? `
+                        ${
+                            module.settings
+                                ? `
                             <button
                                 onclick="openSettings(${jsArg(module.name)})"
                                 type="button"
                                 class="absolute top-4 right-4 p-2 text-gray-400 hover:text-white transition-colors z-10">
                                 <i class="fas fa-cog"></i>
                             </button>
-                        ` : ''}
+                        `
+                                : ''
+                        }
                         <a href="${escapeAttr(module.endpoint)}" class="block p-6">
                             <div class="w-12 h-12 bg-gray-800 rounded-lg flex items-center justify-center mb-4">
                                 <i class="${module.icon_type} fa-${module.icon} text-${module.icon_color}-500 text-2xl"></i>
@@ -63,22 +73,31 @@ function renderResources(resources) {
                             <h3 class="text-xl font-semibold text-white mb-2">${escapeHtml(module.name)}</h3>
                             <p class="text-gray-400 mb-4">${escapeHtml(module.description)}</p>
                             <div class="flex flex-wrap gap-2">
-                                ${module.tags.map(tag => `
+                                ${module.tags
+                                    .map(
+                                        (tag) => `
                                     <span class="px-3 py-1 bg-gray-800 text-gray-300 rounded-full text-sm">${tag}</span>
-                                `).join('')}
+                                `
+                                    )
+                                    .join('')}
                             </div>
                         </a>
                     </div>
                 </div>
-            `).join('') + `
+            `
+            )
+            .join('') +
+        `
                 <a href="/plugins/builder" class="bg-[#14151f] border border-dashed border-[#24283b] hover:border-purple-700/60 rounded-xl p-6 flex flex-col items-center justify-center text-center gap-3 transition-colors">
                     <div class="w-12 h-12 bg-gray-800 rounded-lg flex items-center justify-center"><i class="fas fa-plus text-purple-400 text-2xl"></i></div>
                     <h3 class="text-xl font-semibold text-white">Build a plugin</h3>
                     <p class="text-gray-400">Connect another website or service and search it from here - no coding needed.</p>
-                </a>`
+                </a>`;
 
-        const resourcesList = document.getElementById('resourcesList')
-        resourcesList.innerHTML = ext_res.map(resource => `
+    const resourcesList = document.getElementById('resourcesList');
+    resourcesList.innerHTML = ext_res
+        .map(
+            (resource) => `
                 <div class="bg-[#14151f] border border-[#24283b] hover:border-gray-600 rounded-xl p-4 flex items-start gap-4 group transition-colors">
                     <div class="flex-shrink-0">
                         <img src="${escapeAttr(resourceIcon(resource))}" alt="" loading="lazy"
@@ -98,46 +117,48 @@ function renderResources(resources) {
                         <p class="text-sm text-gray-400 mt-1">${escapeHtml(resource.description)}</p>
                     </div>
                 </div>
-            `).join('')
+            `
+        )
+        .join('');
 
-        document.getElementById('loadingState').style.display = 'none'
-        document.getElementById('contentContainer').style.display = 'block'
-        lucide.createIcons()
+    document.getElementById('loadingState').style.display = 'none';
+    document.getElementById('contentContainer').style.display = 'block';
+    lucide.createIcons();
 }
 
 async function loadResources() {
-    let shown = readResourcesCache()
+    let shown = readResourcesCache();
     if (shown) {
         try {
-            renderResources(JSON.parse(shown))
+            renderResources(JSON.parse(shown));
         } catch {
-            shown = null
+            shown = null;
         }
     }
-    loadActiveInvestigation()
+    loadActiveInvestigation();
 
     try {
-        const response = await fetch('/api/resources/')
-        if (!response.ok) throw new Error(`HTTP ${response.status}`)
-        const text = await response.text()
+        const response = await fetch('/api/resources/');
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const text = await response.text();
         if (text !== shown) {
-            renderResources(JSON.parse(text))
-            writeResourcesCache(text)
-            shown = text
+            renderResources(JSON.parse(text));
+            writeResourcesCache(text);
+            shown = text;
         }
     } catch (error) {
-        console.error('Error loading resources:', error)
+        console.error('Error loading resources:', error);
         if (!shown) {
             document.getElementById('loadingState').innerHTML = `
                 <div class="text-red-500">
                     <i class="fas fa-exclamation-circle text-2xl mb-2"></i>
                     <p>Error loading resources. Please try again later.</p>
                 </div>
-            `
-            return
+            `;
+            return;
         }
     }
-    annotateReadiness()
+    annotateReadiness();
 }
 
 async function loadActiveInvestigation() {
@@ -153,7 +174,7 @@ async function loadActiveInvestigation() {
             const dateStr = new Date(inv.created_at || Date.now()).toLocaleDateString('en-US', {
                 month: 'short',
                 day: 'numeric',
-                year: 'numeric'
+                year: 'numeric',
             });
 
             banner.innerHTML = `
@@ -215,7 +236,7 @@ async function loadActiveInvestigation() {
             `;
         }
     } catch (e) {
-        console.error("Error loading active investigation banner:", e);
+        console.error('Error loading active investigation banner:', e);
     }
 }
 
@@ -228,24 +249,25 @@ function redactSensitiveValue(value) {
 }
 
 function openSettings(moduleName) {
-    const module = modules.find(m => m.name === moduleName);
+    const module = modules.find((m) => m.name === moduleName);
     if (!module || !module.settings) {
         return;
     }
 
     currentModule = module;
     const content = document.getElementById('settingsContent');
-    content.innerHTML = Object.entries(module.settings).map(([key, config]) => {
-        const savedValue = localStorage.getItem(`${moduleName}_${key}`);
-        let displayValue = '';
+    content.innerHTML = Object.entries(module.settings)
+        .map(([key, config]) => {
+            const savedValue = localStorage.getItem(`${moduleName}_${key}`);
+            let displayValue = '';
 
-        if (config.type === 'password' || key.toLowerCase().includes('api_key')) {
-            displayValue = savedValue ? '•'.repeat(8) : '';
-        } else {
-            displayValue = savedValue || '';
-        }
+            if (config.type === 'password' || key.toLowerCase().includes('api_key')) {
+                displayValue = savedValue ? '•'.repeat(8) : '';
+            } else {
+                displayValue = savedValue || '';
+            }
 
-        return `
+            return `
                 <div>
                     <label class="block text-sm font-medium text-gray-400 mb-2">${config.label}</label>
                     <input type="${config.type}"
@@ -258,7 +280,8 @@ function openSettings(moduleName) {
                            placeholder="${config.label}">
                 </div>
             `;
-    }).join('');
+        })
+        .join('');
 
     document.getElementById('settingsTitle').textContent = `${moduleName} Settings`;
     const modal = document.getElementById('settingsModal');
@@ -318,7 +341,7 @@ async function saveSettings() {
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify(settings)
+                body: JSON.stringify(settings),
             });
 
             if (!response.ok) {
@@ -326,7 +349,8 @@ async function saveSettings() {
             }
 
             const notification = document.createElement('div');
-            notification.className = 'fixed bottom-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg transform transition-all duration-300 translate-y-full opacity-0';
+            notification.className =
+                'fixed bottom-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg transform transition-all duration-300 translate-y-full opacity-0';
             notification.innerHTML = `
                     <div class="flex items-center space-x-2">
                         <i class="fas fa-check-circle"></i>
@@ -356,40 +380,48 @@ async function saveSettings() {
     }
 }
 
-loadResources()
+loadResources();
 
 // Refresh the active-investigation banner when the header selector changes it
 document.addEventListener('investigation:changed', loadActiveInvestigation);
 document.addEventListener('investigation:created', loadActiveInvestigation);
 
-
 // Readiness badge on each module card (missing keys, tools, Telegram login)
 // Ready is the normal state and gets no marker. A module that can't run says
 // what is missing, in words, with a link to fix it.
 function setupProblem(problem) {
-    if (/Telegram/i.test(problem)) return { text: 'Log in to Telegram', href: '/telegram_auth' }
-    const key = (problem.match(/^([A-Z0-9_]+) is not (configured|set)/) || [])[1]
-    if (key) return { text: `Add ${key.replace(/_(API_)?KEY$|_PATH$/, '').replace(/_/g, ' ').toLowerCase()} ${/_PATH$/.test(key) ? 'path' : 'key'}`, href: '/settings' }
-    const missingFile = (problem.match(/(\S+) is missing/) || [])[1]
-    if (missingFile) return { text: `Add ${missingFile.split('/').pop()}`, href: '/settings' }
-    if (/not installed|not found/i.test(problem)) return { text: problem.replace(/ is not installed| not found/, '') + ' is not installed', href: '/settings' }
-    return { text: problem, href: '/settings' }
+    if (/Telegram/i.test(problem)) return { text: 'Log in to Telegram', href: '/telegram_auth' };
+    const key = (problem.match(/^([A-Z0-9_]+) is not (configured|set)/) || [])[1];
+    if (key)
+        return {
+            text: `Add ${key
+                .replace(/_(API_)?KEY$|_PATH$/, '')
+                .replace(/_/g, ' ')
+                .toLowerCase()} ${/_PATH$/.test(key) ? 'path' : 'key'}`,
+            href: '/settings',
+        };
+    const missingFile = (problem.match(/(\S+) is missing/) || [])[1];
+    if (missingFile) return { text: `Add ${missingFile.split('/').pop()}`, href: '/settings' };
+    if (/not installed|not found/i.test(problem))
+        return { text: problem.replace(/ is not installed| not found/, '') + ' is not installed', href: '/settings' };
+    return { text: problem, href: '/settings' };
 }
 
 async function annotateReadiness() {
-    const modules = await getModules()
-    document.querySelectorAll('#modulesList a[href]').forEach(link => {
-        const related = modules.filter(m => m.page === link.getAttribute('href'))
-        const blocked = related.filter(m => !m.ready)
-        if (!blocked.length) return
-        const partial = blocked.length < related.length
-        const first = setupProblem(blocked[0].problems[0] || 'Needs setup')
-        const line = document.createElement('a')
-        line.href = first.href
-        line.className = 'flex items-center gap-2 px-6 py-2.5 border-t border-gray-800 text-xs text-amber-300/80 hover:text-amber-200 hover:bg-gray-800/50 transition-colors'
-        line.title = blocked.map(m => `${m.name}: ${m.problems.join('; ')}`).join('\n')
-        line.innerHTML = `<i class="fas fa-wrench text-[10px]"></i><span class="truncate">${partial ? `${escapeHtml(blocked.map(m => m.name).join(', '))}: ` : ''}${escapeHtml(first.text)}</span><span class="ml-auto shrink-0 text-gray-500">Set up →</span>`
-        link.parentElement.appendChild(line)
-        if (!partial) link.querySelector('i')?.classList.add('opacity-50')
-    })
+    const modules = await getModules();
+    document.querySelectorAll('#modulesList a[href]').forEach((link) => {
+        const related = modules.filter((m) => m.page === link.getAttribute('href'));
+        const blocked = related.filter((m) => !m.ready);
+        if (!blocked.length) return;
+        const partial = blocked.length < related.length;
+        const first = setupProblem(blocked[0].problems[0] || 'Needs setup');
+        const line = document.createElement('a');
+        line.href = first.href;
+        line.className =
+            'flex items-center gap-2 px-6 py-2.5 border-t border-gray-800 text-xs text-amber-300/80 hover:text-amber-200 hover:bg-gray-800/50 transition-colors';
+        line.title = blocked.map((m) => `${m.name}: ${m.problems.join('; ')}`).join('\n');
+        line.innerHTML = `<i class="fas fa-wrench text-[10px]"></i><span class="truncate">${partial ? `${escapeHtml(blocked.map((m) => m.name).join(', '))}: ` : ''}${escapeHtml(first.text)}</span><span class="ml-auto shrink-0 text-gray-500">Set up →</span>`;
+        link.parentElement.appendChild(line);
+        if (!partial) link.querySelector('i')?.classList.add('opacity-50');
+    });
 }

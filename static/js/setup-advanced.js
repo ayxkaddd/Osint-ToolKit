@@ -192,10 +192,12 @@ function getStep4HTML() {
         { name: 'osint_industries', label: 'OSINT Industries API', url: 'https://osint.industries' },
         { name: 'whois_history', label: 'WhoisXML API', url: 'https://whoisxmlapi.com' },
         { name: 'securitytrails', label: 'SecurityTrails API', url: 'https://securitytrails.com' },
-        { name: 'virustotal', label: 'VirusTotal API', url: 'https://www.virustotal.com/gui/join-us' }
+        { name: 'virustotal', label: 'VirusTotal API', url: 'https://www.virustotal.com/gui/join-us' },
     ];
 
-    let apiHTML = apis.map(api => `
+    let apiHTML = apis
+        .map(
+            (api) => `
         <div class="api-config-card">
             <div class="flex items-center justify-between mb-3">
                 <label class="text-white font-semibold">${api.label}</label>
@@ -211,7 +213,9 @@ function getStep4HTML() {
             </div>
             <div id="${api.name}_status" class="mt-2 text-sm"></div>
         </div>
-    `).join('');
+    `
+        )
+        .join('');
 
     return `
     <div id="step-4" class="setup-step">
@@ -293,7 +297,8 @@ function getStep5HTML() {
 // Check Go tools installation status
 async function checkGoTools() {
     const statusDiv = document.getElementById('go-tools-status');
-    statusDiv.innerHTML = '<div class="flex items-center justify-between text-sm"><span class="text-gray-400">Checking tools...</span><div class="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div></div>';
+    statusDiv.innerHTML =
+        '<div class="flex items-center justify-between text-sm"><span class="text-gray-400">Checking tools...</span><div class="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div></div>';
 
     try {
         const response = await fetch('/setup/system-check');
@@ -364,9 +369,10 @@ async function showGitFiveGuide() {
         const response = await fetch('/setup/gitfive-guide');
         const data = await response.json();
 
-        let html = '<div class="bg-gray-900 border border-gray-700 rounded-lg p-6"><h3 class="text-xl font-bold mb-4">GitFive Setup Instructions</h3><div class="space-y-4">';
+        let html =
+            '<div class="bg-gray-900 border border-gray-700 rounded-lg p-6"><h3 class="text-xl font-bold mb-4">GitFive Setup Instructions</h3><div class="space-y-4">';
 
-        data.guide.steps.forEach(step => {
+        data.guide.steps.forEach((step) => {
             html += `
                 <div class="border-l-2 border-purple-600 pl-4">
                     <div class="text-white font-semibold mb-1">Step ${step.number}: ${step.title}</div>
@@ -375,16 +381,21 @@ async function showGitFiveGuide() {
                 </div>`;
         });
 
-        html += '</div><div class="mt-4 bg-yellow-900/30 border border-yellow-700 rounded p-3"><div class="text-yellow-400 font-semibold mb-2">⚠ Important Warnings:</div><ul class="text-yellow-300 text-sm space-y-1">';
-        data.guide.warnings.forEach(warn => {
+        html +=
+            '</div><div class="mt-4 bg-yellow-900/30 border border-yellow-700 rounded p-3"><div class="text-yellow-400 font-semibold mb-2">⚠ Important Warnings:</div><ul class="text-yellow-300 text-sm space-y-1">';
+        data.guide.warnings.forEach((warn) => {
             html += `<li>• ${warn}</li>`;
         });
         html += '</ul></div></div>';
 
         const modal = document.createElement('div');
         modal.className = 'fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4';
-        modal.innerHTML = html + '<button onclick="this.parentElement.remove()" class="absolute top-4 right-4 text-white hover:text-gray-400"><i data-lucide="x" class="w-6 h-6"></i></button>';
-        modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+        modal.innerHTML =
+            html +
+            '<button onclick="this.parentElement.remove()" class="absolute top-4 right-4 text-white hover:text-gray-400"><i data-lucide="x" class="w-6 h-6"></i></button>';
+        modal.onclick = (e) => {
+            if (e.target === modal) modal.remove();
+        };
         document.body.appendChild(modal);
         if (typeof lucide !== 'undefined') lucide.createIcons();
     } catch (error) {

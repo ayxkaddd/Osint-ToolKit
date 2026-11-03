@@ -25,7 +25,7 @@ function masonryLayout(container, cards = []) {
     });
     const state = { count, columns };
     masonryState.set(container, state);
-    cards.forEach(card => masonryAppend(container, card));
+    cards.forEach((card) => masonryAppend(container, card));
     return state;
 }
 
@@ -35,19 +35,20 @@ function masonryAppend(container, card) {
         state = masonryLayout(container);
     }
     if (!card.dataset.order) card.dataset.order = String(masonryOrder++);
-    const heights = state.columns.map(column => column.offsetHeight);
+    const heights = state.columns.map((column) => column.offsetHeight);
     // Hidden containers report 0 height everywhere: fall back to card counts
-    const measure = heights.some(h => h > 0) ? heights : state.columns.map(column => column.childElementCount);
+    const measure = heights.some((h) => h > 0) ? heights : state.columns.map((column) => column.childElementCount);
     const target = measure.indexOf(Math.min(...measure));
     state.columns[target].appendChild(card);
 }
 
 function masonryReflowAll() {
-    document.querySelectorAll('.username-masonry, .username-category-results').forEach(container => {
+    document.querySelectorAll('.username-masonry, .username-category-results').forEach((container) => {
         const state = masonryState.get(container);
         if (!state || state.count === masonryColumnCount(container)) return;
-        const cards = Array.from(container.querySelectorAll('.username-result-card'))
-            .sort((a, b) => Number(a.dataset.order) - Number(b.dataset.order));
+        const cards = Array.from(container.querySelectorAll('.username-result-card')).sort(
+            (a, b) => Number(a.dataset.order) - Number(b.dataset.order)
+        );
         masonryLayout(container, cards);
     });
 }
@@ -60,7 +61,7 @@ window.addEventListener('resize', () => {
 
 // Lays out cards that were rendered as plain HTML into [data-masonry-pack] containers
 function masonryPackAll(root = document) {
-    root.querySelectorAll('[data-masonry-pack]').forEach(container => {
+    root.querySelectorAll('[data-masonry-pack]').forEach((container) => {
         masonryLayout(container, Array.from(container.querySelectorAll('.username-result-card')));
     });
 }

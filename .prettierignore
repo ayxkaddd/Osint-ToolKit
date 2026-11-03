@@ -1,0 +1,4 @@
+static/vendor/
+static/css/
+node_modules/
+venv/
