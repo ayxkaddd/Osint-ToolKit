@@ -1091,7 +1091,7 @@ function renderUserHistoryModal(data) {
                                     </div>
                                 </div>
                                 <button
-                                    onclick="copyToClipboard('${escapeAttr(entry.value.replace(/'/g, "\\'"))}', this)"
+                                    onclick="copyToClipboard(${jsArg(entry.value)}, this)"
                                     class="text-gray-500 hover:text-purple-400 transition-colors p-2"
                                     title="Copy to clipboard"
                                 >
@@ -2104,7 +2104,7 @@ function displayUserBasicInfo(user, savedTmeProfile = null) {
                         <div id="tmeProfile" class="text-sm"></div>
                         <div class="flex items-center gap-2 mt-1">
                             <p class="text-gray-500 text-sm">ID: ${pivotText('telegram_id', user.id)}</p>
-                            <button onclick="copyToClipboard('${escapeAttr(user.id)}', this)" class="text-gray-500 hover:text-purple-400 transition-colors text-sm" title="Copy ID">
+                            <button onclick="copyToClipboard(${jsArg(user.id)}, this)" class="text-gray-500 hover:text-purple-400 transition-colors text-sm" title="Copy ID">
                                 <i class="fas fa-copy"></i>
                             </button>
                         </div>
@@ -2937,7 +2937,7 @@ function displayTextResults(data) {
                                         <i class="fas fa-external-link-alt mr-1"></i>Open in Telegram
                                     </a>
                                     ${result.group.username ? `
-                                        <button onclick="getMessageContext('${escapeAttr(result.group.username)}', ${escapeHtml(result.message_id)})"
+                                        <button onclick="getMessageContext(${jsArg(result.group.username)}, ${escapeHtml(result.message_id)})"
                                             class="context-btn text-xs text-blue-400 hover:text-blue-300 bg-blue-900/30 px-2 py-1 rounded">
                                             <i class="fas fa-comments mr-1"></i>Get Context
                                         </button>

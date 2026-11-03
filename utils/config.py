@@ -40,6 +40,10 @@ def update_env(values: Dict[str, Optional[str]]) -> None:
     A value of None removes the key. Updated values are also exported to
     os.environ so services reading os.getenv() pick them up immediately.
     """
+    for key, value in values.items():
+        # A line break would end the line and start another key in .env
+        if any(c in str(key) + str(value or "") for c in "\r\n\x00"):
+            raise ValueError(f"{key}: settings can't contain line breaks")
     lines = ENV_PATH.read_text().splitlines() if ENV_PATH.exists() else []
     remaining = dict(values)
     out = []

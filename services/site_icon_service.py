@@ -19,7 +19,7 @@ ICON_DIR = os.path.join("media", "site_icons")
 MAX_ICON_BYTES = 200_000
 MISSING_RETRY_SECONDS = 7 * 86400
 DOMAIN_RE = re.compile(r"^(?=.{4,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$")
-ICON_TYPES = {".png": "image/png", ".ico": "image/x-icon", ".svg": "image/svg+xml", ".jpg": "image/jpeg", ".webp": "image/webp"}
+ICON_TYPES = {".png": "image/png", ".ico": "image/x-icon", ".jpg": "image/jpeg", ".webp": "image/webp"}
 
 # Sources tried in order; Google's has the sharpest icons and answers 404 for unknown sites
 SOURCES = (

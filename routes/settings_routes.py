@@ -28,7 +28,10 @@ async def update_settings(settings: Dict[str, str]):
     # A blank field means "keep the current value", not "erase the key"
     updates = {key.upper(): value.strip() for key, value in settings.items() if value and value.strip()}
     if updates:
-        update_env(updates)
+        try:
+            update_env(updates)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
     return {"success": True, "updated": sorted(updates)}
 
 

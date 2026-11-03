@@ -66,6 +66,8 @@ class OsintFrameWork:
         self.setup_static_files()
         self.setup_auth()
         self.app.middleware("http")(self.access_middleware)
+        # Added last, so it runs first: before login, setup gating and every route
+        self.app.middleware("http")(self.security_middleware)
 
     def setup_static_files(self):
         self.app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -83,6 +85,26 @@ class OsintFrameWork:
     @staticmethod
     def _wants_json(path: str) -> bool:
         return path.startswith(API_PREFIXES)
+
+    async def security_middleware(self, request: Request, call_next):
+        # The login cookie (SameSite=Lax) is sent when another site links here, and
+        # many lookups (some paid) are GET requests. Browsers say where a request came
+        # from: requests from other sites may only open pages, never call the API or
+        # submit anything. Scripts and the job runner send no header and are allowed.
+        site = request.headers.get("sec-fetch-site")
+        if site in ("cross-site", "same-site") and not request.url.path.startswith("/static/") and (
+                request.method not in ("GET", "HEAD") or self._wants_json(request.url.path)):
+            return JSONResponse({"detail": "Request from another site blocked"}, status_code=403)
+
+        response = await call_next(request)
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        content_type = response.headers.get("content-type", "")
+        if content_type.startswith("text/html"):
+            response.headers.setdefault("X-Frame-Options", "DENY")
+        elif not content_type.startswith("application/pdf"):
+            # Files (icons, media, plugin SVGs) opened directly can't run scripts as this app
+            response.headers.setdefault("Content-Security-Policy", "default-src 'none'; img-src 'self' data:; media-src 'self'; style-src 'unsafe-inline'; sandbox")
+        return response
 
     async def access_middleware(self, request: Request, call_next):
         path = request.url.path

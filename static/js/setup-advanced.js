@@ -205,7 +205,7 @@ function getStep4HTML() {
             </div>
             <div class="flex gap-2">
                 <input type="text" name="${api.name}" id="${api.name}_input" class="flex-1 px-4 py-3 bg-gray-800 border border-gray-700 text-white rounded-lg focus:outline-none focus:border-gray-500 transition-colors placeholder-gray-500" placeholder="Enter API key (optional)">
-                <button type="button" onclick="validateKey('${api.name}')" class="px-4 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-white rounded-lg transition-colors">
+                <button type="button" onclick="validateKey(${jsArg(api.name)})" class="px-4 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-white rounded-lg transition-colors">
                     <i data-lucide="check" class="w-4 h-4"></i>
                 </button>
             </div>

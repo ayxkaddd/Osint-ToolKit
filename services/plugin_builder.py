@@ -174,7 +174,10 @@ def save_draft(plugin_id: str, manifest: Optional[Dict[str, Any]], yaml_text: Op
     own: Dict[str, Optional[str]] = {k: v.strip() for k, v in (settings or {}).items()
            if v and v.strip() and k in manifest.get("settings", {}) and k.startswith(plugin.id.upper() + "_")}
     if own:
-        update_env(own)
+        try:
+            update_env(own)
+        except ValueError as e:
+            raise DraftError(str(e)) from e
     saved = pl.refresh(force=True).get(plugin.id)
     if not saved:
         raise DraftError("Saved, but the plugin did not load - check plugins/" + plugin.id)

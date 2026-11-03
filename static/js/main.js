@@ -41,6 +41,13 @@ window.escapeHtml = escapeHtml
 window.escapeAttr = escapeAttr
 window.safeUrl = safeUrl
 
+// A value passed to a function in an inline handler: onclick="fn(${jsArg(value)})".
+// A JSON string literal, then attribute-escaped (the browser decodes the attribute first).
+function jsArg(value) {
+  return escapeAttr(JSON.stringify(String(value ?? "")))
+}
+window.jsArg = jsArg
+
 // lucide.createIcons() re-renders *every* icon on the page on each call (rendered
 // SVGs keep their data-lucide attribute). Scripts call it after every render, so
 // patch it to only convert icons that have not been rendered yet.

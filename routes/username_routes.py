@@ -1,5 +1,5 @@
 from collections import defaultdict
-from fastapi import APIRouter, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse, StreamingResponse
 from services.username_test_service import StreamingUsernameSearchService
 import asyncio
@@ -61,62 +61,6 @@ async def stream_search_sse(
             "X-Accel-Buffering": "no"
         }
     )
-
-
-@router.websocket("/search/ws")
-async def websocket_search(websocket: WebSocket):
-    """
-    WebSocket endpoint for streaming search results
-
-    Example usage:
-    ```javascript
-    const ws = new WebSocket('ws://localhost:8000/api/search/ws');
-    ws.onopen = () => {
-        ws.send(JSON.stringify({
-            username: 'johndoe',
-            include_duckduckgo: false,
-            extract_profile: false
-        }));
-    };
-    ws.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        console.log(data);
-    };
-    ```
-    """
-    await websocket.accept()
-
-    try:
-        # Wait for search parameters
-        data = await websocket.receive_json()
-
-        username = data.get("username")
-        if not username:
-            await websocket.send_json({
-                "error": "Username is required"
-            })
-            await websocket.close()
-            return
-
-        # Stream results
-        async for event in search_service.stream_search(
-            username=username,
-            include_duckduckgo=data.get("include_duckduckgo", False),
-            extract_profile=data.get("extract_profile", False),
-            categories=data.get("categories"),
-            priority_sites=data.get("priority_sites")
-        ):
-            await websocket.send_json(event.to_json())
-
-    except WebSocketDisconnect:
-        logger.info("WebSocket disconnected")
-    except Exception as e:
-        logger.error(f"WebSocket error: {str(e)}")
-        await websocket.send_json({
-            "event_type": "error",
-            "data": {"message": str(e)}
-        })
-        await websocket.close()
 
 
 @router.get("/api/metadata")
