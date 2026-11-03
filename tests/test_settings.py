@@ -15,9 +15,9 @@ def test_real_env_is_not_loaded(app):
 
 
 def test_changes_apply_without_restart():
-    from services.git_service import GitService
+    from services.gitfive_service import GitFiveService
     from utils.config import update_env
-    service = GitService()
+    service = GitFiveService()
     update_env({"GITFIVE_VENV_PATH": "/opt/test/python"})
     assert service.venv_path == "/opt/test/python"
     update_env({"GITFIVE_VENV_PATH": None})

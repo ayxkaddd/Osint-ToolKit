@@ -6,10 +6,10 @@ const MODULES = {
     whois: { name: 'WHOIS', icon: 'info', page: '/whois' },
     dns_recon: { name: 'DNS Reconnaissance', icon: 'globe', page: '/dnsrecon' },
     username: { name: 'Username Search', icon: 'user-check', page: '/username' },
-    hlr: { name: 'HLR Phone Lookup', icon: 'phone', page: '/hlr' },
-    gitfive: { name: 'GitHub Recon (GitFive)', icon: 'github', page: '/git' },
+    hlr: { name: 'HLR Phone Lookup', icon: 'phone', page: '/phone' },
+    gitfive: { name: 'GitHub Recon (GitFive)', icon: 'github', page: '/gitfive' },
     vk_profile: { name: 'VK Profile History', icon: 'user', page: '/vk' },
-    oi: { name: 'OSINT Industries', icon: 'shield-alert', page: '/api' },
+    oi: { name: 'OSINT Industries', icon: 'shield-alert', page: '/oi' },
     cavalier: { name: 'Hudson Rock Cavalier', icon: 'shield', page: '/cavalier' },
     ghunt: { name: 'GHunt Google Recon', icon: 'mail', page: '/ghunt' },
     web_search: { name: 'Web Dorking', icon: 'search', page: '/websearch' },
@@ -18,7 +18,7 @@ const MODULES = {
     sharetrace: { name: 'ShareTrace Link Enrichment', icon: 'share-2', page: null },
     funstat: { name: 'Telegram Funstat', icon: 'message-square', page: '/funstat' },
     ip: { name: 'IP Lookup', icon: 'map-pin', page: '/ip' },
-    phone: { name: 'Phone analysis', icon: 'phone', page: '/hlr' },
+    phone: { name: 'Phone analysis', icon: 'phone', page: '/phone' },
 };
 
 const METHOD_LABELS = {

@@ -17,19 +17,19 @@ from routes import (
     sharetrace_routes,
     username_routes,
     dnsrecon_routes,
-    git_routes,
+    gitfive_routes,
     ghunt_routes,
     hlr_routes,
     lookup_routes,
     oi_routes,
     plugin_routes,
-    rosources_routes,
+    resources_routes,
     settings_routes,
-    templates,
-    ns_routers,
+    pages_routes,
+    ns_routes,
     updates_routes,
     web_search_routes,
-    whois_route,
+    whois_routes,
     telegram_routes,
     funstat_routes,
 )
@@ -65,7 +65,7 @@ async def lifespan(app: FastAPI):
     await telethon_service.stop()
 
 
-class OsintFrameWork:
+class OsintFramework:
     def __init__(self):
         self.app = FastAPI(title="Osint Framework", version="1.0.0", lifespan=lifespan)
         self.auth_handler = AuthHandler()
@@ -188,21 +188,21 @@ class OsintFrameWork:
 
         routes_config = [
             (setup_routes.router, "Setup"),
-            (git_routes.router, "GitFive"),
-            (ns_routers.router, "DNS"),
-            (whois_route.router, "WHOIS"),
+            (gitfive_routes.router, "GitFive"),
+            (ns_routes.router, "DNS"),
+            (whois_routes.router, "WHOIS"),
             (oi_routes.router, "OSINT"),
             (telegram_routes.auth_router, "Telegram Auth"),
             (telegram_routes.bot_router, "Telegram Bot"),
             (dnsrecon_routes.router, "DNS Reconnaissance"),
             (hlr_routes.router, "HLR"),
             (username_routes.router, "Username"),
-            (rosources_routes.router, "Resources"),
+            (resources_routes.router, "Resources"),
             (settings_routes.router, "Settings"),
             (cavalier_routes.router, "Cavalier"),
             (lookup_routes.router, "Lookup & jobs"),
             (updates_routes.router, "Updates"),
-            (templates.router, "Templates"),
+            (pages_routes.router, "Pages"),
             (investigation_routes.router, "Investigations"),
             (ghunt_routes.router, "GHunt"),
             (face_search_routes.router, "Face Search"),
@@ -227,4 +227,4 @@ class OsintFrameWork:
         plugin_loader.refresh(force=True)
 
 
-app = OsintFrameWork().app
+app = OsintFramework().app

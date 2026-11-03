@@ -20,17 +20,17 @@ def index_post(request: Request):
 def dashboard(request: Request):
     return templates.TemplateResponse(request=request, name="dashboard.html")
 
-@router.get('/git')
-def git_lookup_page(request: Request):
-    return templates.TemplateResponse(request=request, name="git.html")
+@router.get('/gitfive')
+def gitfive_page(request: Request):
+    return templates.TemplateResponse(request=request, name="gitfive.html")
 
 @router.get('/ns')
 def ns_lookup_page(request: Request):
     return templates.TemplateResponse(request=request, name="ns_lookup.html")
 
-@router.get('/api')
-def api_page(request: Request):
-    return templates.TemplateResponse(request=request, name="use_api.html")
+@router.get('/oi')
+def oi_page(request: Request):
+    return templates.TemplateResponse(request=request, name="oi.html")
 
 @router.get('/cavalier')
 def cavalier_page(request: Request):
@@ -40,9 +40,9 @@ def cavalier_page(request: Request):
 def whois_page(request: Request):
     return templates.TemplateResponse(request=request, name="whois_history.html")
 
-@router.get('/hlr')
-def hlr_page(request: Request):
-    return templates.TemplateResponse(request=request, name="hlr_lookup.html")
+@router.get('/phone')
+def phone_page(request: Request):
+    return templates.TemplateResponse(request=request, name="phone.html")
 
 @router.get('/telegram_auth')
 def telegram_auth_page(request: Request):
@@ -50,7 +50,7 @@ def telegram_auth_page(request: Request):
 
 @router.get('/vk')
 def vk_page(request: Request):
-    return templates.TemplateResponse(request=request, name="telegram.html")
+    return templates.TemplateResponse(request=request, name="vk_history.html")
 
 @router.get('/dnsrecon')
 def dnsrecon_page(request: Request):
@@ -122,3 +122,16 @@ def ip_page(request: Request):
 @router.get("/settings")
 def settings_page(request: Request):
     return templates.TemplateResponse(request=request, name="settings.html")
+
+
+# Pages renamed with their modules; old links and bookmarks keep working
+_OLD_PAGES = {"/git": "/gitfive", "/api": "/oi", "/hlr": "/phone"}
+
+
+def _redirect_old_page(request: Request):
+    target = _OLD_PAGES[request.url.path]
+    return RedirectResponse(f"{target}?{request.url.query}" if request.url.query else target, status_code=301)
+
+
+for _old in _OLD_PAGES:
+    router.add_api_route(_old, _redirect_old_page, methods=["GET"], include_in_schema=False)

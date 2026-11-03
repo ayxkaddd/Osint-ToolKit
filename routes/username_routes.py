@@ -1,7 +1,7 @@
 from collections import defaultdict
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse, StreamingResponse
-from services.username_test_service import StreamingUsernameSearchService
+from services.username_service import StreamingUsernameSearchService
 import asyncio
 import logging
 from typing import List, Optional

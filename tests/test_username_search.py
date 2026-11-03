@@ -44,7 +44,7 @@ def server():
 
 
 def test_search_results(server):
-    from services.username_test_service import StreamingUsernameSearchService
+    from services.username_service import StreamingUsernameSearchService
     sites = [
         {"name": "Found", "uri_check": server + "/found/{account}", "e_code": 200, "e_string": "Followers",
          "m_code": 404, "m_string": "not found"},

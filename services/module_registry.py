@@ -60,10 +60,10 @@ def _q(name: str) -> Callable[[str], Dict[str, Any]]:
 
 
 MODULES: List[Module] = [
-    Module("phone_info", "Phone number info", "/hlr", "phone",
+    Module("phone_info", "Phone number info", "/phone", "phone",
            {"phone": RunSpec("GET", "/api/phone/info", _q("phone"))},
            cost_note="Offline - country, carrier, line type", prefill={"input": "#phoneInput"}),
-    Module("hlr", "HLR lookup", "/hlr", "radio-tower",
+    Module("hlr", "HLR lookup", "/phone", "radio-tower",
            {"phone": RunSpec("POST", "/api/hlr/lookup", lambda v: {"json": {"phones": v}})},
            cost=PAID, cost_note="smsc.ru balance", speed="medium", concurrency=1,
            prefill={"input": "#phoneInput"}),
@@ -73,7 +73,7 @@ MODULES: List[Module] = [
             "telegram_username": RunSpec("GET", "/api/username/search/stream",
                                          lambda v: {"params": {"username": v, "extract_profile": "true"}}, stream=True)},
            speed="slow", concurrency=1, prefill={"input": "#usernameSearchInput"}),
-    Module("gitfive", "GitHub (GitFive)", "/git", "github",
+    Module("gitfive", "GitHub (GitFive)", "/gitfive", "github",
            {"username": RunSpec("GET", "/api/gitfive/query", _q("username"))},
            speed="slow", tools=["GITFIVE_SCRIPT_PATH"], concurrency=1, prefill={"input": "#usernameInput"}),
     Module("ghunt", "Google account (GHunt)", "/ghunt", "mail",
@@ -82,7 +82,7 @@ MODULES: List[Module] = [
             "bssid": RunSpec("GET", "/api/ghunt/geolocate", _q("bssid")),
             "domain": RunSpec("GET", "/api/ghunt/spiderdal", _q("domain"))},
            speed="medium", concurrency=1, prefill={"input": "#searchInput"}),
-    Module("oi", "OSINT Industries", "/api", "shield-alert",
+    Module("oi", "OSINT Industries", "/oi", "shield-alert",
            {t: RunSpec("GET", "/api/oi/query", (lambda kind: lambda v: {"params": {"type": kind, "query": v}})(t))
             for t in ("email", "phone", "username")},
            cost=PAID, cost_note="OSINT Industries credits", speed="medium", keys=["OSINT_INDUSTRIES_API_KEY"],

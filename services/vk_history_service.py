@@ -6,9 +6,9 @@ from utils import telegram_client
 import logging
 
 
-from models.telegram_models import VKProfileHistoryResponse, ProfileEntry
+from models.vk_history_models import VKProfileHistoryResponse, ProfileEntry
 
-class TelegramService:
+class VkHistoryService:
     def __init__(self):
         self.session_name = "telegram_session"
         self.logger = logging.getLogger(__name__)
