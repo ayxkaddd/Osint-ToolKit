@@ -10,7 +10,7 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
 from services.entities import detect, make_entity, type_label
-from services.investigation_service import InvestigationService
+from services.investigation_service import investigation_service
 from services.ip_service import IPLookupError, IPService
 from services.job_manager import job_manager
 from services.module_registry import MODULES_BY_ID, all_module_status, balances, modules_for, module_status
@@ -19,7 +19,6 @@ from utils.investigation_decorator import save_investigation
 
 router = APIRouter()
 templates = Jinja2Templates(directory="templates")
-investigation_service = InvestigationService()
 ip_service = IPService()
 
 

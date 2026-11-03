@@ -1235,3 +1235,7 @@ class InvestigationService:
                     "children": [],
                 })
         return others
+
+
+# The one instance the app uses (routes, the saving decorator, reports)
+investigation_service = InvestigationService()

@@ -38,11 +38,10 @@ from fastapi import UploadFile
 from starlette.requests import Request
 from starlette.responses import Response, StreamingResponse
 
-from services.investigation_service import InvestigationService, _new_result_id
+from services.investigation_service import _new_result_id, investigation_service
 from utils.stream_reducers import parse_stream
 
 logger = logging.getLogger(__name__)
-investigation_service = InvestigationService()
 
 RESULT_ID_HEADER = "X-Investigation-Result-ID"
 _REQUEST_PARAM = "_investigation_request"

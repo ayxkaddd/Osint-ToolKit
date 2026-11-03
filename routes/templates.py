@@ -3,11 +3,10 @@ from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from pathlib import Path
 
-from services.investigation_service import InvestigationService
+from services.investigation_service import investigation_service
 
 router = APIRouter()
 templates = Jinja2Templates(directory="templates")
-investigation_service = InvestigationService()
 
 @router.get('/')
 def index(request: Request):

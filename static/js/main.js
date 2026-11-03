@@ -7,7 +7,7 @@
 // value (OSINT results, user input, API data) into innerHTML / template
 // literals to prevent stored/reflected XSS in the analyst's session.
 // ---------------------------------------------------------------------------
-function _escapeHtml(value) {
+function escapeHtml(value) {
   if (value === null || value === undefined) return ""
   return String(value)
     .replace(/&/g, "&amp;")
@@ -17,13 +17,9 @@ function _escapeHtml(value) {
     .replace(/'/g, "&#39;")
 }
 
-function escapeHtml(value) {
-  return _escapeHtml(value)
-}
-
 // Escape for use inside a double-quoted HTML attribute.
 function escapeAttr(value) {
-  return _escapeHtml(value)
+  return escapeHtml(value)
 }
 
 // Return url only if it uses a safe scheme (http/https/mailto/tel); else "".

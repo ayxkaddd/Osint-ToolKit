@@ -302,30 +302,30 @@ class OSINTSearch {
                 <div class="username-card-heading">
                     <div class="username-site-mark">
                         ${faviconUrl ? `
-                            <img src="${this.escapeHtml(faviconUrl)}" alt="" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                            <img src="${escapeHtml(faviconUrl)}" alt="" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
                             <div class="platform-icon ${platformInfo.class} username-site-mark-fallback">
-                                ${this.escapeHtml(platformInfo.icon)}
+                                ${escapeHtml(platformInfo.icon)}
                             </div>
                         ` : `
                             <div class="platform-icon ${platformInfo.class}">
-                                ${this.escapeHtml(platformInfo.icon)}
+                                ${escapeHtml(platformInfo.icon)}
                             </div>
                         `}
                     </div>
                     <div class="username-card-title">
-                        <h3 title="${this.escapeHtml(result.siteName)}">${this.escapeHtml(result.siteName)}</h3>
-                        <span>${this.escapeHtml(result.category || 'unknown')}</span>
+                        <h3 title="${escapeHtml(result.siteName)}">${escapeHtml(result.siteName)}</h3>
+                        <span>${escapeHtml(result.category || 'unknown')}</span>
                     </div>
                 </div>
                 ${profileImageUrl ? `
                     <div class="username-card-media">
-                        <button type="button" class="username-avatar-preview-btn" data-image-view="${this.escapeHtml(profileImageUrl)}" data-image-title="${this.escapeHtml(result.siteName)}" data-image-note="Profile picture preview" title="Preview profile picture">
-                            <img src="${this.escapeHtml(keyInfo.profileImage)}" alt="" class="username-card-avatar" onerror="this.closest('.username-result-card').classList.remove('has-profile-image'); this.closest('.username-card-media').style.display='none';">
+                        <button type="button" class="username-avatar-preview-btn" data-image-view="${escapeHtml(profileImageUrl)}" data-image-title="${escapeHtml(result.siteName)}" data-image-note="Profile picture preview" title="Preview profile picture">
+                            <img src="${escapeHtml(keyInfo.profileImage)}" alt="" class="username-card-avatar" onerror="this.closest('.username-result-card').classList.remove('has-profile-image'); this.closest('.username-card-media').style.display='none';">
                         </button>
                         <div class="username-reverse-search" aria-label="Reverse image search">
                             ${reverseSearchLinks.map(link => `
-                                <a href="${this.escapeHtml(link.url)}" target="_blank" rel="noopener noreferrer" title="${this.escapeHtml(link.label)} reverse image search">
-                                    <i class="${this.escapeHtml(link.icon)}"></i>
+                                <a href="${escapeHtml(link.url)}" target="_blank" rel="noopener noreferrer" title="${escapeHtml(link.label)} reverse image search">
+                                    <i class="${escapeHtml(link.icon)}"></i>
                                 </a>
                             `).join('')}
                         </div>
@@ -335,8 +335,8 @@ class OSINTSearch {
 
             ${keyInfo.username ? `
                 <div class="username-handle-row">
-                    <span title="@${this.escapeHtml(String(keyInfo.username))}">${pivotText('username', String(keyInfo.username), '@' + keyInfo.username)}</span>
-                    <button class="copy-username-btn" data-username="${this.escapeHtml(String(keyInfo.username))}" title="Copy username">
+                    <span title="@${escapeHtml(String(keyInfo.username))}">${pivotText('username', String(keyInfo.username), '@' + keyInfo.username)}</span>
+                    <button class="copy-username-btn" data-username="${escapeHtml(String(keyInfo.username))}" title="Copy username">
                         <i class="fas fa-copy"></i>
                     </button>
                 </div>
@@ -349,8 +349,8 @@ class OSINTSearch {
 
                 ${metaRows.map(row => `
                     <div class="username-data-row">
-                        <strong>${this.escapeHtml(row.label)}</strong>
-                        <span title="${this.escapeHtml(String(row.value))}">${pivotField(row.label, row.value)}</span>
+                        <strong>${escapeHtml(row.label)}</strong>
+                        <span title="${escapeHtml(String(row.value))}">${pivotField(row.label, row.value)}</span>
                     </div>
                 `).join('')}
 
@@ -358,8 +358,8 @@ class OSINTSearch {
                     <div class="username-mini-stats">
                         ${keyInfo.numericStats.slice(0, 6).map(stat => `
                             <div>
-                                <span>${this.escapeHtml(stat.key)}</span>
-                                <strong>${this.escapeHtml(this.formatFieldValue(stat.rawKey || stat.key, stat.value, { compactCounts: true }))}</strong>
+                                <span>${escapeHtml(stat.key)}</span>
+                                <strong>${escapeHtml(this.formatFieldValue(stat.rawKey || stat.key, stat.value, { compactCounts: true }))}</strong>
                             </div>
                         `).join('')}
                     </div>
@@ -368,7 +368,7 @@ class OSINTSearch {
                 ${keyInfo.socialLinks && keyInfo.socialLinks.length > 0 ? `
                     <div class="username-link-strip">
                         ${keyInfo.socialLinks.slice(0, 5).map(link => `
-                            <a href="${this.escapeHtml(link)}" target="_blank" title="${this.escapeHtml(link)}">
+                            <a href="${escapeHtml(link)}" target="_blank" title="${escapeHtml(link)}">
                                 <i class="fas fa-link"></i>
                             </a>
                         `).join('')}
@@ -377,7 +377,7 @@ class OSINTSearch {
             </div>
 
             <div class="username-card-actions">
-                <a href="${this.escapeHtml(result.url)}" target="_blank" title="${this.escapeHtml(result.url)}">
+                <a href="${escapeHtml(result.url)}" target="_blank" title="${escapeHtml(result.url)}">
                     <i class="fas fa-external-link-alt"></i>
                     <span>View</span>
                 </a>
@@ -526,8 +526,8 @@ class OSINTSearch {
             this.elements.categoryStatsGrid.innerHTML = categories.map(category => {
                 const count = this.resultsByCategory[category].length;
                 return `
-                    <button type="button" class="username-category-pill" data-category="${this.escapeHtml(category)}">
-                        <span>${this.escapeHtml(category)}</span>
+                    <button type="button" class="username-category-pill" data-category="${escapeHtml(category)}">
+                        <span>${escapeHtml(category)}</span>
                         <strong>${count}</strong>
                     </button>
                 `;
@@ -616,7 +616,7 @@ class OSINTSearch {
         section.dataset.category = category;
         section.innerHTML = `
             <div class="username-category-heading">
-                <h2>${this.escapeHtml(category)}</h2>
+                <h2>${escapeHtml(category)}</h2>
                 <span class="category-count">${this.resultsByCategory[category]?.length || 0}</span>
             </div>
             <div class="username-category-results"></div>
@@ -1117,7 +1117,7 @@ class OSINTSearch {
 
             html += `
                 <div class="${indentClass} mb-2">
-                    <span class="text-gray-400 text-sm font-medium">${this.escapeHtml(key)}:</span>
+                    <span class="text-gray-400 text-sm font-medium">${escapeHtml(key)}:</span>
             `;
 
             value.forEach((item, index) => {
@@ -1142,7 +1142,7 @@ class OSINTSearch {
 
             html += `
                 <div class="${indentClass} mb-2">
-                    <span class="text-gray-400 text-sm font-medium">${this.escapeHtml(key)}:</span>
+                    <span class="text-gray-400 text-sm font-medium">${escapeHtml(key)}:</span>
                     <div class="ml-4 mt-1 p-2 bg-gray-800/50 rounded border border-gray-700">
             `;
 
@@ -1157,8 +1157,8 @@ class OSINTSearch {
         if (typeof value === 'string' && (value.startsWith('http://') || value.startsWith('https://'))) {
             return `
                 <div class="${indentClass} flex justify-between items-start gap-4 mb-2">
-                    <span class="text-gray-400 text-sm whitespace-nowrap">${this.escapeHtml(key)}</span>
-                    <a href="${this.escapeHtml(safeUrl(value))}" target="_blank" rel="noopener noreferrer" class="text-purple-400 hover:text-purple-300 hover:underline text-sm text-right break-all">${this.escapeHtml(this.truncateUrl(value))}</a>
+                    <span class="text-gray-400 text-sm whitespace-nowrap">${escapeHtml(key)}</span>
+                    <a href="${escapeHtml(safeUrl(value))}" target="_blank" rel="noopener noreferrer" class="text-purple-400 hover:text-purple-300 hover:underline text-sm text-right break-all">${escapeHtml(this.truncateUrl(value))}</a>
                 </div>
             `;
         }
@@ -1167,7 +1167,7 @@ class OSINTSearch {
             const boolValue = value === true || value === 'True';
             return `
                 <div class="${indentClass} flex justify-between items-start gap-4 mb-2">
-                    <span class="text-gray-400 text-sm whitespace-nowrap">${this.escapeHtml(key)}</span>
+                    <span class="text-gray-400 text-sm whitespace-nowrap">${escapeHtml(key)}</span>
                     <span class="px-2 py-0.5 rounded ${boolValue ? 'bg-green-900 text-green-300' : 'bg-red-900 text-red-300'} text-xs">${boolValue ? 'Yes' : 'No'}</span>
                 </div>
             `;
@@ -1179,8 +1179,8 @@ class OSINTSearch {
                 const formattedValue = date.toLocaleDateString() + (value.includes('T') ? ' ' + date.toLocaleTimeString() : '');
                 return `
                     <div class="${indentClass} flex justify-between items-start gap-4 mb-2">
-                        <span class="text-gray-400 text-sm whitespace-nowrap">${this.escapeHtml(key)}</span>
-                        <span class="text-white text-sm text-right">${this.escapeHtml(formattedValue)}</span>
+                        <span class="text-gray-400 text-sm whitespace-nowrap">${escapeHtml(key)}</span>
+                        <span class="text-white text-sm text-right">${escapeHtml(formattedValue)}</span>
                     </div>
                 `;
             }
@@ -1188,7 +1188,7 @@ class OSINTSearch {
 
         return `
             <div class="${indentClass} flex justify-between items-start gap-4 mb-2">
-                <span class="text-gray-400 text-sm whitespace-nowrap">${this.escapeHtml(key)}</span>
+                <span class="text-gray-400 text-sm whitespace-nowrap">${escapeHtml(key)}</span>
                 <span class="text-white text-sm text-right break-words">${pivotField(key, value)}</span>
             </div>
         `;
@@ -1199,17 +1199,6 @@ class OSINTSearch {
         return url.substring(0, 37) + '...';
     }
 
-    escapeHtml(text) {
-        text = String(text);
-        const map = {
-            '&': '&amp;',
-            '<': '&lt;',
-            '>': '&gt;',
-            '"': '&quot;',
-            "'": '&#039;'
-        };
-        return text.replace(/[&<>"']/g, m => map[m]);
-    }
 
     getTimeAgo(timestamp) {
         const now = new Date();

@@ -7,10 +7,9 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 from starlette.datastructures import UploadFile as FormUpload
-from services.investigation_service import InvestigationService, NOTE_IMAGE_MAX_UPLOAD
+from services.investigation_service import NOTE_IMAGE_MAX_UPLOAD, investigation_service
 
 router = APIRouter(prefix="/api/investigations")
-investigation_service = InvestigationService()
 templates = Jinja2Templates(directory="templates")
 
 VALID_STATUSES = {"active", "completed", "archived"}
