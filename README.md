@@ -52,6 +52,7 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 ```bash
 pip install -r requirements.txt
 ```
+`requirements-lock.txt` has the exact versions the project is tested with, if a newer release of a dependency causes problems.
 
 4. Start the server and open `http://localhost:8000`:
 ```bash
@@ -150,4 +151,5 @@ Plugins you make, and the examples, run as they are. A plugin from someone else 
 - `/utils`: investigation saving, stream reducers, settings, subprocess and Telegram helpers
 - `/plugins`: plugins (one folder each), the plugin SDK and `python -m plugins`
 - `/templates`, `/static`: pages, per-module JS (`static/js/services/`) and the Tailwind build
+- `/tests`: automated tests (`pip install -r requirements-dev.txt`, then `python -m pytest`). They run in a temporary folder with their own settings and need no network
 - `/investigation_results`, `/media`: local case data (git-ignored, never commit it)
