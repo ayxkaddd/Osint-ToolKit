@@ -183,6 +183,8 @@ class OiService:
         return events
 
     async def get_credits(self):
+        if not self.token:
+            return {"credits": "Unavailable"}
         headers = {
             'api-key': self.token,
         }
