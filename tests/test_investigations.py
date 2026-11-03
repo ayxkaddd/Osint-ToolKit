@@ -57,3 +57,17 @@ def test_bulk_delete_ignores_bad_ids(client, service, investigation):
                            json={"action": "delete", "result_ids": ids[:2] + ["../x", "nope", ids[0]]})
     assert sorted(response.json()["done"]) == sorted(ids[:2])
     assert set(_results(client, investigation)) == set(ids[2:])
+
+
+def test_identifier_lists_follow_new_results(client, service, investigation):
+    first = _seed(service, investigation, 1)[0]
+    url = f"/api/investigations/{investigation}/entities"
+    before = {e["value"] for e in client.get(url).json()["entities"]}
+    second = service.save_investigation_result(UUID(investigation), "whois", "lookup", {"domain": "later.test"},
+                                               {"email": "later.person@gmail.com"})
+    after = {e["value"] for e in client.get(url).json()["entities"]}
+    assert "later.person@gmail.com" in after - before
+    one = client.get(f"/api/investigations/{investigation}/results/{second}/entities").json()["entities"]
+    assert "later.person@gmail.com" in {e["value"] for e in one}
+    assert "later.person@gmail.com" not in {
+        e["value"] for e in client.get(f"/api/investigations/{investigation}/results/{first}/entities").json()["entities"]}

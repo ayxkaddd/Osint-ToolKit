@@ -19,7 +19,7 @@ def allowed_setting_keys() -> Set[str]:
 
 
 @router.post("/update")
-async def update_settings(settings: Dict[str, str]):
+def update_settings(settings: Dict[str, str]):
     allowed = allowed_setting_keys()
     rejected = sorted(key for key in settings if key.upper() not in allowed)
     if rejected:
@@ -43,7 +43,7 @@ def _mask(value: str) -> str:
 
 
 @router.get("")
-async def list_settings():
+def list_settings():
     """Editable settings per module with whether each is configured (values masked)."""
     try:
         modules = json.loads(RESOURCES_PATH.read_text()).get("modules", [])

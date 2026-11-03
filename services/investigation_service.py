@@ -44,6 +44,8 @@ logger = logging.getLogger(__name__)
 # templates each construct their own) so concurrent lookups writing to the same
 # JSON files cannot interleave and lose data.
 _STORE_LOCK = threading.RLock()
+# entities.json path -> (file version, {"raw": parsed file, "sorted": decorated list or None})
+_ENTITY_CACHE: Dict[str, Tuple[Any, Dict[str, Any]]] = {}
 _MIGRATED_DIRS: set = set()
 
 # Bump when the index entry format / summary logic changes
@@ -714,18 +716,43 @@ class InvestigationService:
                 if entity.key not in searched:
                     add(entity, "found", service, method, timestamp, child_id, path)
 
-    def get_entities(self, investigation_id: UUID) -> List[Dict[str, Any]]:
-        """All identifiers in the investigation with where they were found."""
-        entities = list(self._load_entities(investigation_id).values())
-        for entity in entities:
-            found_in = {src.get("result_id") for src in entity.get("sources", []) if src.get("role") == "found"}
-            entity["found_count"] = len(found_in)
-            entity["searched"] = sorted({src.get("service") for src in entity.get("sources", [])
-                                         if src.get("role") == "searched"})
-            entity["services"] = sorted({src.get("service") for src in entity.get("sources", [])})
+    @staticmethod
+    def _decorate_entity(entity: Dict[str, Any]) -> Dict[str, Any]:
+        """Counts shown in the identifier list (computed, not stored)."""
+        sources = entity.get("sources", [])
+        entity["found_count"] = len({src.get("result_id") for src in sources if src.get("role") == "found"})
+        entity["searched"] = sorted({src.get("service") for src in sources if src.get("role") == "searched"})
+        entity["services"] = sorted({src.get("service") for src in sources})
+        return entity
+
+    @staticmethod
+    def _entity_order(entity: Dict[str, Any]):
         rank = {"confirmed": 0, "important": 1, None: 2, "false_positive": 3}
-        entities.sort(key=lambda e: (rank.get(e.get("status"), 2), -e["found_count"], e["type"], e["value"]))
-        return entities
+        return (rank.get(entity.get("status"), 2), -entity["found_count"], entity["type"], entity["value"])
+
+    def _entities_snapshot(self, investigation_id) -> Dict[str, Any]:
+        """Read-only view of entities.json, parsed once per version of the file.
+        Large investigations have tens of thousands of identifiers (several MB)."""
+        path = self._entities_file(investigation_id)
+        try:
+            stat = path.stat()
+        except FileNotFoundError:
+            return {"raw": {}, "sorted": []}
+        version = (stat.st_mtime_ns, stat.st_size, stat.st_ino)
+        cached = _ENTITY_CACHE.get(str(path))
+        if cached is None or cached[0] != version:
+            cached = _ENTITY_CACHE[str(path)] = (version, {"raw": self._load_entities(investigation_id), "sorted": None})
+        return cached[1]
+
+    def get_entities(self, investigation_id: UUID) -> List[Dict[str, Any]]:
+        """All identifiers in the investigation with where they were found.
+        Callers get copies they may modify."""
+        snapshot = self._entities_snapshot(investigation_id)
+        if snapshot["sorted"] is None:
+            entities = [self._decorate_entity(dict(e)) for e in snapshot["raw"].values()]
+            entities.sort(key=self._entity_order)
+            snapshot["sorted"] = entities
+        return [dict(e) for e in snapshot["sorted"]]
 
     def set_entity_triage(self, investigation_id: UUID, key: str,
                           status: Optional[str], note: Optional[str]) -> Optional[Dict[str, Any]]:
@@ -743,8 +770,11 @@ class InvestigationService:
             return entity
 
     def entities_for_result(self, investigation_id: UUID, result_id: str) -> List[Dict[str, Any]]:
-        return [e for e in self.get_entities(investigation_id)
-                if any(src.get("result_id") == result_id for src in e.get("sources", []))]
+        """Identifiers one result contributes, without building the whole list."""
+        entities = [self._decorate_entity(dict(e)) for e in self._entities_snapshot(investigation_id)["raw"].values()
+                    if any(src.get("result_id") == result_id for src in e.get("sources", []))]
+        entities.sort(key=self._entity_order)
+        return entities
 
     def previous_lookups(self, investigation_id: UUID, entity_key: str) -> List[Dict[str, Any]]:
         """Earlier lookups run on this identifier (to avoid paying twice)."""

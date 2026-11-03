@@ -505,7 +505,7 @@ def setup_gitfive_guide() -> Dict[str, Any]:
 
 
 @router.get("/setup", response_class=HTMLResponse)
-async def setup_page(request: Request):
+def setup_page(request: Request):
     try:
         """Main setup page"""
         # if check_setup_complete():
@@ -552,7 +552,7 @@ async def setup_page(request: Request):
 
 
 @router.post("/setup/admin")
-async def setup_admin(
+def setup_admin(
     email: str = Form(...),
     password: str = Form(...),
     confirm_password: str = Form(...)
@@ -612,7 +612,7 @@ async def setup_admin(
 
 
 @router.post("/setup/features")
-async def setup_features(
+def setup_features(
     enable_github: bool = Form(False),
     enable_dns_recon: bool = Form(False),
     enable_ns_lookup: bool = Form(False),
@@ -667,7 +667,7 @@ async def setup_features(
 
 
 @router.post("/setup/apis")
-async def setup_apis(
+def setup_apis(
     hacker_target: Optional[str] = Form(None),
     osint_industries: Optional[str] = Form(None),
     whois_history: Optional[str] = Form(None),
@@ -722,7 +722,7 @@ async def setup_apis(
 
 
 @router.post("/setup/install-tools")
-async def install_tools():
+def install_tools():
     """Install Go tools automatically with detailed progress"""
     if not check_dependency("go"):
         raise HTTPException(
@@ -741,7 +741,7 @@ async def install_tools():
 
 
 @router.post("/setup/validate-api")
-async def validate_api(
+def validate_api(
     service: str = Form(...),
     api_key: str = Form(...)
 ):
@@ -757,7 +757,7 @@ async def validate_api(
 
 
 @router.get("/setup/gitfive-guide")
-async def gitfive_guide():
+def gitfive_guide():
     """Get detailed GitFive setup instructions"""
     guide = setup_gitfive_guide()
     gitfive_status = check_gitfive_detailed()
@@ -769,7 +769,7 @@ async def gitfive_guide():
 
 
 @router.get("/setup/system-check")
-async def system_check():
+def system_check():
     """Comprehensive system status check"""
     return JSONResponse({
         "python": {
@@ -793,7 +793,7 @@ async def system_check():
 
 
 @router.post("/setup/complete")
-async def complete_setup():
+def complete_setup():
     """Mark setup as complete"""
     if not CONFIG_PATH.exists():
         raise HTTPException(status_code=400, detail="Configuration not found")
@@ -823,13 +823,13 @@ async def complete_setup():
 
 
 @router.get("/setup/complete")
-async def setup_complete_page():
+def setup_complete_page():
     """Setup completion: send the user to the login page."""
     return RedirectResponse(url="/", status_code=303)
 
 
 @router.get("/setup/status")
-async def setup_status():
+def setup_status():
     """Get current setup status"""
     state = get_setup_state()
     return JSONResponse({
@@ -845,7 +845,7 @@ async def setup_status():
 
 
 @router.post("/setup/reset")
-async def reset_setup(confirm: str = Form(...)):
+def reset_setup(confirm: str = Form(...)):
     """Reset setup (for development/testing)"""
     if confirm != "RESET":
         raise HTTPException(status_code=400, detail="Invalid confirmation")

@@ -75,7 +75,7 @@ def face_search_page(request: Request):
     return templates.TemplateResponse(request=request, name="face_search.html")
 
 @router.get("/reports/{filename}")
-async def get_report(filename: str):
+def get_report(filename: str):
     REPORTS_DIR = Path("reports").resolve()
 
     try:
@@ -90,7 +90,7 @@ async def get_report(filename: str):
 
 
 @router.get("/notes/")
-async def notes_page(request: Request):
+def notes_page(request: Request):
     current = investigation_service.get_current_investigation()
     if not current:
         return RedirectResponse(url="/investigations")

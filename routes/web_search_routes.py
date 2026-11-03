@@ -146,7 +146,7 @@ async def search_custom_dorks(request: CustomDorksRequest):
 
 
 @osint_router.post("/dorks/preview", response_model=DorksResponse)
-async def get_dorks_preview(request: GetDorksRequest):
+def get_dorks_preview(request: GetDorksRequest):
     """
     Preview dork queries that would be generated without executing searches
 
@@ -197,7 +197,7 @@ async def get_dorks_preview(request: GetDorksRequest):
 
 
 @osint_router.get("/health")
-async def health_check():
+def health_check():
     """
     Check if OSINT service is configured and ready
 
@@ -213,7 +213,7 @@ async def health_check():
 
 
 @osint_router.get("/info")
-async def get_service_info():
+def get_service_info():
     """
     Get information about available search options and input types
 

@@ -128,7 +128,7 @@ async def cancel_job(job_id: str):
 # ==================== ENTITIES & TRIAGE ====================
 
 @router.get("/api/investigations/{investigation_id}/entities")
-async def list_entities(investigation_id: UUID, type: Optional[str] = None, q: Optional[str] = None,
+def list_entities(investigation_id: UUID, type: Optional[str] = None, q: Optional[str] = None,
                         status: Optional[str] = None, limit: int = Query(500, ge=1, le=5000), offset: int = 0):
     """Identifiers found in or searched for this investigation (most relevant first)."""
     _require_investigation(investigation_id)
@@ -153,7 +153,7 @@ async def list_entities(investigation_id: UUID, type: Optional[str] = None, q: O
 
 
 @router.patch("/api/investigations/{investigation_id}/entities")
-async def triage_entity(investigation_id: UUID, body: EntityTriageRequest):
+def triage_entity(investigation_id: UUID, body: EntityTriageRequest):
     _require_investigation(investigation_id)
     try:
         entity = investigation_service.set_entity_triage(investigation_id, body.key, body.status, body.note)
@@ -165,7 +165,7 @@ async def triage_entity(investigation_id: UUID, body: EntityTriageRequest):
 
 
 @router.get("/api/investigations/{investigation_id}/results/{result_id}/entities")
-async def result_entities(investigation_id: UUID, result_id: str):
+def result_entities(investigation_id: UUID, result_id: str):
     _require_investigation(investigation_id)
     entities = investigation_service.entities_for_result(investigation_id, result_id)
     for entity in entities:
@@ -175,7 +175,7 @@ async def result_entities(investigation_id: UUID, result_id: str):
 
 
 @router.patch("/api/investigations/{investigation_id}/results/{result_id}/triage")
-async def triage_result(investigation_id: UUID, result_id: str, body: TriageRequest):
+def triage_result(investigation_id: UUID, result_id: str, body: TriageRequest):
     _require_investigation(investigation_id)
     try:
         triage = investigation_service.set_result_triage(investigation_id, result_id, body.status, body.note)
@@ -215,7 +215,7 @@ STATUS_LABELS = {"confirmed": "Confirmed", "important": "Important", "false_posi
 
 
 @router.get("/api/investigations/{investigation_id}/report", response_class=HTMLResponse)
-async def case_report(request: Request, investigation_id: UUID, include: str = Query("findings")):
+def case_report(request: Request, investigation_id: UUID, include: str = Query("findings")):
     """Printable case report. ``include=all`` lists every result, otherwise
     results marked confirmed/important (falling back to all if none are)."""
     info = _require_investigation(investigation_id)

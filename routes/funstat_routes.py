@@ -46,7 +46,7 @@ bot_router = APIRouter(prefix="/funstat/bot", tags=["Bot"])
 
 
 @bot_router.get("/balance")
-async def funstat_balance():
+def funstat_balance():
     """Balance from the latest Funstat response (null until a request is made)."""
     from services.funstat_service import last_tech
     return {"balance": last_tech.get("balance"), "last_cost": last_tech.get("last_cost"),
@@ -256,7 +256,7 @@ async def search_text(
 # ==================== MEDIA ROUTES ====================
 
 @media_router.get("/thumbnails/{filename}")
-async def get_thumbnail(filename: str):
+def get_thumbnail(filename: str):
     """Serve a generated thumbnail (behind login, unlike /static)."""
     if not re.fullmatch(r"[A-Za-z0-9_.-]+\.jpg", filename):
         raise HTTPException(status_code=404, detail="Not found")
@@ -282,7 +282,7 @@ async def get_full_media(
         raise HTTPException(status_code=502, detail=f"Telegram download failed: {e}")
 
 @media_router.get("/avatars/{filename}")
-async def get_avatar(filename: str):
+def get_avatar(filename: str):
     """Serve a saved t.me avatar (behind login)."""
     if not re.fullmatch(r"[a-z0-9_]+_[0-9a-f]{16}\.jpg", filename):
         raise HTTPException(status_code=404, detail="Not found")
@@ -292,7 +292,7 @@ async def get_avatar(filename: str):
     return FileResponse(path, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=86400"})
 
 @media_router.get("/files/{filename}")
-async def get_media_file(filename: str):
+def get_media_file(filename: str):
     """Serve a downloaded original (behind login; supports range requests for video)."""
     if not re.fullmatch(r"[A-Za-z0-9_-]+\.(jpg|png|webp|gif|mp4|webm|mov)", filename):
         raise HTTPException(status_code=404, detail="Not found")
@@ -618,7 +618,7 @@ async def get_user_messages_with_context(
 
 # Example usage endpoint that demonstrates the feature
 @media_router.get("/context/example")
-async def context_example() -> dict:
+def context_example() -> dict:
     """
     Example demonstrating how to use the context API
 
