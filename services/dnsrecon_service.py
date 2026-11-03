@@ -433,22 +433,8 @@ class DNSReconService:
 
             securitytrails = external_data.get('securitytrails') or {}
             virustotal = external_data.get('virustotal') or {}
-            for name, source in ((securitytrails, 'SecurityTrails'), (virustotal, 'VirusTotal')):
-                if name.get('error') and 'not configured' not in name['error']:
-                    warnings.append(f"{source}: {name['error']}")
-            for error in securitytrails.get('errors') or []:
-                warnings.append(f"SecurityTrails {error}")
-
-            # Where each name was seen
-            sources: Dict[str, List[str]] = {domain: ['target']}
-            for names, source in ((subfinder_names, 'subfinder'), (crt_names, 'certificates'),
-                                  (securitytrails.get('subdomains') or [], 'SecurityTrails'),
-                                  (virustotal.get('subdomains') or [], 'VirusTotal')):
-                for name in names:
-                    if name == domain or name.endswith('.' + domain):
-                        sources.setdefault(name, [])
-                        if source not in sources[name]:
-                            sources[name].append(source)
+            warnings += self._external_api_warnings(securitytrails, virustotal)
+            sources = self._name_sources(domain, subfinder_names, crt_names, securitytrails, virustotal)
             names = sorted(sources, key=lambda d: (d != domain, d))
             probe_names = names[:MAX_PROBED_NAMES]
             if len(names) > MAX_PROBED_NAMES:
@@ -478,35 +464,7 @@ class DNSReconService:
         } for ip in top_ips]
 
         security_analysis = self.analyze_security(httpx_results, external_data)
-
-        # httpx's "host" field is the resolved IP; the probed name is "input"
-        def probed_name(result: Dict[str, Any]) -> str:
-            name = result.get('input') or result.get('url', '')
-            return re.sub(r'^https?://', '', name).split('/')[0].split(':')[0].lower()
-
-        httpx_by_host: Dict[str, Dict[str, Any]] = {}
-        for result in httpx_results:
-            httpx_by_host.setdefault(probed_name(result), result)
-
-        subdomains_data = []
-        for subdomain in names:
-            probe = httpx_by_host.get(subdomain, {})
-            cert = crt_names.get(subdomain, {})
-            subdomains_data.append({
-                'name': subdomain,
-                'sources': sources[subdomain],
-                'ips': resolved.get(subdomain, []),
-                'resolves': bool(resolved.get(subdomain)),
-                'first_cert': cert.get('first_seen'),
-                'last_cert': cert.get('last_seen'),
-                'httpx_data': probe,
-                'is_alive': bool(probe),
-                'technologies': probe.get('tech', []),
-                'status_code': probe.get('status_code'),
-                'title': probe.get('title'),
-                'server': probe.get('webserver'),
-                'content_length': probe.get('content_length'),
-            })
+        subdomains_data = self._subdomain_rows(names, sources, resolved, httpx_results, crt_names)
 
         intel = analyze_records(dns_records, dmarc)
         intel['cert_emails'] = cert_emails
@@ -517,32 +475,9 @@ class DNSReconService:
             'securitytrails': securitytrails.get('history') or {},
             'virustotal_resolutions': virustotal.get('resolutions') or [],
         }
-        external_summary = {}
-        if use_external_apis:
-            external_summary = {
-                'securitytrails': {'error': securitytrails['error']} if securitytrails.get('error') else
-                {'subdomains': len(securitytrails.get('subdomains') or []), 'errors': securitytrails.get('errors') or []},
-                'virustotal': {'error': virustotal['error']} if virustotal.get('error') else
-                {'subdomains': len(virustotal.get('subdomains') or []), 'categories': virustotal.get('categories') or [],
-                 'detected_urls': virustotal.get('detected_urls') or []},
-            }
-
-        alive_subdomains = [s for s in subdomains_data if s['is_alive']]
-        all_technologies = [t for s in alive_subdomains for t in (s['technologies'] or [])]
-        summary = {
-            'total_subdomains': len(subdomains_data),
-            'resolving_subdomains': sum(1 for s in subdomains_data if s['resolves']),
-            'alive_subdomains': len(alive_subdomains),
-            'unique_ips': len(by_ip),
-            'unique_technologies': len(set(all_technologies)),
-            'https_percentage': (security_analysis['ssl_analysis']['https_enabled'] /
-                                 max(security_analysis['ssl_analysis']['total_endpoints'], 1)) * 100,
-            'security_score': self.calculate_security_score(security_analysis),
-            'external_apis_used': use_external_apis,
-            'port_scan_performed': include_ports
-        }
-        if port_results:
-            summary['open_ports_found'] = len([p for p in port_results if p.get('state') == 'open'])
+        external_summary = self._external_summary(securitytrails, virustotal) if use_external_apis else {}
+        summary = self._recon_summary(subdomains_data, by_ip, security_analysis, use_external_apis,
+                                      include_ports, port_results)
 
         return ReconResults(
             domain=domain,
@@ -560,6 +495,93 @@ class DNSReconService:
             hosting=hosting,
             dns_history=dns_history,
         )
+
+    @staticmethod
+    def _external_api_warnings(securitytrails: Dict[str, Any], virustotal: Dict[str, Any]) -> List[str]:
+        warnings = []
+        for data, source in ((securitytrails, 'SecurityTrails'), (virustotal, 'VirusTotal')):
+            if data.get('error') and 'not configured' not in data['error']:
+                warnings.append(f"{source}: {data['error']}")
+        warnings += [f"SecurityTrails {error}" for error in securitytrails.get('errors') or []]
+        return warnings
+
+    @staticmethod
+    def _name_sources(domain: str, subfinder_names, crt_names, securitytrails: Dict[str, Any],
+                      virustotal: Dict[str, Any]) -> Dict[str, List[str]]:
+        """Every name under the domain, with where it was seen."""
+        sources: Dict[str, List[str]] = {domain: ['target']}
+        for names, source in ((subfinder_names, 'subfinder'), (crt_names, 'certificates'),
+                              (securitytrails.get('subdomains') or [], 'SecurityTrails'),
+                              (virustotal.get('subdomains') or [], 'VirusTotal')):
+            for name in names:
+                if name == domain or name.endswith('.' + domain):
+                    sources.setdefault(name, [])
+                    if source not in sources[name]:
+                        sources[name].append(source)
+        return sources
+
+    @staticmethod
+    def _subdomain_rows(names: List[str], sources: Dict[str, List[str]], resolved: Dict[str, List[str]],
+                        httpx_results: List[Dict[str, Any]], crt_names: Dict[str, Any]) -> List[Dict[str, Any]]:
+        # httpx's "host" field is the resolved IP; the probed name is "input"
+        def probed_name(result: Dict[str, Any]) -> str:
+            name = result.get('input') or result.get('url', '')
+            return re.sub(r'^https?://', '', name).split('/')[0].split(':')[0].lower()
+
+        httpx_by_host: Dict[str, Dict[str, Any]] = {}
+        for result in httpx_results:
+            httpx_by_host.setdefault(probed_name(result), result)
+
+        rows = []
+        for subdomain in names:
+            probe = httpx_by_host.get(subdomain, {})
+            cert = crt_names.get(subdomain, {})
+            rows.append({
+                'name': subdomain,
+                'sources': sources[subdomain],
+                'ips': resolved.get(subdomain, []),
+                'resolves': bool(resolved.get(subdomain)),
+                'first_cert': cert.get('first_seen'),
+                'last_cert': cert.get('last_seen'),
+                'httpx_data': probe,
+                'is_alive': bool(probe),
+                'technologies': probe.get('tech', []),
+                'status_code': probe.get('status_code'),
+                'title': probe.get('title'),
+                'server': probe.get('webserver'),
+                'content_length': probe.get('content_length'),
+            })
+        return rows
+
+    @staticmethod
+    def _external_summary(securitytrails: Dict[str, Any], virustotal: Dict[str, Any]) -> Dict[str, Any]:
+        return {
+            'securitytrails': {'error': securitytrails['error']} if securitytrails.get('error') else
+            {'subdomains': len(securitytrails.get('subdomains') or []), 'errors': securitytrails.get('errors') or []},
+            'virustotal': {'error': virustotal['error']} if virustotal.get('error') else
+            {'subdomains': len(virustotal.get('subdomains') or []), 'categories': virustotal.get('categories') or [],
+             'detected_urls': virustotal.get('detected_urls') or []},
+        }
+
+    def _recon_summary(self, subdomains_data, by_ip, security_analysis, use_external_apis: bool,
+                       include_ports: bool, port_results) -> Dict[str, Any]:
+        alive_subdomains = [s for s in subdomains_data if s['is_alive']]
+        all_technologies = [t for s in alive_subdomains for t in (s['technologies'] or [])]
+        summary = {
+            'total_subdomains': len(subdomains_data),
+            'resolving_subdomains': sum(1 for s in subdomains_data if s['resolves']),
+            'alive_subdomains': len(alive_subdomains),
+            'unique_ips': len(by_ip),
+            'unique_technologies': len(set(all_technologies)),
+            'https_percentage': (security_analysis['ssl_analysis']['https_enabled'] /
+                                 max(security_analysis['ssl_analysis']['total_endpoints'], 1)) * 100,
+            'security_score': self.calculate_security_score(security_analysis),
+            'external_apis_used': use_external_apis,
+            'port_scan_performed': include_ports
+        }
+        if port_results:
+            summary['open_ports_found'] = len([p for p in port_results if p.get('state') == 'open'])
+        return summary
 
     def calculate_security_score(self, security_analysis: Dict) -> int:
         """Calculate overall security score"""
