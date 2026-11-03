@@ -214,11 +214,14 @@ def load_for_builder(plugin: pl.Plugin) -> Dict[str, Any]:
 # curl import
 # ---------------------------------------------------------------------------
 
-def parse_curl(command: str, example: str = "") -> Dict[str, Any]:
-    """A curl command (as copied from API docs or the browser) -> request parts.
+_CURL_SKIP_WITH_VALUE = {"-o", "--output", "-m", "--max-time", "--connect-timeout", "-A", "--user-agent", "-e",
+                         "--referer", "-b", "--cookie", "-x", "--proxy", "-w", "--write-out", "--retry"}
+_CURL_DATA_FLAGS = ("-d", "--data", "--data-raw", "--data-binary", "--data-ascii", "--data-urlencode")
+_DROPPED_HEADERS = ("content-type", "content-length", "accept-encoding", "user-agent", "cookie", "host", "connection")
+_VALUE_TYPES = ("email", "phone", "domain", "ip", "url", "crypto_btc", "crypto_eth")
 
-    The API key moves into a setting ({key:API_KEY} - the builder names it), and the
-    looked-up value (``example``, or an email/phone/domain/IP it finds) becomes {value}."""
+
+def _curl_tokens(command: str) -> List[str]:
     text = re.sub(r"\\\r?\n", " ", command or "").strip()
     try:
         tokens = shlex.split(text)
@@ -226,37 +229,77 @@ def parse_curl(command: str, example: str = "") -> Dict[str, Any]:
         raise DraftError(f"Couldn't read that example ({e}) - paste the whole command, starting with curl") from None
     if tokens and tokens[0].lower() in ("curl", "curl.exe"):
         tokens = tokens[1:]
+    return tokens
+
+
+def _read_curl_options(tokens: List[str]) -> Tuple[Optional[str], Optional[str], Dict[str, str], Optional[str], bool]:
+    """(method, url, headers, body, body is JSON) from curl's arguments."""
     method, url, headers, data, is_json = None, None, {}, None, False
-    takes_value = {"-o", "--output", "-m", "--max-time", "--connect-timeout", "-A", "--user-agent", "-e", "--referer",
-                   "-b", "--cookie", "-x", "--proxy", "-w", "--write-out", "--retry"}
     i = 0
     while i < len(tokens):
         token = tokens[i]
         nxt = tokens[i + 1] if i + 1 < len(tokens) else None
+        step = 2
         if token in ("-X", "--request") and nxt:
-            method = nxt.upper(); i += 2; continue
-        if token in ("-H", "--header") and nxt:
+            method = nxt.upper()
+        elif token in ("-H", "--header") and nxt:
             name, _, val = nxt.partition(":")
             if name.strip():
                 headers[name.strip()] = val.strip()
-            i += 2; continue
-        if token in ("-d", "--data", "--data-raw", "--data-binary", "--data-ascii", "--data-urlencode") and nxt:
-            data = nxt if data is None else f"{data}&{nxt}"; i += 2; continue
-        if token == "--json" and nxt:
-            data, is_json = nxt, True; i += 2; continue
-        if token in ("-u", "--user") and nxt:
-            headers["Authorization"] = "Basic " + base64.b64encode(nxt.encode()).decode(); i += 2; continue
-        if token in ("-A", "--user-agent") and nxt:
-            headers["User-Agent"] = nxt; i += 2; continue
-        if token in ("--url",) and nxt:
-            url = nxt; i += 2; continue
-        if token in takes_value:
-            i += 2; continue
-        if token.startswith("-"):
-            i += 1; continue
-        if url is None:
-            url = token
-        i += 1
+        elif token in _CURL_DATA_FLAGS and nxt:
+            data = nxt if data is None else f"{data}&{nxt}"
+        elif token == "--json" and nxt:
+            data, is_json = nxt, True
+        elif token in ("-u", "--user") and nxt:
+            headers["Authorization"] = "Basic " + base64.b64encode(nxt.encode()).decode()
+        elif token in ("-A", "--user-agent") and nxt:
+            headers["User-Agent"] = nxt
+        elif token == "--url" and nxt:
+            url = nxt
+        elif token in _CURL_SKIP_WITH_VALUE:
+            pass
+        else:
+            step = 1
+            if not token.startswith("-") and url is None:
+                url = token
+        i += step
+    return method, url, headers, data, is_json
+
+
+def _split_body(data: Optional[str], is_json: bool) -> Tuple[Any, Dict[str, str]]:
+    """(JSON body, form fields) from curl's data."""
+    if data is None:
+        return None, {}
+    stripped = data.strip()
+    if is_json or stripped.startswith(("{", "[")):
+        try:
+            return json.loads(stripped), {}
+        except json.JSONDecodeError:
+            pass
+    return None, dict(parse_qsl(stripped, keep_blank_values=True))
+
+
+def _find_example_value(example: str, candidates: List[str], hostname: str) -> Optional[Tuple[str, str]]:
+    """(value, type) of what the example looks up: the given example, or the first
+    email/phone/domain/... in the request that isn't the API's own host."""
+    if example:
+        found = detect(example)
+        return example, (found[0].type if found else "text")
+    for candidate in candidates:
+        if "{key:" in candidate:
+            continue
+        for entity in detect(candidate):
+            if entity.type in _VALUE_TYPES and candidate.strip() not in hostname:
+                return candidate, entity.type
+    return None
+
+
+def parse_curl(command: str, example: str = "") -> Dict[str, Any]:
+    """A curl command (as copied from API docs or the browser) -> request parts.
+
+    The API key moves into a setting ({key:API_KEY} - the builder names it), and the
+    looked-up value (``example``, or an email/phone/domain/IP it finds) becomes {value}."""
+    method, url, headers, data, is_json = _read_curl_options(_curl_tokens(command))
     if not url:
         raise DraftError("No web address found - paste the whole example, starting with curl")
     if not re.match(r"^https?://", url, re.I):
@@ -264,21 +307,11 @@ def parse_curl(command: str, example: str = "") -> Dict[str, Any]:
     parts = urlsplit(url)
     query = dict(parse_qsl(parts.query, keep_blank_values=True))
     base_url = urlunsplit((parts.scheme, parts.netloc, parts.path or "/", "", ""))
-    json_body, form = None, {}
-    if data is not None:
-        stripped = data.strip()
-        if is_json or stripped.startswith(("{", "[")):
-            try:
-                json_body = json.loads(stripped)
-            except json.JSONDecodeError:
-                form = dict(parse_qsl(stripped, keep_blank_values=True))
-        else:
-            form = dict(parse_qsl(stripped, keep_blank_values=True))
+    json_body, form = _split_body(data, is_json)
     method = method or ("POST" if data is not None else "GET")
     if method not in ("GET", "POST"):
         raise DraftError(f"This example uses {method}, which plugins can't do - only GET and POST (searching)")
-    headers = {k: v for k, v in headers.items() if k.lower() not in ("content-type", "content-length", "accept-encoding",
-                                                                   "user-agent", "cookie", "host", "connection")}
+    headers = {k: v for k, v in headers.items() if k.lower() not in _DROPPED_HEADERS}
 
     # API key -> setting
     secret_value = None
@@ -303,25 +336,11 @@ def parse_curl(command: str, example: str = "") -> Dict[str, Any]:
         json_body = {k: take_secret(k, v) for k, v in json_body.items()}
 
     # looked-up value -> {value}
-    found: Optional[Tuple[str, str]] = None
-    example = (example or "").strip()
     candidates: List[str] = [v for v in list(query.values()) + list(form.values()) if isinstance(v, str)]
     candidates += [seg for seg in parts.path.split("/") if seg]
     if isinstance(json_body, dict):
         candidates += [v for v in json_body.values() if isinstance(v, str)]
-    if example:
-        found = (example, (detect(example)[0].type if detect(example) else "text"))
-    else:
-        for candidate in candidates:
-            if "{key:" in candidate:
-                continue
-            for entity in detect(candidate):
-                if entity.type in ("email", "phone", "domain", "ip", "url", "crypto_btc", "crypto_eth") \
-                        and candidate.strip() not in (parts.hostname or ""):
-                    found = (candidate, entity.type)
-                    break
-            if found:
-                break
+    found = _find_example_value((example or "").strip(), candidates, parts.hostname or "")
 
     def put_value(val: Any) -> Any:
         if found and isinstance(val, str) and found[0] in val:
