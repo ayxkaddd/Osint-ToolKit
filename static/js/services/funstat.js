@@ -2346,16 +2346,3 @@ function displayError(containerId, message) {
         </div>
     `;
 }
-
-async function checkTelegramAuthorization() {
-    try {
-        const response = await fetch('/auth/tg/status');
-        const data = await response.json();
-
-        if (data.authorized === false) {
-            window.location.href = '/telegram_auth';
-        }
-    } catch (error) {
-        console.error('Error checking Telegram authorization:', error);
-    }
-}

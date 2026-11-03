@@ -454,7 +454,8 @@ async def get_complete_user_profile(user_id: int, fetch_all_messages: bool = Fal
             )
             if thumbnail:
                 thumbnails.append(thumbnail)
-        except Exception:
+        except Exception as e:
+            logger.warning("Thumbnail for message %s failed: %s", msg.messageId, e)
             continue
 
     return {

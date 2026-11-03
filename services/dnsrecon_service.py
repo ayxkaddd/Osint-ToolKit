@@ -200,7 +200,10 @@ class DNSReconService:
         def run() -> List[str]:
             try:
                 return [str(a) for a in dns.resolver.resolve(name, record_type, lifetime=8)]
-            except Exception:
+            except dns.exception.DNSException:
+                return []  # no such record / name, or no answer in time
+            except Exception as e:
+                logger.warning("DNS %s lookup for %s failed: %s", record_type, name, e)
                 return []
         return await asyncio.to_thread(run)
 
