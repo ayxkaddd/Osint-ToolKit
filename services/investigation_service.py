@@ -825,7 +825,7 @@ class InvestigationService:
                 _write_json_atomic(self.current_file, {"investigation_id": str(investigation_id)})
             return True
         except OSError as e:
-            logger.error(f"Failed to set current investigation: {e}")
+            logger.error('Failed to set current investigation: %s', e)
             return False
 
     def get_current_investigation(self) -> Optional[UUID]:
@@ -850,7 +850,7 @@ class InvestigationService:
                 _write_json_atomic(self.current_file, {"investigation_id": None})
             return True
         except OSError as e:
-            logger.error(f"Failed to clear investigation: {e}")
+            logger.error('Failed to clear investigation: %s', e)
             return False
 
     # ==================== NOTES ====================

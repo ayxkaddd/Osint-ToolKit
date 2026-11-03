@@ -304,10 +304,10 @@ class SearchExecutor:
                 try:
                     result = await self.search(dork, engine, max_results, client)
                     results.append({"dork": dork, "engine": engine.value, "data": result})
-                    logger.info(f"Search completed for dork: {dork[:50]}...")
+                    logger.info('Search completed for dork: %s...', dork[:50])
                     await asyncio.sleep(delay)  # Rate limiting
                 except Exception as e:
-                    logger.error(f"Search failed for dork '{dork}': {str(e)}")
+                    logger.error("Search failed for dork '%s': %s", dork, str(e))
                     results.append({"dork": dork, "engine": engine.value, "error": str(e)})
 
         return results
@@ -381,7 +381,7 @@ class OSINTSearchService:
 
         for engine in engines:
             dorks = generator.generate(value, engine)
-            logger.info(f"Generated {len(dorks)} dorks for {input_type.value} on {engine.value}")
+            logger.info('Generated %s dorks for %s on %s', len(dorks), input_type.value, engine.value)
 
             raw_results = await self.executor.search_multiple(
                 dorks=dorks,
@@ -449,7 +449,7 @@ class OSINTSearchService:
         all_results = []
 
         for engine in engines:
-            logger.info(f"Searching {len(dorks)} custom dorks on {engine.value}")
+            logger.info('Searching %s custom dorks on %s', len(dorks), engine.value)
 
             raw_results = await self.executor.search_multiple(
                 dorks=dorks,

@@ -223,7 +223,7 @@ class OsintFramework:
                 tags=[tag],
             )
 
-        logger.info(f"Registered {len(routes_config)} route groups")
+        logger.info('Registered %s route groups', len(routes_config))
         plugin_loader.refresh(force=True)
 
 

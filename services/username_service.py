@@ -241,7 +241,7 @@ class StreamingUsernameSearchService:
             self._refresh_metadata(raise_errors=True)
             return self._metadata_cache
         except Exception as e:
-            logger.error(f"Failed to fetch metadata: {str(e)}")
+            logger.error('Failed to fetch metadata: %s', str(e))
             raise HTTPException(status_code=500, detail=f"Failed to fetch the WhatsMyName site list: {str(e)}")
 
     def _refresh_metadata(self, raise_errors: bool = False):
@@ -261,7 +261,7 @@ class StreamingUsernameSearchService:
         except Exception as e:
             if raise_errors:
                 raise
-            logger.warning(f"Could not update the WhatsMyName list ({e}); keeping the local copy")
+            logger.warning('Could not update the WhatsMyName list (%s); keeping the local copy', e)
             try:
                 # Don't retry on every search when GitHub is unreachable
                 os.utime(self.WMN_LOCAL)
@@ -510,7 +510,7 @@ class StreamingUsernameSearchService:
             try:
                 profile_data = await asyncio.to_thread(extract, text)
             except Exception as e:
-                logger.debug(f"socid_extractor failed for {url}: {e}")
+                logger.debug('socid_extractor failed for %s: %s', url, e)
 
         if not profile_data:
             parsed_json = self._try_parse_json(text)
@@ -572,7 +572,7 @@ class StreamingUsernameSearchService:
                             await asyncio.sleep(self.stream_delay)
 
         except Exception as e:
-            logger.error(f"DuckDuckGo search error: {str(e)}")
+            logger.error('DuckDuckGo search error: %s', str(e))
 
     @staticmethod
     def _select_sites(sites: list[dict], categories, only_sites, priority_sites) -> list[dict]:

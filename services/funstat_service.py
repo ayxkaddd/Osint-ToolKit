@@ -80,19 +80,19 @@ class FunstatService:
                 return data
 
         except httpx.HTTPStatusError as e:
-            logger.error(f"HTTP error: {e.response.status_code} - {e.response.text}")
+            logger.error('HTTP error: %s - %s', e.response.status_code, e.response.text)
             raise HTTPException(
                 status_code=e.response.status_code,
                 detail=f"Funstat API error: {e.response.text}"
             )
         except httpx.RequestError as e:
-            logger.error(f"Request error: {str(e)}")
+            logger.error('Request error: %s', str(e))
             raise HTTPException(
                 status_code=500,
                 detail=f"Request to Funstat API failed: {str(e)}"
             )
         except Exception as e:
-            logger.error(f"Unexpected error: {str(e)}")
+            logger.error('Unexpected error: %s', str(e))
             raise HTTPException(
                 status_code=500,
                 detail=f"Unexpected error: {str(e)}"
@@ -207,7 +207,7 @@ class FunstatService:
         page_size = 100  # Max page size for efficiency
         total_fetched = 0
 
-        logger.info(f"Fetching all messages for user {user_id}")
+        logger.info('Fetching all messages for user %s', user_id)
 
         while True:
             response = await self.get_user_messages(
@@ -226,7 +226,7 @@ class FunstatService:
             all_messages.extend(messages)
             total_fetched += len(messages)
 
-            logger.info(f"Fetched page {page}/{paging.total_pages}, got {len(messages)} messages, total: {total_fetched}")
+            logger.info('Fetched page %s/%s, got %s messages, total: %s', page, paging.total_pages, len(messages), total_fetched)
 
             # Check if we've reached the max or all pages
             if max_messages and total_fetched >= max_messages:
