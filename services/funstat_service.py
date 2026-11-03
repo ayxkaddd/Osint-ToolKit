@@ -209,12 +209,6 @@ class FunstatService:
 
         logger.info(f"Fetching all messages for user {user_id}")
 
-        # with open("messages_all.json", "r") as f:
-        #     print("opened")
-        #     messages_all = json.load(f)
-
-        # return messages_all
-
         while True:
             response = await self.get_user_messages(
                 user_id=user_id,

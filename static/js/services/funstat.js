@@ -1013,11 +1013,9 @@ async function processAndEnrichLinks(messages, containerId) {
     const links = extractLinksFromMessages(messages);
 
     if (links.length === 0) {
-        console.log('No enrichable links found in messages');
         return;
     }
 
-    console.log(`Found ${links.length} enrichable links:`, links);
     showEnrichmentLoading(containerId);
 
     try {

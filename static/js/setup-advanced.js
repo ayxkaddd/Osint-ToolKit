@@ -449,10 +449,8 @@ async function completeSetup() {
 async function refreshSystemStatus() {
     try {
         const response = await fetch('/setup/system-check');
-        const data = await response.json();
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
         showNotification('System status refreshed', 'success');
-        // Update UI with new data
-        console.log(data);
     } catch (error) {
         showNotification('Failed to refresh status', 'error');
     }

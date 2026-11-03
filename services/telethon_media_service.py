@@ -55,19 +55,6 @@ class MediaUnavailable(Exception):
     """The message has no media that can be shown in the browser."""
 LEGACY_THUMBNAIL_DIR = os.path.join("static", "thumbnails")
 
-# @dataclass
-# class ThumbnailResult:
-#     """Structured thumbnail generation result"""
-#     message_id: int
-#     chat_identifier: str
-#     media_type: str
-#     thumbnail_path: str
-#     thumbnail_url: str
-#     file_size: int
-#     cached: bool
-#     generated_at: datetime
-
-
 class LRUCache:
     """Thread-safe LRU cache implementation"""
 
@@ -1153,8 +1140,6 @@ class TelethonMediaService:
                     f"Created thumbnail for message {message_id}: "
                     f"{filename} ({len(processed_bytes)} bytes)"
                 )
-
-                print(result)
 
                 return result
 

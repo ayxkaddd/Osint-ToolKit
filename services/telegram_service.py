@@ -176,7 +176,6 @@ class TelegramService:
                         value = f"https://{value}"
 
                     data[mapped_key] = value
-                    # self.logger.debug(f"Mapped {key} -> {mapped_key}: {value}")
 
             self.logger.debug(f"Final parsed data: {data}")
 

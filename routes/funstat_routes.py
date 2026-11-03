@@ -394,7 +394,7 @@ async def process_user_messages_media(
                 if thumbnail:
                     thumbnails.append(thumbnail)
             except Exception as e:
-                print(f"Failed to create thumbnail for message {msg.messageId}: {e}")
+                logger.warning("Thumbnail for message %s failed: %s", msg.messageId, e)
 
     return {
         "messages": messages_data["messages"],
@@ -600,7 +600,7 @@ async def get_user_messages_with_context(
                 "context": context
             })
         except Exception as e:
-            print(f"Failed to get context for message {msg.messageId}: {e}")
+            logger.warning("Context for message %s failed: %s", msg.messageId, e)
             enriched_messages.append({
                 "funstat_data": msg.model_dump(),
                 "context": None,

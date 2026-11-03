@@ -3,21 +3,15 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse, StreamingResponse
 from services.username_test_service import StreamingUsernameSearchService
 import asyncio
+import logging
 from typing import List, Optional
 
 from utils.investigation_decorator import save_investigation
 from utils.stream_reducers import reduce_username_search
 
 router = APIRouter(prefix="/api/username")
-# service = StreamingUsernameSearchService(
-#     max_concurrent_requests=30,
-#     timeout_seconds=15,
-#     max_retries=2
-# )
-
 search_service = StreamingUsernameSearchService()
 
-import logging
 logger = logging.getLogger("username_routes")
 
 @router.get("/search/stream")
@@ -91,27 +85,6 @@ async def get_metadata():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
-# @router.get("/search")
-# async def search_username(
-#     username: str = Query(..., min_length=1, max_length=50, description="Username to search for"),
-#     include_duckduckgo: bool = Query(False, description="Include DuckDuckGo results"),
-#     extract_profile: bool = Query(False, description="Extract profile data using socid-extractor"),
-#     categories: Optional[List[str]] = Query(None, description="Filter by site categories"),
-#     priority_sites: Optional[List[str]] = Query(None, description="Filter by specific site names")
-# ) -> JSONResponse:
-#     """
-#     Search for a username across multiple websites and optionally DuckDuckGo.
-#     Optionally extract rich profile data from matched pages.
-#     """
-#     try:
-#         result = await service.search_username(
-#             username=username,
-#             include_duckduckgo=include_duckduckgo,
-#             extract_profile=extract_profile,
-#             categories=categories,
-#             priority_sites=priority_sites
-#         )
 
 #         return JSONResponse({
 #             "username": result.username,

@@ -230,7 +230,6 @@ function redactSensitiveValue(value) {
 function openSettings(moduleName) {
     const module = modules.find(m => m.name === moduleName);
     if (!module || !module.settings) {
-        console.log('No settings found for module:', moduleName);
         return;
     }
 

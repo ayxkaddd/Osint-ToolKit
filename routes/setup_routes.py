@@ -93,8 +93,7 @@ def get_go_path() -> Optional[Path]:
 def check_go_tools() -> Dict[str, Dict[str, Any]]:
     """Check if Go tools are installed with detailed info"""
     tools = {}
-    go_bin = get_go_path()
-    
+
     tool_checks = {
         "subfinder": {
             "command": "subfinder",
@@ -375,13 +374,6 @@ def install_go_tool(tool_name: str, package: str) -> Dict[str, Any]:
                 "install_url": "https://golang.org/dl/"
             }
         
-        # Get Go version
-        go_version = subprocess.run(
-            ["go", "version"],
-            capture_output=True,
-            text=True
-        ).stdout.strip()
-        
         # Install the tool
         process = subprocess.Popen(
             ["go", "install", "-v", package],
@@ -506,11 +498,8 @@ def setup_gitfive_guide() -> Dict[str, Any]:
 
 @router.get("/setup", response_class=HTMLResponse)
 def setup_page(request: Request):
+    """Main setup page"""
     try:
-        """Main setup page"""
-        # if check_setup_complete():
-            # return RedirectResponse(url="/setup/complete")
-        
         state = get_setup_state()
         
         # Get comprehensive system status
@@ -562,8 +551,8 @@ def setup_admin(
         if password != confirm_password:
             raise HTTPException(status_code=400, detail="Passwords do not match")
         
-        # Validate credentials with enhanced rules
-        creds = AdminCredentials(email=email, password=password)
+        # Raises if the email or password doesn't meet the rules
+        AdminCredentials(email=email, password=password)
         
         # Hash password with bcrypt
         hashed = bcrypt.hashpw(password.encode()[:72], bcrypt.gensalt(rounds=12))  # bcrypt uses 72 bytes
