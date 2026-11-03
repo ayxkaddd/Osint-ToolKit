@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import List, Dict, Any, Optional
 from enum import Enum
 import asyncio
-import aiohttp
+import httpx
 from abc import ABC, abstractmethod
 import re
 import logging
@@ -262,7 +262,7 @@ class SearchExecutor:
         dork: str,
         engine: SearchEngine,
         max_results: int = 10,
-        session: Optional[aiohttp.ClientSession] = None
+        client: Optional[httpx.AsyncClient] = None
     ) -> Dict[str, Any]:
         """Execute a single search query"""
 
@@ -277,22 +277,17 @@ class SearchExecutor:
         else:
             params["engine"] = "yandex"
 
-        close_session = False
-        if session is None:
-            session = aiohttp.ClientSession()
-            close_session = True
-
+        own_client = client is None
+        client = client or httpx.AsyncClient(timeout=60)
         try:
-            async with session.get(self.base_url, params=params) as response:
-                if response.status == 200:
-                    return await response.json()
-                else:
-                    error_text = await response.text()
-                    logger.error(f"SerpAPI error {response.status}: {error_text}")
-                    raise Exception(f"SerpAPI error {response.status}: {error_text}")
+            response = await client.get(self.base_url, params=params)
+            if response.status_code == 200:
+                return response.json()
+            logger.error("SerpAPI error %s: %s", response.status_code, response.text)
+            raise Exception(f"SerpAPI error {response.status_code}: {response.text}")
         finally:
-            if close_session:
-                await session.close()
+            if own_client:
+                await client.aclose()
 
     async def search_multiple(
         self,
@@ -304,10 +299,10 @@ class SearchExecutor:
         """Execute multiple searches with rate limiting"""
 
         results = []
-        async with aiohttp.ClientSession() as session:
+        async with httpx.AsyncClient(timeout=60) as client:
             for dork in dorks:
                 try:
-                    result = await self.search(dork, engine, max_results, session)
+                    result = await self.search(dork, engine, max_results, client)
                     results.append({"dork": dork, "engine": engine.value, "data": result})
                     logger.info(f"Search completed for dork: {dork[:50]}...")
                     await asyncio.sleep(delay)  # Rate limiting

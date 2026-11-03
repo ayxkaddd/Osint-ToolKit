@@ -1,12 +1,18 @@
 import json
+import logging
 import os
 import re
 import uuid
-import aiohttp
+import codecs
+import time
+
+import httpx
 from fastapi.responses import JSONResponse
 
 from services.site_icon_service import domain_from_url
 from utils.config import get_setting
+
+logger = logging.getLogger(__name__)
 
 
 API_URL = "https://api.osint.industries"
@@ -53,7 +59,7 @@ class OiService:
         if not self.token:
             return JSONResponse({"detail": "OSINT Industries API key is not configured"}, status_code=500)
 
-        async with aiohttp.ClientSession() as session:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(150, connect=10)) as client:
             headers = {
                 "content-type": "application/json",
                 'accept': 'application/pdf' if format == 'pdf' else 'application/json',
@@ -69,35 +75,32 @@ class OiService:
                 "premium_modules_only": premium_modules_only,
             }
 
-            timeout = aiohttp.ClientTimeout(total=150)
-            async with session.post('https://api.osint.industries/v2/request', headers=headers, json=params,
-                                    timeout=timeout) as resp:
-                content_type = resp.headers.get('Content-Type', '')
-                if resp.status >= 400:
-                    detail = await resp.text()
-                    return JSONResponse(
-                        {"detail": detail or "OSINT Industries request failed"},
-                        status_code=resp.status,
-                    )
+            resp = await client.post('https://api.osint.industries/v2/request', headers=headers, json=params)
+            content_type = resp.headers.get('Content-Type', '')
+            if resp.status_code >= 400:
+                return JSONResponse(
+                    {"detail": resp.text or "OSINT Industries request failed"},
+                    status_code=resp.status_code,
+                )
 
-                if 'application/pdf' not in content_type:
-                    try:
-                        data = await resp.json(content_type=None)
-                    except Exception:
-                        return JSONResponse({"detail": await resp.text()}, status_code=502)
-                    return JSONResponse({
-                        "type": type,
-                        "query": query,
-                        "premium": premium,
-                        "modules": normalize_oi(data),
-                        "raw": data,
-                    })
+            if 'application/pdf' not in content_type:
+                try:
+                    data = resp.json()
+                except ValueError:
+                    return JSONResponse({"detail": resp.text}, status_code=502)
+                return JSONResponse({
+                    "type": type,
+                    "query": query,
+                    "premium": premium,
+                    "modules": normalize_oi(data),
+                    "raw": data,
+                })
 
-                os.makedirs('reports', exist_ok=True)
-                filename = f'reports/{uuid.uuid4()}.pdf'
-                with open(filename, 'wb') as f:
-                    f.write(await resp.read())
-                return JSONResponse({"url": "/" + filename})
+            os.makedirs('reports', exist_ok=True)
+            filename = f'reports/{uuid.uuid4()}.pdf'
+            with open(filename, 'wb') as f:
+                f.write(resp.content)
+            return JSONResponse({"url": "/" + filename})
 
     async def stream_oi(self, type: str, query: str, premium: bool = False,
                         premium_modules_only: bool = False, sandbox: bool = False):
@@ -123,32 +126,37 @@ class OiService:
         }
         modules = 0
         completed = False
-        timeout = aiohttp.ClientTimeout(total=180, sock_read=120)
         url = API_URL + (SANDBOX_STREAM_PATH if sandbox else STREAM_PATH)
+        deadline = time.monotonic() + 180  # the whole stream, like aiohttp's total timeout before
         try:
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.post(url, headers=headers, json=params) as resp:
-                    if resp.status >= 400:
-                        detail = _error_text(await resp.text()) or f"OSINT Industries returned HTTP {resp.status}"
-                        yield _sse({"event": "error", "status": resp.status, "detail": detail})
+            async with httpx.AsyncClient(timeout=httpx.Timeout(120, connect=10)) as client:
+                async with client.stream("POST", url, headers=headers, json=params) as resp:
+                    if resp.status_code >= 400:
+                        await resp.aread()
+                        detail = _error_text(resp.text) or f"OSINT Industries returned HTTP {resp.status_code}"
+                        yield _sse({"event": "error", "status": resp.status_code, "detail": detail})
                         yield _sse({"event": "done", "modules": 0, "completed": False})
                         return
                     buffer = ""
-                    # iter_any + own splitting: one module can be a line longer than aiohttp's readline limit
-                    async for chunk in resp.content.iter_any():
-                        buffer += chunk.decode("utf-8", errors="replace")
+                    decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
+                    # Own line splitting: one module can be a very long line
+                    async for chunk in resp.aiter_bytes():
+                        if time.monotonic() > deadline:
+                            raise TimeoutError("stream took longer than 180 s")
+                        buffer += decoder.decode(chunk)
                         *lines, buffer = buffer.split("\n")
                         for line in lines:
                             for event in self._stream_line(line):
                                 if event.get("event") == "module":
                                     modules += 1
                                 yield _sse(event)
+                    buffer += decoder.decode(b"", final=True)
                     for event in self._stream_line(buffer):
                         if event.get("event") == "module":
                             modules += 1
                         yield _sse(event)
                     completed = True
-        except (aiohttp.ClientError, TimeoutError) as e:
+        except (httpx.HTTPError, TimeoutError) as e:
             yield _sse({"event": "error", "detail": f"Connection to OSINT Industries failed: {e.__class__.__name__}"})
         yield _sse({"event": "done", "modules": modules, "completed": completed})
 
@@ -180,16 +188,13 @@ class OiService:
         }
 
         try:
-            timeout = aiohttp.ClientTimeout(total=5)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.get('https://api.osint.industries/misc/credits', headers=headers) as resp:
-                    if resp.status == 200:
-                        credits = await resp.text()
-                        return {"credits": credits}
-                    else:
-                        return {"credits": "Unavailable"}
+            async with httpx.AsyncClient(timeout=5) as client:
+                resp = await client.get('https://api.osint.industries/misc/credits', headers=headers)
+            if resp.status_code == 200:
+                return {"credits": resp.text}
+            return {"credits": "Unavailable"}
         except Exception as e:
-            print(f"Error fetching credits: {e}")
+            logger.warning("Error fetching OSINT Industries credits: %s", e)
             return {"credits": "Error"}
 
 

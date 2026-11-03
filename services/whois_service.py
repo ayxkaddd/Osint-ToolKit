@@ -1,7 +1,7 @@
 import json
 import re
 from typing import Any, Dict, List, Optional
-import aiohttp
+import httpx
 from fastapi import HTTPException
 from utils.config import get_setting
 
@@ -19,15 +19,14 @@ class WhoisService:
         if not self.wx_api_key:
             raise HTTPException(status_code=400, detail="WHOIS_XML_API_KEY is not configured - add it in Settings")
         params = {'apiKey': self.wx_api_key, 'domainName': domain, 'mode': mode, 'outputFormat': 'JSON'}
-        timeout = aiohttp.ClientTimeout(total=60)
-        async with aiohttp.ClientSession(timeout=timeout) as session:
-            async with session.get(f'https://{self.whois_history_domain}/api/v1', params=params) as resp:
-                data = await resp.json(content_type=None)
-                if resp.status != 200 or (isinstance(data, dict) and data.get('messages')):
-                    message = data.get('messages') if isinstance(data, dict) else None
-                    raise HTTPException(status_code=resp.status if resp.status != 200 else 502,
-                                        detail=f"WhoisXML: {message or 'HTTP ' + str(resp.status)}")
-                return data
+        async with httpx.AsyncClient(timeout=60) as client:
+            resp = await client.get(f'https://{self.whois_history_domain}/api/v1', params=params)
+        data = resp.json()
+        if resp.status_code != 200 or (isinstance(data, dict) and data.get('messages')):
+            message = data.get('messages') if isinstance(data, dict) else None
+            raise HTTPException(status_code=resp.status_code if resp.status_code != 200 else 502,
+                                detail=f"WhoisXML: {message or 'HTTP ' + str(resp.status_code)}")
+        return data
 
     async def preview_whois_history(self, domain: str) -> Dict[str, Any]:
         """How many historical records exist (free - no credits used)."""
@@ -45,27 +44,27 @@ class WhoisService:
         return data
 
     async def lookup_whois(self, domain: str):
-        async with aiohttp.ClientSession() as session:
-            async with session.post(f'http://{self.domain}{self.uri}', json={"address": domain}) as resp:
-                if resp.status != 200:
-                    raise HTTPException(status_code=resp.status, detail="WHOIS lookup failed")
+        async with httpx.AsyncClient(timeout=60) as client:
+            resp = await client.post(f'http://{self.domain}{self.uri}', json={"address": domain})
+        if resp.status_code != 200:
+            raise HTTPException(status_code=resp.status_code, detail="WHOIS lookup failed")
 
-                data = await resp.json()
-                domain_records = (data.get('records') or {}).get('domain') or {}
-                domain_raw_text = domain_records.get('rawText', '{}')
-                domain_parsed = self.parse_domain_json(domain_raw_text)
+        data = resp.json()
+        domain_records = (data.get('records') or {}).get('domain') or {}
+        domain_raw_text = domain_records.get('rawText', '{}')
+        domain_parsed = self.parse_domain_json(domain_raw_text)
 
-                # Get top-level registrar information
-                top_registrar = (data.get('registrar') or {}).get('provider')
+        # Get top-level registrar information
+        top_registrar = (data.get('registrar') or {}).get('provider')
 
-                combined_data = self.combine_whois_data(
-                    domain_parsed,
-                    domain_records,
-                    top_registrar
-                )
+        combined_data = self.combine_whois_data(
+            domain_parsed,
+            domain_records,
+            top_registrar
+        )
 
-                combined_data['domain_raw_text'] = domain_raw_text
-                return combined_data
+        combined_data['domain_raw_text'] = domain_raw_text
+        return combined_data
 
     def parse_domain_json(self, raw_json_text: str) -> dict:
         """Parse the domain JSON data from rawText."""

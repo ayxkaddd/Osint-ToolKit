@@ -3,7 +3,7 @@ import json
 import re
 import threading
 import time
-import requests
+import httpx
 import logging
 from typing import Dict
 from fastapi import HTTPException
@@ -83,7 +83,7 @@ class HLRService:
             'login': self.login,
             'psw': self.password
         }
-        response = requests.get(f'{self.url}/sys/balance.php', params=data, timeout=30)
+        response = httpx.get(f'{self.url}/sys/balance.php', params=data, timeout=30, follow_redirects=True)
         if response.status_code != 200:
             logger.error(f"Balance check failed with status code: {response.status_code}")
             raise HTTPException(status_code=response.status_code, detail="Failed to check balance")
@@ -99,7 +99,7 @@ class HLRService:
             'phone': phone,
             'id': sms_id
         }
-        response = requests.get(f'{self.url}/sys/status.php', params=data, timeout=30)
+        response = httpx.get(f'{self.url}/sys/status.php', params=data, timeout=30, follow_redirects=True)
         if response.status_code != 200:
             logger.error(f"Status fetch failed with status code: {response.status_code}")
             raise HTTPException(status_code=response.status_code, detail="Failed to fetch status")
@@ -218,7 +218,7 @@ class HLRService:
                     }
 
                     logger.info(f"Sending HLR request for {phone}...")
-                    response = requests.get(f'{self.url}/sys/send.php', params=data, timeout=30)
+                    response = httpx.get(f'{self.url}/sys/send.php', params=data, timeout=30, follow_redirects=True)
                     if response.status_code != 200:
                         logger.error(f"HLR request failed with status code: {response.status_code}")
                         raise HTTPException(status_code=response.status_code, detail="Failed to send HLR request")

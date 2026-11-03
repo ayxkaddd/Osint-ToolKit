@@ -9,7 +9,7 @@ import secrets
 import os
 import subprocess
 import shutil
-import requests
+import httpx
 from pathlib import Path
 from typing import Optional, Dict, Any
 import json
@@ -204,9 +204,8 @@ def check_python_packages() -> Dict[str, bool]:
         "python-multipart": "Form data handling",
         "pydantic": "Data validation",
         "bcrypt": "Password hashing",
-        "python-jose": "JWT handling",
-        "requests": "HTTP client",
-        "aiohttp": "Async HTTP client"
+        "jwt": "JWT handling",
+        "httpx": "HTTP client",
     }
     
     results = {}
@@ -223,9 +222,9 @@ def check_python_packages() -> Dict[str, bool]:
 def validate_hacker_target_api(api_key: str) -> Dict[str, Any]:
     """Validate HackerTarget API key with actual request"""
     try:
-        response = requests.get(
+        response = httpx.get(
             f"https://api.hackertarget.com/findshareddns/?q=google.com&apikey={api_key}",
-            timeout=10
+            timeout=10, follow_redirects=True
         )
         
         if response.status_code == 200 and "error" not in response.text.lower():
@@ -238,7 +237,7 @@ def validate_hacker_target_api(api_key: str) -> Dict[str, Any]:
             return {"valid": False, "message": f"API Error: {response.text}"}
         else:
             return {"valid": False, "message": f"HTTP {response.status_code}: Invalid API key"}
-    except requests.RequestException as e:
+    except (httpx.HTTPError, ValueError) as e:  # ValueError: not JSON
         return {"valid": False, "message": f"Connection error: {str(e)}"}
 
 
@@ -246,10 +245,10 @@ def validate_osint_industries_api(api_key: str) -> Dict[str, Any]:
     """Validate OSINT Industries API key"""
     try:
         headers = {"api-key": api_key}
-        response = requests.get(
+        response = httpx.get(
             "https://api.osint.industries/misc/credits",
             headers=headers,
-            timeout=10
+            timeout=10, follow_redirects=True
         )
         
         if response.status_code == 200:
@@ -263,16 +262,16 @@ def validate_osint_industries_api(api_key: str) -> Dict[str, Any]:
             return {"valid": False, "message": "Invalid API key"}
         else:
             return {"valid": False, "message": f"HTTP {response.status_code}"}
-    except requests.RequestException as e:
+    except (httpx.HTTPError, ValueError) as e:  # ValueError: not JSON
         return {"valid": False, "message": f"Connection error: {str(e)}"}
 
 
 def validate_whois_history_api(api_key: str) -> Dict[str, Any]:
     """Validate WhoisXML API key"""
     try:
-        response = requests.get(
+        response = httpx.get(
             f"https://whois-history.whoisxmlapi.com/api/v1?apiKey={api_key}&domainName=google.com&mode=purchase",
-            timeout=10
+            timeout=10, follow_redirects=True
         )
         
         if response.status_code == 200:
@@ -286,7 +285,7 @@ def validate_whois_history_api(api_key: str) -> Dict[str, Any]:
             return {"valid": False, "message": data.get("error", {}).get("message", "Unknown error")}
         else:
             return {"valid": False, "message": f"HTTP {response.status_code}"}
-    except requests.RequestException as e:
+    except (httpx.HTTPError, ValueError) as e:  # ValueError: not JSON
         return {"valid": False, "message": f"Connection error: {str(e)}"}
 
 
@@ -294,10 +293,10 @@ def validate_securitytrails_api(api_key: str) -> Dict[str, Any]:
     """Validate SecurityTrails API key"""
     try:
         headers = {"APIKEY": api_key}
-        response = requests.get(
+        response = httpx.get(
             "https://api.securitytrails.com/v1/ping",
             headers=headers,
-            timeout=10
+            timeout=10, follow_redirects=True
         )
         
         if response.status_code == 200:
@@ -311,7 +310,7 @@ def validate_securitytrails_api(api_key: str) -> Dict[str, Any]:
             return {"valid": False, "message": "Invalid API key"}
         else:
             return {"valid": False, "message": f"HTTP {response.status_code}"}
-    except requests.RequestException as e:
+    except (httpx.HTTPError, ValueError) as e:  # ValueError: not JSON
         return {"valid": False, "message": f"Connection error: {str(e)}"}
 
 
@@ -319,10 +318,10 @@ def validate_virustotal_api(api_key: str) -> Dict[str, Any]:
     """Validate VirusTotal API key"""
     try:
         headers = {"x-apikey": api_key}
-        response = requests.get(
+        response = httpx.get(
             "https://www.virustotal.com/api/v3/domains/google.com",
             headers=headers,
-            timeout=10
+            timeout=10, follow_redirects=True
         )
         
         if response.status_code == 200:
@@ -333,7 +332,7 @@ def validate_virustotal_api(api_key: str) -> Dict[str, Any]:
             return {"valid": False, "message": "API key lacks required permissions"}
         else:
             return {"valid": False, "message": f"HTTP {response.status_code}"}
-    except requests.RequestException as e:
+    except (httpx.HTTPError, ValueError) as e:  # ValueError: not JSON
         return {"valid": False, "message": f"Connection error: {str(e)}"}
 
 
