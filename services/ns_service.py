@@ -1,9 +1,7 @@
 import requests
-from dotenv import load_dotenv
 from typing import List
 from utils.config import get_setting
 
-load_dotenv()
 
 
 class NsLookupError(Exception):

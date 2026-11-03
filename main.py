@@ -2,8 +2,8 @@ from fastapi import FastAPI, Request, Response
 from fastapi.exceptions import HTTPException
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
-from dotenv import load_dotenv
 import hmac
+from contextlib import asynccontextmanager
 import logging
 import time
 from collections import defaultdict, deque
@@ -35,7 +35,7 @@ from routes import (
 )
 from auth.auth_handler import AuthHandler
 from services import plugin_loader
-from utils.config import get_setting
+from utils.config import get_setting, load_env
 
 logging.basicConfig(
     level=logging.INFO,
@@ -44,7 +44,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-load_dotenv()
+load_env()
 
 # Paths reachable without a session
 PUBLIC_PATHS = {"/", "/login", "/logout"}
@@ -57,9 +57,17 @@ LOGIN_MAX_FAILURES = 5
 LOGIN_WINDOW_SECONDS = 15 * 60
 
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Telegram connects on first use (Funstat media, VK, status checks), not at startup
+    yield
+    from routes.funstat_routes import telethon_service
+    await telethon_service.stop()
+
+
 class OsintFrameWork:
     def __init__(self):
-        self.app = FastAPI(title="Osint Framework", version="1.0.0")
+        self.app = FastAPI(title="Osint Framework", version="1.0.0", lifespan=lifespan)
         self.auth_handler = AuthHandler()
         self.failed_logins: dict[str, deque] = defaultdict(deque)
         self.setup_routes()

@@ -3,7 +3,7 @@ import threading
 from pathlib import Path
 from typing import Dict, Optional
 
-from dotenv import dotenv_values
+from dotenv import dotenv_values, load_dotenv
 
 ENV_PATH = Path(".env")
 
@@ -24,6 +24,15 @@ def _load() -> Dict[str, Optional[str]]:
             _cache = dict(dotenv_values(ENV_PATH))
             _cache_mtime = mtime
         return _cache
+
+
+def load_env() -> None:
+    """Export .env from the working directory to os.environ, once at startup.
+
+    Only this file is read: load_dotenv() without a path searches upward from the
+    calling module, so a copy of the app run elsewhere picked up this repo's .env.
+    Code should read settings with get_setting, which also sees later changes."""
+    load_dotenv(ENV_PATH)
 
 
 def get_setting(key: str, default: Optional[str] = None) -> Optional[str]:

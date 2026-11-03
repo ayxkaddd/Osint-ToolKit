@@ -4,7 +4,8 @@ import os
 import re
 from pathlib import Path
 
-from dotenv import load_dotenv
+from utils.config import get_setting
+
 
 from utils.subprocess_runner import run_command
 
@@ -21,11 +22,17 @@ class GitFiveError(Exception):
 
 class GitService:
     def __init__(self):
-        load_dotenv()
-        self.venv_path = os.getenv('GITFIVE_VENV_PATH', 'venv/bin/python')
-        self.gitfive_path = str(Path(os.getenv('GITFIVE_SCRIPT_PATH', 'GitFive/main.py')).resolve())
         self.assets_path = Path('./assets')
         self.assets_path.mkdir(exist_ok=True)
+
+    # Read on each lookup, so paths saved in Settings apply without a restart
+    @property
+    def venv_path(self) -> str:
+        return get_setting('GITFIVE_VENV_PATH') or 'venv/bin/python'
+
+    @property
+    def gitfive_path(self) -> str:
+        return str(Path(get_setting('GITFIVE_SCRIPT_PATH') or 'GitFive/main.py').resolve())
 
     @staticmethod
     def normalize_username(username: str) -> str:

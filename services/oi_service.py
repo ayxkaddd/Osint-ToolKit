@@ -5,11 +5,9 @@ import uuid
 import aiohttp
 from fastapi.responses import JSONResponse
 
-from dotenv import load_dotenv
 from services.site_icon_service import domain_from_url
 from utils.config import get_setting
 
-load_dotenv()
 
 API_URL = "https://api.osint.industries"
 STREAM_PATH = "/v2/request/stream"

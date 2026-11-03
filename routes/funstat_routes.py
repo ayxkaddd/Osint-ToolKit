@@ -24,10 +24,9 @@ from services.telethon_media_service import FULL_MEDIA_DIR, THUMBNAIL_DIR, Media
 from utils.telegram_client import TelegramNotAuthorized
 from services import tme_service
 
-from dotenv import load_dotenv
+from utils.config import get_setting
 from utils.investigation_decorator import save_investigation
 
-load_dotenv()
 logger = logging.getLogger(__name__)
 
 funstat_service = FunstatService()
@@ -36,7 +35,7 @@ funstat_service = FunstatService()
 telethon_service = TelethonMediaService(
     api_id=0,
     api_hash="",
-    phone=os.getenv("TG_PHONE_NUMBER", "your_phone_number")
+    phone=get_setting("TG_PHONE_NUMBER") or ""
 )
 
 user_router = APIRouter(prefix="/funstat/users", tags=["Users"])
@@ -255,20 +254,6 @@ async def search_text(
     return await funstat_service.search_text(input, page, pageSize)
 
 # ==================== MEDIA ROUTES ====================
-
-@media_router.on_event("startup")
-async def startup_telethon():
-    """Connect Telethon on startup. Failure (no session, locked session file,
-    no network) must not stop the whole app - media endpoints retry lazily."""
-    try:
-        await telethon_service.start()
-    except Exception as e:
-        logging.getLogger(__name__).warning("Telegram media client not started: %s", e)
-
-@media_router.on_event("shutdown")
-async def shutdown_telethon():
-    """Stop Telethon client on application shutdown"""
-    await telethon_service.stop()
 
 @media_router.get("/thumbnails/{filename}")
 async def get_thumbnail(filename: str):

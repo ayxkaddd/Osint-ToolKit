@@ -10,7 +10,6 @@ from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, asdict
 from collections import OrderedDict
-from dotenv import load_dotenv
 
 # Configure logging
 logging.basicConfig(
@@ -142,7 +141,6 @@ class TelethonMediaService:
             entity_cache_size: Maximum entities to cache
             thread_pool_workers: Thread pool size for CPU-bound tasks
         """
-        load_dotenv()
 
         # Telegram client configuration
         self.api_id = api_id

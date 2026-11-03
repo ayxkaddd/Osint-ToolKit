@@ -19,14 +19,12 @@ from models.dnsrecon_models import ReconResults
 import httpx
 import dns.resolver
 import whois
-import dotenv
 
 from services.dns_intel import (analyze_records, cymru_query_name, parse_crtsh,
                                 parse_cymru_asname, parse_cymru_origin)
 from utils.subprocess_runner import run_command
 from utils.config import get_setting
 
-dotenv.load_dotenv()
 logger = logging.getLogger(__name__)
 
 MAX_PROBED_NAMES = 1000
