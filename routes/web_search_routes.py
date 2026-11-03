@@ -2,9 +2,8 @@
 FastAPI routes for OSINT Search Service
 """
 
-import os
+from utils.config import get_setting
 from fastapi import APIRouter, HTTPException
-from dotenv import load_dotenv
 
 from services.web_search_service import (
     OSINTSearchService,
@@ -20,7 +19,6 @@ from models.web_search_models import (
 )
 from utils.investigation_decorator import save_investigation
 
-load_dotenv()
 
 # Initialize router
 osint_router = APIRouter(prefix="/web", tags=["OSINT Search"])
@@ -34,7 +32,7 @@ def get_osint_service() -> OSINTSearchService:
     global _osint_service
 
     if _osint_service is None:
-        api_key = os.getenv("SERPAPI_KEY")
+        api_key = get_setting("SERPAPI_KEY")
         if not api_key:
             raise HTTPException(
                 status_code=500,
@@ -205,7 +203,7 @@ async def health_check():
 
     Returns service configuration status and API key presence
     """
-    api_key = os.getenv("SERPAPI_KEY")
+    api_key = get_setting("SERPAPI_KEY")
 
     return {
         "status": "healthy" if api_key else "misconfigured",

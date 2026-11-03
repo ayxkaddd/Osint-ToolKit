@@ -108,7 +108,7 @@ function displayDashboardInvestigations(investigations) {
 
         return `
             <div class="bg-[#14151f] border ${isCurrent ? 'border-emerald-500 shadow-lg shadow-emerald-950/30 ring-1 ring-emerald-500/50' : 'border-[#24283b]'} rounded-xl overflow-hidden hover:border-purple-500/50 transition-all duration-300 cursor-pointer group flex flex-col justify-between relative"
-                 onclick="openDashboardInvestigationDetails('${inv.investigation_id}')">
+                 onclick="openDashboardInvestigationDetails(${jsArg(inv.investigation_id)})">
                 
                 ${isCurrent ? `
                     <div class="absolute top-3 left-3 z-10">
@@ -165,12 +165,12 @@ function displayDashboardInvestigations(investigations) {
                                 <i data-lucide="eye" class="w-3.5 h-3.5"></i> Results
                             </a>
                             ${!isCurrent ? `
-                                <button onclick="event.stopPropagation(); setActiveInvestigationDirectly('${inv.investigation_id}')"
+                                <button onclick="event.stopPropagation(); setActiveInvestigationDirectly(${jsArg(inv.investigation_id)})"
                                     class="bg-gray-800 hover:bg-emerald-600 hover:text-white text-gray-300 py-2 rounded-lg transition-colors text-xs font-medium flex items-center justify-center gap-1.5 border border-gray-700">
                                     <i data-lucide="check-circle" class="w-3.5 h-3.5"></i> Set Active
                                 </button>
                             ` : `
-                                <button onclick="event.stopPropagation(); openDashboardInvestigationDetails('${inv.investigation_id}')"
+                                <button onclick="event.stopPropagation(); openDashboardInvestigationDetails(${jsArg(inv.investigation_id)})"
                                     class="bg-emerald-950/60 border border-emerald-700 text-emerald-300 py-2 rounded-lg text-xs font-medium flex items-center justify-center gap-1.5">
                                     <i data-lucide="info" class="w-3.5 h-3.5"></i> Details
                                 </button>

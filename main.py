@@ -2,8 +2,8 @@ from fastapi import FastAPI, Request, Response
 from fastapi.exceptions import HTTPException
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
-from dotenv import load_dotenv
 import hmac
+from contextlib import asynccontextmanager
 import logging
 import time
 from collections import defaultdict, deque
@@ -35,7 +35,7 @@ from routes import (
 )
 from auth.auth_handler import AuthHandler
 from services import plugin_loader
-from utils.config import get_setting
+from utils.config import get_setting, load_env
 
 logging.basicConfig(
     level=logging.INFO,
@@ -44,7 +44,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-load_dotenv()
+load_env()
 
 # Paths reachable without a session
 PUBLIC_PATHS = {"/", "/login", "/logout"}
@@ -57,15 +57,25 @@ LOGIN_MAX_FAILURES = 5
 LOGIN_WINDOW_SECONDS = 15 * 60
 
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Telegram connects on first use (Funstat media, VK, status checks), not at startup
+    yield
+    from routes.funstat_routes import telethon_service
+    await telethon_service.stop()
+
+
 class OsintFrameWork:
     def __init__(self):
-        self.app = FastAPI(title="Osint Framework", version="1.0.0")
+        self.app = FastAPI(title="Osint Framework", version="1.0.0", lifespan=lifespan)
         self.auth_handler = AuthHandler()
         self.failed_logins: dict[str, deque] = defaultdict(deque)
         self.setup_routes()
         self.setup_static_files()
         self.setup_auth()
         self.app.middleware("http")(self.access_middleware)
+        # Added last, so it runs first: before login, setup gating and every route
+        self.app.middleware("http")(self.security_middleware)
 
     def setup_static_files(self):
         self.app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -83,6 +93,26 @@ class OsintFrameWork:
     @staticmethod
     def _wants_json(path: str) -> bool:
         return path.startswith(API_PREFIXES)
+
+    async def security_middleware(self, request: Request, call_next):
+        # The login cookie (SameSite=Lax) is sent when another site links here, and
+        # many lookups (some paid) are GET requests. Browsers say where a request came
+        # from: requests from other sites may only open pages, never call the API or
+        # submit anything. Scripts and the job runner send no header and are allowed.
+        site = request.headers.get("sec-fetch-site")
+        if site in ("cross-site", "same-site") and not request.url.path.startswith("/static/") and (
+                request.method not in ("GET", "HEAD") or self._wants_json(request.url.path)):
+            return JSONResponse({"detail": "Request from another site blocked"}, status_code=403)
+
+        response = await call_next(request)
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        content_type = response.headers.get("content-type", "")
+        if content_type.startswith("text/html"):
+            response.headers.setdefault("X-Frame-Options", "DENY")
+        elif not content_type.startswith("application/pdf"):
+            # Files (icons, media, plugin SVGs) opened directly can't run scripts as this app
+            response.headers.setdefault("Content-Security-Policy", "default-src 'none'; img-src 'self' data:; media-src 'self'; style-src 'unsafe-inline'; sandbox")
+        return response
 
     async def access_middleware(self, request: Request, call_next):
         path = request.url.path

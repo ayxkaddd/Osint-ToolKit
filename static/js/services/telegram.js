@@ -62,6 +62,7 @@ function displayResults(data) {
     const notices = [];
     if (data.complete === false) notices.push('The bot did not finish within 60 seconds - results may be incomplete.');
     (data.notices || []).forEach(n => notices.push(n));
+    if (data.status === 'error' && data.message) notices.push(data.message);
     if (notices.length) {
         entriesContainer.insertAdjacentHTML('beforeend', `
             <div class="bg-yellow-900/30 border border-yellow-700/60 rounded-lg p-4 text-sm text-yellow-100 space-y-2">
@@ -98,7 +99,7 @@ function displayResults(data) {
     };
 
     // Display profile entries
-    data.entries.forEach(entry => {
+    (data.entries || []).forEach(entry => {
         const entryDiv = document.createElement('div');
         entryDiv.className = 'bg-gray-800 rounded-lg p-4 space-y-3';
 
@@ -145,7 +146,7 @@ function displayResults(data) {
     });
 
     // Display photos with proxy
-    data.photos.forEach(photoUrl => {
+    (data.photos || []).forEach(photoUrl => {
         const photoDiv = document.createElement('div');
         photoDiv.className = 'relative group';
         photoDiv.innerHTML = `

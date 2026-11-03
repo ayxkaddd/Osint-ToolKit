@@ -3,7 +3,7 @@ import threading
 from pathlib import Path
 from typing import Dict, Optional
 
-from dotenv import dotenv_values
+from dotenv import dotenv_values, load_dotenv
 
 ENV_PATH = Path(".env")
 
@@ -26,6 +26,15 @@ def _load() -> Dict[str, Optional[str]]:
         return _cache
 
 
+def load_env() -> None:
+    """Export .env from the working directory to os.environ, once at startup.
+
+    Only this file is read: load_dotenv() without a path searches upward from the
+    calling module, so a copy of the app run elsewhere picked up this repo's .env.
+    Code should read settings with get_setting, which also sees later changes."""
+    load_dotenv(ENV_PATH)
+
+
 def get_setting(key: str, default: Optional[str] = None) -> Optional[str]:
     """Read a setting from .env (fresh) falling back to the process environment."""
     value = _load().get(key)
@@ -40,6 +49,10 @@ def update_env(values: Dict[str, Optional[str]]) -> None:
     A value of None removes the key. Updated values are also exported to
     os.environ so services reading os.getenv() pick them up immediately.
     """
+    for key, value in values.items():
+        # A line break would end the line and start another key in .env
+        if any(c in str(key) + str(value or "") for c in "\r\n\x00"):
+            raise ValueError(f"{key}: settings can't contain line breaks")
     lines = ENV_PATH.read_text().splitlines() if ENV_PATH.exists() else []
     remaining = dict(values)
     out = []

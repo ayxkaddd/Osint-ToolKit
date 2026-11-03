@@ -128,8 +128,8 @@ class PhoneDorkGenerator(DorkGenerator):
     def _normalize_phone(self, phone: str) -> List[str]:
         """Generate different phone number formats"""
         try:
-            from services.phone_service import phone_info
-            formats = phone_info(phone).get("search_formats") or []
+            from services.phone_service import search_formats
+            formats = search_formats(phone) or []
             if formats:
                 return formats[:4]
         except Exception:

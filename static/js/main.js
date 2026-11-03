@@ -41,6 +41,13 @@ window.escapeHtml = escapeHtml
 window.escapeAttr = escapeAttr
 window.safeUrl = safeUrl
 
+// A value passed to a function in an inline handler: onclick="fn(${jsArg(value)})".
+// A JSON string literal, then attribute-escaped (the browser decodes the attribute first).
+function jsArg(value) {
+  return escapeAttr(JSON.stringify(String(value ?? "")))
+}
+window.jsArg = jsArg
+
 // lucide.createIcons() re-renders *every* icon on the page on each call (rendered
 // SVGs keep their data-lucide attribute). Scripts call it after every render, so
 // patch it to only convert icons that have not been rendered yet.
@@ -601,13 +608,38 @@ function showPersistentHistoryButton() {
   document.body.appendChild(btn)
 }
 
+// A saved result the page's own view can't draw (an older format, a saved error):
+// shown with the investigation page's renderer, which handles anything
+function showSavedResultFallback(record) {
+  document.getElementById("savedResultFallback")?.remove()
+  const page = document.querySelector(".page") || document.querySelector("main") || document.body
+  const card = document.createElement("div")
+  card.id = "savedResultFallback"
+  card.className = "card mb-6"
+  card.innerHTML = `
+    <h2 class="text-lg font-semibold text-white mb-1">Saved result</h2>
+    <p class="muted-note mb-4">This result doesn't fit this page's usual layout, so it is shown as saved.</p>
+    ${safeRender(record.service_name, record.method_name, record.result, record)}`
+  const lead = page.querySelector(":scope > .page-lead")
+  if (lead) lead.after(card)
+  else page.prepend(card)
+  refreshIcons()
+}
+window.showSavedResultFallback = showSavedResultFallback
+
 async function loadResult(resultId, investigationId = currentInvestigationId) {
   if (!investigationId || typeof window.loadResultIntoView !== "function") return
   try {
     const response = await fetch(`/api/investigations/${encodeURIComponent(investigationId)}/results/${encodeURIComponent(resultId)}`)
     if (!response.ok) throw new Error(`HTTP ${response.status}`)
     const { result: record } = await response.json()
-    window.loadResultIntoView(record.result, record)
+    document.getElementById("savedResultFallback")?.remove()
+    try {
+      window.loadResultIntoView(record.result, record)
+    } catch (renderError) {
+      console.error("This page can't draw the saved result:", renderError)
+      showSavedResultFallback(record)
+    }
     document.getElementById("resultLoadNotification")?.remove()
     document.getElementById("historyModal")?.remove()
     showTemporaryNotification("Saved result loaded", "success")

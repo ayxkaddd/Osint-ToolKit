@@ -24,18 +24,18 @@ from services.telethon_media_service import FULL_MEDIA_DIR, THUMBNAIL_DIR, Media
 from utils.telegram_client import TelegramNotAuthorized
 from services import tme_service
 
-from dotenv import load_dotenv
+from utils.config import get_setting
 from utils.investigation_decorator import save_investigation
 
-load_dotenv()
 logger = logging.getLogger(__name__)
 
 funstat_service = FunstatService()
 
+# Telegram keys are read by utils.telegram_client when the client is first used
 telethon_service = TelethonMediaService(
-    api_id=int(os.getenv("TG_API_ID", 123)),
-    api_hash=os.getenv("TG_API_HASH", "your_api_hash"),
-    phone=os.getenv("TG_PHONE_NUMBER", "your_phone_number")
+    api_id=0,
+    api_hash="",
+    phone=get_setting("TG_PHONE_NUMBER") or ""
 )
 
 user_router = APIRouter(prefix="/funstat/users", tags=["Users"])
@@ -255,20 +255,6 @@ async def search_text(
 
 # ==================== MEDIA ROUTES ====================
 
-@media_router.on_event("startup")
-async def startup_telethon():
-    """Connect Telethon on startup. Failure (no session, locked session file,
-    no network) must not stop the whole app - media endpoints retry lazily."""
-    try:
-        await telethon_service.start()
-    except Exception as e:
-        logging.getLogger(__name__).warning("Telegram media client not started: %s", e)
-
-@media_router.on_event("shutdown")
-async def shutdown_telethon():
-    """Stop Telethon client on application shutdown"""
-    await telethon_service.stop()
-
 @media_router.get("/thumbnails/{filename}")
 async def get_thumbnail(filename: str):
     """Serve a generated thumbnail (behind login, unlike /static)."""
@@ -468,7 +454,8 @@ async def get_complete_user_profile(user_id: int, fetch_all_messages: bool = Fal
             )
             if thumbnail:
                 thumbnails.append(thumbnail)
-        except Exception:
+        except Exception as e:
+            logger.warning("Thumbnail for message %s failed: %s", msg.messageId, e)
             continue
 
     return {

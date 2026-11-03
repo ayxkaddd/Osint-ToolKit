@@ -1,0 +1,63 @@
+# Exact versions the app is known to work with: the dependencies of requirements.txt,
+# pinned to the working venv. Install with: pip install -r requirements-lock.txt
+# socid-extractor comes from git here, as in the working venv (PyPI 0.0.27 needs an older beautifulsoup4).
+# Update: pip install -U -r requirements.txt, test, then rebuild with
+#   uv pip compile requirements.txt -c <(pip freeze) --no-header --no-annotate -o requirements-lock.txt
+aiofiles==25.1.0
+aiohappyeyeballs==2.6.1
+aiohttp==3.13.3
+aiosignal==1.4.0
+annotated-doc==0.0.4
+annotated-types==0.7.0
+anyio==4.12.1
+attrs==25.4.0
+bcrypt==4.2.1
+beautifulsoup4==4.15.0
+certifi==2026.1.4
+cffi==2.0.0
+charset-normalizer==3.4.4
+click==8.3.1
+cryptography==44.0.1
+dnspython==2.8.0
+ecdsa==0.19.0
+email-validator==2.3.0
+fastapi==0.128.0
+frozenlist==1.8.0
+h11==0.16.0
+httpcore==1.0.9
+httpx==0.28.1
+idna==3.11
+jinja2==3.1.6
+markupsafe==3.0.3
+multidict==6.7.1
+passlib==1.7.4
+phonenumbers==8.13.50
+pillow==12.1.0
+propcache==0.4.1
+pyaes==1.6.1
+pyasn1==0.6.2
+pycparser==3.0
+pydantic==2.12.5
+pydantic-core==2.41.5
+pyjwt==2.11.0
+pynacl==1.6.2
+python-dateutil==2.9.0.post0
+python-dotenv==1.2.1
+python-jose==3.5.0
+python-multipart==0.0.22
+python-whois==0.9.6
+pyyaml==6.0.2
+requests==2.32.5
+rsa==4.9.1
+six==1.17.0
+sniffio==1.3.1
+socid-extractor @ git+https://github.com/soxoj/socid-extractor.git@11cc00a9c7dfdf78374a51645dd52ca4d521b1c8
+soupsieve==2.8.3
+starlette==0.50.0
+telethon==1.42.0
+typing-extensions==4.15.0
+typing-inspection==0.4.2
+urllib3==2.6.3
+uvicorn==0.40.0
+watchfiles==1.3.0
+yarl==1.22.0

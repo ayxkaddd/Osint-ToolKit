@@ -658,12 +658,12 @@ async function loadSavedNotes() {
       ? notes
           .map(
             (note) => `
-          <div class="note-list-item group" data-note-id="${escapeAttr(note.note_id)}" onclick="openSidebarNote('${escapeAttr(note.note_id)}')">
+          <div class="note-list-item group" data-note-id="${escapeAttr(note.note_id)}" onclick="openSidebarNote(${jsArg(note.note_id)})">
             <div class="flex-1 min-w-0">
               <div class="text-sm text-white truncate">${escapeHtml(note.title || "Untitled note")}</div>
               <div class="text-xs text-gray-500">${escapeHtml(noteDate(note.updated_at))}</div>
             </div>
-            <button type="button" onclick="deleteNote('${escapeAttr(note.note_id)}', event)" title="Delete note"
+            <button type="button" onclick="deleteNote(${jsArg(note.note_id)}, event)" title="Delete note"
                     class="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-300 transition-all ml-2">
               <i class="fas fa-trash text-xs"></i>
             </button>

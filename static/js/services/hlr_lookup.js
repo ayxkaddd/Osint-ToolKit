@@ -3,9 +3,18 @@ lucide.createIcons();
 
 // Enable result loading
 window.currentService = 'hlr';
-window.loadResultIntoView = function (data) {
+window.loadResultIntoView = function (data, record) {
+    // This page saves two kinds of result: the free analysis and the HLR lookup
+    phoneInfoResults.innerHTML = '';
+    if (record && record.method_name === 'phone_info') {
+        hlrResults.classList.add('hidden');
+        phoneInput.value = data.input || data.e164 || '';
+        phoneInfoResults.innerHTML = phoneInfoCard(data);
+        lucide.createIcons();
+        return;
+    }
     displayResults(data);
-    document.getElementById('hlrResults').classList.remove('hidden');
+    hlrResults.classList.remove('hidden');
 };
 
 

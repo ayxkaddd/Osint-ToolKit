@@ -8,17 +8,18 @@ session, so everything goes through this module instead.
 import asyncio
 import inspect
 import logging
-from typing import Optional, Tuple
-
-from telethon import TelegramClient
+from typing import TYPE_CHECKING, Optional, Tuple
 
 from utils.config import get_setting
+
+if TYPE_CHECKING:
+    from telethon import TelegramClient
 
 logger = logging.getLogger(__name__)
 
 SESSION_NAME = "telegram_session"
 
-_client: Optional[TelegramClient] = None
+_client: Optional["TelegramClient"] = None
 _connect_lock: Optional[asyncio.Lock] = None
 
 
@@ -42,7 +43,7 @@ def is_configured() -> bool:
     return _credentials() is not None
 
 
-def get_client() -> TelegramClient:
+def get_client() -> "TelegramClient":
     """Return the shared client (created on first use, not necessarily connected)."""
     global _client
     if _client is None:
@@ -50,11 +51,14 @@ def get_client() -> TelegramClient:
         if credentials is None:
             raise TelegramNotConfigured("Telegram API ID and hash are not set - add them in Settings")
         api_id, api_hash = credentials
+        # Telethon takes about 40 MB, so installs without Telegram keys never load it
+        from telethon import TelegramClient
+
         _client = TelegramClient(SESSION_NAME, api_id, api_hash, flood_sleep_threshold=60)
     return _client
 
 
-async def ensure_connected(require_authorized: bool = True) -> TelegramClient:
+async def ensure_connected(require_authorized: bool = True) -> "TelegramClient":
     """Connect the shared client if needed. Never prompts for a login code."""
     global _connect_lock
     if _connect_lock is None:

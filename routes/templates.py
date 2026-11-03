@@ -80,7 +80,7 @@ async def get_report(filename: str):
 
     try:
         requested_path = (REPORTS_DIR / filename).resolve()
-        if not str(requested_path).startswith(str(REPORTS_DIR)):
+        if not requested_path.is_relative_to(REPORTS_DIR):
             return HTMLResponse("Access denied", status_code=403)
         if not requested_path.is_file():
             return HTMLResponse("File not found", status_code=404)

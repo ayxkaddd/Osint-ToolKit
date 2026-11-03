@@ -358,7 +358,10 @@ def validate_api_key(service: str, api_key: str) -> Dict[str, Any]:
 
 def save_env_config(config: Dict[str, str]):
     """Save configuration to the .env file, preserving existing keys and comments."""
-    update_env({k: v for k, v in config.items() if v not in (None, "")})
+    try:
+        update_env({k: v for k, v in config.items() if v not in (None, "")})
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 def install_go_tool(tool_name: str, package: str) -> Dict[str, Any]:

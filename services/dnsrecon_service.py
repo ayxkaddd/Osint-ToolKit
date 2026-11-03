@@ -19,14 +19,12 @@ from models.dnsrecon_models import ReconResults
 import httpx
 import dns.resolver
 import whois
-import dotenv
 
 from services.dns_intel import (analyze_records, cymru_query_name, parse_crtsh,
                                 parse_cymru_asname, parse_cymru_origin)
 from utils.subprocess_runner import run_command
 from utils.config import get_setting
 
-dotenv.load_dotenv()
 logger = logging.getLogger(__name__)
 
 MAX_PROBED_NAMES = 1000
@@ -202,7 +200,10 @@ class DNSReconService:
         def run() -> List[str]:
             try:
                 return [str(a) for a in dns.resolver.resolve(name, record_type, lifetime=8)]
-            except Exception:
+            except dns.exception.DNSException:
+                return []  # no such record / name, or no answer in time
+            except Exception as e:
+                logger.warning("DNS %s lookup for %s failed: %s", record_type, name, e)
                 return []
         return await asyncio.to_thread(run)
 

@@ -1,8 +1,3 @@
-from telethon import TelegramClient
-from telethon.tl.types import (
-    MessageMediaPhoto, MessageMediaDocument,
-    PhotoSize, PhotoCachedSize
-)
 from PIL import Image
 import io
 import os
@@ -10,18 +5,20 @@ import logging
 import asyncio
 import aiofiles
 import re
-from typing import Dict, List, Optional, Tuple, Any, Union
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple, Any, Union
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, asdict
 from collections import OrderedDict
-from dotenv import load_dotenv
 
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
+if TYPE_CHECKING:
+    from telethon import TelegramClient
+
 logger = logging.getLogger(__name__)
 
 
@@ -144,16 +141,15 @@ class TelethonMediaService:
             entity_cache_size: Maximum entities to cache
             thread_pool_workers: Thread pool size for CPU-bound tasks
         """
-        load_dotenv()
 
         # Telegram client configuration
-        self.api_id = int(os.environ.get("TG_API_ID", api_id))
-        self.api_hash = os.environ.get("TG_API_HASH", api_hash)
+        self.api_id = api_id
+        self.api_hash = api_hash
         self.phone = phone
         self.session_name = session_name
 
         # Client instance (initialized in start())
-        self.client: Optional[TelegramClient] = None
+        self.client: Optional["TelegramClient"] = None
         self._client_started = False
         self._start_lock = asyncio.Lock()
 
@@ -363,6 +359,8 @@ class TelethonMediaService:
 
     def _get_media_type(self, message) -> Optional[str]:
         """Determine the type of media in a message"""
+        from telethon.tl.types import MessageMediaDocument, MessageMediaPhoto
+
         if not message.media:
             return None
 
@@ -895,6 +893,8 @@ class TelethonMediaService:
         Returns:
             Unique hash string or None
         """
+        from telethon.tl.types import MessageMediaDocument, MessageMediaPhoto
+
         if not message.media:
             return None
 
@@ -926,6 +926,8 @@ class TelethonMediaService:
         Returns:
             Thumbnail bytes or None
         """
+        from telethon.tl.types import MessageMediaDocument, MessageMediaPhoto, PhotoCachedSize, PhotoSize
+
         try:
             if isinstance(message.media, MessageMediaPhoto):
                 photo = message.media.photo
@@ -1165,6 +1167,8 @@ class TelethonMediaService:
 
     def _full_media_info(self, message) -> Tuple[str, str, Optional[int]]:
         """(media type, file extension, size in bytes) of a message's original media."""
+        from telethon.tl.types import MessageMediaDocument, MessageMediaPhoto
+
         if isinstance(message.media, MessageMediaPhoto):
             return "photo", ".jpg", None
         if isinstance(message.media, MessageMediaDocument):

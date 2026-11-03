@@ -3,11 +3,8 @@ import re
 import time
 from typing import List
 from utils import telegram_client
-import os
-from dotenv import load_dotenv
 import logging
 
-load_dotenv()
 
 from models.telegram_models import VKProfileHistoryResponse, ProfileEntry
 
@@ -15,12 +12,8 @@ class TelegramService:
     def __init__(self):
         self.session_name = "telegram_session"
         self.logger = logging.getLogger(__name__)
-        self.api_id = os.getenv('TG_API_ID')
-        self.api_hash = os.getenv('TG_API_HASH')
-
-        if not all([self.api_id, self.api_hash]):
-            self.logger.error("Telegram API credentials not found in environment variables")
-            # raise ValueError("Missing Telegram API credentials")
+        if not telegram_client.is_configured():
+            self.logger.warning("Telegram API ID and hash are not set; VK history needs them")
 
         self.client = None
         self._bot_lock = asyncio.Lock()

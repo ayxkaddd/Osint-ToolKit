@@ -40,6 +40,7 @@ starlette
 typing_extensions
 urllib3
 uvicorn
+watchfiles
 yarl
 Telethon
 httpx

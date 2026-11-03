@@ -1,22 +1,24 @@
 import asyncio
 import json
-import os
 from typing import Any, Dict, List
 
-from dotenv import load_dotenv
 
+from utils.config import get_setting
 from utils.subprocess_runner import run_command
 
-load_dotenv()
 
 SHARETRACE_TIMEOUT = 30
 SHARETRACE_CONCURRENCY = 4
 
 
 class ShareTraceService:
-    def __init__(self):
-        self.python_path = os.getenv('SHARETRACE_PYTHON_PATH', 'python')
-        self.sharetrace_dir = os.getenv('SHARETRACE_MODULE_PATH')
+    @property
+    def python_path(self) -> str:
+        return get_setting('SHARETRACE_PYTHON_PATH') or 'python'
+
+    @property
+    def sharetrace_dir(self):
+        return get_setting('SHARETRACE_MODULE_PATH')
 
     async def run_sharetrace(self, link: str) -> Dict[str, Any]:
         """Run sharetrace for one link; errors are returned in the result."""
