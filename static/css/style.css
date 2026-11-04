@@ -261,6 +261,21 @@
 }
 .pivot-chip:hover { background: rgba(109, 40, 217, 0.45); color: #fff; }
 .pivot-chip i { font-size: 0.6rem; opacity: 0.7; flex-shrink: 0; }
+/* The identifier is in other investigations too (count) */
+.pivot-chip .shared-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0 0.3rem;
+  border-radius: 0.25rem;
+  background: rgba(120, 53, 15, 0.55);
+  border: 1px solid rgba(217, 119, 6, 0.55);
+  color: #fcd34d;
+  font-size: 0.65rem;
+  line-height: 1.1rem;
+  flex-shrink: 0;
+}
+.pivot-chip .shared-badge i { opacity: 1; }
 
 /* Investigation tabs and identifier facets */
 .inv-tab { padding: 0.6rem 1rem; color: #9ca3af; border-bottom: 2px solid transparent; margin-bottom: -1px; font-size: 0.9rem; }

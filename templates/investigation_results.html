@@ -29,8 +29,11 @@
 
     <!-- Tabs -->
     <div class="flex gap-1 border-b border-gray-800 mb-5" role="tablist">
-        <button type="button" data-tab="timeline" class="inv-tab active">
-            <i class="fas fa-stream mr-2"></i>Timeline <span id="resultsCountBadge" class="ml-1 text-xs text-gray-400"></span>
+        <button type="button" data-tab="timeline" class="inv-tab active" title="Lookups and added results, in the order they were made">
+            <i class="fas fa-layer-group mr-2"></i>Results <span id="resultsCountBadge" class="ml-1 text-xs text-gray-400"></span>
+        </button>
+        <button type="button" data-tab="events" class="inv-tab" title="Dates found inside the results: accounts created, domains registered, leaks, messages">
+            <i class="fas fa-stream mr-2"></i>Timeline <span id="eventsCountBadge" class="ml-1 text-xs text-gray-400"></span>
         </button>
         <button type="button" data-tab="entities" class="inv-tab">
             <i class="fas fa-fingerprint mr-2"></i>Identifiers <span id="entitiesCountBadge" class="ml-1 text-xs text-gray-400"></span>
@@ -39,6 +42,9 @@
 
     <div id="timelinePanel" class="space-y-3">
         <div class="flex flex-col md:flex-row items-start md:items-center justify-end gap-2 mb-2">
+            <button type="button" onclick="openManualModal()" title="Add a screenshot, file or text found outside the toolkit"
+                class="md:mr-auto px-3 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm flex items-center gap-1.5">
+                <i data-lucide="upload" class="w-4 h-4"></i>Add manually</button>
             <div class="flex items-center gap-2 w-full md:w-auto flex-wrap">
                 <div class="relative flex-1 md:w-64">
                     <input type="search" id="timelineSearchInput" placeholder="Filter by target, module, summary..."
@@ -95,10 +101,32 @@
             </div>
             <h3 id="noResultsTitle" class="text-xl font-bold text-white mb-2">No results recorded yet</h3>
             <p class="text-gray-400 text-sm max-w-md mx-auto mb-4">While this investigation is selected (red dot in the header), every module lookup is saved here automatically.</p>
-            <a href="/lookup" class="inline-flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-sm font-medium">
-                <i data-lucide="search" class="w-4 h-4"></i> Start a lookup
-            </a>
+            <div class="flex flex-wrap justify-center gap-2">
+                <a href="/lookup" class="inline-flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-sm font-medium">
+                    <i data-lucide="search" class="w-4 h-4"></i> Start a lookup
+                </a>
+                <button type="button" onclick="openManualModal()" class="inline-flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm">
+                    <i data-lucide="upload" class="w-4 h-4"></i> Add manually
+                </button>
+            </div>
         </div>
+    </div>
+
+    <div id="eventsPanel" class="hidden">
+        <p class="text-sm text-gray-400 mb-4">When things happened, from the dates inside the results: accounts created, domains
+            registered or changed, logins leaked, names changed, messages posted. Many dates from one list (all messages of a chat) are shown as one row.</p>
+        <div class="flex flex-wrap gap-2 mb-4">
+            <input type="search" id="eventSearchInput" placeholder="Filter by site, name, module..."
+                class="flex-1 min-w-[12rem] bg-gray-900 border border-gray-700 rounded-lg py-2 px-3 text-white text-sm focus:outline-none focus:border-purple-500">
+            <select id="eventModuleSelect" class="bg-gray-900 border border-gray-700 rounded-lg py-2 px-3 text-white text-sm focus:outline-none focus:border-purple-500">
+                <option value="all">All modules</option>
+            </select>
+            <select id="eventSortSelect" class="bg-gray-900 border border-gray-700 rounded-lg py-2 px-3 text-white text-sm focus:outline-none focus:border-purple-500">
+                <option value="newest">Newest first</option>
+                <option value="oldest">Oldest first</option>
+            </select>
+        </div>
+        <div id="eventsList" class="space-y-1.5"></div>
     </div>
 
     <div id="entitiesPanel" class="hidden">
@@ -118,6 +146,73 @@
         </div>
         <div id="entitiesList" class="space-y-1.5"></div>
         <div class="text-center mt-4"><button type="button" id="entitiesMore" class="hidden text-sm text-purple-300 hover:text-white">Show more</button></div>
+    </div>
+</div>
+
+<!-- Add Manually Modal -->
+<div id="manualModal" class="modal fixed inset-0 bg-black/70 hidden items-center justify-center z-50"
+    onclick="if (event.target === this) closeManualModal()">
+    <div class="modal-panel bg-gray-900 rounded-xl p-6 max-w-2xl w-full mx-4 border border-gray-800 shadow-2xl max-h-[92vh] overflow-y-auto custom-scrollbar">
+        <div class="flex justify-between items-center mb-1">
+            <h2 class="text-xl font-bold text-white flex items-center gap-2">
+                <i data-lucide="upload" class="w-5 h-5 text-purple-400"></i> <span id="manualModalTitle">Add manually</span>
+            </h2>
+            <button type="button" onclick="closeManualModal()" class="text-gray-400 hover:text-white">
+                <i data-lucide="x" class="w-6 h-6"></i>
+            </button>
+        </div>
+        <p class="text-sm text-gray-400 mb-5">For what you found outside the toolkit: a site without an API, a Telegram bot, a leak, a page.
+            Add screenshots or files, paste text, list the identifiers - they become clickable and searchable like any other result.</p>
+        <form onsubmit="submitManualModal(event)" class="space-y-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="md:col-span-2">
+                    <label for="manualTitle" class="block text-sm text-gray-300 mb-1">Title</label>
+                    <input type="text" id="manualTitle" required maxlength="200" placeholder="e.g. Search on leakcheck site, answer from @SomeBot"
+                        class="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-purple-500">
+                </div>
+                <div>
+                    <label for="manualSource" class="block text-sm text-gray-300 mb-1">Source <span class="text-gray-500">(optional)</span></label>
+                    <input type="text" id="manualSource" maxlength="200" placeholder="Site, bot or tool"
+                        class="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-purple-500">
+                </div>
+                <div>
+                    <label for="manualDate" class="block text-sm text-gray-300 mb-1">When it happened <span class="text-gray-500">(optional)</span></label>
+                    <input type="text" id="manualDate" maxlength="40" placeholder="YYYY-MM-DD - shown on the Timeline"
+                        class="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-purple-500">
+                </div>
+                <div class="md:col-span-2">
+                    <label for="manualUrl" class="block text-sm text-gray-300 mb-1">Link <span class="text-gray-500">(optional)</span></label>
+                    <input type="url" id="manualUrl" maxlength="2000" placeholder="https://..."
+                        class="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-purple-500">
+                </div>
+            </div>
+            <div>
+                <label for="manualText" class="block text-sm text-gray-300 mb-1">Text <span class="text-gray-500">(optional - pasted JSON is kept as data)</span></label>
+                <textarea id="manualText" rows="5" placeholder="Paste what the site or bot showed"
+                    class="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm font-mono focus:outline-none focus:border-purple-500"></textarea>
+            </div>
+            <div>
+                <label for="manualIdentifiers" class="block text-sm text-gray-300 mb-1">Identifiers <span class="text-gray-500">(optional, one per line)</span></label>
+                <textarea id="manualIdentifiers" rows="3" placeholder="someone@mail.com&#10;+14155552671&#10;username"
+                    class="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm font-mono focus:outline-none focus:border-purple-500"></textarea>
+                <p class="text-xs text-gray-500 mt-1">Emails and +phone numbers in the text and in text files are found anyway.</p>
+            </div>
+            <div>
+                <span class="block text-sm text-gray-300 mb-1">Files <span class="text-gray-500">(optional, up to 20, 50 MB each)</span></span>
+                <label id="manualDrop" class="flex flex-col items-center justify-center gap-1 border border-dashed border-gray-700 hover:border-purple-500 rounded-lg px-3 py-5 text-sm text-gray-400 cursor-pointer text-center">
+                    <i data-lucide="image-plus" class="w-6 h-6 text-purple-400"></i>
+                    <span>Drop files here, paste a screenshot (Ctrl+V) or click to choose</span>
+                    <input type="file" id="manualFiles" multiple class="hidden">
+                </label>
+                <div id="manualFileList" class="mt-2 space-y-1"></div>
+            </div>
+            <div class="flex justify-end gap-3 pt-4 border-t border-gray-800">
+                <button type="button" onclick="closeManualModal()"
+                    class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg">Cancel</button>
+                <button type="submit" id="manualSubmit"
+                    class="px-5 py-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-medium rounded-lg">Save</button>
+            </div>
+        </form>
     </div>
 </div>
 

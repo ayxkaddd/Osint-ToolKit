@@ -638,29 +638,106 @@ function showSavedResultFallback(record) {
 }
 window.showSavedResultFallback = showSavedResultFallback;
 
-async function loadResult(resultId, investigationId = currentInvestigationId) {
+// A lookup still streaming in the background (opened from the jobs tray) comes back
+// with running: true and what it has found so far; the page follows it until it's saved.
+const LIVE_REFRESH_MS = 2000;
+const live = { timer: null, resultId: null, signature: null, sawRunning: false };
+
+function stopFollowingResult() {
+    clearTimeout(live.timer);
+    Object.assign(live, { timer: null, resultId: null, signature: null, sawRunning: false });
+    document.getElementById('liveResultBanner')?.remove();
+}
+
+function showLiveResultBanner() {
+    if (document.getElementById('liveResultBanner')) return;
+    const banner = document.createElement('div');
+    banner.id = 'liveResultBanner';
+    banner.className =
+        'mb-5 bg-[#1a1b26] border border-purple-500/40 rounded-xl px-4 py-2.5 flex items-center gap-3 text-sm';
+    banner.innerHTML = `
+        <span class="block w-2.5 h-2.5 rounded-full bg-purple-400 animate-pulse shrink-0"></span>
+        <span class="flex-1 text-gray-200">This lookup is still running in the background - the page updates as results arrive.</span>
+        <button type="button" data-live-stop class="shrink-0 whitespace-nowrap text-xs text-gray-400 hover:text-white border border-gray-700 rounded-lg px-2 py-1">Stop following</button>`;
+    // in the page, under its title (where a saved result that doesn't fit is shown too)
+    const page = document.querySelector('.page') || document.querySelector('main') || document.body;
+    const lead = page.querySelector(':scope > .page-lead');
+    if (lead) lead.after(banner);
+    else page.prepend(banner);
+}
+
+async function loadResult(resultId, investigationId = currentInvestigationId, following = false) {
     if (!investigationId || typeof window.loadResultIntoView !== 'function') return;
+    if (!following) stopFollowingResult();
+    else if (live.resultId !== resultId) return; // stopped, or another result was opened meanwhile
     try {
         const response = await fetch(
             `/api/investigations/${encodeURIComponent(investigationId)}/results/${encodeURIComponent(resultId)}`
         );
+        if (following && live.resultId !== resultId) return;
+        if (response.status === 404 && following) {
+            // finished with nothing worth saving (a failed or empty lookup)
+            stopFollowingResult();
+            showTemporaryNotification('The lookup finished without a result to keep', 'info');
+            return;
+        }
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const { result: record } = await response.json();
-        document.getElementById('savedResultFallback')?.remove();
-        try {
-            window.loadResultIntoView(record.result, record);
-        } catch (renderError) {
-            console.error("This page can't draw the saved result:", renderError);
-            showSavedResultFallback(record);
+        const signature = JSON.stringify(record.result ?? null);
+        if (!following || signature !== live.signature) {
+            document.getElementById('savedResultFallback')?.remove();
+            try {
+                window.loadResultIntoView(record.result, record);
+            } catch (renderError) {
+                console.error("This page can't draw the saved result:", renderError);
+                showSavedResultFallback(record);
+            }
         }
         document.getElementById('resultLoadNotification')?.remove();
         document.getElementById('historyModal')?.remove();
-        showTemporaryNotification('Saved result loaded', 'success');
+        if (record.running) {
+            Object.assign(live, { resultId, signature, sawRunning: true });
+            showLiveResultBanner();
+            live.timer = setTimeout(() => loadResult(resultId, investigationId, true), LIVE_REFRESH_MS);
+        } else {
+            const finished = following && live.sawRunning;
+            stopFollowingResult();
+            showTemporaryNotification(finished ? 'Lookup finished - result saved' : 'Saved result loaded', 'success');
+        }
     } catch (error) {
         console.error('Error loading result:', error);
+        if (following) {
+            // a hiccup while following: try again rather than give up
+            live.timer = setTimeout(() => loadResult(resultId, investigationId, true), LIVE_REFRESH_MS * 2);
+            return;
+        }
         showTemporaryNotification('Failed to load saved result', 'error');
     }
 }
+
+// Starting a search of your own on the page stops following the background one
+document.addEventListener(
+    'click',
+    (event) => {
+        if (!live.resultId) return;
+        if (event.target.closest('[data-live-stop]')) return stopFollowingResult();
+        if (event.target.closest('#liveResultBanner')) return;
+        if (
+            event.target.closest(
+                'button.btn-primary, button[id*="search" i], button[onclick*="search" i], button[type="submit"]'
+            )
+        )
+            stopFollowingResult();
+    },
+    true
+);
+document.addEventListener(
+    'keydown',
+    (event) => {
+        if (live.resultId && event.key === 'Enter' && event.target.matches('input, textarea')) stopFollowingResult();
+    },
+    true
+);
 
 function showResultSelector() {
     document.getElementById('resultLoadNotification')?.remove();
@@ -965,11 +1042,29 @@ async function openPivotMenu(type, value, anchor, options = {}) {
               )
               .join('')
         : '<div class="px-3 py-3 text-gray-500">No module looks up this type yet.</div>';
+    const shared = sharedCache.get(`${type}:${value}`) || [];
+    const sharedRows = shared.length
+        ? `<div class="px-3 py-2 border-b border-gray-700 text-xs">
+            <div class="text-gray-500 mb-1"><i class="fas fa-folder-open mr-1 text-amber-300"></i>Also in other investigations</div>
+            <div class="flex flex-wrap gap-1.5">${shared
+                .slice(0, 8)
+                .map(
+                    (p) =>
+                        `<a href="${escapeAttr(`/api/investigations/${encodeURIComponent(p.investigation_id)}/view?identifier=${encodeURIComponent(value)}#identifiers`)}"
+                    class="px-2 py-0.5 rounded bg-amber-900/30 border border-amber-700/50 text-amber-200 hover:border-amber-400"
+                    title="${escapeAttr(`${p.searched ? 'Looked up' : 'Found'} there${p.results ? ` · ${p.results} result${p.results === 1 ? '' : 's'}` : ''}`)}">${escapeHtml(p.name)}</a>`
+                )
+                .join(
+                    ''
+                )}${shared.length > 8 ? `<span class="text-gray-500">+${shared.length - 8} more</span>` : ''}</div>
+        </div>`
+        : '';
     menu.innerHTML = `
     <div class="px-3 py-2.5 border-b border-gray-700">
         <div class="text-[11px] uppercase tracking-wider text-gray-500">${escapeHtml(ENTITY_LABELS[type] || type)}</div>
         <div class="font-mono text-purple-200 break-all">${escapeHtml(value)}</div>
     </div>
+    ${sharedRows}
     <div class="max-h-80 overflow-y-auto custom-scrollbar py-1">${rows}</div>
     <div class="px-3 py-2 border-t border-gray-700 flex justify-between text-xs">
         <button type="button" data-copy="${escapeAttr(value)}" class="text-gray-400 hover:text-white"><i class="fas fa-copy mr-1"></i>Copy</button>
@@ -1012,6 +1107,94 @@ document.addEventListener('click', (event) => {
     if (!event.target.closest('#pivotMenu')) closePivotMenu();
 });
 window.addEventListener('scroll', closePivotMenu, { passive: true });
+
+// ---------------------------------------------------------------------------
+// Identifiers other investigations have too: their pivot chips get a badge with the
+// number of investigations, and the pivot menu links to them. Chips are checked in
+// batches as they appear on the page.
+// ---------------------------------------------------------------------------
+const sharedCache = new Map(); // "type:value" -> [{investigation_id, name, ...}] ([] = nowhere else)
+const sharedPending = new Set();
+let sharedTimer = null;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// Results on this page belong to this investigation (the page's own, or the one recording)
+function sharedExclude() {
+    const id = window.pageInvestigationId || currentInvestigationId;
+    return id && UUID_RE.test(id) ? id : null;
+}
+
+function markSharedChip(chip, places) {
+    if (!places || !places.length || chip.querySelector('.shared-badge')) return;
+    const names = places.map((p) => p.name).join(', ');
+    const badge = `<span class="shared-badge" title="${escapeAttr(`Also in: ${names}`)}"><i class="fas fa-folder-open"></i>${places.length}</span>`;
+    const chevron = chip.querySelector('.fa-chevron-down');
+    if (chevron) chevron.insertAdjacentHTML('beforebegin', badge);
+    else chip.insertAdjacentHTML('beforeend', badge);
+}
+
+function queueSharedChips(root) {
+    const chips =
+        root.matches && root.matches('[data-pivot-type]') ? [root] : root.querySelectorAll('[data-pivot-type]');
+    chips.forEach((chip) => {
+        if (chip.dataset.sharedChecked) return;
+        chip.dataset.sharedChecked = '1';
+        const name = `${chip.dataset.pivotType}:${chip.dataset.pivotValue}`;
+        if (sharedCache.has(name)) markSharedChip(chip, sharedCache.get(name));
+        else sharedPending.add(name);
+    });
+    if (sharedPending.size && !sharedTimer) sharedTimer = setTimeout(flushSharedChips, 250);
+}
+
+async function flushSharedChips() {
+    sharedTimer = null;
+    const names = [...sharedPending].slice(0, 2000);
+    names.forEach((name) => sharedPending.delete(name));
+    if (sharedPending.size) sharedTimer = setTimeout(flushSharedChips, 250);
+    const items = names.map((name) => {
+        const split = name.indexOf(':');
+        return { type: name.slice(0, split), value: name.slice(split + 1) };
+    });
+    try {
+        const response = await fetch('/api/entities/elsewhere', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ items, exclude: sharedExclude() }),
+        });
+        if (!response.ok) return;
+        const { matches } = await response.json();
+        names.forEach((name) => sharedCache.set(name, matches[name] || []));
+        if (!Object.keys(matches).length) return;
+        document.querySelectorAll('[data-pivot-type]').forEach((chip) => {
+            const found = matches[`${chip.dataset.pivotType}:${chip.dataset.pivotValue}`];
+            if (found) markSharedChip(chip, found);
+        });
+    } catch (e) {
+        // the badge is a hint; the page works without it
+    }
+}
+
+// Answers the page already has (the Identifiers tab lists them with each identifier)
+window.primeSharedIdentifiers = (entries) => {
+    entries.forEach(([name, places]) => sharedCache.set(name, places || []));
+};
+
+function recheckSharedChips() {
+    sharedCache.clear();
+    document.querySelectorAll('.shared-badge').forEach((badge) => badge.remove());
+    document.querySelectorAll('[data-shared-checked]').forEach((chip) => delete chip.dataset.sharedChecked);
+    queueSharedChips(document.body);
+}
+document.addEventListener('investigation:changed', recheckSharedChips);
+
+queueSharedChips(document.body);
+new MutationObserver((mutations) => {
+    mutations.forEach((m) =>
+        m.addedNodes.forEach((node) => {
+            if (node.nodeType === 1) queueSharedChips(node);
+        })
+    );
+}).observe(document.body, { childList: true, subtree: true });
 
 // ---------------------------------------------------------------------------
 // Image viewer, on every page. Elements with data-image-view open it on click: the

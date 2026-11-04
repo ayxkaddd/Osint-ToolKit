@@ -130,6 +130,10 @@ class OsintFramework:
                 return JSONResponse({"detail": "Setup is not complete"}, status_code=503)
             return RedirectResponse(url="/setup")
 
+        # Already logged in (valid, unexpired token): the login page goes to the dashboard
+        if path == "/" and request.method == "GET" and self._is_authenticated(request):
+            return RedirectResponse(url="/dashboard")
+
         if path in PUBLIC_PATHS or path in PUBLIC_AFTER_SETUP:
             return await call_next(request)
 

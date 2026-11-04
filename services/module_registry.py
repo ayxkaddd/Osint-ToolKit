@@ -97,7 +97,7 @@ MODULES: list[Module] = [
             "telegram_username": RunSpec("GET", "/funstat/users/resolve_username", _q("name"))},
            cost=PAID, cost_note="Funstat credits", keys=["FUNSTAT_API_KEY"], prefill={"input": "#userSearchInput"}),
     Module("vk_profile", "VK profile history", "/vk", "user",
-           {"vk": RunSpec("GET", "/api/telegram/search", _q("user_id"))},
+           {"vk": RunSpec("GET", "/api/telegram/search/stream", _q("user_id"), stream=True)},
            speed="medium", needs_telegram=True, concurrency=1, prefill={"input": "#user-id"}),
     Module("whois_history", "WHOIS history", "/whois", "history",
            {"domain": RunSpec("GET", "/api/domain/history", _q("domain"))},

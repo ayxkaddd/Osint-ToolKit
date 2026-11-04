@@ -101,3 +101,29 @@ def test_login_limit_uses_forwarded_for_when_trusted(behind_local_proxy, monkeyp
     monkeypatch.setenv("TRUST_PROXY_HEADERS", "true")
     assert [_failed_login(behind_local_proxy, "192.0.2.50") for _ in range(6)] == [401] * 5 + [429]
     assert _failed_login(behind_local_proxy, "192.0.2.77") == 401
+
+
+def _token(app, **delta):
+    import jwt
+    from datetime import datetime, timedelta, timezone
+    from auth.auth_handler import AuthHandler
+    secret = AuthHandler().secret
+    now = datetime.now(timezone.utc)
+    return jwt.encode({"sub": "test@example.com", "iat": now, "exp": now + timedelta(**delta)}, secret, algorithm="HS256")
+
+
+def test_login_page_sends_a_logged_in_user_to_the_dashboard(app):
+    from fastapi.testclient import TestClient
+    client = TestClient(app, follow_redirects=False, cookies={"access_token": _token(app, hours=1)})
+    response = client.get("/")
+    assert response.status_code == 307 and response.headers["location"] == "/dashboard"
+
+
+@pytest.mark.parametrize("cookie", [None, "expired", "not-a-token", "forged"])
+def test_login_page_stays_without_a_live_token(app, cookie):
+    import jwt
+    from fastapi.testclient import TestClient
+    value = {None: None, "expired": _token(app, seconds=-5), "not-a-token": "abc",
+             "forged": jwt.encode({"sub": "x", "exp": 9999999999}, "wrong-secret", algorithm="HS256")}[cookie]
+    client = TestClient(app, follow_redirects=False, cookies={"access_token": value} if value else None)
+    assert client.get("/").status_code == 200

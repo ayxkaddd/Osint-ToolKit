@@ -19,6 +19,7 @@ const MODULES = {
     funstat: { name: 'Telegram Funstat', icon: 'message-square', page: '/funstat' },
     ip: { name: 'IP Lookup', icon: 'map-pin', page: '/ip' },
     phone: { name: 'Phone analysis', icon: 'phone', page: '/phone' },
+    manual: { name: 'Added manually', icon: 'upload', page: null },
 };
 
 const METHOD_LABELS = {
@@ -63,6 +64,7 @@ const METHOD_LABELS = {
     phone_info: 'Offline analysis',
     enrich_links: 'Link enrichment',
     run: 'Lookup', // plugins
+    upload: 'Outside source',
 };
 
 const moduleInfo = (service) =>
@@ -132,7 +134,110 @@ const RENDERERS = {
     'funstat.search_text': renderFunstatTextSearch,
     'phone.phone_info': renderPhoneInfo,
     ip: renderIpInfo,
+    manual: renderManual,
 };
+
+// Something added by hand: text, identifiers, a link and files (screenshots, exports, pages)
+const INLINE_FILE_EXTS = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'pdf', 'txt', 'csv', 'tsv', 'log', 'md', 'json'];
+const IMAGE_FILE_EXTS = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'];
+
+function fileSize(bytes) {
+    if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+    if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
+    return `${bytes} B`;
+}
+
+// A date as precise as it was given: "2019", "Mar 2019", "5 Mar 2019" or a local time (UTC stored)
+function eventDateText(date, precision) {
+    if (!date) return '';
+    const [y, m, d] = String(date).slice(0, 10).split('-').map(Number);
+    if (precision === 'year') return String(y);
+    if (precision === 'month')
+        return new Date(y, m - 1, 1).toLocaleDateString(undefined, { year: 'numeric', month: 'short' });
+    if (precision === 'time')
+        return new Date(`${date}Z`).toLocaleString(undefined, {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+        });
+    return new Date(y, m - 1, d).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+function renderManual(d, record) {
+    if (!d || d.kind !== 'manual') return renderValue(d);
+    const investigation =
+        (record && record.investigation_id) || window.pageInvestigationId || window.notesForInvestigation;
+    const fileUrl = (f, download = false) =>
+        `/api/investigations/${encodeURIComponent(investigation)}/files/${encodeURIComponent(f.stored)}` +
+        (download ? `?download=1&filename=${encodeURIComponent(f.name)}` : '');
+    const files = d.files || [];
+    const images = files.filter((f) => IMAGE_FILE_EXTS.includes(f.stored.split('.').pop()));
+    const others = files.filter((f) => !images.includes(f));
+    const entities = Object.entries(d.entities || {}).flatMap(([type, values]) =>
+        (values || []).map((value) => ({ type, value }))
+    );
+    const meta = [
+        d.source ? `<span><i class="fas fa-tag mr-1 text-gray-500"></i>${pivotInText(d.source)}</span>` : '',
+        d.date
+            ? `<span><i class="fas fa-calendar mr-1 text-gray-500"></i>${escapeHtml(eventDateText(d.date, d.date_precision))}</span>`
+            : '',
+        d.url ? `<span><i class="fas fa-link mr-1 text-gray-500"></i>${link(d.url)}</span>` : '',
+    ].filter(Boolean);
+    const hash = (f) =>
+        `<span class="font-mono text-[10px] text-gray-500 truncate" title="SHA-256 ${escapeAttr(f.sha256)}">sha256 ${escapeHtml((f.sha256 || '').slice(0, 16))}…</span>`;
+    const contents = (f) => {
+        if (f.content === undefined || f.content === null) return '';
+        const body =
+            typeof f.content === 'string'
+                ? `<pre class="text-xs text-gray-300 whitespace-pre-wrap break-words max-h-96 overflow-y-auto">${pivotInText(f.content.slice(0, 50000))}${f.content.length > 50000 ? '\n…' : ''}</pre>`
+                : renderValue(f.content);
+        return `<details class="mt-2"><summary class="text-xs text-gray-500 hover:text-gray-300 cursor-pointer select-none">Show contents</summary><div class="mt-2">${body}</div></details>`;
+    };
+    return `
+        <div class="space-y-4">
+            ${meta.length ? `<div class="flex flex-wrap gap-x-5 gap-y-1 text-sm text-gray-300">${meta.join('')}</div>` : ''}
+            ${d.text ? `<div class="whitespace-pre-wrap break-words text-sm text-gray-200 bg-gray-900/60 border border-gray-800 rounded-lg p-3 max-h-96 overflow-y-auto">${pivotInText(d.text)}</div>` : ''}
+            ${d.data !== null && d.data !== undefined ? renderValue(d.data) : ''}
+            ${entities.length ? identifierGroupsHtml(entities) : ''}
+            ${
+                images.length
+                    ? `<div class="grid grid-cols-2 md:grid-cols-4 gap-3">${images
+                          .map(
+                              (f) => `
+                <figure class="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
+                    <img src="${escapeAttr(fileUrl(f))}" alt="" loading="lazy" data-image-view="" data-image-title="${escapeAttr(f.name)}"
+                        data-image-note="${escapeAttr(`${fileSize(f.size)} · SHA-256 ${f.sha256}`)}" class="w-full h-36 object-cover cursor-zoom-in">
+                    <figcaption class="px-2 py-1.5 flex items-center justify-between gap-2 text-xs">
+                        <span class="truncate text-gray-300" title="${escapeAttr(f.name)}">${escapeHtml(f.name)}</span>
+                        <a href="${escapeAttr(fileUrl(f, true))}" class="text-gray-400 hover:text-white shrink-0" title="Download the original"><i class="fas fa-download"></i></a>
+                    </figcaption>
+                </figure>`
+                          )
+                          .join('')}</div>`
+                    : ''
+            }
+            ${others
+                .map((f) => {
+                    const ext = f.stored.split('.').pop();
+                    return `
+                <div class="bg-gray-900 border border-gray-800 rounded-lg px-3 py-2">
+                    <div class="flex items-center gap-3">
+                        <i class="fas ${ext === 'pdf' ? 'fa-file-pdf' : 'fa-file'} text-purple-300"></i>
+                        <div class="min-w-0 flex-1">
+                            <div class="text-sm text-gray-200 truncate" title="${escapeAttr(f.name)}">${escapeHtml(f.name)}</div>
+                            <div class="flex items-center gap-2"><span class="text-[11px] text-gray-500">${escapeHtml(fileSize(f.size))}</span>${hash(f)}</div>
+                        </div>
+                        ${INLINE_FILE_EXTS.includes(ext) ? `<a href="${escapeAttr(fileUrl(f))}" target="_blank" rel="noopener" class="px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 text-xs">Open</a>` : ''}
+                        <a href="${escapeAttr(fileUrl(f, true))}" class="px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 text-xs">Download</a>
+                    </div>
+                    ${contents(f)}
+                </div>`;
+                })
+                .join('')}
+        </div>`;
+}
 
 function renderPhoneInfo(d) {
     if (!d || !d.e164) return renderValue(d);
@@ -609,12 +714,36 @@ function renderGitFive(data) {
         </div>`;
 }
 
+// Columns of the snapshots table, shown when any snapshot has them
+const VK_TABLE_COLUMNS = [
+    'year_month',
+    'full_name',
+    'username',
+    'email',
+    'mobile_phone',
+    'city',
+    'region',
+    'country',
+    'birth_date',
+    'last_login',
+    'last_visit',
+    'device',
+    'followers',
+    'university',
+];
+
 function renderVkProfile(data) {
     if (!data || typeof data !== 'object' || !Array.isArray(data.entries)) return renderValue(data);
     return `
         <div class="space-y-4">
             <span class="text-sm font-semibold text-gray-300">${data.entries.length} snapshot${data.entries.length === 1 ? '' : 's'}${(data.photos || []).length ? `, ${data.photos.length} photos` : ''}</span>
-            ${renderTable(data.entries, ['year_month', 'full_name', 'username', 'city', 'country', 'birth_date', 'last_login', 'device', 'followers', 'university'])}
+            ${renderTable(
+                data.entries,
+                VK_TABLE_COLUMNS.filter((c) =>
+                    data.entries.some((e) => e && e[c] !== null && e[c] !== undefined && e[c] !== '')
+                )
+            )}
+            ${(data.empty_periods || []).length ? `<p class="text-xs text-gray-500">No snapshot for ${escapeHtml(data.empty_periods.join(', '))}</p>` : ''}
             ${(data.photos || []).length ? `<div><h5 class="text-xs font-semibold text-gray-400 uppercase mb-2">Photos</h5><div class="space-y-1">${data.photos.map((p) => `<div class="text-xs">${link(p)}</div>`).join('')}</div></div>` : ''}
         </div>`;
 }

@@ -154,6 +154,7 @@ class JobManager:
         found = checked = 0
         last_event: Any = None
         plugin_error = None
+        notice = None   # what the VK bot said instead of data (limits, not found)
         async with client.stream(method, path, headers=headers, **request_args) as response:
             job.result_id = response.headers.get(RESULT_ID_HEADER)
             if response.status_code >= 400:
@@ -184,9 +185,11 @@ class JobManager:
                     job.progress.update(done=data.get("done"), total=data.get("total"))
                 elif kind == "search_completed":
                     job.progress.update(done=data.get("total_checked", checked))
-                elif event.get("event") == "item":   # plugins (services/plugin_loader.py)
+                elif event.get("event") in ("item", "entry"):   # plugins, VK history snapshots
                     found += 1
                     job.progress.update(found=found)
+                elif event.get("event") == "notice":
+                    notice = notice or event.get("text")
                 elif event.get("event") == "error":
                     plugin_error = event.get("detail")
         if plugin_error:
@@ -195,7 +198,10 @@ class JobManager:
             return
         if last_event and last_event.get("event") == "done" and "count" in last_event:
             job.status = "done"
-            job.summary = f"{found} result{'' if found == 1 else 's'}" if found else (last_event.get("note") or "Nothing found")
+            job.summary = f"{found} result{'' if found == 1 else 's'}" if found else (
+                last_event.get("note") or (notice or "")[:120] or "Nothing found")
+            if last_event.get("complete") is False:
+                job.summary += " (the bot didn't finish in time)"
             return
         job.status = "done"
         if found or checked:

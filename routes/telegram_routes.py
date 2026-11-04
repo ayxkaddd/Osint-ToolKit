@@ -1,10 +1,12 @@
-from fastapi import APIRouter, HTTPException, Request
+import json
+
+from fastapi import APIRouter, HTTPException, Query, Request
 from auth.auth_handler import TelegramAuthHandler
-from fastapi.responses import JSONResponse
-from models.vk_history_models import VKProfileHistoryResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from services.vk_history_service import VkHistoryService
 from utils import telegram_client
 from utils.investigation_decorator import save_investigation
+from utils.stream_reducers import reduce_vk_history
 
 auth_router = APIRouter(prefix="/auth/tg")
 bot_router = APIRouter(prefix="/api/telegram")
@@ -60,14 +62,32 @@ async def auth_status():
 
 vk_history_service = VkHistoryService()
 
-@bot_router.get("/search")
-@save_investigation(service_name="vk_profile", method_name="lookup_vk_profile")
-async def search_vk_profile(user_id: str) -> VKProfileHistoryResponse:
+
+def _nothing_to_keep(result: dict) -> bool:
+    """A lookup that failed or was stopped before the bot said anything."""
+    said = result["entries"] or result["photos"] or result["notices"] or result["empty_periods"]
+    return not result.get("complete") and not said
+
+
+@bot_router.get("/search/stream")
+@save_investigation(service_name="vk_profile", method_name="lookup_vk_profile",
+                    stream_reducer=reduce_vk_history, skip_if=_nothing_to_keep)
+async def stream_vk_profile(user_id: str = Query(..., min_length=1, max_length=200)):
+    """Server-Sent Events: each snapshot of the profile as soon as the bot sends it
+    (events in VkHistoryService.stream_request). Saved when the bot finishes, or as
+    a partial result if the search is stopped."""
+    if not vk_history_service.normalize_target(user_id):
+        raise HTTPException(status_code=400, detail="Enter a VK id, screen name or profile link")
     try:
-        result = await vk_history_service.send_request(user_id)
-        return result
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"status": "error", "message": str(e)}
-        )
+        await vk_history_service.ensure_client()
+    except (telegram_client.TelegramNotConfigured, telegram_client.TelegramNotAuthorized) as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
+    except (OSError, ConnectionError) as e:
+        raise HTTPException(status_code=503, detail=f"Could not connect to Telegram: {e}") from e
+
+    async def generate():
+        async for event in vk_history_service.stream_request(user_id):
+            yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(generate(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})

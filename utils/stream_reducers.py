@@ -109,6 +109,34 @@ def reduce_username_search(events: list[Any]) -> dict[str, Any]:
     }
 
 
+def reduce_vk_history(events: list[Any]) -> dict[str, Any]:
+    """VK profile history stream -> the shape of the JSON lookup: {entries, photos, complete, notices,
+    empty_periods}. ``stopped`` marks a search the client ended before the bot finished."""
+    result: dict[str, Any] = {"entries": [], "photos": [], "complete": False, "notices": [], "empty_periods": []}
+    finished = False
+    for event in events:
+        if not isinstance(event, dict):
+            continue
+        kind = event.get("event")
+        if kind == "entry":
+            result["entries"].append(event.get("entry"))
+        elif kind == "photos":
+            result["photos"].extend(event.get("photos") or [])
+        elif kind == "notice":
+            result["notices"].append(event.get("text"))
+        elif kind == "nothing_for":
+            result["empty_periods"].append(event.get("period"))
+        elif kind == "error":
+            result["error"] = event.get("detail")
+            finished = True
+        elif kind == "done":
+            result["complete"] = bool(event.get("complete"))
+            finished = True
+    if not finished:
+        result["stopped"] = True
+    return result
+
+
 def reduce_whois_analysis(events: list[Any]) -> dict[str, Any]:
     """NDJSON events from the NS WHOIS analysis -> {domains: {domain: whois}}."""
     domains: dict[str, Any] = {}

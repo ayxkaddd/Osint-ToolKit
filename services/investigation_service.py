@@ -21,6 +21,7 @@ fetched for a Funstat user) so related data stays in one group.
 """
 import base64
 import gzip
+import hashlib
 import io
 import json
 import logging
@@ -34,7 +35,8 @@ from pathlib import Path
 from typing import Any, Optional
 from uuid import UUID, uuid4
 
-from services.entities import Entity, entities_from_parameters, extract_entities
+from services.entities import Entity, detect, entities_from_parameters, extract_entities
+from services.events import extract_events, parse_date
 from utils.legacy_repr import parse_model_repr
 from utils.stream_reducers import legacy_username_result
 
@@ -44,14 +46,29 @@ logger = logging.getLogger(__name__)
 # templates each construct their own) so concurrent lookups writing to the same
 # JSON files cannot interleave and lose data.
 _STORE_LOCK = threading.RLock()
-# entities.json path -> (file version, {"raw": parsed file, "sorted": decorated list or None})
+# entities.json path -> (file version, {"raw": parsed file, "sorted": decorated list or None, "version"})
 _ENTITY_CACHE: dict[str, tuple[Any, dict[str, Any]]] = {}
+# Identifiers found in more than one investigation, rebuilt when any entities.json changes
+_SHARED_CACHE: dict[str, Any] = {"versions": None, "index": {}}
 _MIGRATED_DIRS: set = set()
 
 # Bump when the index entry format / summary logic changes
 INDEX_VERSION = 7
 
 TRIAGE_STATUSES = {None, "confirmed", "important", "false_positive"}
+
+# Bump when extract_events changes, so cached timelines are rebuilt (on next view)
+EVENTS_VERSION = 2
+
+# Results added by hand (data from sites and tools without an API)
+MANUAL_SERVICE = "manual"
+MANUAL_FILES_MAX = 20
+MANUAL_FILE_MAX_UPLOAD = 50 * 1024 * 1024
+MANUAL_TEXT_MAX = 1024 * 1024
+# Text files up to this size are read too, so their identifiers and dates are found
+MANUAL_FILE_TEXT_MAX = 2 * 1024 * 1024
+MANUAL_TEXT_EXTS = {"txt", "csv", "tsv", "json", "log", "md", "xml", "html", "htm"}
+MANUAL_FILE_NAME = re.compile(r"[0-9a-f]{32}\.[a-z0-9]{1,10}")
 
 PICTURE_MAX_SIDE = 512
 PICTURE_MAX_UPLOAD = 10 * 1024 * 1024
@@ -74,7 +91,7 @@ SERVICE_ALIASES = {
 TARGET_KEYS = (
     "username", "domain", "email", "query", "phones", "phone", "ns1", "user_id",
     "gaia_id", "bssid", "drive_url", "url", "link", "links", "term", "input",
-    "target", "group_id", "id", "domains", "filename", "image",
+    "target", "group_id", "id", "domains", "filename", "image", "title",
 )
 
 
@@ -177,6 +194,13 @@ def summarize(result: Any) -> str:
     """One-line description of a result for listings."""
     if result is None:
         return "No data"
+    if isinstance(result, dict) and result.get("kind") == "manual":
+        files = len(result.get("files") or [])
+        identifiers = sum(len(v) for v in (result.get("entities") or {}).values())
+        parts = [f"{files} file{'s' if files != 1 else ''}" if files else "",
+                 "text" if result.get("text") or result.get("data") is not None else "",
+                 f"{identifiers} identifier{'s' if identifiers != 1 else ''}" if identifiers else ""]
+        return " · ".join(p for p in parts if p) or "Added manually"
     if isinstance(result, list):
         return f"{len(result)} item{'s' if len(result) != 1 else ''}"
     if isinstance(result, dict):
@@ -450,9 +474,11 @@ class InvestigationService:
                         "partial": partial,
                         "timestamp": now.isoformat(),
                     }
+                    # Several things added by hand under one result are all kept
                     children = [
                         c for c in parent.get("children", [])
-                        if not (c.get("method_name") == method_name and c.get("parameters") == parameters)
+                        if service_name == MANUAL_SERVICE
+                        or not (c.get("method_name") == method_name and c.get("parameters") == parameters)
                     ]
                     children.append(child)
                     parent["children"] = children
@@ -565,9 +591,11 @@ class InvestigationService:
             index = self._load_index(investigation_id)
             if result_id not in index:
                 return False
+            files = self._result_files(investigation_id, index[result_id])
             del index[result_id]
             self._save_index(investigation_id, index)
             self._result_file(investigation_id, result_id).unlink(missing_ok=True)
+            self._delete_files(investigation_id, result_id, files)
             entities = self._load_entities(investigation_id)
             self._apply_record_entities(entities, {"result_id": result_id}, remove_only=True)
             self._save_entities(investigation_id, entities)
@@ -585,11 +613,13 @@ class InvestigationService:
 
     def _remove_from_store(self, investigation_id, index: dict[str, Any], result_ids: list[str]) -> None:
         """Take results out of an investigation, writing its index and entities once."""
+        files = {result_id: self._result_files(investigation_id, index[result_id]) for result_id in result_ids}
         for result_id in result_ids:
             del index[result_id]
         self._save_index(investigation_id, index)
         for result_id in result_ids:
             self._result_file(investigation_id, result_id).unlink(missing_ok=True)
+            self._delete_files(investigation_id, result_id, files[result_id])
         entities = self._load_entities(investigation_id)
         self._drop_entity_sources(entities, set(result_ids))
         self._save_entities(investigation_id, entities)
@@ -609,6 +639,11 @@ class InvestigationService:
                 if record is None or result_id in target_index:
                     continue
                 record["investigation_id"] = str(target_id)
+                for name in self._record_files(record):
+                    source = self._files_dir(investigation_id) / name
+                    if source.is_file():
+                        self._files_dir(target_id).mkdir(parents=True, exist_ok=True)
+                        shutil.copy2(source, self._files_dir(target_id) / name)
                 size = _write_gz_atomic(self._result_file(target_id, result_id), record)
                 target_index[result_id] = self._index_entry(record, size)
                 self._apply_record_entities(target_entities, record)
@@ -737,11 +772,12 @@ class InvestigationService:
         try:
             stat = path.stat()
         except FileNotFoundError:
-            return {"raw": {}, "sorted": []}
+            return {"raw": {}, "sorted": [], "version": None}
         version = (stat.st_mtime_ns, stat.st_size, stat.st_ino)
         cached = _ENTITY_CACHE.get(str(path))
         if cached is None or cached[0] != version:
-            cached = _ENTITY_CACHE[str(path)] = (version, {"raw": self._load_entities(investigation_id), "sorted": None})
+            cached = _ENTITY_CACHE[str(path)] = (version, {"raw": self._load_entities(investigation_id),
+                                                           "sorted": None, "version": version})
         return cached[1]
 
     def get_entities(self, investigation_id: UUID) -> list[dict[str, Any]]:
@@ -782,6 +818,264 @@ class InvestigationService:
         if not entity:
             return []
         return [src for src in entity.get("sources", []) if src.get("role") == "searched"]
+
+    # ==================== SHARED WITH OTHER INVESTIGATIONS ====================
+
+    def _shared_index(self) -> dict[str, list[dict[str, Any]]]:
+        """{entity key: [where it is]} for identifiers in more than one investigation.
+        Identifiers marked false positive don't count."""
+        investigations = self._load_investigations()
+        snapshots = {inv_id: self._entities_snapshot(inv_id) for inv_id in investigations}
+        versions = tuple(sorted((inv_id, str(snap["version"])) for inv_id, snap in snapshots.items()))
+        if _SHARED_CACHE["versions"] == versions:
+            return _SHARED_CACHE["index"]
+        counts: dict[str, int] = {}
+        for snap in snapshots.values():
+            for key, entity in snap["raw"].items():
+                if entity.get("status") != "false_positive":
+                    counts[key] = counts.get(key, 0) + 1
+        index: dict[str, list[dict[str, Any]]] = {}
+        for inv_id, snap in snapshots.items():
+            for key, entity in snap["raw"].items():
+                if counts.get(key, 0) > 1 and entity.get("status") != "false_positive":
+                    sources = entity.get("sources", [])
+                    index.setdefault(key, []).append({
+                        "investigation_id": inv_id,
+                        "status": entity.get("status"),
+                        "searched": any(src.get("role") == "searched" for src in sources),
+                        "results": len({src.get("result_id") for src in sources if src.get("result_id")}),
+                    })
+        _SHARED_CACHE.update(versions=versions, index=index)
+        return index
+
+    def investigations_with(self, keys: list[str], exclude: Optional[UUID] = None) -> dict[str, list[dict[str, Any]]]:
+        """For each entity key, the other investigations it appears in (only keys that do)."""
+        index = self._shared_index()
+        investigations = self._load_investigations()
+        skip = str(exclude) if exclude else None
+        found = {}
+        for key in dict.fromkeys(keys):
+            places = [{**place, "name": investigations.get(place["investigation_id"], {}).get("name") or "Untitled",
+                       "investigation_status": investigations.get(place["investigation_id"], {}).get("status")}
+                      for place in index.get(key, []) if place["investigation_id"] != skip]
+            if places:
+                places.sort(key=lambda p: investigations.get(p["investigation_id"], {}).get("updated_at", ""), reverse=True)
+                found[key] = places
+        return found
+
+    def shared_entity_keys(self, investigation_id: UUID) -> set[str]:
+        """Keys of this investigation's identifiers that other investigations have too."""
+        here = str(investigation_id)
+        return {key for key, places in self._shared_index().items()
+                if any(p["investigation_id"] == here for p in places)
+                and any(p["investigation_id"] != here for p in places)}
+
+    # ==================== EVENTS (DATES INSIDE RESULTS) ====================
+
+    def _events_file(self, investigation_id) -> Path:
+        return self._inv_dir(investigation_id) / "events.json"
+
+    @staticmethod
+    def _record_events(record: dict[str, Any]) -> list[dict[str, Any]]:
+        events = []
+        parts = [(None, record)] + [(c.get("child_id"), c) for c in record.get("children", [])]
+        for child_id, part in parts:
+            service = part.get("service_name", "")
+            result = part.get("result")
+            found = []
+            if service == MANUAL_SERVICE and isinstance(result, dict):
+                if result.get("date"):
+                    found.append({"date": result["date"], "precision": result.get("date_precision") or "day",
+                                  "label": result.get("title") or "Added manually", "section": "",
+                                  "context": None, "path": "date", "manual": True})
+                result = {k: v for k, v in result.items() if k != "date"}
+            found += extract_events(result, service, part.get("timestamp") or record.get("timestamp"))
+            for event in found:
+                event.update({"result_id": record["result_id"], "service": service,
+                              "method": part.get("method_name", "")})
+                if child_id:
+                    event["child_id"] = child_id
+            events.extend(found)
+        return events
+
+    def get_events(self, investigation_id: UUID) -> list[dict[str, Any]]:
+        """Dated events found in the investigation's results, newest first.
+        Each result's events are cached in events.json until its file changes."""
+        index = self._load_index(investigation_id)
+        cache_file = self._events_file(investigation_id)
+        cache = _read_json(cache_file, {})
+        cached = cache.get("results", {}) if cache.get("version") == EVENTS_VERSION else {}
+        fresh: dict[str, Any] = {}
+        changed = False
+        for result_id in index:
+            try:
+                stat = self._result_file(investigation_id, result_id).stat()
+            except (FileNotFoundError, ValueError):
+                continue
+            stamp = f"{stat.st_mtime_ns}:{stat.st_size}"
+            entry = cached.get(result_id)
+            if not entry or entry.get("stamp") != stamp:
+                record = self.get_result(investigation_id, result_id)
+                entry = {"stamp": stamp, "events": self._record_events(record) if record else []}
+                changed = True
+            fresh[result_id] = entry
+        if changed or fresh.keys() != cached.keys():
+            with _STORE_LOCK:
+                if self._inv_dir(investigation_id).is_dir():
+                    _write_json_atomic(cache_file, {"version": EVENTS_VERSION, "results": fresh}, compact=True)
+        events = []
+        for result_id, entry in fresh.items():
+            target = index[result_id].get("target")
+            events.extend({**event, "target": target} for event in entry["events"])
+        events.sort(key=lambda e: (e.get("end") or e["date"], e["date"]), reverse=True)
+        return events
+
+    # ==================== RESULTS ADDED BY HAND ====================
+
+    def _files_dir(self, investigation_id) -> Path:
+        return self._inv_dir(investigation_id) / "files"
+
+    @staticmethod
+    def _record_files(record: dict[str, Any]) -> list[str]:
+        """Stored names of the files a result (and its follow-ups) added by hand."""
+        names = []
+        for part in [record] + list(record.get("children", [])):
+            result = part.get("result")
+            if part.get("service_name") == MANUAL_SERVICE and isinstance(result, dict):
+                names += [f["stored"] for f in result.get("files") or []
+                          if isinstance(f, dict) and MANUAL_FILE_NAME.fullmatch(str(f.get("stored", "")))]
+        return names
+
+    def _result_files(self, investigation_id, summary: dict[str, Any]) -> list[str]:
+        """Files of a result, read only when its index entry says it has manual parts."""
+        services = [summary.get("service_name")] + [c.get("service_name") for c in summary.get("children", [])]
+        if MANUAL_SERVICE not in services:
+            return []
+        record = self.get_result(investigation_id, summary["result_id"])
+        return self._record_files(record) if record else []
+
+    def _delete_files(self, investigation_id, result_id: str, names: list[str]) -> None:
+        """Delete a removed result's files, unless a note keeps a snapshot of it."""
+        if not names:
+            return
+        snapshots = _read_json(self._snapshots_dir(investigation_id) / "index.json", {})
+        if result_id in snapshots.values():
+            return
+        for name in names:
+            (self._files_dir(investigation_id) / name).unlink(missing_ok=True)
+
+    def get_file_path(self, investigation_id: UUID, name: str) -> Optional[Path]:
+        if not MANUAL_FILE_NAME.fullmatch(name or ""):
+            return None
+        path = self._files_dir(investigation_id) / name
+        return path if path.is_file() else None
+
+    @staticmethod
+    def _clean_filename(name: str) -> str:
+        name = re.split(r"[\\/]", name or "")[-1]
+        name = "".join(c for c in name if c.isprintable()).strip()
+        return name[:200] or "file"
+
+    def add_manual_result(
+        self,
+        investigation_id: UUID,
+        title: str,
+        source: str = "",
+        url: str = "",
+        date: str = "",
+        text: str = "",
+        identifiers: str = "",
+        files: Optional[list[tuple[str, bytes]]] = None,
+        parent_result_id: Optional[str] = None,
+    ) -> dict[str, Any]:
+        """Save something found outside the toolkit (a screenshot, a page, a bot's answer)
+        as a result. Returns {"result_id", "skipped": identifier lines not recognised}."""
+        title = (title or "").strip()[:200]
+        if not title:
+            raise ValueError("Give it a title")
+        files = files or []
+        if len(files) > MANUAL_FILES_MAX:
+            raise ValueError(f"At most {MANUAL_FILES_MAX} files at once")
+        text = (text or "").strip()
+        if len(text.encode("utf-8")) > MANUAL_TEXT_MAX:
+            raise ValueError("The text is too long (max 1 MB) - add it as a file instead")
+        url = (url or "").strip()
+        if url and not re.match(r"https?://\S+$", url, re.I):
+            raise ValueError("The link must start with http:// or https://")
+        parsed_date = None
+        if (date or "").strip():
+            parsed_date = parse_date(date.strip(), "date")
+            if not parsed_date:
+                raise ValueError("The date is not recognised - use YYYY-MM-DD")
+
+        entities: dict[str, list[str]] = {}
+        skipped = []
+        for line in (identifiers or "").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            found = detect(line)
+            if found:
+                values = entities.setdefault(found[0].type, [])
+                if found[0].value not in values:
+                    values.append(found[0].value)
+            else:
+                skipped.append(line)
+
+        data = None
+        if text[:1] in "{[":
+            try:
+                data, text = json.loads(text), ""
+            except json.JSONDecodeError:
+                pass
+        if not (text or data is not None or entities or files or url):
+            raise ValueError("Add some text, identifiers, a link or a file")
+
+        stored = []
+        directory = self._files_dir(investigation_id)
+        try:
+            for filename, content in files:
+                if len(content) > MANUAL_FILE_MAX_UPLOAD:
+                    raise ValueError(f"{self._clean_filename(filename)} is too large (max 50 MB)")
+                name = self._clean_filename(filename)
+                ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""
+                ext = ext if re.fullmatch(r"[a-z0-9]{1,10}", ext) else "bin"
+                item = {"name": name, "stored": f"{uuid4().hex}.{ext}", "size": len(content),
+                        "sha256": hashlib.sha256(content).hexdigest()}
+                if ext in MANUAL_TEXT_EXTS and len(content) <= MANUAL_FILE_TEXT_MAX:
+                    decoded = content.decode("utf-8", errors="replace")
+                    item["content"] = decoded
+                    if ext == "json":
+                        try:
+                            item["content"] = json.loads(decoded)
+                        except json.JSONDecodeError:
+                            pass
+                directory.mkdir(parents=True, exist_ok=True)
+                tmp = directory / f"{item['stored']}.tmp"
+                tmp.write_bytes(content)
+                os.replace(tmp, directory / item["stored"])
+                stored.append(item)
+
+            result = {
+                "kind": "manual",
+                "title": title,
+                "source": (source or "").strip()[:200] or None,
+                "url": url or None,
+                "date": parsed_date[0] if parsed_date else None,
+                "date_precision": parsed_date[1] if parsed_date else None,
+                "text": text or None,
+                "data": data,
+                "entities": entities or None,
+                "files": stored,
+            }
+            parameters = {k: v for k, v in {"title": title, "source": result["source"]}.items() if v}
+            result_id = self.save_investigation_result(investigation_id, MANUAL_SERVICE, "upload", parameters,
+                                                       result, parent_result_id=parent_result_id)
+        except Exception:
+            for item in stored:
+                (directory / item["stored"]).unlink(missing_ok=True)
+            raise
+        return {"result_id": result_id, "skipped": skipped}
 
     def get_investigation_result(self, investigation_id: UUID) -> Optional[dict[str, Any]]:
         """Investigation info + result summaries"""

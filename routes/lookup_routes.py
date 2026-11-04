@@ -7,7 +7,7 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from services.entities import detect, make_entity, type_label
 from services.investigation_service import investigation_service
@@ -36,6 +36,16 @@ class TriageRequest(BaseModel):
 
 class EntityTriageRequest(TriageRequest):
     key: str
+
+
+class Identifier(BaseModel):
+    type: str
+    value: str
+
+
+class ElsewhereRequest(BaseModel):
+    items: list[Identifier] = Field(max_length=2000)
+    exclude: Optional[UUID] = None
 
 
 def _require_investigation(investigation_id: UUID) -> dict:
@@ -128,11 +138,16 @@ async def cancel_job(job_id: str):
 
 @router.get("/api/investigations/{investigation_id}/entities")
 def list_entities(investigation_id: UUID, type: Optional[str] = None, q: Optional[str] = None,
-                        status: Optional[str] = None, limit: int = Query(500, ge=1, le=5000), offset: int = 0):
-    """Identifiers found in or searched for this investigation (most relevant first)."""
+                        status: Optional[str] = None, shared: bool = False,
+                        limit: int = Query(500, ge=1, le=5000), offset: int = 0):
+    """Identifiers found in or searched for this investigation (most relevant first).
+    ``shared=1``: only those that other investigations have too."""
     _require_investigation(investigation_id)
     entities = investigation_service.get_entities(investigation_id)
     type_counts = Counter(e["type"] for e in entities)
+    shared_keys = investigation_service.shared_entity_keys(investigation_id)
+    if shared:
+        entities = [e for e in entities if e["key"] in shared_keys]
     if type:
         entities = [e for e in entities if e["type"] == type]
     if status == "untriaged":
@@ -144,11 +159,33 @@ def list_entities(investigation_id: UUID, type: Optional[str] = None, q: Optiona
         entities = [e for e in entities if needle in e["value"].lower() or needle in (e.get("note") or "").lower()]
     total = len(entities)
     page = entities[offset:offset + limit]
+    elsewhere = investigation_service.investigations_with([e["key"] for e in page if e["key"] in shared_keys],
+                                                          exclude=investigation_id)
     for entity in page:
         entity["label"] = type_label(entity["type"])
         entity["sources"] = entity.get("sources", [])[:20]
+        entity["elsewhere"] = elsewhere.get(entity["key"], [])
     return {"total": total, "types": [{"type": t, "label": type_label(t), "count": c} for t, c in type_counts.most_common()],
-            "entities": page}
+            "shared_count": len(shared_keys), "entities": page}
+
+
+@router.post("/api/entities/elsewhere")
+def entities_elsewhere(body: ElsewhereRequest):
+    """Which of these identifiers other investigations have, keyed "type:value" as sent."""
+    sent: dict[str, str] = {}
+    for item in body.items:
+        entity = make_entity(item.type, item.value)
+        if entity:
+            sent[f"{item.type}:{item.value}"] = entity.key
+    found = investigation_service.investigations_with(list(sent.values()), exclude=body.exclude)
+    return {"matches": {name: found[key] for name, key in sent.items() if key in found}}
+
+
+@router.get("/api/investigations/{investigation_id}/events")
+def list_events(investigation_id: UUID):
+    """Dates found inside the results (account created, domain registered, messages...)."""
+    _require_investigation(investigation_id)
+    return {"events": investigation_service.get_events(investigation_id)}
 
 
 @router.patch("/api/investigations/{investigation_id}/entities")
