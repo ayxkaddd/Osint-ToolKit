@@ -193,7 +193,8 @@ def save_investigation(
 ):
     """Save the decorated route's output to the active investigation (see module doc).
 
-    ``skip_if(result)`` returning True suppresses saving (e.g. empty lookups).
+    ``skip_if(result)`` returning True suppresses saving (e.g. empty lookups); for
+    streams it gets the reduced result.
     """
 
     def decorator(func: Callable) -> Callable:
@@ -239,6 +240,8 @@ def save_investigation(
                     if not isinstance(events, list):
                         events = [events]
                     stored = stream_reducer(events) if stream_reducer else events
+                    if skip_if is not None and skip_if(stored):
+                        return
                     _save(inv_id, service, used_method_name, parameters, stored,
                           result_id, parent_id, partial=not completed)
 

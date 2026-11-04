@@ -714,12 +714,36 @@ function renderGitFive(data) {
         </div>`;
 }
 
+// Columns of the snapshots table, shown when any snapshot has them
+const VK_TABLE_COLUMNS = [
+    'year_month',
+    'full_name',
+    'username',
+    'email',
+    'mobile_phone',
+    'city',
+    'region',
+    'country',
+    'birth_date',
+    'last_login',
+    'last_visit',
+    'device',
+    'followers',
+    'university',
+];
+
 function renderVkProfile(data) {
     if (!data || typeof data !== 'object' || !Array.isArray(data.entries)) return renderValue(data);
     return `
         <div class="space-y-4">
             <span class="text-sm font-semibold text-gray-300">${data.entries.length} snapshot${data.entries.length === 1 ? '' : 's'}${(data.photos || []).length ? `, ${data.photos.length} photos` : ''}</span>
-            ${renderTable(data.entries, ['year_month', 'full_name', 'username', 'city', 'country', 'birth_date', 'last_login', 'device', 'followers', 'university'])}
+            ${renderTable(
+                data.entries,
+                VK_TABLE_COLUMNS.filter((c) =>
+                    data.entries.some((e) => e && e[c] !== null && e[c] !== undefined && e[c] !== '')
+                )
+            )}
+            ${(data.empty_periods || []).length ? `<p class="text-xs text-gray-500">No snapshot for ${escapeHtml(data.empty_periods.join(', '))}</p>` : ''}
             ${(data.photos || []).length ? `<div><h5 class="text-xs font-semibold text-gray-400 uppercase mb-2">Photos</h5><div class="space-y-1">${data.photos.map((p) => `<div class="text-xs">${link(p)}</div>`).join('')}</div></div>` : ''}
         </div>`;
 }
