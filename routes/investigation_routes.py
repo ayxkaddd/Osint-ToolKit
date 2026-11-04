@@ -7,6 +7,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 from starlette.datastructures import UploadFile as FormUpload
+from utils.investigation_decorator import live_result
 from services.investigation_service import (
     MANUAL_FILE_MAX_UPLOAD, MANUAL_FILES_MAX, MANUAL_TEXT_MAX, NOTE_IMAGE_MAX_UPLOAD, investigation_service,
 )
@@ -209,9 +210,11 @@ def get_investigation_results(investigation_id: UUID) -> JSONResponse:
 
 @router.get("/{investigation_id}/results/{result_id}")
 def get_investigation_result_detail(investigation_id: UUID, result_id: str) -> JSONResponse:
-    """Full record for one result, including grouped follow-up lookups (children)."""
+    """Full record for one result, including grouped follow-up lookups (children).
+    A lookup still streaming in the background comes back with ``running: true``
+    and what it has found so far."""
     _require_investigation(investigation_id)
-    record = investigation_service.get_result(investigation_id, result_id)
+    record = investigation_service.get_result(investigation_id, result_id) or live_result(investigation_id, result_id)
     if record is None:
         raise HTTPException(status_code=404, detail="Result not found")
     return JSONResponse(content={"status": "success", "result": record})

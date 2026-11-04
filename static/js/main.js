@@ -638,29 +638,106 @@ function showSavedResultFallback(record) {
 }
 window.showSavedResultFallback = showSavedResultFallback;
 
-async function loadResult(resultId, investigationId = currentInvestigationId) {
+// A lookup still streaming in the background (opened from the jobs tray) comes back
+// with running: true and what it has found so far; the page follows it until it's saved.
+const LIVE_REFRESH_MS = 2000;
+const live = { timer: null, resultId: null, signature: null, sawRunning: false };
+
+function stopFollowingResult() {
+    clearTimeout(live.timer);
+    Object.assign(live, { timer: null, resultId: null, signature: null, sawRunning: false });
+    document.getElementById('liveResultBanner')?.remove();
+}
+
+function showLiveResultBanner() {
+    if (document.getElementById('liveResultBanner')) return;
+    const banner = document.createElement('div');
+    banner.id = 'liveResultBanner';
+    banner.className =
+        'mb-5 bg-[#1a1b26] border border-purple-500/40 rounded-xl px-4 py-2.5 flex items-center gap-3 text-sm';
+    banner.innerHTML = `
+        <span class="block w-2.5 h-2.5 rounded-full bg-purple-400 animate-pulse shrink-0"></span>
+        <span class="flex-1 text-gray-200">This lookup is still running in the background - the page updates as results arrive.</span>
+        <button type="button" data-live-stop class="shrink-0 whitespace-nowrap text-xs text-gray-400 hover:text-white border border-gray-700 rounded-lg px-2 py-1">Stop following</button>`;
+    // in the page, under its title (where a saved result that doesn't fit is shown too)
+    const page = document.querySelector('.page') || document.querySelector('main') || document.body;
+    const lead = page.querySelector(':scope > .page-lead');
+    if (lead) lead.after(banner);
+    else page.prepend(banner);
+}
+
+async function loadResult(resultId, investigationId = currentInvestigationId, following = false) {
     if (!investigationId || typeof window.loadResultIntoView !== 'function') return;
+    if (!following) stopFollowingResult();
+    else if (live.resultId !== resultId) return; // stopped, or another result was opened meanwhile
     try {
         const response = await fetch(
             `/api/investigations/${encodeURIComponent(investigationId)}/results/${encodeURIComponent(resultId)}`
         );
+        if (following && live.resultId !== resultId) return;
+        if (response.status === 404 && following) {
+            // finished with nothing worth saving (a failed or empty lookup)
+            stopFollowingResult();
+            showTemporaryNotification('The lookup finished without a result to keep', 'info');
+            return;
+        }
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const { result: record } = await response.json();
-        document.getElementById('savedResultFallback')?.remove();
-        try {
-            window.loadResultIntoView(record.result, record);
-        } catch (renderError) {
-            console.error("This page can't draw the saved result:", renderError);
-            showSavedResultFallback(record);
+        const signature = JSON.stringify(record.result ?? null);
+        if (!following || signature !== live.signature) {
+            document.getElementById('savedResultFallback')?.remove();
+            try {
+                window.loadResultIntoView(record.result, record);
+            } catch (renderError) {
+                console.error("This page can't draw the saved result:", renderError);
+                showSavedResultFallback(record);
+            }
         }
         document.getElementById('resultLoadNotification')?.remove();
         document.getElementById('historyModal')?.remove();
-        showTemporaryNotification('Saved result loaded', 'success');
+        if (record.running) {
+            Object.assign(live, { resultId, signature, sawRunning: true });
+            showLiveResultBanner();
+            live.timer = setTimeout(() => loadResult(resultId, investigationId, true), LIVE_REFRESH_MS);
+        } else {
+            const finished = following && live.sawRunning;
+            stopFollowingResult();
+            showTemporaryNotification(finished ? 'Lookup finished - result saved' : 'Saved result loaded', 'success');
+        }
     } catch (error) {
         console.error('Error loading result:', error);
+        if (following) {
+            // a hiccup while following: try again rather than give up
+            live.timer = setTimeout(() => loadResult(resultId, investigationId, true), LIVE_REFRESH_MS * 2);
+            return;
+        }
         showTemporaryNotification('Failed to load saved result', 'error');
     }
 }
+
+// Starting a search of your own on the page stops following the background one
+document.addEventListener(
+    'click',
+    (event) => {
+        if (!live.resultId) return;
+        if (event.target.closest('[data-live-stop]')) return stopFollowingResult();
+        if (event.target.closest('#liveResultBanner')) return;
+        if (
+            event.target.closest(
+                'button.btn-primary, button[id*="search" i], button[onclick*="search" i], button[type="submit"]'
+            )
+        )
+            stopFollowingResult();
+    },
+    true
+);
+document.addEventListener(
+    'keydown',
+    (event) => {
+        if (live.resultId && event.key === 'Enter' && event.target.matches('input, textarea')) stopFollowingResult();
+    },
+    true
+);
 
 function showResultSelector() {
     document.getElementById('resultLoadNotification')?.remove();

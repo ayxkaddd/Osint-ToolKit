@@ -22,6 +22,9 @@ Usage::
   their own id).
 * The response carries ``X-Investigation-Result-ID`` so the client can group
   later follow-ups under this result.
+* While a stream is being recorded, ``live_result()`` returns what has arrived
+  so far (reduced like the saved result), so a lookup running in the background
+  can be opened before it finishes.
 """
 import asyncio
 import dataclasses
@@ -29,6 +32,8 @@ import enum
 import inspect
 import json
 import logging
+import time
+from datetime import datetime
 from functools import wraps
 from typing import Any, Optional, Union
 from collections.abc import Callable
@@ -52,6 +57,11 @@ _SKIP_PARAMS = {"investigation_id", "parent_result_id", "request", "response", "
 _SECRET_PARAM_HINTS = ("password", "token", "secret", "api_key", "auth_key", "apikey")
 # Keys stripped from stored *results* (API credentials echoed back by services)
 _SECRET_RESULT_KEYS = {"api_key", "apikey", "apiKey", "access_token", "auth_token", "psw", "secret"}
+
+# Streams being recorded: (investigation id, result id) -> chunks so far and how to reduce them
+_LIVE: dict[tuple[str, str], dict[str, Any]] = {}
+# A stream whose body never started is never finished: forget it after this long
+_LIVE_MAX_AGE = 6 * 3600
 
 
 def _to_serializable(obj: Any, strip_secrets: bool = False) -> Any:
@@ -155,12 +165,33 @@ def _save(inv_id, service_name, method_name, parameters, stored, result_id, pare
         return None
 
 
-def _tee_stream(response: StreamingResponse, on_complete: Callable[[str, bool], None]) -> None:
-    """Pass every chunk through to the client while keeping a copy for saving."""
+def live_result(investigation_id, result_id: str) -> Optional[dict[str, Any]]:
+    """A result that is still streaming, as a record like a saved one with
+    ``running: True`` and the result reduced from the events so far; None if
+    there is no such stream."""
+    live = _LIVE.get((str(investigation_id), str(result_id)))
+    if live is None:
+        return None
+    text = b"".join(list(live["chunks"])).decode("utf-8", errors="replace")
+    events = parse_stream(text, live["media_type"])
+    if not isinstance(events, list):
+        events = [events]
+    try:
+        result = live["reducer"](events) if live["reducer"] else events
+    except Exception:
+        logger.exception("Could not reduce the stream of %s so far", result_id)
+        result = None
+    return {**live["record"], "result": _to_serializable(result, strip_secrets=True)}
+
+
+def _tee_stream(response: StreamingResponse, on_complete: Callable[[str, bool], None],
+                chunks: Optional[list] = None) -> None:
+    """Pass every chunk through to the client while keeping a copy for saving
+    (in ``chunks`` when given, so live_result can read it meanwhile)."""
     original = response.body_iterator
+    chunks = [] if chunks is None else chunks
 
     async def tee():
-        chunks = []
         completed = False
         try:
             async for chunk in original:
@@ -234,18 +265,34 @@ def save_investigation(
 
             if isinstance(result, StreamingResponse):
                 media_type = result.media_type or result.headers.get("content-type")
+                chunks: list = []
+                live_key = (str(inv_id), result_id)
+                if not parent_id:   # a follow-up is opened through its parent, which is saved
+                    now = time.time()
+                    for key in [k for k, v in _LIVE.items() if now - v["started"] > _LIVE_MAX_AGE]:
+                        _LIVE.pop(key, None)
+                    _LIVE[live_key] = {"chunks": chunks, "media_type": media_type, "reducer": stream_reducer,
+                                       "started": now, "record": {
+                                           "result_id": result_id, "investigation_id": str(inv_id),
+                                           "service_name": service, "method_name": used_method_name,
+                                           "parameters": parameters, "partial": True, "running": True,
+                                           "children": [], "timestamp": datetime.now().isoformat()}}
 
                 def on_complete(text: str, completed: bool):
-                    events = parse_stream(text, media_type)
-                    if not isinstance(events, list):
-                        events = [events]
-                    stored = stream_reducer(events) if stream_reducer else events
-                    if skip_if is not None and skip_if(stored):
-                        return
-                    _save(inv_id, service, used_method_name, parameters, stored,
-                          result_id, parent_id, partial=not completed)
+                    try:
+                        events = parse_stream(text, media_type)
+                        if not isinstance(events, list):
+                            events = [events]
+                        stored = stream_reducer(events) if stream_reducer else events
+                        if skip_if is not None and skip_if(stored):
+                            return
+                        _save(inv_id, service, used_method_name, parameters, stored,
+                              result_id, parent_id, partial=not completed)
+                    finally:
+                        # Saved first, so the result never seems to vanish in between
+                        _LIVE.pop(live_key, None)
 
-                _tee_stream(result, on_complete)
+                _tee_stream(result, on_complete, chunks)
                 result.headers[RESULT_ID_HEADER] = header_id
                 return result, None
 
