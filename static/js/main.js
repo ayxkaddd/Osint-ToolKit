@@ -965,11 +965,29 @@ async function openPivotMenu(type, value, anchor, options = {}) {
               )
               .join('')
         : '<div class="px-3 py-3 text-gray-500">No module looks up this type yet.</div>';
+    const shared = sharedCache.get(`${type}:${value}`) || [];
+    const sharedRows = shared.length
+        ? `<div class="px-3 py-2 border-b border-gray-700 text-xs">
+            <div class="text-gray-500 mb-1"><i class="fas fa-folder-open mr-1 text-amber-300"></i>Also in other investigations</div>
+            <div class="flex flex-wrap gap-1.5">${shared
+                .slice(0, 8)
+                .map(
+                    (p) =>
+                        `<a href="${escapeAttr(`/api/investigations/${encodeURIComponent(p.investigation_id)}/view?identifier=${encodeURIComponent(value)}#identifiers`)}"
+                    class="px-2 py-0.5 rounded bg-amber-900/30 border border-amber-700/50 text-amber-200 hover:border-amber-400"
+                    title="${escapeAttr(`${p.searched ? 'Looked up' : 'Found'} there${p.results ? ` · ${p.results} result${p.results === 1 ? '' : 's'}` : ''}`)}">${escapeHtml(p.name)}</a>`
+                )
+                .join(
+                    ''
+                )}${shared.length > 8 ? `<span class="text-gray-500">+${shared.length - 8} more</span>` : ''}</div>
+        </div>`
+        : '';
     menu.innerHTML = `
     <div class="px-3 py-2.5 border-b border-gray-700">
         <div class="text-[11px] uppercase tracking-wider text-gray-500">${escapeHtml(ENTITY_LABELS[type] || type)}</div>
         <div class="font-mono text-purple-200 break-all">${escapeHtml(value)}</div>
     </div>
+    ${sharedRows}
     <div class="max-h-80 overflow-y-auto custom-scrollbar py-1">${rows}</div>
     <div class="px-3 py-2 border-t border-gray-700 flex justify-between text-xs">
         <button type="button" data-copy="${escapeAttr(value)}" class="text-gray-400 hover:text-white"><i class="fas fa-copy mr-1"></i>Copy</button>
@@ -1012,6 +1030,94 @@ document.addEventListener('click', (event) => {
     if (!event.target.closest('#pivotMenu')) closePivotMenu();
 });
 window.addEventListener('scroll', closePivotMenu, { passive: true });
+
+// ---------------------------------------------------------------------------
+// Identifiers other investigations have too: their pivot chips get a badge with the
+// number of investigations, and the pivot menu links to them. Chips are checked in
+// batches as they appear on the page.
+// ---------------------------------------------------------------------------
+const sharedCache = new Map(); // "type:value" -> [{investigation_id, name, ...}] ([] = nowhere else)
+const sharedPending = new Set();
+let sharedTimer = null;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// Results on this page belong to this investigation (the page's own, or the one recording)
+function sharedExclude() {
+    const id = window.pageInvestigationId || currentInvestigationId;
+    return id && UUID_RE.test(id) ? id : null;
+}
+
+function markSharedChip(chip, places) {
+    if (!places || !places.length || chip.querySelector('.shared-badge')) return;
+    const names = places.map((p) => p.name).join(', ');
+    const badge = `<span class="shared-badge" title="${escapeAttr(`Also in: ${names}`)}"><i class="fas fa-folder-open"></i>${places.length}</span>`;
+    const chevron = chip.querySelector('.fa-chevron-down');
+    if (chevron) chevron.insertAdjacentHTML('beforebegin', badge);
+    else chip.insertAdjacentHTML('beforeend', badge);
+}
+
+function queueSharedChips(root) {
+    const chips =
+        root.matches && root.matches('[data-pivot-type]') ? [root] : root.querySelectorAll('[data-pivot-type]');
+    chips.forEach((chip) => {
+        if (chip.dataset.sharedChecked) return;
+        chip.dataset.sharedChecked = '1';
+        const name = `${chip.dataset.pivotType}:${chip.dataset.pivotValue}`;
+        if (sharedCache.has(name)) markSharedChip(chip, sharedCache.get(name));
+        else sharedPending.add(name);
+    });
+    if (sharedPending.size && !sharedTimer) sharedTimer = setTimeout(flushSharedChips, 250);
+}
+
+async function flushSharedChips() {
+    sharedTimer = null;
+    const names = [...sharedPending].slice(0, 2000);
+    names.forEach((name) => sharedPending.delete(name));
+    if (sharedPending.size) sharedTimer = setTimeout(flushSharedChips, 250);
+    const items = names.map((name) => {
+        const split = name.indexOf(':');
+        return { type: name.slice(0, split), value: name.slice(split + 1) };
+    });
+    try {
+        const response = await fetch('/api/entities/elsewhere', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ items, exclude: sharedExclude() }),
+        });
+        if (!response.ok) return;
+        const { matches } = await response.json();
+        names.forEach((name) => sharedCache.set(name, matches[name] || []));
+        if (!Object.keys(matches).length) return;
+        document.querySelectorAll('[data-pivot-type]').forEach((chip) => {
+            const found = matches[`${chip.dataset.pivotType}:${chip.dataset.pivotValue}`];
+            if (found) markSharedChip(chip, found);
+        });
+    } catch (e) {
+        // the badge is a hint; the page works without it
+    }
+}
+
+// Answers the page already has (the Identifiers tab lists them with each identifier)
+window.primeSharedIdentifiers = (entries) => {
+    entries.forEach(([name, places]) => sharedCache.set(name, places || []));
+};
+
+function recheckSharedChips() {
+    sharedCache.clear();
+    document.querySelectorAll('.shared-badge').forEach((badge) => badge.remove());
+    document.querySelectorAll('[data-shared-checked]').forEach((chip) => delete chip.dataset.sharedChecked);
+    queueSharedChips(document.body);
+}
+document.addEventListener('investigation:changed', recheckSharedChips);
+
+queueSharedChips(document.body);
+new MutationObserver((mutations) => {
+    mutations.forEach((m) =>
+        m.addedNodes.forEach((node) => {
+            if (node.nodeType === 1) queueSharedChips(node);
+        })
+    );
+}).observe(document.body, { childList: true, subtree: true });
 
 // ---------------------------------------------------------------------------
 // Image viewer, on every page. Elements with data-image-view open it on click: the

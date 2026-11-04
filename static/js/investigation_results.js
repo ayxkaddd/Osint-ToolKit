@@ -9,6 +9,8 @@ const openCards = new Set();
 const selectedResults = new Set(); // ticked for bulk delete / move / assessment
 // Notes opened on this page (Ctrl+K) belong to this investigation, recording or not
 window.notesForInvestigation = investigationId;
+// Identifiers on this page are this investigation's: badges count the others (main.js)
+window.pageInvestigationId = investigationId;
 
 const TRIAGE = {
     confirmed: {
@@ -63,16 +65,28 @@ document.addEventListener('DOMContentLoaded', () => {
         .querySelectorAll('[data-tab]')
         .forEach((tab) => tab.addEventListener('click', () => switchTab(tab.dataset.tab)));
     setupEntitiesPanel();
+    setupEventsPanel();
+    setupManualModal();
+    // Links from other investigations' pivot menus: ?identifier=<value>#identifiers
+    const identifier = new URLSearchParams(location.search).get('identifier');
+    if (identifier) {
+        document.getElementById('entitySearchInput').value = identifier;
+        entityState.q = identifier;
+    }
     if (location.hash === '#identifiers') switchTab('entities');
+    else if (location.hash === '#events') switchTab('events');
     window.addEventListener('hashchange', openLinkedResult);
 });
 
 function switchTab(name) {
     document.querySelectorAll('[data-tab]').forEach((t) => t.classList.toggle('active', t.dataset.tab === name));
     document.getElementById('timelinePanel').classList.toggle('hidden', name !== 'timeline');
+    document.getElementById('eventsPanel').classList.toggle('hidden', name !== 'events');
     document.getElementById('entitiesPanel').classList.toggle('hidden', name !== 'entities');
-    history.replaceState(null, '', name === 'entities' ? '#identifiers' : location.pathname);
+    const hash = { entities: '#identifiers', events: '#events' }[name] || '';
+    history.replaceState(null, '', location.pathname + location.search + hash);
     if (name === 'entities' && !entityState.loaded) loadEntities(true);
+    if (name === 'events' && !eventState.loaded) loadEvents();
 }
 
 function debounce(fn, ms) {
@@ -175,6 +189,7 @@ function renderHeader(investigation) {
                         <span><i data-lucide="sticky-note" class="w-3.5 h-3.5 inline mr-1"></i>${escapeHtml(investigation.notes_count || 0)} notes</span>
                         <span><i data-lucide="calendar" class="w-3.5 h-3.5 inline mr-1"></i>Created ${escapeHtml(fmt(investigation.created_at))}</span>
                         <span><i data-lucide="clock" class="w-3.5 h-3.5 inline mr-1"></i>Updated ${escapeHtml(fmt(investigation.updated_at))}</span>
+                        ${sharedStatHtml()}
                     </div>
                 </div>
             </div>
@@ -340,7 +355,7 @@ function renderCard(r) {
                                 ? `<div class="flex flex-wrap gap-1.5 mt-1.5">${children
                                       .map(
                                           (c) =>
-                                              `<span class="text-[11px] px-1.5 py-0.5 rounded bg-gray-800 text-gray-300 border border-gray-700">${escapeHtml(methodLabel(c.method_name))}${c.summary ? ` · ${escapeHtml(c.summary)}` : ''}</span>`
+                                              `<span class="text-[11px] px-1.5 py-0.5 rounded bg-gray-800 text-gray-300 border border-gray-700">${escapeHtml(partTitle(c, c.target))}${c.summary ? ` · ${escapeHtml(c.summary)}` : ''}</span>`
                                       )
                                       .join('')}</div>`
                                 : ''
@@ -378,6 +393,8 @@ function onResultsClick(event) {
             );
     } else if (action === 'note-link' || action === 'note-attach') {
         window.addResultToNote(id, { snapshot: action === 'note-attach' }).then(() => loadResultReferences(id));
+    } else if (action === 'manual-add') {
+        openManualModal(id);
     } else if (action === 'delete-result') {
         deleteResult(id);
     } else if (action === 'move-result') {
@@ -438,6 +455,11 @@ async function expandCard(id, silent = false) {
     if (!silent) card.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 }
 
+// A follow-up's heading: its own title when it was added by hand
+function partTitle(part, title) {
+    return part.service_name === 'manual' && title ? title : methodLabel(part.method_name);
+}
+
 function renderDetail(record) {
     const info = moduleInfo(record.service_name);
     const loadable = info.page && record.service_name !== 'sharetrace';
@@ -451,7 +473,7 @@ function renderDetail(record) {
         <section class="mt-6">
             <div class="flex items-center justify-between mb-3 border-b border-gray-800 pb-2">
                 <h4 class="text-sm font-bold text-purple-300 flex items-center gap-2">
-                    <i data-lucide="corner-down-right" class="w-4 h-4"></i>${escapeHtml(methodLabel(child.method_name))}
+                    <i data-lucide="corner-down-right" class="w-4 h-4"></i>${escapeHtml(partTitle(child, (child.result || {}).title))}
                     ${child.partial ? '<span class="text-[10px] uppercase px-1.5 py-0.5 rounded bg-yellow-900/60 text-yellow-300">partial</span>' : ''}
                 </h4>
                 <span class="text-xs text-gray-500">${escapeHtml(child.timestamp ? new Date(child.timestamp).toLocaleString() : '')}</span>
@@ -471,6 +493,7 @@ function renderDetail(record) {
                     ${openUrl ? `<a href="${escapeAttr(openUrl)}" class="px-2.5 py-1.5 rounded-lg bg-purple-700/80 hover:bg-purple-600 text-white text-xs flex items-center gap-1.5"><i data-lucide="external-link" class="w-3.5 h-3.5"></i>Open in module</a>` : ''}
                     <button type="button" data-action="note-link" title="Add a link to this result to the open note" class="px-2.5 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 text-xs flex items-center gap-1.5"><i data-lucide="link" class="w-3.5 h-3.5"></i>Link in note</button>
                     <button type="button" data-action="note-attach" title="Attach a copy of this result to the open note - it stays there even if the result is deleted" class="px-2.5 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 text-xs flex items-center gap-1.5"><i data-lucide="paperclip" class="w-3.5 h-3.5"></i>Attach to note</button>
+                    <button type="button" data-action="manual-add" title="Add a screenshot, file or text found elsewhere to this result" class="px-2.5 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 text-xs flex items-center gap-1.5"><i data-lucide="upload" class="w-3.5 h-3.5"></i>Add to this</button>
                     <button type="button" data-action="copy-json" class="px-2.5 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 text-xs flex items-center gap-1.5"><i data-lucide="copy" class="w-3.5 h-3.5"></i>Copy JSON</button>
                     <button type="button" data-action="move-result" class="px-2.5 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 text-xs flex items-center gap-1.5"><i data-lucide="folder-input" class="w-3.5 h-3.5"></i>Move</button>
                     <button type="button" data-action="delete-result" class="px-2.5 py-1.5 rounded-lg bg-gray-800 hover:bg-red-900/60 border border-gray-700 hover:border-red-700 text-gray-300 text-xs flex items-center gap-1.5"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i>Delete</button>
@@ -629,6 +652,7 @@ function removeResultsFromView(ids) {
         delete detailCache[id];
     });
     entityState.loaded = false;
+    eventState.loaded = false;
     currentInvestigation.results_count = allResults.length;
     renderHeader(currentInvestigation);
     populateModuleFilterOptions();
@@ -852,8 +876,9 @@ async function submitEditModal(e) {
 }
 
 document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !document.getElementById('editInvestigationModal').classList.contains('hidden'))
-        closeEditModal();
+    if (e.key !== 'Escape') return;
+    if (!document.getElementById('editInvestigationModal').classList.contains('hidden')) closeEditModal();
+    if (!document.getElementById('manualModal').classList.contains('hidden')) closeManualModal();
 });
 document.addEventListener('investigation:changed', () => {
     if (currentInvestigation) renderHeader(currentInvestigation);
@@ -861,7 +886,37 @@ document.addEventListener('investigation:changed', () => {
 
 // ----------------- IDENTIFIERS TAB -----------------
 
-const entityState = { type: '', q: '', status: '', offset: 0, total: 0, loaded: false, pageSize: 200 };
+const entityState = {
+    type: '',
+    q: '',
+    status: '',
+    shared: false,
+    sharedCount: 0,
+    offset: 0,
+    total: 0,
+    loaded: false,
+    pageSize: 200,
+};
+
+// "N identifiers in other investigations" in the header; opens them in the Identifiers tab
+function sharedStatHtml() {
+    const n = entityState.sharedCount;
+    if (!n) return '';
+    return `<button type="button" onclick="showSharedIdentifiers()" class="text-amber-300 hover:text-amber-200" title="Identifiers that other investigations have too">
+        <i data-lucide="folder-open" class="w-3.5 h-3.5 inline mr-1"></i>${n.toLocaleString()} in other investigations</button>`;
+}
+
+function showSharedIdentifiers() {
+    entityState.shared = true;
+    switchTab('entities');
+    loadEntities(true);
+}
+
+function setSharedCount(count) {
+    if (count === entityState.sharedCount) return;
+    entityState.sharedCount = count || 0;
+    if (currentInvestigation) renderHeader(currentInvestigation);
+}
 const entityCache = new Map(); // key -> entity as last rendered
 
 function setupEntitiesPanel() {
@@ -877,6 +932,11 @@ function setupEntitiesPanel() {
         loadEntities(true);
     });
     document.getElementById('entityTypeFacets').addEventListener('click', (e) => {
+        if (e.target.closest('[data-shared-facet]')) {
+            entityState.shared = !entityState.shared;
+            loadEntities(true);
+            return;
+        }
         const facet = e.target.closest('[data-facet]');
         if (!facet) return;
         entityState.type = entityState.type === facet.dataset.facet ? '' : facet.dataset.facet;
@@ -895,6 +955,7 @@ function setupEntitiesPanel() {
         .then((r) => r.json())
         .then((d) => {
             document.getElementById('entitiesCountBadge').textContent = d.total ?? '';
+            setSharedCount(d.shared_count);
         })
         .catch(() => {});
 }
@@ -905,6 +966,7 @@ async function loadEntities(reset) {
     if (entityState.type) params.set('type', entityState.type);
     if (entityState.q) params.set('q', entityState.q);
     if (entityState.status) params.set('status', entityState.status);
+    if (entityState.shared) params.set('shared', '1');
     const list = document.getElementById('entitiesList');
     if (reset) list.innerHTML = '<p class="text-gray-400"><i class="fas fa-spinner fa-spin mr-2"></i>Loading…</p>';
     try {
@@ -913,6 +975,9 @@ async function loadEntities(reset) {
         if (!response.ok) throw new Error(data.detail || `HTTP ${response.status}`);
         entityState.loaded = true;
         entityState.total = data.total;
+        setSharedCount(data.shared_count);
+        // the server already said which of these other investigations have (badges, main.js)
+        window.primeSharedIdentifiers(data.entities.map((e) => [`${e.type}:${e.value}`, e.elsewhere]));
         renderFacets(data.types);
         const rows = data.entities.map(entityRow).join('');
         if (reset) list.innerHTML = rows || '<p class="text-gray-500 text-sm">No identifiers match.</p>';
@@ -938,6 +1003,13 @@ function renderFacets(types) {
                 (t) =>
                     `<button type="button" data-facet="${escapeAttr(t.type)}" class="facet ${entityState.type === t.type ? 'active' : ''}">${escapeHtml(t.label)} <span>${t.count.toLocaleString()}</span></button>`
             )
+        )
+        .concat(
+            entityState.sharedCount || entityState.shared
+                ? [
+                      `<button type="button" data-shared-facet class="facet ${entityState.shared ? 'active' : ''}" title="Identifiers that other investigations have too"><i class="fas fa-folder-open mr-1 text-amber-300"></i>In other investigations <span>${entityState.sharedCount.toLocaleString()}</span></button>`,
+                  ]
+                : []
         )
         .join('');
 }
@@ -995,4 +1067,293 @@ async function saveEntityTriage(key, status) {
     } catch (e) {
         showTemporaryNotification(`Failed to save: ${e.message}`, 'error');
     }
+}
+
+// ----------------- TIMELINE: DATES INSIDE RESULTS -----------------
+
+const eventState = { loaded: false, events: [], shown: 300 };
+
+function setupEventsPanel() {
+    const rerender = () => {
+        eventState.shown = 300;
+        renderEvents();
+    };
+    document.getElementById('eventSearchInput').addEventListener('input', debounce(rerender, 150));
+    document.getElementById('eventModuleSelect').addEventListener('change', rerender);
+    document.getElementById('eventSortSelect').addEventListener('change', rerender);
+    document.getElementById('eventsList').addEventListener('click', (e) => {
+        if (e.target.closest('[data-events-more]')) {
+            eventState.shown += 500;
+            renderEvents();
+            return;
+        }
+        const open = e.target.closest('[data-open-result]');
+        if (!open) return;
+        e.preventDefault();
+        history.replaceState(null, '', `#result-${encodeURIComponent(open.dataset.openResult)}`);
+        openLinkedResult();
+    });
+}
+
+async function loadEvents() {
+    const list = document.getElementById('eventsList');
+    list.innerHTML =
+        '<p class="text-gray-400"><i class="fas fa-spinner fa-spin mr-2"></i>Reading the dates in the results…</p>';
+    try {
+        const response = await fetch(`/api/investigations/${investigationId}/events`);
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.detail || `HTTP ${response.status}`);
+        eventState.events = data.events || [];
+        eventState.loaded = true;
+        document.getElementById('eventsCountBadge').textContent = eventState.events.length || '';
+        const counts = {};
+        eventState.events.forEach((e) => (counts[e.service] = (counts[e.service] || 0) + 1));
+        const select = document.getElementById('eventModuleSelect');
+        const chosen = select.value;
+        select.innerHTML =
+            '<option value="all">All modules</option>' +
+            Object.keys(counts)
+                .sort()
+                .map(
+                    (m) => `<option value="${escapeAttr(m)}">${escapeHtml(moduleInfo(m).name)} (${counts[m]})</option>`
+                )
+                .join('');
+        if (counts[chosen]) select.value = chosen;
+        renderEvents();
+    } catch (e) {
+        list.innerHTML = `<p class="text-red-400 text-sm">Failed to load the timeline: ${escapeHtml(e.message)}</p>`;
+    }
+}
+
+function filteredEvents() {
+    const search = document.getElementById('eventSearchInput').value.toLowerCase().trim();
+    const service = document.getElementById('eventModuleSelect').value;
+    const list = eventState.events.filter((e) => {
+        if (service !== 'all' && e.service !== service) return false;
+        if (!search) return true;
+        return [e.label, e.section, e.context && e.context.value, e.target, moduleInfo(e.service).name, e.date, e.end]
+            .join(' ')
+            .toLowerCase()
+            .includes(search);
+    });
+    if (document.getElementById('eventSortSelect').value === 'oldest')
+        list.sort((a, b) => a.date.localeCompare(b.date) || (a.end || '').localeCompare(b.end || ''));
+    return list;
+}
+
+function renderEvents() {
+    const list = document.getElementById('eventsList');
+    if (!eventState.events.length) {
+        list.innerHTML = `<div class="text-center py-12 bg-[#14151f] border border-[#24283b] rounded-xl">
+            <p class="text-gray-300 font-medium mb-1">No dates found in the results yet</p>
+            <p class="text-gray-500 text-sm max-w-md mx-auto">Lookups that return creation dates, WHOIS records, leaks or messages fill this in.
+                Dates you give when adding something manually are shown here too.</p></div>`;
+        return;
+    }
+    const events = filteredEvents();
+    if (!events.length) {
+        list.innerHTML = '<p class="text-gray-500 text-sm">Nothing matches the filter.</p>';
+        return;
+    }
+    const oldest = document.getElementById('eventSortSelect').value === 'oldest';
+    let lastYear = null;
+    const rows = events.slice(0, eventState.shown).map((e) => {
+        const year = (oldest ? e.date : e.end || e.date).slice(0, 4);
+        const heading =
+            year !== lastYear
+                ? `<h3 class="text-xs font-semibold uppercase tracking-wider text-gray-500 pt-4 pb-1">${escapeHtml(year)}</h3>`
+                : '';
+        lastYear = year;
+        return heading + eventRow(e);
+    });
+    const left = events.length - eventState.shown;
+    list.innerHTML =
+        rows.join('') +
+        (left > 0
+            ? `<div class="text-center mt-4"><button type="button" data-events-more class="text-sm text-purple-300 hover:text-white">Show more (${left.toLocaleString()} left)</button></div>`
+            : '');
+    refreshIcons();
+}
+
+function eventRow(e) {
+    const info = moduleInfo(e.service);
+    const when = e.count
+        ? `${eventDateText(e.date, e.precision === 'time' ? 'day' : e.precision)} – ${eventDateText(e.end, e.end_precision === 'time' ? 'day' : e.end_precision)}`
+        : eventDateText(e.date, e.precision);
+    const upcoming = (e.end || e.date) > new Date().toISOString().slice(0, 19);
+    const what = e.count
+        ? `<span><b class="text-white">${e.count.toLocaleString()}</b> dates · ${escapeHtml(e.section ? `${e.section} · ${e.label}` : e.label)}</span>`
+        : e.manual
+          ? `<span class="text-white">${escapeHtml(e.label)}</span>`
+          : `<span>${escapeHtml(e.label)}${e.section ? ` <span class="text-gray-500">in ${escapeHtml(e.section)}</span>` : ''}</span>`;
+    return `
+        <div class="flex items-start gap-3 bg-[#14151f] border border-[#24283b] rounded-lg px-3 py-2">
+            <div class="w-56 shrink-0 text-xs text-gray-300 font-mono pt-0.5">${escapeHtml(when)}</div>
+            <div class="min-w-0 flex-1">
+                <div class="text-sm text-gray-300 flex flex-wrap items-center gap-2">
+                    ${e.context ? pivotField(e.context.key, e.context.value) : ''}${what}
+                    ${e.count ? '<span class="text-[10px] uppercase px-1.5 py-0.5 rounded bg-gray-800 text-gray-400 border border-gray-700" title="Many dates from one list, shown as their first and last">series</span>' : ''}
+                    ${upcoming ? '<span class="text-[10px] uppercase px-1.5 py-0.5 rounded bg-blue-950/80 text-blue-300 border border-blue-800/60">upcoming</span>' : ''}
+                </div>
+                <div class="text-[11px] text-gray-500 mt-0.5 truncate">${escapeHtml(info.name)}${e.method ? ` · ${escapeHtml(methodLabel(e.method))}` : ''}${e.target && e.target !== e.label ? ` · ${escapeHtml(e.target)}` : ''}</div>
+            </div>
+            <a href="#result-${encodeURIComponent(e.result_id)}" data-open-result="${escapeAttr(e.result_id)}" class="text-xs text-purple-300 hover:text-white shrink-0 pt-0.5">Open result</a>
+        </div>`;
+}
+
+// ----------------- ADD MANUALLY -----------------
+
+const MANUAL_FILES_MAX = 20;
+const MANUAL_FILE_MAX_BYTES = 50 * 1024 * 1024;
+let manualParent = null; // result id when adding to an existing result
+let manualFiles = [];
+
+function setupManualModal() {
+    const input = document.getElementById('manualFiles');
+    input.addEventListener('change', () => {
+        addManualFiles([...input.files]);
+        input.value = '';
+    });
+    const drop = document.getElementById('manualDrop');
+    drop.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        drop.classList.add('border-purple-500');
+    });
+    drop.addEventListener('dragleave', () => drop.classList.remove('border-purple-500'));
+    drop.addEventListener('drop', (e) => {
+        e.preventDefault();
+        drop.classList.remove('border-purple-500');
+        addManualFiles([...e.dataTransfer.files]);
+    });
+    // A screenshot pasted anywhere in the form becomes a file; pasted text goes to the field as usual
+    document.getElementById('manualModal').addEventListener('paste', (e) => {
+        const files = [...((e.clipboardData && e.clipboardData.files) || [])];
+        if (!files.length) return;
+        e.preventDefault();
+        const stamp = new Date().toLocaleString().replace(/[/:]/g, '-');
+        addManualFiles(
+            files.map((f, i) =>
+                f.name && f.name !== 'image.png'
+                    ? f
+                    : new File([f], `Screenshot ${stamp}${files.length > 1 ? ` (${i + 1})` : ''}.png`, { type: f.type })
+            )
+        );
+    });
+    document.getElementById('manualFileList').addEventListener('click', (e) => {
+        const remove = e.target.closest('[data-remove-file]');
+        if (!remove) return;
+        manualFiles.splice(Number(remove.dataset.removeFile), 1);
+        renderManualFiles();
+    });
+}
+
+function addManualFiles(files) {
+    for (const file of files) {
+        if (manualFiles.length >= MANUAL_FILES_MAX) {
+            showTemporaryNotification(`At most ${MANUAL_FILES_MAX} files at once`, 'error');
+            break;
+        }
+        if (file.size > MANUAL_FILE_MAX_BYTES) {
+            showTemporaryNotification(`${file.name} is too large (max 50 MB)`, 'error');
+            continue;
+        }
+        manualFiles.push(file);
+    }
+    renderManualFiles();
+}
+
+function renderManualFiles() {
+    document.getElementById('manualFileList').innerHTML = manualFiles
+        .map(
+            (f, i) => `
+        <div class="flex items-center gap-2 bg-gray-950 border border-gray-800 rounded-lg px-3 py-1.5 text-sm">
+            <i class="fas ${f.type.startsWith('image/') ? 'fa-image' : 'fa-file'} text-purple-300"></i>
+            <span class="truncate flex-1 text-gray-200" title="${escapeAttr(f.name)}">${escapeHtml(f.name)}</span>
+            <span class="text-xs text-gray-500 shrink-0">${escapeHtml(fileSize(f.size))}</span>
+            <button type="button" data-remove-file="${i}" class="text-gray-500 hover:text-red-300" title="Remove"><i class="fas fa-times"></i></button>
+        </div>`
+        )
+        .join('');
+}
+
+function openManualModal(parentId = null) {
+    manualParent = parentId;
+    manualFiles = [];
+    ['manualTitle', 'manualSource', 'manualDate', 'manualUrl', 'manualText', 'manualIdentifiers'].forEach((id) => {
+        document.getElementById(id).value = '';
+    });
+    const parent = parentId && allResults.find((r) => r.result_id === parentId);
+    document.getElementById('manualModalTitle').textContent = parent
+        ? `Add to ${moduleInfo(parent.service_name).name}${parent.target ? ` · ${parent.target}` : ''}`
+        : 'Add manually';
+    renderManualFiles();
+    const modal = document.getElementById('manualModal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    requestAnimationFrame(() => modal.classList.add('modal-open'));
+    refreshIcons();
+    // unless a field was already clicked
+    setTimeout(() => {
+        if (!modal.contains(document.activeElement)) document.getElementById('manualTitle').focus();
+    }, 50);
+}
+
+function closeManualModal() {
+    const modal = document.getElementById('manualModal');
+    modal.classList.remove('modal-open');
+    setTimeout(() => {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    }, 150);
+}
+
+async function submitManualModal(event) {
+    event.preventDefault();
+    const form = new FormData();
+    const fields = {
+        title: 'manualTitle',
+        source: 'manualSource',
+        date: 'manualDate',
+        url: 'manualUrl',
+        text: 'manualText',
+        identifiers: 'manualIdentifiers',
+    };
+    Object.entries(fields).forEach(([name, id]) => form.append(name, document.getElementById(id).value));
+    if (manualParent) form.append('parent_result_id', manualParent);
+    manualFiles.forEach((f) => form.append('files', f, f.name));
+    const button = document.getElementById('manualSubmit');
+    button.disabled = true;
+    button.textContent = manualFiles.length ? 'Uploading…' : 'Saving…';
+    try {
+        const response = await fetch(`/api/investigations/${investigationId}/manual`, { method: 'POST', body: form });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(typeof data.detail === 'string' ? data.detail : `HTTP ${response.status}`);
+        closeManualModal();
+        delete detailCache[data.result_id];
+        entityState.loaded = false;
+        eventState.loaded = false;
+        await reloadResults();
+        const skipped = data.skipped || [];
+        showTemporaryNotification(
+            skipped.length ? `Saved. Not recognised as identifiers: ${skipped.join(', ')}` : 'Saved',
+            skipped.length ? 'error' : 'success'
+        );
+        history.replaceState(null, '', `#result-${encodeURIComponent(data.result_id)}`);
+        openLinkedResult();
+    } catch (e) {
+        showTemporaryNotification(`Failed to save: ${e.message}`, 'error');
+    } finally {
+        button.disabled = false;
+        button.textContent = 'Save';
+    }
+}
+
+async function reloadResults() {
+    const response = await fetch(`/api/investigations/${investigationId}/results`);
+    if (!response.ok) return;
+    allResults = (await response.json()).results || [];
+    currentInvestigation.results_count = allResults.length;
+    renderHeader(currentInvestigation);
+    populateModuleFilterOptions();
+    renderResults();
 }

@@ -7,12 +7,23 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 from starlette.datastructures import UploadFile as FormUpload
-from services.investigation_service import NOTE_IMAGE_MAX_UPLOAD, investigation_service
+from services.investigation_service import (
+    MANUAL_FILE_MAX_UPLOAD, MANUAL_FILES_MAX, MANUAL_TEXT_MAX, NOTE_IMAGE_MAX_UPLOAD, investigation_service,
+)
 
 router = APIRouter(prefix="/api/investigations")
 templates = Jinja2Templates(directory="templates")
 
 VALID_STATUSES = {"active", "completed", "archived"}
+
+# One "add manually" request: several files together
+MANUAL_UPLOAD_MAX = 200 * 1024 * 1024
+# Files added by hand that the browser may show; anything else is only downloaded
+INLINE_FILE_TYPES = {
+    "png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "gif": "image/gif", "webp": "image/webp",
+    "bmp": "image/bmp", "pdf": "application/pdf",
+    **{ext: "text/plain; charset=utf-8" for ext in ("txt", "csv", "tsv", "log", "md", "json")},
+}
 
 
 class NoteCreate(BaseModel):
@@ -410,6 +421,52 @@ def get_note_image(investigation_id: UUID, name: str):
         "Cache-Control": "private, max-age=31536000, immutable",
         "X-Content-Type-Options": "nosniff",
     })
+
+
+@router.post("/{investigation_id}/manual", status_code=201)
+async def add_manual_result(investigation_id: UUID, request: Request) -> JSONResponse:
+    """Save data found outside the toolkit: text, identifiers, a link, a date and files.
+    With ``parent_result_id`` it is grouped under that result."""
+    _require_investigation(investigation_id)
+    if int(request.headers.get("content-length") or 0) > MANUAL_UPLOAD_MAX + 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Too much at once (max 200 MB) - add the files in several steps")
+    form = await request.form(max_files=MANUAL_FILES_MAX + 1, max_fields=20, max_part_size=MANUAL_TEXT_MAX + 64 * 1024)
+    fields = {key: form.get(key) if isinstance(form.get(key), str) else ""
+              for key in ("title", "source", "url", "date", "text", "identifiers", "parent_result_id")}
+    files = []
+    for upload in form.getlist("files"):
+        if not isinstance(upload, FormUpload) or not upload.filename:
+            continue   # the browser sends an empty part when no file was chosen
+        data = await upload.read(MANUAL_FILE_MAX_UPLOAD + 1)
+        if len(data) > MANUAL_FILE_MAX_UPLOAD:
+            raise HTTPException(status_code=413, detail=f"{upload.filename} is too large (max 50 MB)")
+        files.append((upload.filename, data))
+    parent = fields.pop("parent_result_id") or None
+    try:
+        saved = await run_in_threadpool(investigation_service.add_manual_result, investigation_id,
+                                        files=files, parent_result_id=parent, **fields)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    return JSONResponse(content={"status": "success", **saved}, status_code=201)
+
+
+@router.get("/{investigation_id}/files/{name}")
+def get_manual_file(investigation_id: UUID, name: str, download: bool = False, filename: str = ""):
+    """A file added by hand. Images, PDFs and plain text open in the browser; the rest
+    (and anything with ``download=1``) is downloaded under ``filename``."""
+    path = investigation_service.get_file_path(investigation_id, name)
+    if path is None:
+        raise HTTPException(status_code=404, detail="File not found")
+    media_type = INLINE_FILE_TYPES.get(name.rsplit(".", 1)[-1])
+    headers = {"Cache-Control": "private, max-age=31536000, immutable", "X-Content-Type-Options": "nosniff"}
+    if media_type != "application/pdf":
+        # Chrome won't show PDFs in a sandbox; everything else gets no scripts or plugins
+        headers["Content-Security-Policy"] = "sandbox; default-src 'none'; img-src 'self'; style-src 'unsafe-inline'"
+    if download or media_type is None:
+        clean = "".join(c for c in filename if c.isprintable() and c not in '\\/"').strip()[:200]
+        return FileResponse(path, media_type="application/octet-stream", headers=headers,
+                            filename=clean or name, content_disposition_type="attachment")
+    return FileResponse(path, media_type=media_type, headers=headers, content_disposition_type="inline")
 
 
 @router.get("/{investigation_id}/notes/view", response_class=HTMLResponse)
