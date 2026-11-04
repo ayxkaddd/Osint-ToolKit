@@ -59,6 +59,8 @@ pip install -r requirements.txt
 uvicorn main:app
 ```
 
+Behind a reverse proxy (nginx, Caddy) that adds the client address to `X-Forwarded-For`, set `TRUST_PROXY_HEADERS=true` in `.env` so the login limit counts each client separately. If the proxy runs on another machine, also start uvicorn with `--forwarded-allow-ips <proxy address>`.
+
 5. The setup wizard opens on first start: create the admin login, pick the modules you want and add API keys. Everything can be changed later on the Settings page (it writes `.env` - see `.env.example` for all keys).
 
 The CSS is prebuilt (`static/css/tailwind.css`). After changing templates, rebuild it with `npm install && npm run build:css`.
