@@ -14,7 +14,7 @@ import json
 import re
 import shlex
 import shutil
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 from urllib.parse import parse_qsl, urlsplit, urlunsplit
 
 import yaml
@@ -46,8 +46,8 @@ class DraftError(Exception):
 # Drafts
 # ---------------------------------------------------------------------------
 
-def draft_plugin(plugin_id: str, manifest: Dict[str, Any],
-                 settings: Optional[Dict[str, Optional[str]]] = None) -> pl.Plugin:
+def draft_plugin(plugin_id: str, manifest: dict[str, Any],
+                 settings: Optional[dict[str, Optional[str]]] = None) -> pl.Plugin:
     """A Plugin object for a manifest from the builder (not written anywhere)."""
     plugin_id = (plugin_id or "").strip()
     if not pl.ID_RE.match(plugin_id):
@@ -65,7 +65,7 @@ def draft_plugin(plugin_id: str, manifest: Dict[str, Any],
     return plugin
 
 
-def to_yaml(manifest: Dict[str, Any]) -> str:
+def to_yaml(manifest: dict[str, Any]) -> str:
     """plugin.yaml text, fields in the README's order, empty parts left out."""
     order = ["name", "description", "icon", "site", "placeholder", "accepts", "cost", "cost_note", "speed",
              "concurrency", "timeout", "settings", "request", "request_by_type", "response", "requests"]
@@ -88,8 +88,8 @@ def _strip_empty(value: Any) -> Any:
     return value
 
 
-async def test_draft(plugin_id: str, manifest: Dict[str, Any], value: str, kind: Optional[str],
-                     settings: Dict[str, Optional[str]], detect_mapping: bool) -> Dict[str, Any]:
+async def test_draft(plugin_id: str, manifest: dict[str, Any], value: str, kind: Optional[str],
+                     settings: dict[str, Optional[str]], detect_mapping: bool) -> dict[str, Any]:
     """Send the draft's request. Returns {status, ok, format, raw, items, suggestion, error}."""
     plugin = draft_plugin(plugin_id, manifest, settings)
     assert plugin.manifest is not None
@@ -109,7 +109,7 @@ async def test_draft(plugin_id: str, manifest: Dict[str, Any], value: str, kind:
     except PluginError as e:
         raise DraftError(pl.redact(str(e), secrets)) from None
 
-    out: Dict[str, Any] = {"status": response.status_code, "url": pl.redact(str(response.request.url), secrets),
+    out: dict[str, Any] = {"status": response.status_code, "url": pl.redact(str(response.request.url), secrets),
                            "content_type": response.headers.get("content-type", ""), "value": value, "type": kind}
     fmt = action.response.format
     try:
@@ -136,14 +136,14 @@ async def test_draft(plugin_id: str, manifest: Dict[str, Any], value: str, kind:
     return out
 
 
-def preview(plugin_id: str, manifest: Dict[str, Any], raw: Any, value: str, kind: str) -> List[Dict[str, Any]]:
+def preview(plugin_id: str, manifest: dict[str, Any], raw: Any, value: str, kind: str) -> list[dict[str, Any]]:
     """Cards for a mapping, from an answer already fetched (no request)."""
     plugin = draft_plugin(plugin_id, manifest)
     return pl.build_items(plugin, raw, value or "", kind or "")
 
 
-def save_draft(plugin_id: str, manifest: Optional[Dict[str, Any]], yaml_text: Optional[str],
-               settings: Dict[str, Optional[str]], editing: bool) -> pl.Plugin:
+def save_draft(plugin_id: str, manifest: Optional[dict[str, Any]], yaml_text: Optional[str],
+               settings: dict[str, Optional[str]], editing: bool) -> pl.Plugin:
     """Write plugins/<id>/plugin.yaml (from the form, or YAML typed in the builder)."""
     if yaml_text is not None:
         try:
@@ -171,7 +171,7 @@ def save_draft(plugin_id: str, manifest: Optional[Dict[str, Any]], yaml_text: Op
     folder.mkdir(parents=True, exist_ok=True)
     (folder / "plugin.yaml").write_text(text, encoding="utf-8")
     pl.write_trust(plugin.id, "local")
-    own: Dict[str, Optional[str]] = {k: v.strip() for k, v in (settings or {}).items()
+    own: dict[str, Optional[str]] = {k: v.strip() for k, v in (settings or {}).items()
            if v and v.strip() and k in manifest.get("settings", {}) and k.startswith(plugin.id.upper() + "_")}
     if own:
         try:
@@ -199,7 +199,7 @@ def delete_plugin(plugin: pl.Plugin) -> None:
     pl.refresh(force=True)
 
 
-def load_for_builder(plugin: pl.Plugin) -> Dict[str, Any]:
+def load_for_builder(plugin: pl.Plugin) -> dict[str, Any]:
     """An existing plugin's manifest for the builder (edit, or duplicate)."""
     try:
         text = (plugin.path / "plugin.yaml").read_text(encoding="utf-8")
@@ -214,11 +214,14 @@ def load_for_builder(plugin: pl.Plugin) -> Dict[str, Any]:
 # curl import
 # ---------------------------------------------------------------------------
 
-def parse_curl(command: str, example: str = "") -> Dict[str, Any]:
-    """A curl command (as copied from API docs or the browser) -> request parts.
+_CURL_SKIP_WITH_VALUE = {"-o", "--output", "-m", "--max-time", "--connect-timeout", "-A", "--user-agent", "-e",
+                         "--referer", "-b", "--cookie", "-x", "--proxy", "-w", "--write-out", "--retry"}
+_CURL_DATA_FLAGS = ("-d", "--data", "--data-raw", "--data-binary", "--data-ascii", "--data-urlencode")
+_DROPPED_HEADERS = ("content-type", "content-length", "accept-encoding", "user-agent", "cookie", "host", "connection")
+_VALUE_TYPES = ("email", "phone", "domain", "ip", "url", "crypto_btc", "crypto_eth")
 
-    The API key moves into a setting ({key:API_KEY} - the builder names it), and the
-    looked-up value (``example``, or an email/phone/domain/IP it finds) becomes {value}."""
+
+def _curl_tokens(command: str) -> list[str]:
     text = re.sub(r"\\\r?\n", " ", command or "").strip()
     try:
         tokens = shlex.split(text)
@@ -226,37 +229,77 @@ def parse_curl(command: str, example: str = "") -> Dict[str, Any]:
         raise DraftError(f"Couldn't read that example ({e}) - paste the whole command, starting with curl") from None
     if tokens and tokens[0].lower() in ("curl", "curl.exe"):
         tokens = tokens[1:]
+    return tokens
+
+
+def _read_curl_options(tokens: list[str]) -> tuple[Optional[str], Optional[str], dict[str, str], Optional[str], bool]:
+    """(method, url, headers, body, body is JSON) from curl's arguments."""
     method, url, headers, data, is_json = None, None, {}, None, False
-    takes_value = {"-o", "--output", "-m", "--max-time", "--connect-timeout", "-A", "--user-agent", "-e", "--referer",
-                   "-b", "--cookie", "-x", "--proxy", "-w", "--write-out", "--retry"}
     i = 0
     while i < len(tokens):
         token = tokens[i]
         nxt = tokens[i + 1] if i + 1 < len(tokens) else None
+        step = 2
         if token in ("-X", "--request") and nxt:
-            method = nxt.upper(); i += 2; continue
-        if token in ("-H", "--header") and nxt:
+            method = nxt.upper()
+        elif token in ("-H", "--header") and nxt:
             name, _, val = nxt.partition(":")
             if name.strip():
                 headers[name.strip()] = val.strip()
-            i += 2; continue
-        if token in ("-d", "--data", "--data-raw", "--data-binary", "--data-ascii", "--data-urlencode") and nxt:
-            data = nxt if data is None else f"{data}&{nxt}"; i += 2; continue
-        if token == "--json" and nxt:
-            data, is_json = nxt, True; i += 2; continue
-        if token in ("-u", "--user") and nxt:
-            headers["Authorization"] = "Basic " + base64.b64encode(nxt.encode()).decode(); i += 2; continue
-        if token in ("-A", "--user-agent") and nxt:
-            headers["User-Agent"] = nxt; i += 2; continue
-        if token in ("--url",) and nxt:
-            url = nxt; i += 2; continue
-        if token in takes_value:
-            i += 2; continue
-        if token.startswith("-"):
-            i += 1; continue
-        if url is None:
-            url = token
-        i += 1
+        elif token in _CURL_DATA_FLAGS and nxt:
+            data = nxt if data is None else f"{data}&{nxt}"
+        elif token == "--json" and nxt:
+            data, is_json = nxt, True
+        elif token in ("-u", "--user") and nxt:
+            headers["Authorization"] = "Basic " + base64.b64encode(nxt.encode()).decode()
+        elif token in ("-A", "--user-agent") and nxt:
+            headers["User-Agent"] = nxt
+        elif token == "--url" and nxt:
+            url = nxt
+        elif token in _CURL_SKIP_WITH_VALUE:
+            pass
+        else:
+            step = 1
+            if not token.startswith("-") and url is None:
+                url = token
+        i += step
+    return method, url, headers, data, is_json
+
+
+def _split_body(data: Optional[str], is_json: bool) -> tuple[Any, dict[str, str]]:
+    """(JSON body, form fields) from curl's data."""
+    if data is None:
+        return None, {}
+    stripped = data.strip()
+    if is_json or stripped.startswith(("{", "[")):
+        try:
+            return json.loads(stripped), {}
+        except json.JSONDecodeError:
+            pass
+    return None, dict(parse_qsl(stripped, keep_blank_values=True))
+
+
+def _find_example_value(example: str, candidates: list[str], hostname: str) -> Optional[tuple[str, str]]:
+    """(value, type) of what the example looks up: the given example, or the first
+    email/phone/domain/... in the request that isn't the API's own host."""
+    if example:
+        found = detect(example)
+        return example, (found[0].type if found else "text")
+    for candidate in candidates:
+        if "{key:" in candidate:
+            continue
+        for entity in detect(candidate):
+            if entity.type in _VALUE_TYPES and candidate.strip() not in hostname:
+                return candidate, entity.type
+    return None
+
+
+def parse_curl(command: str, example: str = "") -> dict[str, Any]:
+    """A curl command (as copied from API docs or the browser) -> request parts.
+
+    The API key moves into a setting ({key:API_KEY} - the builder names it), and the
+    looked-up value (``example``, or an email/phone/domain/IP it finds) becomes {value}."""
+    method, url, headers, data, is_json = _read_curl_options(_curl_tokens(command))
     if not url:
         raise DraftError("No web address found - paste the whole example, starting with curl")
     if not re.match(r"^https?://", url, re.I):
@@ -264,21 +307,11 @@ def parse_curl(command: str, example: str = "") -> Dict[str, Any]:
     parts = urlsplit(url)
     query = dict(parse_qsl(parts.query, keep_blank_values=True))
     base_url = urlunsplit((parts.scheme, parts.netloc, parts.path or "/", "", ""))
-    json_body, form = None, {}
-    if data is not None:
-        stripped = data.strip()
-        if is_json or stripped.startswith(("{", "[")):
-            try:
-                json_body = json.loads(stripped)
-            except json.JSONDecodeError:
-                form = dict(parse_qsl(stripped, keep_blank_values=True))
-        else:
-            form = dict(parse_qsl(stripped, keep_blank_values=True))
+    json_body, form = _split_body(data, is_json)
     method = method or ("POST" if data is not None else "GET")
     if method not in ("GET", "POST"):
         raise DraftError(f"This example uses {method}, which plugins can't do - only GET and POST (searching)")
-    headers = {k: v for k, v in headers.items() if k.lower() not in ("content-type", "content-length", "accept-encoding",
-                                                                   "user-agent", "cookie", "host", "connection")}
+    headers = {k: v for k, v in headers.items() if k.lower() not in _DROPPED_HEADERS}
 
     # API key -> setting
     secret_value = None
@@ -303,25 +336,11 @@ def parse_curl(command: str, example: str = "") -> Dict[str, Any]:
         json_body = {k: take_secret(k, v) for k, v in json_body.items()}
 
     # looked-up value -> {value}
-    found: Optional[Tuple[str, str]] = None
-    example = (example or "").strip()
-    candidates: List[str] = [v for v in list(query.values()) + list(form.values()) if isinstance(v, str)]
+    candidates: list[str] = [v for v in list(query.values()) + list(form.values()) if isinstance(v, str)]
     candidates += [seg for seg in parts.path.split("/") if seg]
     if isinstance(json_body, dict):
         candidates += [v for v in json_body.values() if isinstance(v, str)]
-    if example:
-        found = (example, (detect(example)[0].type if detect(example) else "text"))
-    else:
-        for candidate in candidates:
-            if "{key:" in candidate:
-                continue
-            for entity in detect(candidate):
-                if entity.type in ("email", "phone", "domain", "ip", "url", "crypto_btc", "crypto_eth") \
-                        and candidate.strip() not in (parts.hostname or ""):
-                    found = (candidate, entity.type)
-                    break
-            if found:
-                break
+    found = _find_example_value((example or "").strip(), candidates, parts.hostname or "")
 
     def put_value(val: Any) -> Any:
         if found and isinstance(val, str) and found[0] in val:
@@ -352,7 +371,7 @@ def parse_curl(command: str, example: str = "") -> Dict[str, Any]:
 # Response auto-detection
 # ---------------------------------------------------------------------------
 
-def _lists_of_objects(data: Any, path: str = "", depth: int = 0) -> List[Tuple[str, int, int]]:
+def _lists_of_objects(data: Any, path: str = "", depth: int = 0) -> list[tuple[str, int, int]]:
     """(path, length, depth) of every list of objects in the answer."""
     found = []
     if depth > 5:
@@ -367,9 +386,9 @@ def _lists_of_objects(data: Any, path: str = "", depth: int = 0) -> List[Tuple[s
     return found
 
 
-def _flatten(element: Any, prefix: str = "", depth: int = 0) -> Dict[str, Any]:
+def _flatten(element: Any, prefix: str = "", depth: int = 0) -> dict[str, Any]:
     """Paths of the simple values in one result: {"owner.login": "x", "tags": [...], "sources[].uri": [...]}."""
-    out: Dict[str, Any] = {}
+    out: dict[str, Any] = {}
     if not isinstance(element, dict) or depth > 2:
         return out
     for key, value in element.items():
@@ -408,7 +427,7 @@ def _is_api_url(value: Any) -> bool:
     return host.startswith("api.") or "/api/" in value or "{" in value
 
 
-def suggest_mapping(data: Any, fmt: str = "json") -> Dict[str, Any]:
+def suggest_mapping(data: Any, fmt: str = "json") -> dict[str, Any]:
     """A response: mapping for an answer: where the results are, title, link, picture,
     the rows to show and the identifiers in them."""
     if fmt == "text":
@@ -417,7 +436,7 @@ def suggest_mapping(data: Any, fmt: str = "json") -> Dict[str, Any]:
                 "entities": {t: "." for t in _guess_types(lines, domains=all(make_entity("domain", x) for x in lines))}}
     lists = _lists_of_objects(data)
     items_path: Optional[str] = None
-    elements: List[Any]
+    elements: list[Any]
     if lists:
         # the longest list, nearer the top on a tie
         items_path = sorted(lists, key=lambda x: (-x[1], x[2]))[0][0]
@@ -432,7 +451,7 @@ def suggest_mapping(data: Any, fmt: str = "json") -> Dict[str, Any]:
         if len(top_values) >= 5:
             items_path, elements = None, [data]
 
-    flat: Dict[str, Any] = {}
+    flat: dict[str, Any] = {}
     for element in elements:
         for path, val in _flatten(element).items():
             if path not in flat or flat[path] in (None, "", []):
@@ -465,7 +484,7 @@ def suggest_mapping(data: Any, fmt: str = "json") -> Dict[str, Any]:
                  and not _is_api_url(v)), None)
 
     skip = {title, image, url}
-    fields: Dict[str, str] = {}
+    fields: dict[str, str] = {}
     for path, val in present.items():
         if path in skip or len(fields) >= MAX_FIELDS:
             continue
@@ -482,7 +501,7 @@ def suggest_mapping(data: Any, fmt: str = "json") -> Dict[str, Any]:
         template = f"{{{path}|date}}" if isinstance(val, str) and re.match(r"^\d{4}-\d\d-\d\dT", val) else path
         fields[label] = template
 
-    entities: Dict[str, List[str]] = {}
+    entities: dict[str, list[str]] = {}
     for path, val in present.items():
         values = val if isinstance(val, list) else [val]
         values = [v for v in values if isinstance(v, (str, int)) and not _is_api_url(v)][:10]
@@ -496,7 +515,7 @@ def suggest_mapping(data: Any, fmt: str = "json") -> Dict[str, Any]:
             continue
         for guess in _guess_types(values, domains=bool(DOMAIN_KEY_RE.search(path.split(".")[-1]))):
             entities.setdefault(guess, []).append(path)
-    mapping: Dict[str, Any] = {"format": "json"}
+    mapping: dict[str, Any] = {"format": "json"}
     if items_path:
         mapping["items"] = items_path
     for key, val in (("title", title), ("subtitle", subtitle), ("url", url), ("image", image)):
@@ -507,7 +526,7 @@ def suggest_mapping(data: Any, fmt: str = "json") -> Dict[str, Any]:
     return mapping
 
 
-def _guess_types(values: List[Any], domains: bool = False) -> List[str]:
+def _guess_types(values: list[Any], domains: bool = False) -> list[str]:
     """Identifier types that unambiguous values are (emails, URLs, IPs, phones with +;
     domains only where the key says so - "Jane.Doe" would pass as one)."""
     types = []

@@ -1,5 +1,5 @@
 # routes/investigation_routes.py
-from typing import List, Literal, Optional
+from typing import Literal, Optional
 from uuid import UUID
 from fastapi import APIRouter, HTTPException, Query, Form, File, UploadFile, Request
 from fastapi.responses import FileResponse, JSONResponse, HTMLResponse
@@ -7,10 +7,9 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 from starlette.datastructures import UploadFile as FormUpload
-from services.investigation_service import InvestigationService, NOTE_IMAGE_MAX_UPLOAD
+from services.investigation_service import NOTE_IMAGE_MAX_UPLOAD, investigation_service
 
 router = APIRouter(prefix="/api/investigations")
-investigation_service = InvestigationService()
 templates = Jinja2Templates(directory="templates")
 
 VALID_STATUSES = {"active", "completed", "archived"}
@@ -21,7 +20,7 @@ class NoteCreate(BaseModel):
     content: str
     note_type: str = "manual"
     related_result_id: Optional[str] = None
-    tags: Optional[List[str]] = None
+    tags: Optional[list[str]] = None
 
 
 class SnapshotCreate(BaseModel):
@@ -30,7 +29,7 @@ class SnapshotCreate(BaseModel):
 
 class BulkResultsRequest(BaseModel):
     action: Literal["delete", "move", "triage"]
-    result_ids: List[str] = Field(min_length=1)
+    result_ids: list[str] = Field(min_length=1)
     target_investigation_id: Optional[UUID] = None
     status: Optional[str] = None
 
@@ -38,7 +37,7 @@ class BulkResultsRequest(BaseModel):
 class NoteUpdate(BaseModel):
     title: Optional[str] = None
     content: Optional[str] = None
-    tags: Optional[List[str]] = None
+    tags: Optional[list[str]] = None
 
 
 def _require_investigation(investigation_id: UUID) -> dict:
@@ -93,7 +92,7 @@ async def create_investigation(
 
 
 @router.post("/set")
-async def set_current_investigation(investigation_id: UUID = Form(...)) -> JSONResponse:
+def set_current_investigation(investigation_id: UUID = Form(...)) -> JSONResponse:
     """Set the current active investigation"""
     if not investigation_service.set_current_investigation(investigation_id):
         raise HTTPException(status_code=404, detail=f"Investigation with ID {investigation_id} not found")
@@ -105,7 +104,7 @@ async def set_current_investigation(investigation_id: UUID = Form(...)) -> JSONR
 
 
 @router.get("/current")
-async def get_current_investigation() -> JSONResponse:
+def get_current_investigation() -> JSONResponse:
     """Get the current active investigation with details"""
     current_id = investigation_service.get_current_investigation()
     return JSONResponse(content={
@@ -116,7 +115,7 @@ async def get_current_investigation() -> JSONResponse:
 
 
 @router.delete("/clear")
-async def clear_investigation() -> JSONResponse:
+def clear_investigation() -> JSONResponse:
     """Clear the current investigation"""
     if not investigation_service.clear_investigation():
         raise HTTPException(status_code=500, detail="Failed to clear investigation")
@@ -124,7 +123,7 @@ async def clear_investigation() -> JSONResponse:
 
 
 @router.get("/")
-async def list_all_investigations() -> JSONResponse:
+def list_all_investigations() -> JSONResponse:
     """List all investigations"""
     investigations = investigation_service.list_all_investigations()
     return JSONResponse(content={
@@ -135,7 +134,7 @@ async def list_all_investigations() -> JSONResponse:
 
 
 @router.get("/results/legacy")
-async def list_module_history(
+def list_module_history(
     service_name: Optional[str] = Query(None, description="Filter by service name"),
     method_name: Optional[str] = Query(None, description="Filter by method name"),
     limit: int = Query(50, ge=1, le=500)
@@ -157,7 +156,7 @@ async def list_module_history(
 
 
 @router.get("/{investigation_id}")
-async def get_investigation(investigation_id: UUID) -> JSONResponse:
+def get_investigation(investigation_id: UUID) -> JSONResponse:
     """Investigation info + result summaries"""
     result = investigation_service.get_investigation_result(investigation_id)
     if result is None:
@@ -166,7 +165,7 @@ async def get_investigation(investigation_id: UUID) -> JSONResponse:
 
 
 @router.get("/{investigation_id}/info")
-async def get_investigation_info(investigation_id: UUID) -> JSONResponse:
+def get_investigation_info(investigation_id: UUID) -> JSONResponse:
     """Get investigation metadata only"""
     return JSONResponse(content={
         "status": "success",
@@ -175,7 +174,7 @@ async def get_investigation_info(investigation_id: UUID) -> JSONResponse:
 
 
 @router.get("/{investigation_id}/picture")
-async def get_investigation_picture(investigation_id: UUID):
+def get_investigation_picture(investigation_id: UUID):
     """Case picture (resized WebP). The URL carries a version, so it can be cached."""
     path = investigation_service.get_picture_path(investigation_id)
     if path is None:
@@ -185,7 +184,7 @@ async def get_investigation_picture(investigation_id: UUID):
 
 
 @router.get("/{investigation_id}/results")
-async def get_investigation_results(investigation_id: UUID) -> JSONResponse:
+def get_investigation_results(investigation_id: UUID) -> JSONResponse:
     """Summaries of every result (newest first). Fetch payloads per result."""
     _require_investigation(investigation_id)
     results = investigation_service.get_investigation_results(investigation_id)
@@ -198,7 +197,7 @@ async def get_investigation_results(investigation_id: UUID) -> JSONResponse:
 
 
 @router.get("/{investigation_id}/results/{result_id}")
-async def get_investigation_result_detail(investigation_id: UUID, result_id: str) -> JSONResponse:
+def get_investigation_result_detail(investigation_id: UUID, result_id: str) -> JSONResponse:
     """Full record for one result, including grouped follow-up lookups (children)."""
     _require_investigation(investigation_id)
     record = investigation_service.get_result(investigation_id, result_id)
@@ -208,7 +207,7 @@ async def get_investigation_result_detail(investigation_id: UUID, result_id: str
 
 
 @router.get("/{investigation_id}/results/{result_id}/references")
-async def get_result_references(investigation_id: UUID, result_id: str) -> JSONResponse:
+def get_result_references(investigation_id: UUID, result_id: str) -> JSONResponse:
     """Notes that link to this result or hold a snapshot of it (asked before deleting it)."""
     _require_investigation(investigation_id)
     return JSONResponse(content={"status": "success",
@@ -216,7 +215,7 @@ async def get_result_references(investigation_id: UUID, result_id: str) -> JSONR
 
 
 @router.delete("/{investigation_id}/results/{result_id}")
-async def delete_investigation_result(investigation_id: UUID, result_id: str) -> JSONResponse:
+def delete_investigation_result(investigation_id: UUID, result_id: str) -> JSONResponse:
     _require_investigation(investigation_id)
     if not investigation_service.delete_result(investigation_id, result_id):
         raise HTTPException(status_code=404, detail="Result not found")
@@ -245,7 +244,7 @@ def bulk_update_results(investigation_id: UUID, body: BulkResultsRequest) -> JSO
 
 
 @router.get("/{investigation_id}/view", response_class=HTMLResponse)
-async def view_investigation_results(request: Request, investigation_id: UUID):
+def view_investigation_results(request: Request, investigation_id: UUID):
     """Render investigation results page"""
     _require_investigation(investigation_id)
     return templates.TemplateResponse(
@@ -256,7 +255,7 @@ async def view_investigation_results(request: Request, investigation_id: UUID):
 
 
 @router.get("/{investigation_id}/export")
-async def export_investigation(investigation_id: UUID) -> JSONResponse:
+def export_investigation(investigation_id: UUID) -> JSONResponse:
     """Export complete investigation data and results as JSON"""
     info = _require_investigation(investigation_id)
     results = investigation_service.get_full_results(investigation_id)
@@ -324,7 +323,7 @@ async def update_investigation(investigation_id: UUID, request: Request) -> JSON
 
 
 @router.delete("/{investigation_id}")
-async def delete_investigation(investigation_id: UUID) -> JSONResponse:
+def delete_investigation(investigation_id: UUID) -> JSONResponse:
     """Delete investigation and all its results"""
     if not investigation_service.delete_investigation(investigation_id):
         raise HTTPException(status_code=404, detail=f"Investigation with ID {investigation_id} not found")
@@ -337,7 +336,7 @@ async def delete_investigation(investigation_id: UUID) -> JSONResponse:
 # ==================== NOTES ENDPOINTS ====================
 
 @router.post("/{investigation_id}/notes")
-async def create_note(investigation_id: UUID, note: NoteCreate) -> JSONResponse:
+def create_note(investigation_id: UUID, note: NoteCreate) -> JSONResponse:
     """Create a new note for an investigation"""
     try:
         note_id = investigation_service.create_note(
@@ -358,7 +357,7 @@ async def create_note(investigation_id: UUID, note: NoteCreate) -> JSONResponse:
 
 
 @router.get("/{investigation_id}/notes")
-async def get_investigation_notes(
+def get_investigation_notes(
     investigation_id: UUID,
     note_type: Optional[str] = Query(None, description="Filter by note type"),
     tags: Optional[str] = Query(None, description="Comma-separated list of tags to filter by")
@@ -403,7 +402,7 @@ async def upload_note_image(investigation_id: UUID, request: Request) -> JSONRes
 
 
 @router.get("/{investigation_id}/note-images/{name}")
-async def get_note_image(investigation_id: UUID, name: str):
+def get_note_image(investigation_id: UUID, name: str):
     path = investigation_service.get_note_image_path(investigation_id, name)
     if path is None:
         raise HTTPException(status_code=404, detail="Image not found")
@@ -414,7 +413,7 @@ async def get_note_image(investigation_id: UUID, name: str):
 
 
 @router.get("/{investigation_id}/notes/view", response_class=HTMLResponse)
-async def view_investigation_notes(request: Request, investigation_id: UUID):
+def view_investigation_notes(request: Request, investigation_id: UUID):
     """Render investigation notes page (registered before /{note_id} so "view"
     is not captured as a note id)."""
     _require_investigation(investigation_id)
@@ -426,7 +425,7 @@ async def view_investigation_notes(request: Request, investigation_id: UUID):
 
 
 @router.post("/{investigation_id}/snapshots")
-async def create_snapshot(investigation_id: UUID, body: SnapshotCreate) -> JSONResponse:
+def create_snapshot(investigation_id: UUID, body: SnapshotCreate) -> JSONResponse:
     """Copy a result for a note, so the note keeps it even if the result is deleted."""
     _require_investigation(investigation_id)
     snapshot = investigation_service.create_snapshot(investigation_id, body.result_id)
@@ -436,7 +435,7 @@ async def create_snapshot(investigation_id: UUID, body: SnapshotCreate) -> JSONR
 
 
 @router.get("/{investigation_id}/snapshots/{snapshot_id}")
-async def get_snapshot(investigation_id: UUID, snapshot_id: str) -> JSONResponse:
+def get_snapshot(investigation_id: UUID, snapshot_id: str) -> JSONResponse:
     _require_investigation(investigation_id)
     snapshot = investigation_service.get_snapshot(investigation_id, snapshot_id)
     if snapshot is None:
@@ -445,7 +444,7 @@ async def get_snapshot(investigation_id: UUID, snapshot_id: str) -> JSONResponse
 
 
 @router.get("/{investigation_id}/notes/{note_id}")
-async def get_note(investigation_id: UUID, note_id: UUID) -> JSONResponse:
+def get_note(investigation_id: UUID, note_id: UUID) -> JSONResponse:
     note = investigation_service.get_note(investigation_id, note_id)
     if note is None:
         raise HTTPException(status_code=404, detail=f"Note with ID {note_id} not found")
@@ -453,7 +452,7 @@ async def get_note(investigation_id: UUID, note_id: UUID) -> JSONResponse:
 
 
 @router.put("/{investigation_id}/notes/{note_id}")
-async def update_note(investigation_id: UUID, note_id: UUID, note: NoteUpdate) -> JSONResponse:
+def update_note(investigation_id: UUID, note_id: UUID, note: NoteUpdate) -> JSONResponse:
     success = investigation_service.update_note(
         investigation_id=investigation_id,
         note_id=note_id,
@@ -467,7 +466,7 @@ async def update_note(investigation_id: UUID, note_id: UUID, note: NoteUpdate) -
 
 
 @router.delete("/{investigation_id}/notes/{note_id}")
-async def delete_note(investigation_id: UUID, note_id: UUID) -> JSONResponse:
+def delete_note(investigation_id: UUID, note_id: UUID) -> JSONResponse:
     if not investigation_service.delete_note(investigation_id, note_id):
         raise HTTPException(status_code=404, detail=f"Note with ID {note_id} not found")
     return JSONResponse(content={"status": "success", "message": f"Note {note_id} deleted successfully"})

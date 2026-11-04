@@ -8,7 +8,7 @@ import logging
 import os
 import re
 import time
-from typing import Optional, Tuple
+from typing import Optional
 from urllib.parse import urlparse
 
 import httpx
@@ -39,7 +39,7 @@ def domain_from_url(url: Optional[str]) -> Optional[str]:
     return host if DOMAIN_RE.match(host) else None
 
 
-def _cached(domain: str) -> Tuple[Optional[str], bool]:
+def _cached(domain: str) -> tuple[Optional[str], bool]:
     """(path of the cached icon, whether a recent lookup found nothing)."""
     for ext in ICON_TYPES:
         path = os.path.join(ICON_DIR, domain + ext)
@@ -76,7 +76,7 @@ async def _download(domain: str) -> Optional[str]:
     return None
 
 
-async def get_icon(domain: str) -> Optional[Tuple[str, str]]:
+async def get_icon(domain: str) -> Optional[tuple[str, str]]:
     """(path, media type) of the site's icon, or None if it has none."""
     found = domain_from_url(domain)
     if not found:

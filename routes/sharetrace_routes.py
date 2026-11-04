@@ -1,4 +1,4 @@
-from typing import Any, Dict, List
+from typing import Any
 
 from fastapi import APIRouter, HTTPException
 
@@ -13,13 +13,13 @@ MAX_LINKS = 100
 
 @router.get("/enrich_link")
 @save_investigation(service_name="sharetrace", method_name="enrich_link")
-async def enrich_link(link: str) -> Dict[str, Any]:
+async def enrich_link(link: str) -> dict[str, Any]:
     return await searchtrace_service.run_sharetrace(link)
 
 
 @router.post("/enrich_links")
 @save_investigation(service_name="sharetrace", method_name="enrich_links")
-async def enrich_links(links: List[str]) -> Dict[str, Any]:
+async def enrich_links(links: list[str]) -> dict[str, Any]:
     links = list(dict.fromkeys(link.strip() for link in links if link and link.strip()))
     if len(links) > MAX_LINKS:
         raise HTTPException(status_code=400, detail=f"At most {MAX_LINKS} links per request")

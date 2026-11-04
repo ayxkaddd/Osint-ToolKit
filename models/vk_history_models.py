@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional
 
 class ProfileEntry(BaseModel):
     year_month: Optional[str] = None
@@ -26,9 +26,9 @@ class ProfileEntry(BaseModel):
     last_visit: Optional[str] = None
 
 class VKProfileHistoryResponse(BaseModel):
-    entries: List[ProfileEntry] = []
-    photos: List[str] = []
+    entries: list[ProfileEntry] = []
+    photos: list[str] = []
     # False when the bot didn't finish before the timeout (partial data)
     complete: bool = True
     # Other bot replies (limits, "not found", errors) - shown to the user
-    notices: List[str] = []
+    notices: list[str] = []

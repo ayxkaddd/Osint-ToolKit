@@ -7,7 +7,7 @@ from services import plugin_loader
 router = APIRouter(prefix="/api/resources")
 
 @router.get("/")
-async def get_resources() -> JSONResponse:
+def get_resources() -> JSONResponse:
     try:
         with open("resources.json", "r") as f:
             resources = Resources.model_validate(json.load(f))

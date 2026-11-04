@@ -20,7 +20,9 @@ function renderIp(data) {
     const [lat, lon] = (basic.loc || '').split(',');
     const warnings = data.warnings || [];
 
-    const abuseHtml = abuse && !abuse.error ? `
+    const abuseHtml =
+        abuse && !abuse.error
+            ? `
         <section class="bg-gray-900 rounded-xl p-5 border border-gray-800">
             <h2 class="font-bold mb-3"><i class="fas fa-flag text-red-400 mr-2"></i>Abuse reports (AbuseIPDB)</h2>
             <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
@@ -30,13 +32,19 @@ function renderIp(data) {
                 ${ipField('Last reported', escapeHtml((abuse.lastReportedAt || '').slice(0, 10)))}
                 ${ipField('Tor exit node', abuse.isTor ? '<span class="text-yellow-300">yes</span>' : 'no')}
             </div>
-            ${(abuse.reports || []).length ? `<div class="mt-3 space-y-1 text-xs text-gray-400 max-h-48 overflow-y-auto">${abuse.reports.map(r => `<div><span class="text-gray-500">${escapeHtml((r.reportedAt || '').slice(0, 10))}</span> ${escapeHtml(r.comment || '')}</div>`).join('')}</div>` : ''}
-        </section>` : '';
+            ${(abuse.reports || []).length ? `<div class="mt-3 space-y-1 text-xs text-gray-400 max-h-48 overflow-y-auto">${abuse.reports.map((r) => `<div><span class="text-gray-500">${escapeHtml((r.reportedAt || '').slice(0, 10))}</span> ${escapeHtml(r.comment || '')}</div>`).join('')}</div>` : ''}
+        </section>`
+            : '';
 
-    const shodanHtml = shodan && !shodan.error ? `
+    const shodanHtml =
+        shodan && !shodan.error
+            ? `
         <section class="bg-gray-900 rounded-xl p-5 border border-gray-800">
             <h2 class="font-bold mb-3"><i class="fas fa-server text-blue-400 mr-2"></i>Exposed services (Shodan)</h2>
-            ${shodan.note ? `<p class="text-sm text-gray-400">${escapeHtml(shodan.note)}</p>` : `
+            ${
+                shodan.note
+                    ? `<p class="text-sm text-gray-400">${escapeHtml(shodan.note)}</p>`
+                    : `
             <div class="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
                 ${ipField('Open ports', escapeHtml((shodan.ports || []).join(', ')))}
                 ${ipField('OS', escapeHtml(shodan.os))}
@@ -44,11 +52,13 @@ function renderIp(data) {
                 ${ipField('Known CVEs', (shodan.vulns || []).length ? `<span class="text-red-300">${escapeHtml(shodan.vulns.join(', '))}</span>` : '')}
                 ${ipField('Tags', escapeHtml((shodan.tags || []).join(', ')))}
             </div>
-            ${(shodan.hostnames || []).length || (shodan.domains || []).length ? `<div class="mt-3 flex flex-wrap gap-1.5">${[...(shodan.hostnames || []), ...(shodan.domains || [])].map(h => pivotChip('domain', h)).join('')}</div>` : ''}`}
-        </section>` : '';
+            ${(shodan.hostnames || []).length || (shodan.domains || []).length ? `<div class="mt-3 flex flex-wrap gap-1.5">${[...(shodan.hostnames || []), ...(shodan.domains || [])].map((h) => pivotChip('domain', h)).join('')}</div>` : ''}`
+            }
+        </section>`
+            : '';
 
     ipEls.result.innerHTML = `
-        ${warnings.length ? `<div class="bg-yellow-900/30 border border-yellow-700/60 rounded-lg p-4 text-sm text-yellow-100">${warnings.map(w => `<p>${escapeHtml(w)}</p>`).join('')}</div>` : ''}
+        ${warnings.length ? `<div class="bg-yellow-900/30 border border-yellow-700/60 rounded-lg p-4 text-sm text-yellow-100">${warnings.map((w) => `<p>${escapeHtml(w)}</p>`).join('')}</div>` : ''}
         <section class="bg-gray-900 rounded-xl p-5 border border-gray-800">
             <div class="flex items-center justify-between gap-3 mb-4">
                 <div class="font-mono text-xl text-purple-200">${pivotText('ip', data.ip)}</div>

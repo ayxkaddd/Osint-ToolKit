@@ -3,7 +3,7 @@
         {
             "name": "GitFive",
             "description": "A GitHub user's real emails and names from commits, linked accounts and SSH keys",
-            "endpoint": "/git",
+            "endpoint": "/gitfive",
             "icon": "github",
             "icon_color": "orange",
             "icon_type": "fab",
@@ -44,7 +44,7 @@
         {
             "name": "OSINT Industries",
             "description": "Accounts registered to an email, phone or username across hundreds of sites",
-            "endpoint": "/api",
+            "endpoint": "/oi",
             "icon": "code",
             "icon_color": "green",
             "icon_type": "fas",
@@ -203,7 +203,7 @@
         {
             "name": "Phone Lookup",
             "description": "Free offline phone analysis plus a paid HLR network lookup",
-            "endpoint": "/hlr",
+            "endpoint": "/phone",
             "icon": "phone",
             "icon_color": "blue",
             "icon_type": "fas",

@@ -1,7 +1,7 @@
 import json
 import re
-from typing import Any, Dict, List, Optional
-import aiohttp
+from typing import Any, Optional
+import httpx
 from fastapi import HTTPException
 from utils.config import get_setting
 
@@ -15,21 +15,20 @@ class WhoisService:
     def wx_api_key(self):
         return get_setting("WHOIS_XML_API_KEY")
 
-    async def _history_request(self, domain: str, mode: str) -> Dict[str, Any]:
+    async def _history_request(self, domain: str, mode: str) -> dict[str, Any]:
         if not self.wx_api_key:
             raise HTTPException(status_code=400, detail="WHOIS_XML_API_KEY is not configured - add it in Settings")
         params = {'apiKey': self.wx_api_key, 'domainName': domain, 'mode': mode, 'outputFormat': 'JSON'}
-        timeout = aiohttp.ClientTimeout(total=60)
-        async with aiohttp.ClientSession(timeout=timeout) as session:
-            async with session.get(f'https://{self.whois_history_domain}/api/v1', params=params) as resp:
-                data = await resp.json(content_type=None)
-                if resp.status != 200 or (isinstance(data, dict) and data.get('messages')):
-                    message = data.get('messages') if isinstance(data, dict) else None
-                    raise HTTPException(status_code=resp.status if resp.status != 200 else 502,
-                                        detail=f"WhoisXML: {message or 'HTTP ' + str(resp.status)}")
-                return data
+        async with httpx.AsyncClient(timeout=60) as client:
+            resp = await client.get(f'https://{self.whois_history_domain}/api/v1', params=params)
+        data = resp.json()
+        if resp.status_code != 200 or (isinstance(data, dict) and data.get('messages')):
+            message = data.get('messages') if isinstance(data, dict) else None
+            raise HTTPException(status_code=resp.status_code if resp.status_code != 200 else 502,
+                                detail=f"WhoisXML: {message or 'HTTP ' + str(resp.status_code)}")
+        return data
 
-    async def preview_whois_history(self, domain: str) -> Dict[str, Any]:
+    async def preview_whois_history(self, domain: str) -> dict[str, Any]:
         """How many historical records exist (free - no credits used)."""
         data = await self._history_request(domain, 'preview')
         return {'domain': domain, 'records_count': data.get('recordsCount', 0)}
@@ -45,27 +44,27 @@ class WhoisService:
         return data
 
     async def lookup_whois(self, domain: str):
-        async with aiohttp.ClientSession() as session:
-            async with session.post(f'http://{self.domain}{self.uri}', json={"address": domain}) as resp:
-                if resp.status != 200:
-                    raise HTTPException(status_code=resp.status, detail="WHOIS lookup failed")
+        async with httpx.AsyncClient(timeout=60) as client:
+            resp = await client.post(f'http://{self.domain}{self.uri}', json={"address": domain})
+        if resp.status_code != 200:
+            raise HTTPException(status_code=resp.status_code, detail="WHOIS lookup failed")
 
-                data = await resp.json()
-                domain_records = (data.get('records') or {}).get('domain') or {}
-                domain_raw_text = domain_records.get('rawText', '{}')
-                domain_parsed = self.parse_domain_json(domain_raw_text)
+        data = resp.json()
+        domain_records = (data.get('records') or {}).get('domain') or {}
+        domain_raw_text = domain_records.get('rawText', '{}')
+        domain_parsed = self.parse_domain_json(domain_raw_text)
 
-                # Get top-level registrar information
-                top_registrar = (data.get('registrar') or {}).get('provider')
+        # Get top-level registrar information
+        top_registrar = (data.get('registrar') or {}).get('provider')
 
-                combined_data = self.combine_whois_data(
-                    domain_parsed,
-                    domain_records,
-                    top_registrar
-                )
+        combined_data = self.combine_whois_data(
+            domain_parsed,
+            domain_records,
+            top_registrar
+        )
 
-                combined_data['domain_raw_text'] = domain_raw_text
-                return combined_data
+        combined_data['domain_raw_text'] = domain_raw_text
+        return combined_data
 
     def parse_domain_json(self, raw_json_text: str) -> dict:
         """Parse the domain JSON data from rawText."""
@@ -103,7 +102,7 @@ class WhoisService:
         except json.JSONDecodeError:
             return {}
 
-    def combine_whois_data(self, domain_data: Dict, structured_data: Dict, top_registrar: str) -> Dict:
+    def combine_whois_data(self, domain_data: dict, structured_data: dict, top_registrar: str) -> dict:
         """Combine data from all sources, preferring structured data when available."""
         result = {
             'registrant': None,
@@ -186,7 +185,7 @@ CONTACT_ROLES = {
 CONTACT_FIELDS = ('name', 'organization', 'email', 'telephone', 'street', 'city', 'state', 'postalCode', 'country')
 
 
-def _record_date(record: Dict[str, Any]) -> str:
+def _record_date(record: dict[str, Any]) -> str:
     """When the snapshot was taken (falls back to the record's own dates)."""
     audit = record.get('audit') or {}
     for value in (audit.get('updatedDate'), record.get('updatedDateISO8601'),
@@ -201,7 +200,7 @@ def _clean(value: Any) -> Optional[str]:
     return text or None
 
 
-def _contact(raw: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+def _contact(raw: dict[str, Any]) -> Optional[dict[str, Any]]:
     contact = {k: _clean(raw.get(k)) for k in CONTACT_FIELDS}
     if not any(contact.values()):
         return None
@@ -210,22 +209,22 @@ def _contact(raw: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     return contact
 
 
-def _summary(contact: Optional[Dict[str, Any]]) -> str:
+def _summary(contact: Optional[dict[str, Any]]) -> str:
     if not contact:
         return ''
     return ' / '.join(v for v in (contact.get('name'), contact.get('organization'), contact.get('email')) if v)
 
 
-def analyze_whois_history(records: List[Dict[str, Any]]) -> Dict[str, Any]:
+def analyze_whois_history(records: list[dict[str, Any]]) -> dict[str, Any]:
     """Everyone ever listed, registrar/name server periods and a change log."""
     snapshots = sorted(records, key=_record_date)
-    contacts: Dict[tuple, Dict[str, Any]] = {}
-    registrars: Dict[str, Dict[str, str]] = {}
-    nameservers: Dict[str, Dict[str, str]] = {}
-    timeline: List[Dict[str, Any]] = []
-    previous: Optional[Dict[str, Any]] = None
+    contacts: dict[tuple, dict[str, Any]] = {}
+    registrars: dict[str, dict[str, str]] = {}
+    nameservers: dict[str, dict[str, str]] = {}
+    timeline: list[dict[str, Any]] = []
+    previous: Optional[dict[str, Any]] = None
 
-    def seen(table: Dict[str, Dict[str, str]], key: str, date: str):
+    def seen(table: dict[str, dict[str, str]], key: str, date: str):
         entry = table.setdefault(key, {'first_seen': date, 'last_seen': date})
         if date:
             entry['first_seen'] = min(filter(None, [entry['first_seen'], date]))

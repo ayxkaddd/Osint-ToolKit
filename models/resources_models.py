@@ -1,4 +1,4 @@
-from typing import Dict, List, Optional
+from typing import Optional
 from pydantic import BaseModel
 
 class Setting(BaseModel):
@@ -12,8 +12,8 @@ class Module(BaseModel):
     icon: str
     icon_color: str
     icon_type: str
-    tags: List[str]
-    settings: Optional[Dict[str, Setting]] = None
+    tags: list[str]
+    settings: Optional[dict[str, Setting]] = None
 
 class ExternalResource(BaseModel):
     name: str
@@ -22,5 +22,5 @@ class ExternalResource(BaseModel):
     description: str
 
 class Resources(BaseModel):
-    modules: List[Module]
-    ext_res: List[ExternalResource]
+    modules: list[Module]
+    ext_res: list[ExternalResource]

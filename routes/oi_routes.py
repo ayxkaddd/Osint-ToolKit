@@ -73,7 +73,6 @@ async def site_icon(domain: str):
 async def query_credits() -> JSONResponse:
     try:
         return await oi_service.get_credits()
-        # return {"credits": 223}
     except HTTPException:
         raise
     except Exception as e:

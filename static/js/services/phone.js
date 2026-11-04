@@ -17,7 +17,6 @@ window.loadResultIntoView = function (data, record) {
     hlrResults.classList.remove('hidden');
 };
 
-
 const searchButton = document.getElementById('searchButton');
 const phoneInput = document.getElementById('phoneInput');
 const loadingIndicator = document.getElementById('loadingIndicator');
@@ -36,7 +35,7 @@ async function performHLRLookup() {
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ phones })
+            body: JSON.stringify({ phones }),
         });
 
         const data = await response.json();
@@ -48,7 +47,6 @@ async function performHLRLookup() {
 
         displayResults(data);
         hlrResults.classList.remove('hidden'); // Show results
-
     } catch (error) {
         console.error('Error:', error);
         // Show error in the results area
@@ -76,7 +74,9 @@ async function performHLRLookup() {
                         </div>
                     </div>
                 </div>
-                ${errorData.raw_response ? `
+                ${
+                    errorData.raw_response
+                        ? `
                 <div class="p-4 bg-gray-900/50">
                     <div class="flex items-center justify-between mb-2">
                         <span class="text-sm text-gray-400">Raw SMSC Response:</span>
@@ -86,7 +86,9 @@ async function performHLRLookup() {
                     </div>
                     <div class="font-mono text-sm bg-gray-800 p-3 rounded">${escapeHtml(errorData.raw_response)}</div>
                 </div>
-                ` : ''}
+                `
+                        : ''
+                }
             </div>
         `;
         lucide.createIcons();
@@ -98,7 +100,9 @@ async function performHLRLookup() {
 function displayResults(data) {
     balanceAmount.textContent = data.balance;
 
-    resultsTimeline.innerHTML = data.results.map(result => `
+    resultsTimeline.innerHTML = data.results
+        .map(
+            (result) => `
         <div class="bg-gray-900 rounded-lg overflow-hidden">
             <!-- Header section -->
             <div class="p-4 border-b border-gray-800">
@@ -131,26 +135,28 @@ function displayResults(data) {
                             <i data-lucide="globe" class="w-4 h-4 text-gray-400"></i>
                             <span class="text-xs text-gray-400">MCC</span>
                         </div>
-                        <span class="text-sm font-semibold">${escapeHtml(result.mcc || "N/A")}</span>
+                        <span class="text-sm font-semibold">${escapeHtml(result.mcc || 'N/A')}</span>
                     </div>
                     <div class="bg-gray-800 p-3 rounded-lg">
                         <div class="flex items-center gap-2 mb-2">
                             <i data-lucide="network" class="w-4 h-4 text-gray-400"></i>
                             <span class="text-xs text-gray-400">MNC</span>
                         </div>
-                        <span class="text-sm font-semibold">${escapeHtml(result.mnc || "N/A")}</span>
+                        <span class="text-sm font-semibold">${escapeHtml(result.mnc || 'N/A')}</span>
                     </div>
                     <div class="bg-gray-800 p-3 rounded-lg">
                         <div class="flex items-center gap-2 mb-2">
                             <i data-lucide="fingerprint" class="w-4 h-4 text-gray-400"></i>
                             <span class="text-xs text-gray-400">IMSI</span>
                         </div>
-                        <span class="text-sm font-semibold">${escapeHtml(result.imsi || "N/A")}</span>
+                        <span class="text-sm font-semibold">${escapeHtml(result.imsi || 'N/A')}</span>
                     </div>
                 </div>
             </div>
         </div>
-    `).join('');
+    `
+        )
+        .join('');
 
     lucide.createIcons();
 }
@@ -190,8 +196,12 @@ document.addEventListener('click', (event) => {
 const phoneInfoResults = document.getElementById('phoneInfoResults');
 
 function phoneInfoCard(info) {
-    const link = (href, label, icon) => `<a href="${escapeAttr(safeUrl(href) || href)}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-gray-800 hover:bg-gray-700 text-xs"><i class="${icon}"></i>${label}</a>`;
-    const field = (label, value) => value ? `<div><div class="text-xs text-gray-500">${label}</div><div class="text-gray-100">${escapeHtml(value)}</div></div>` : '';
+    const link = (href, label, icon) =>
+        `<a href="${escapeAttr(safeUrl(href) || href)}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-gray-800 hover:bg-gray-700 text-xs"><i class="${icon}"></i>${label}</a>`;
+    const field = (label, value) =>
+        value
+            ? `<div><div class="text-xs text-gray-500">${label}</div><div class="text-gray-100">${escapeHtml(value)}</div></div>`
+            : '';
     return `
         <div class="bg-gray-900 rounded-lg p-5 border ${info.valid ? 'border-gray-800' : 'border-yellow-700/60'}">
             <div class="flex items-center justify-between gap-3 flex-wrap mb-4">
@@ -206,7 +216,7 @@ function phoneInfoCard(info) {
             </div>
             <div class="mt-4">
                 <div class="text-xs text-gray-500 mb-1">Formats to search for</div>
-                <div class="flex flex-wrap gap-1.5">${(info.search_formats || []).map(f => `<button type="button" data-copy="${escapeAttr(f)}" class="font-mono text-xs px-2 py-0.5 rounded bg-gray-800 hover:bg-gray-700" title="Copy">${escapeHtml(f)}</button>`).join('')}</div>
+                <div class="flex flex-wrap gap-1.5">${(info.search_formats || []).map((f) => `<button type="button" data-copy="${escapeAttr(f)}" class="font-mono text-xs px-2 py-0.5 rounded bg-gray-800 hover:bg-gray-700" title="Copy">${escapeHtml(f)}</button>`).join('')}</div>
             </div>
             <div class="mt-4 flex flex-wrap gap-2">
                 ${link(info.links.whatsapp, 'WhatsApp', 'fab fa-whatsapp')}
@@ -219,15 +229,21 @@ function phoneInfoCard(info) {
 }
 
 async function analyzePhones() {
-    const numbers = phoneInput.value.split(/[,;\n]+/).map(n => n.trim()).filter(Boolean);
+    const numbers = phoneInput.value
+        .split(/[,;\n]+/)
+        .map((n) => n.trim())
+        .filter(Boolean);
     if (!numbers.length) return;
     phoneInfoResults.innerHTML = '<p class="text-gray-400"><i class="fas fa-spinner fa-spin mr-2"></i>Analyzing…</p>';
-    const cards = await Promise.all(numbers.map(async (number) => {
-        const response = await fetch(`/api/phone/info?phone=${encodeURIComponent(number)}`);
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok) return `<div class="bg-gray-900 rounded-lg p-4 text-red-300 text-sm">${escapeHtml(number)}: ${escapeHtml(data.detail || 'could not analyze')}</div>`;
-        return phoneInfoCard(data);
-    }));
+    const cards = await Promise.all(
+        numbers.map(async (number) => {
+            const response = await fetch(`/api/phone/info?phone=${encodeURIComponent(number)}`);
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok)
+                return `<div class="bg-gray-900 rounded-lg p-4 text-red-300 text-sm">${escapeHtml(number)}: ${escapeHtml(data.detail || 'could not analyze')}</div>`;
+            return phoneInfoCard(data);
+        })
+    );
     phoneInfoResults.innerHTML = cards.join('');
 }
 

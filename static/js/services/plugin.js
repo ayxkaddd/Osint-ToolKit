@@ -20,15 +20,21 @@ const state = { type: plugin.accepts[0] && plugin.accepts[0].type, controller: n
 // Plugins with several lookups: choose which run (all by default)
 function renderActions() {
     const box = document.getElementById('pluginActions');
-    const actions = (plugin.actions || []).filter(a => a.accepts.includes(state.type));
+    const actions = (plugin.actions || []).filter((a) => a.accepts.includes(state.type));
     box.classList.toggle('hidden', actions.length < 2);
-    box.innerHTML = 'Searches to run:' + actions.map(a => `<button type="button" data-action-id="${escapeAttr(a.id)}"
-        class="b-chip${state.off.has(a.id) ? '' : ' active'}">${escapeHtml(a.name)}</button>`).join('');
+    box.innerHTML =
+        'Searches to run:' +
+        actions
+            .map(
+                (a) => `<button type="button" data-action-id="${escapeAttr(a.id)}"
+        class="b-chip${state.off.has(a.id) ? '' : ' active'}">${escapeHtml(a.name)}</button>`
+            )
+            .join('');
 }
 
 function selectedActions() {
-    const actions = (plugin.actions || []).filter(a => a.accepts.includes(state.type));
-    const on = actions.filter(a => !state.off.has(a.id)).map(a => a.id);
+    const actions = (plugin.actions || []).filter((a) => a.accepts.includes(state.type));
+    const on = actions.filter((a) => !state.off.has(a.id)).map((a) => a.id);
     return on.length && on.length < actions.length ? on : null;
 }
 
@@ -36,7 +42,8 @@ document.getElementById('pluginActions').addEventListener('click', (event) => {
     const chip = event.target.closest('[data-action-id]');
     if (!chip) return;
     const id = chip.dataset.actionId;
-    if (state.off.has(id)) state.off.delete(id); else state.off.add(id);
+    if (state.off.has(id)) state.off.delete(id);
+    else state.off.add(id);
     renderActions();
 });
 
@@ -72,11 +79,13 @@ function countText(count) {
     return `${count} result${count === 1 ? '' : 's'}`;
 }
 
-els.types.forEach((button) => button.addEventListener('click', () => {
-    state.type = button.dataset.type;
-    els.types.forEach((b) => b.classList.toggle('active', b === button));
-    renderActions();
-}));
+els.types.forEach((button) =>
+    button.addEventListener('click', () => {
+        state.type = button.dataset.type;
+        els.types.forEach((b) => b.classList.toggle('active', b === button));
+        renderActions();
+    })
+);
 
 window.loadResultIntoView = function (result, record) {
     if (!isPluginResult(result)) return;
@@ -121,7 +130,7 @@ async function runLookup() {
         });
         if (!response.ok) {
             const data = await response.json().catch(() => ({}));
-            const detail = Array.isArray(data.detail) ? data.detail.map(d => d.msg).join(', ') : data.detail;
+            const detail = Array.isArray(data.detail) ? data.detail.map((d) => d.msg).join(', ') : data.detail;
             throw new Error(detail || `Request failed (${response.status})`);
         }
         const reader = response.body.getReader();

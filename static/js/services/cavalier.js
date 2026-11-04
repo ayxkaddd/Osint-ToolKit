@@ -1,13 +1,13 @@
 function formatDateNew(dateString) {
     const date = new Date(dateString);
-    const day = date.getUTCDate().toString().padStart(2, "0");
-    const month = date.toLocaleString("en-US", {
-        month: "short",
-        timeZone: "UTC",
+    const day = date.getUTCDate().toString().padStart(2, '0');
+    const month = date.toLocaleString('en-US', {
+        month: 'short',
+        timeZone: 'UTC',
     });
     const year = date.getUTCFullYear();
-    const hour = date.getUTCHours().toString().padStart(2, "0");
-    const minute = date.getUTCMinutes().toString().padStart(2, "0");
+    const hour = date.getUTCHours().toString().padStart(2, '0');
+    const minute = date.getUTCMinutes().toString().padStart(2, '0');
 
     return `${day} ${month}, ${year} ${hour}:${minute} +01:00`;
 }
@@ -25,17 +25,17 @@ async function fetchStealerData(input) {
 }
 
 function createStealerCard(data, isEmailSearch) {
-    const card = document.createElement("div");
-    card.className = "bg-gray-900 rounded-lg p-6 border border-gray-700";
+    const card = document.createElement('div');
+    card.className = 'bg-gray-900 rounded-lg p-6 border border-gray-700';
 
-    const title = document.createElement("h2");
-    title.className = "text-xl font-bold text-white mb-4 flex items-center gap-2";
+    const title = document.createElement('h2');
+    title.className = 'text-xl font-bold text-white mb-4 flex items-center gap-2';
     title.innerHTML = '<i class="fas fa-shield-virus text-blue-500"></i>Cavalier Information';
 
-    const content = document.createElement("div");
-    content.className = "space-y-4";
+    const content = document.createElement('div');
+    content.className = 'space-y-4';
 
-    if (data.error === "not found") {
+    if (data.error === 'not found') {
         content.innerHTML = '<p class="text-gray-400">No information found.</p>';
         card.appendChild(title);
         card.appendChild(content);
@@ -58,25 +58,43 @@ function createStealerCard(data, isEmailSearch) {
                         <p><i class="fas fa-file-code stealer-icon"></i><span class="stealer-label">Malware Path:</span>
                         <span class="stealer-value">${escapeHtml(entry.malware_path)}</span></p>
                         <p><i class="fas fa-shield-alt stealer-icon"></i><span class="stealer-label">Antiviruses:</span>
-                        <span class="stealer-value">${escapeHtml(Array.isArray(entry.antiviruses) ? entry.antiviruses.join(", ") : entry.antiviruses)}</span></p>
+                        <span class="stealer-value">${escapeHtml(Array.isArray(entry.antiviruses) ? entry.antiviruses.join(', ') : entry.antiviruses)}</span></p>
                         <p><i class="fas fa-network-wired stealer-icon"></i><span class="stealer-label">IP:</span>
-                        <span class="stealer-value">${pivotText("ip", entry.ip)}</span></p>
-                        ${entry.clientAt ? `<p><i class="fas fa-users stealer-icon"></i><span class="stealer-label">Client At:</span>
-                            <span class="stealer-value">${escapeHtml(entry.clientAt.filter(e => e).join(", "))}</span></p>` : ''}
-                        ${entry.credentials?.length > 0 ? `
+                        <span class="stealer-value">${pivotText('ip', entry.ip)}</span></p>
+                        ${
+                            entry.clientAt
+                                ? `<p><i class="fas fa-users stealer-icon"></i><span class="stealer-label">Client At:</span>
+                            <span class="stealer-value">${escapeHtml(entry.clientAt.filter((e) => e).join(', '))}</span></p>`
+                                : ''
+                        }
+                        ${
+                            entry.credentials?.length > 0
+                                ? `
                         <div class="mt-4">
                             <p class="stealer-label"><i class="fas fa-key stealer-icon"></i>Credentials:</p>
                             <div class="credentials-grid">
-                                ${entry.credentials.map(cred => `
+                                ${entry.credentials
+                                    .map(
+                                        (cred) => `
                                     <div class="credential-line">
-                                        <span class="cred-domain">${pivotText("domain", String(cred.domain || "").replace(/^https?:\/\//, "").split("/")[0], cred.domain)}</span>
+                                        <span class="cred-domain">${pivotText(
+                                            'domain',
+                                            String(cred.domain || '')
+                                                .replace(/^https?:\/\//, '')
+                                                .split('/')[0],
+                                            cred.domain
+                                        )}</span>
                                         <span class="cred-username">${pivotLogin(cred.username)}</span>
                                         <span class="cred-password">${cred.password ? '••••••••••' : ''}</span>
                                     </div>
-                                `).join('')}
+                                `
+                                    )
+                                    .join('')}
                             </div>
                         </div>
-                        ` : ''}
+                        `
+                                : ''
+                        }
                     `;
             });
         }
@@ -98,16 +116,16 @@ function createStealerCard(data, isEmailSearch) {
                         <p><i class="fas fa-file-code stealer-icon"></i><span class="stealer-label">Malware Path:</span>
                         <span class="stealer-value">${escapeHtml(stealer.malware_path)}</span></p>
                         <p><i class="fas fa-shield-alt stealer-icon"></i><span class="stealer-label">Antiviruses:</span>
-                        <span class="stealer-value">${escapeHtml(Array.isArray(stealer.antiviruses) ? stealer.antiviruses.join(", ") : stealer.antiviruses)}</span></p>
+                        <span class="stealer-value">${escapeHtml(Array.isArray(stealer.antiviruses) ? stealer.antiviruses.join(', ') : stealer.antiviruses)}</span></p>
                         <p><i class="fas fa-network-wired stealer-icon"></i><span class="stealer-label">IP:</span>
-                        <span class="stealer-value">${pivotText("ip", stealer.ip)}</span></p>
+                        <span class="stealer-value">${pivotText('ip', stealer.ip)}</span></p>
                         <p><i class="fas fa-key stealer-icon"></i><span class="stealer-label">Top Passwords:</span>
                         <ul class="stealer-list">
-                            ${stealer.top_passwords.map((pwd) => `<li>${escapeHtml(pwd)}</li>`).join("")}
+                            ${stealer.top_passwords.map((pwd) => `<li>${escapeHtml(pwd)}</li>`).join('')}
                         </ul></p>
                         <p><i class="fas fa-user stealer-icon"></i><span class="stealer-label">Top Logins:</span>
                         <ul class="stealer-list">
-                            ${stealer.top_logins.map((login) => `<li>${pivotLogin(login)}</li>`).join("")}
+                            ${stealer.top_logins.map((login) => `<li>${pivotLogin(login)}</li>`).join('')}
                         </ul></p>
                     `;
             });
@@ -120,27 +138,27 @@ function createStealerCard(data, isEmailSearch) {
 }
 
 async function displayResults(input) {
-    const loadingElement = document.getElementById("loading");
-    const stealerResultsContainer = document.getElementById("stealerResults");
+    const loadingElement = document.getElementById('loading');
+    const stealerResultsContainer = document.getElementById('stealerResults');
     const isEmailSearch = isEmail(input);
 
-    loadingElement.classList.remove("hidden");
-    stealerResultsContainer.innerHTML = "";
+    loadingElement.classList.remove('hidden');
+    stealerResultsContainer.innerHTML = '';
 
     try {
         const responseData = await fetchStealerData(input);
-        loadingElement.classList.add("hidden");
+        loadingElement.classList.add('hidden');
         renderCavalierData(responseData, isEmailSearch);
     } catch (error) {
-        console.error("Error fetching data:", error);
-        loadingElement.classList.add("hidden");
+        console.error('Error fetching data:', error);
+        loadingElement.classList.add('hidden');
         stealerResultsContainer.innerHTML = `<p class="text-red-500">Error fetching data: ${escapeHtml(error.message)}</p>`;
     }
 }
 
 function renderCavalierData(data, isEmailSearch) {
-    const stealerResultsContainer = document.getElementById("stealerResults");
-    stealerResultsContainer.innerHTML = "";
+    const stealerResultsContainer = document.getElementById('stealerResults');
+    stealerResultsContainer.innerHTML = '';
 
     if (data.error) {
         stealerResultsContainer.appendChild(createStealerCard(data, isEmailSearch));
@@ -154,19 +172,17 @@ function renderCavalierData(data, isEmailSearch) {
 window.currentService = 'cavalier';
 window.loadResultIntoView = function (data) {
     const isEmailSearch = data.search_type ? data.search_type === 'email' : !!(data.data && Array.isArray(data.data));
-    if (data.query) document.getElementById("usernameInput").value = data.query;
+    if (data.query) document.getElementById('usernameInput').value = data.query;
     renderCavalierData(data, isEmailSearch);
 };
 
-
-
-document.getElementById("searchButton").addEventListener("click", () => {
-    const input = document.getElementById("usernameInput").value.trim();
+document.getElementById('searchButton').addEventListener('click', () => {
+    const input = document.getElementById('usernameInput').value.trim();
     if (input) displayResults(input);
 });
 
-document.getElementById("usernameInput").addEventListener("keypress", (event) => {
-    if (event.key === "Enter") {
+document.getElementById('usernameInput').addEventListener('keypress', (event) => {
+    if (event.key === 'Enter') {
         const input = event.target.value.trim();
         if (input) displayResults(input);
     }

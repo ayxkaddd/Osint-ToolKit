@@ -1,6 +1,5 @@
 import json
 from pathlib import Path
-from typing import Dict, Set
 
 from fastapi import APIRouter, HTTPException
 
@@ -12,14 +11,14 @@ router = APIRouter(prefix="/api/settings")
 RESOURCES_PATH = Path("resources.json")
 
 
-def allowed_setting_keys() -> Set[str]:
+def allowed_setting_keys() -> set[str]:
     """Only keys that a module declares in resources.json, or a plugin under its own
     name, can be edited here (never ROOT_PASSWORD, JWT_SECRET, ...)."""
     return plugin_loader.builtin_setting_keys() | plugin_loader.setting_keys()
 
 
 @router.post("/update")
-async def update_settings(settings: Dict[str, str]):
+def update_settings(settings: dict[str, str]):
     allowed = allowed_setting_keys()
     rejected = sorted(key for key in settings if key.upper() not in allowed)
     if rejected:
@@ -43,7 +42,7 @@ def _mask(value: str) -> str:
 
 
 @router.get("")
-async def list_settings():
+def list_settings():
     """Editable settings per module with whether each is configured (values masked)."""
     try:
         modules = json.loads(RESOURCES_PATH.read_text()).get("modules", [])

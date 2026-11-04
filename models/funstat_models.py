@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Dict, Optional, List, Any, Literal
+from typing import Optional, Any, Literal
 from pydantic import BaseModel, Field, ConfigDict
 
 # Base class to allow populating by name (snake_case) or alias (camelCase)
@@ -136,10 +136,10 @@ class WhoWroteText(BaseSchema):
     text: Optional[str] = None
 
 class UsernameUsageModel(BaseSchema):
-    actual_users: Optional[List[ResolvedUser]] = Field(None, alias="actualUsers")
-    usage_by_users_in_the_past: Optional[List[ResolvedUser]] = Field(None, alias="usageByUsersInThePast")
-    actual_groups_or_channels: Optional[List[ChatInfoExt]] = Field(None, alias="actualGroupsOrChannels")
-    mention_by_channel_or_group_desc: Optional[List[ChatInfoExt]] = Field(None, alias="mentionByChannelOrGroupDesc")
+    actual_users: Optional[list[ResolvedUser]] = Field(None, alias="actualUsers")
+    usage_by_users_in_the_past: Optional[list[ResolvedUser]] = Field(None, alias="usageByUsersInThePast")
+    actual_groups_or_channels: Optional[list[ChatInfoExt]] = Field(None, alias="actualGroupsOrChannels")
+    mention_by_channel_or_group_desc: Optional[list[ChatInfoExt]] = Field(None, alias="mentionByChannelOrGroupDesc")
 
 # Response Models
 class ApiResponse(BaseSchema):
@@ -162,10 +162,10 @@ class MediaThumbnail(BaseSchema):
 class MessageContext(BaseSchema):
     """Structured message context data"""
     chat_id: str
-    target_message: Dict[str, Any]
-    previous_messages: List[Dict[str, Any]]
-    next_messages: List[Dict[str, Any]]
-    reply_chain: List[Dict[str, Any]]
+    target_message: dict[str, Any]
+    previous_messages: list[dict[str, Any]]
+    next_messages: list[dict[str, Any]]
+    reply_chain: list[dict[str, Any]]
     context_size: int
     total_messages: int
 

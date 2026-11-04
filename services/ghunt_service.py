@@ -5,7 +5,7 @@ import uuid
 from pathlib import Path
 import shlex
 import shutil
-from typing import List, Literal, Optional, Tuple
+from typing import Literal, Optional
 
 from utils.config import get_setting
 from utils.subprocess_runner import run_command
@@ -51,7 +51,7 @@ def _venv_python(value: str) -> str:
     return str(path)
 
 
-def ghunt_command() -> Tuple[List[str], Optional[str]]:
+def ghunt_command() -> tuple[list[str], Optional[str]]:
     """How to start GHunt, like GitFive: GHUNT_VENV_PATH (venv folder or its python) +
     GHUNT_SCRIPT_PATH (GHunt's main.py). With neither set, the `ghunt` command on PATH.
     Returns (command, problem or None)."""
@@ -89,7 +89,7 @@ class GHuntService:
         self.work_dir.mkdir(parents=True, exist_ok=True)
 
     @property
-    def command(self) -> List[str]:
+    def command(self) -> list[str]:
         """Read per lookup, so paths changed in Settings apply without a restart."""
         return ghunt_command()[0]
 

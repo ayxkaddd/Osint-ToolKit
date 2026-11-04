@@ -1,5 +1,5 @@
-from pydantic import BaseModel, validator
-from typing import List, Dict, Any, Optional
+from pydantic import BaseModel, field_validator
+from typing import Any, Optional
 import re
 
 class DomainRequest(BaseModel):
@@ -8,7 +8,8 @@ class DomainRequest(BaseModel):
     include_ports: bool = False
     use_external_apis: bool = True
 
-    @validator('domain')
+    @field_validator('domain')
+    @classmethod
     def validate_domain(cls, v):
         pattern = re.compile(
             r'^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$'
@@ -20,19 +21,19 @@ class DomainRequest(BaseModel):
 class ReconResults(BaseModel):
     domain: str
     timestamp: str
-    subdomains: List[Dict[str, Any]]
-    dns_records: Dict[str, Any]
-    whois_info: Dict[str, Any]
-    httpx_results: List[Dict[str, Any]]
-    security_analysis: Dict[str, Any]
-    port_scan_results: Optional[List[Dict[str, Any]]] = None
-    external_api_data: Dict[str, Any]
-    summary: Dict[str, Any]
+    subdomains: list[dict[str, Any]]
+    dns_records: dict[str, Any]
+    whois_info: dict[str, Any]
+    httpx_results: list[dict[str, Any]]
+    security_analysis: dict[str, Any]
+    port_scan_results: Optional[list[dict[str, Any]]] = None
+    external_api_data: dict[str, Any]
+    summary: dict[str, Any]
     # Tool problems (not installed, timed out, failed) - shown to the user
-    warnings: List[str] = []
+    warnings: list[str] = []
     # Owner intel from TXT/MX/NS/SOA/DMARC and certificates
-    intel: Dict[str, Any] = {}
+    intel: dict[str, Any] = {}
     # IPs the names resolve to, with network owner (ASN)
-    hosting: List[Dict[str, Any]] = []
+    hosting: list[dict[str, Any]] = []
     # Earlier A/MX/NS values (SecurityTrails) and passive DNS (VirusTotal)
-    dns_history: Dict[str, Any] = {}
+    dns_history: dict[str, Any] = {}

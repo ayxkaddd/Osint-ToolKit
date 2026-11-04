@@ -13,7 +13,7 @@ import uuid
 from collections import OrderedDict
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 import httpx
 
@@ -37,7 +37,7 @@ class Job:
     investigation_id: str
     parent_result_id: Optional[str] = None
     status: str = "queued"          # queued / running / done / failed / cancelled
-    progress: Dict[str, Any] = field(default_factory=dict)
+    progress: dict[str, Any] = field(default_factory=dict)
     summary: Optional[str] = None
     result_id: Optional[str] = None
     error: Optional[str] = None
@@ -46,16 +46,16 @@ class Job:
     started_at: Optional[str] = None
     finished_at: Optional[str] = None
 
-    def public(self) -> Dict[str, Any]:
+    def public(self) -> dict[str, Any]:
         return asdict(self)
 
 
 class JobManager:
     def __init__(self):
         self.jobs: "OrderedDict[str, Job]" = OrderedDict()
-        self._tasks: Dict[str, asyncio.Task] = {}
+        self._tasks: dict[str, asyncio.Task] = {}
         self._global: Optional[asyncio.Semaphore] = None
-        self._per_module: Dict[str, asyncio.Semaphore] = {}
+        self._per_module: dict[str, asyncio.Semaphore] = {}
 
     def _sem(self, module: Module) -> asyncio.Semaphore:
         if module.id not in self._per_module:
@@ -84,7 +84,7 @@ class JobManager:
         self._tasks[job.id] = asyncio.create_task(self._run(job, module, base_url, auth_cookie))
         return job
 
-    def list(self, investigation_id: Optional[str] = None, limit: int = 50) -> List[Dict[str, Any]]:
+    def list(self, investigation_id: Optional[str] = None, limit: int = 50) -> list[dict[str, Any]]:
         jobs = [j for j in reversed(self.jobs.values()) if not investigation_id or j.investigation_id == investigation_id]
         return [j.public() for j in jobs[:limit]]
 

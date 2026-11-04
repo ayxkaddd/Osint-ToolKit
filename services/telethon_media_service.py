@@ -5,7 +5,7 @@ import logging
 import asyncio
 import aiofiles
 import re
-from typing import TYPE_CHECKING, Dict, List, Optional, Tuple, Any, Union
+from typing import TYPE_CHECKING, Optional, Any, Union
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, asdict
@@ -26,10 +26,10 @@ logger = logging.getLogger(__name__)
 class MessageContext:
     """Structured message context data"""
     chat_id: str
-    target_message: Dict[str, Any]
-    previous_messages: List[Dict[str, Any]]
-    next_messages: List[Dict[str, Any]]
-    reply_chain: List[Dict[str, Any]]
+    target_message: dict[str, Any]
+    previous_messages: list[dict[str, Any]]
+    next_messages: list[dict[str, Any]]
+    reply_chain: list[dict[str, Any]]
     context_size: int
     total_messages: int
 
@@ -54,19 +54,6 @@ FULL_MEDIA_TYPES = {
 class MediaUnavailable(Exception):
     """The message has no media that can be shown in the browser."""
 LEGACY_THUMBNAIL_DIR = os.path.join("static", "thumbnails")
-
-# @dataclass
-# class ThumbnailResult:
-#     """Structured thumbnail generation result"""
-#     message_id: int
-#     chat_identifier: str
-#     media_type: str
-#     thumbnail_path: str
-#     thumbnail_url: str
-#     file_size: int
-#     cached: bool
-#     generated_at: datetime
-
 
 class LRUCache:
     """Thread-safe LRU cache implementation"""
@@ -159,7 +146,7 @@ class TelethonMediaService:
         self.thumbnail_dir = THUMBNAIL_DIR
         os.makedirs(self.thumbnail_dir, exist_ok=True)
         os.makedirs(FULL_MEDIA_DIR, exist_ok=True)
-        self._full_downloads: Dict[str, asyncio.Task] = {}
+        self._full_downloads: dict[str, asyncio.Task] = {}
         self._migrate_public_thumbnails()
 
         # Caching layers
@@ -175,9 +162,7 @@ class TelethonMediaService:
         self._thread_pool = ThreadPoolExecutor(max_workers=thread_pool_workers)
 
         logger.info(
-            f"TelethonMediaService initialized: "
-            f"max_concurrent={max_concurrent_requests}, "
-            f"thread_pool={thread_pool_workers}"
+            'TelethonMediaService initialized: max_concurrent=%s, thread_pool=%s', max_concurrent_requests, thread_pool_workers
         )
 
     @classmethod
@@ -313,7 +298,7 @@ class TelethonMediaService:
         # Fast path: check cache
         cached = await self._entity_cache.get(cache_key)
         if cached is not None:
-            logger.debug(f"Entity cache hit: {cache_key}")
+            logger.debug('Entity cache hit: %s', cache_key)
             return cached
 
         # Slow path: resolve and cache
@@ -327,11 +312,11 @@ class TelethonMediaService:
                 # Direct resolution using Telethon's session cache
                 input_peer = await self.client.get_input_entity(identifier)
                 await self._entity_cache.set(cache_key, input_peer)
-                logger.info(f"Entity resolved and cached: {cache_key}")
+                logger.info('Entity resolved and cached: %s', cache_key)
                 return input_peer
 
             except (ValueError, TypeError) as e:
-                logger.error(f"Entity resolution failed for '{identifier}': {e}")
+                logger.error("Entity resolution failed for '%s': %s", identifier, e)
                 raise ValueError(
                     f"Cannot resolve entity '{identifier}'. "
                     f"Ensure you have access to this chat/channel. "
@@ -351,7 +336,7 @@ class TelethonMediaService:
         else:
             cache_key = self._normalize_identifier(identifier)
             # Note: LRUCache doesn't have delete, so we just let it expire
-            logger.info(f"Invalidated entity cache for: {cache_key}")
+            logger.info('Invalidated entity cache for: %s', cache_key)
 
     # ============================================================================
     # MESSAGE SERIALIZATION (OPTIMIZED)
@@ -384,7 +369,7 @@ class TelethonMediaService:
         message,
         include_sender_details: bool = True,
         include_media_details: bool = False
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Convert a Telegram message to a serializable dictionary
 
@@ -398,7 +383,7 @@ class TelethonMediaService:
         Returns:
             Serialized message dictionary
         """
-        logger.info(f"{message}")
+        logger.info('%s', message)
         result = {
             "message_id": message.id,
             "date": message.date.isoformat() if message.date else None,
@@ -475,7 +460,7 @@ class TelethonMediaService:
 
                 if not target_msg:
                     logger.warning(
-                        f"Message {message_id} not found in chat {chat_identifier}"
+                        'Message %s not found in chat %s', message_id, chat_identifier
                     )
                     return None
 
@@ -545,15 +530,13 @@ class TelethonMediaService:
                 )
 
                 logger.info(
-                    f"Fetched context for message {message_id}: "
-                    f"{len(previous_messages)} prev, {len(next_messages)} next, "
-                    f"{len(reply_chain)} in reply chain"
+                    'Fetched context for message %s: %s prev, %s next, %s in reply chain', message_id, len(previous_messages), len(next_messages), len(reply_chain)
                 )
 
                 return result
 
             except Exception as e:
-                logger.error(f"Error fetching message context: {e}", exc_info=True)
+                logger.error('Error fetching message context: %s', e, exc_info=True)
                 raise
 
     async def _fetch_reply_chain_optimized(
@@ -563,7 +546,7 @@ class TelethonMediaService:
         include_sender_details: bool = False,
         include_media_details: bool = False,
         max_depth: int = 10
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Fetch reply chain with batching optimization
 
@@ -589,7 +572,7 @@ class TelethonMediaService:
         # Phase 1: Collect all reply IDs (minimal fetches)
         while current_id and len(reply_ids) < max_depth:
             if current_id in seen:
-                logger.warning(f"Circular reply detected at message {current_id}")
+                logger.warning('Circular reply detected at message %s', current_id)
                 break
 
             seen.add(current_id)
@@ -617,7 +600,7 @@ class TelethonMediaService:
                     break
 
             except Exception as e:
-                logger.warning(f"Reply chain break at {current_id}: {e}")
+                logger.warning('Reply chain break at %s: %s', current_id, e)
                 break
 
         # Phase 2: Batch fetch all reply messages
@@ -645,7 +628,7 @@ class TelethonMediaService:
             return list(reversed(serialized))
 
         except Exception as e:
-            logger.error(f"Batch reply fetch failed: {e}")
+            logger.error('Batch reply fetch failed: %s', e)
             return []
 
     async def get_conversation_thread(
@@ -656,7 +639,7 @@ class TelethonMediaService:
         context_size: int = 5,
         include_sender_details: bool = False,
         include_media_details: bool = False
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Optional[dict[str, Any]]:
         """
         Get a complete conversation thread including context and reply chain
 
@@ -691,9 +674,9 @@ class TelethonMediaService:
 
     def _group_message_ids_into_ranges(
         self,
-        sorted_ids: List[int],
+        sorted_ids: list[int],
         context_size: int
-    ) -> List[Tuple[int, int, List[int]]]:
+    ) -> list[tuple[int, int, list[int]]]:
         """
         Group message IDs into overlapping ranges
 
@@ -748,7 +731,7 @@ class TelethonMediaService:
         ))
 
         logger.debug(
-            f"Grouped {len(sorted_ids)} message IDs into {len(ranges)} ranges"
+            'Grouped %s message IDs into %s ranges', len(sorted_ids), len(ranges)
         )
 
         return ranges
@@ -756,13 +739,13 @@ class TelethonMediaService:
     async def get_batch_message_contexts(
         self,
         chat_identifier: Union[int, str],
-        message_ids: List[int],
+        message_ids: list[int],
         context_size: int = 5,
         fetch_replies: bool = True,
         include_sender_details: bool = False,
         include_media_details: bool = False,
         max_concurrent: int = 3
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Get conversation contexts for multiple messages
 
@@ -809,7 +792,7 @@ class TelethonMediaService:
                 # Build contexts from cached messages
                 for msg_id in msg_ids_in_range:
                     if msg_id not in message_map:
-                        logger.warning(f"Message {msg_id} not found in range")
+                        logger.warning('Message %s not found in range', msg_id)
                         continue
 
                     target_msg = message_map[msg_id]
@@ -866,13 +849,13 @@ class TelethonMediaService:
 
             except Exception as e:
                 logger.error(
-                    f"Range fetch failed [{range_start}-{range_end}]: {e}",
+                    'Range fetch failed [%s-%s]: %s', range_start, range_end, e,
                     exc_info=True
                 )
                 continue
 
         logger.info(
-            f"Retrieved {len(all_contexts)}/{len(message_ids)} message contexts"
+            'Retrieved %s/%s message contexts', len(all_contexts), len(message_ids)
         )
 
         return all_contexts
@@ -946,8 +929,7 @@ class TelethonMediaService:
 
                 # Download ONLY this thumbnail size
                 logger.debug(
-                    f"Downloading photo thumbnail: "
-                    f"{getattr(thumb_size, 'w', 0)}x{getattr(thumb_size, 'h', 0)}"
+                    'Downloading photo thumbnail: %sx%s', getattr(thumb_size, 'w', 0), getattr(thumb_size, 'h', 0)
                 )
 
                 return await self.client.download_media(
@@ -974,9 +956,7 @@ class TelethonMediaService:
                         )
 
                         logger.debug(
-                            f"Downloading document thumbnail: "
-                            f"{getattr(suitable_thumbs[0], 'w', 0)}x"
-                            f"{getattr(suitable_thumbs[0], 'h', 0)}"
+                            'Downloading document thumbnail: %sx%s', getattr(suitable_thumbs[0], 'w', 0), getattr(suitable_thumbs[0], 'h', 0)
                         )
 
                         return await self.client.download_media(
@@ -986,19 +966,18 @@ class TelethonMediaService:
                         )
 
                 logger.warning(
-                    f"No thumbnail available for document {doc.id}. "
-                    f"Consider implementing frame extraction for videos."
+                    'No thumbnail available for document %s. Consider implementing frame extraction for videos.', doc.id
                 )
                 return None
 
         except Exception as e:
-            logger.error(f"Thumbnail download failed: {e}", exc_info=True)
+            logger.error('Thumbnail download failed: %s', e, exc_info=True)
             return None
 
     def _create_thumbnail_sync(
         self,
         image_bytes: bytes,
-        size: Tuple[int, int] = (THUMBNAIL_SIZE, THUMBNAIL_SIZE)
+        size: tuple[int, int] = (THUMBNAIL_SIZE, THUMBNAIL_SIZE)
     ) -> bytes:
         """
         Create thumbnail from image bytes (CPU-bound, runs in thread pool)
@@ -1034,14 +1013,14 @@ class TelethonMediaService:
             return output.getvalue()
 
         except Exception as e:
-            logger.error(f"Thumbnail creation failed: {e}", exc_info=True)
+            logger.error('Thumbnail creation failed: %s', e, exc_info=True)
             raise
 
     async def download_and_create_thumbnail(
         self,
         chat_identifier: Union[int, str],
         message_id: int,
-        size: Tuple[int, int] = (THUMBNAIL_SIZE, THUMBNAIL_SIZE),
+        size: tuple[int, int] = (THUMBNAIL_SIZE, THUMBNAIL_SIZE),
         force_regenerate: bool = False
     ) -> Optional[ThumbnailResult]:
         """
@@ -1072,15 +1051,14 @@ class TelethonMediaService:
 
                 if not message or not message.media:
                     logger.warning(
-                        f"No media found in message {message_id} "
-                        f"from chat {chat_identifier}"
+                        'No media found in message %s from chat %s', message_id, chat_identifier
                     )
                     return None
 
                 media_type = self._get_media_type(message)
                 if media_type not in ["photo", "video", "image"]:
                     logger.info(
-                        f"Media type '{media_type}' doesn't support thumbnails"
+                        "Media type '%s' doesn't support thumbnails", media_type
                     )
                     return None
 
@@ -1089,7 +1067,7 @@ class TelethonMediaService:
                 if media_hash and not force_regenerate:
                     cached_path = await self._thumbnail_cache.get(media_hash)
                     if cached_path and os.path.exists(cached_path):
-                        logger.debug(f"Thumbnail cache hit: {media_hash}")
+                        logger.debug('Thumbnail cache hit: %s', media_hash)
 
                         # Get file size
                         file_size = os.path.getsize(cached_path)
@@ -1115,7 +1093,7 @@ class TelethonMediaService:
 
                 if not thumbnail_bytes:
                     logger.warning(
-                        f"No thumbnail available for message {message_id}"
+                        'No thumbnail available for message %s', message_id
                     )
                     return None
 
@@ -1150,22 +1128,19 @@ class TelethonMediaService:
                 )
 
                 logger.info(
-                    f"Created thumbnail for message {message_id}: "
-                    f"{filename} ({len(processed_bytes)} bytes)"
+                    'Created thumbnail for message %s: %s (%s bytes)', message_id, filename, len(processed_bytes)
                 )
-
-                print(result)
 
                 return result
 
             except Exception as e:
                 logger.error(
-                    f"Error processing media from message {message_id}: {e}",
+                    'Error processing media from message %s: %s', message_id, e,
                     exc_info=True
                 )
                 raise
 
-    def _full_media_info(self, message) -> Tuple[str, str, Optional[int]]:
+    def _full_media_info(self, message) -> tuple[str, str, Optional[int]]:
         """(media type, file extension, size in bytes) of a message's original media."""
         from telethon.tl.types import MessageMediaDocument, MessageMediaPhoto
 
@@ -1179,7 +1154,7 @@ class TelethonMediaService:
             raise MediaUnavailable(f"{doc.mime_type} can't be shown in the browser")
         raise MediaUnavailable("This message has no photo or video")
 
-    async def download_full_media(self, chat_identifier: Union[int, str], message_id: int) -> Dict[str, Any]:
+    async def download_full_media(self, chat_identifier: Union[int, str], message_id: int) -> dict[str, Any]:
         """Download a message's original photo or video (cached on disk by media id)."""
         if not self._client_started:
             await self.start()
@@ -1225,10 +1200,10 @@ class TelethonMediaService:
     async def batch_create_thumbnails(
         self,
         chat_identifier: Union[int, str],
-        message_ids: List[int],
-        size: Tuple[int, int] = (THUMBNAIL_SIZE, THUMBNAIL_SIZE),
+        message_ids: list[int],
+        size: tuple[int, int] = (THUMBNAIL_SIZE, THUMBNAIL_SIZE),
         max_concurrent: int = 5
-    ) -> List[ThumbnailResult]:
+    ) -> list[ThumbnailResult]:
         """
         Create thumbnails for multiple messages with bounded concurrency
 
@@ -1257,7 +1232,7 @@ class TelethonMediaService:
                         size
                     )
                 except Exception as e:
-                    logger.error(f"Thumbnail failed for message {msg_id}: {e}")
+                    logger.error('Thumbnail failed for message %s: %s', msg_id, e)
                     return None
 
         # Run concurrently
@@ -1270,8 +1245,7 @@ class TelethonMediaService:
         successful = [r for r in results if r is not None]
 
         logger.info(
-            f"Created {len(successful)}/{len(message_ids)} thumbnails "
-            f"with concurrency={max_concurrent}"
+            'Created %s/%s thumbnails with concurrency=%s', len(successful), len(message_ids), max_concurrent
         )
 
         return successful
@@ -1281,8 +1255,8 @@ class TelethonMediaService:
         chat_identifier: Union[int, str],
         limit: int = 100,
         offset_id: int = 0,
-        media_types: Optional[List[str]] = None
-    ) -> List[Dict[str, Any]]:
+        media_types: Optional[list[str]] = None
+    ) -> list[dict[str, Any]]:
         """
         Get messages with media from a chat
 
@@ -1326,15 +1300,14 @@ class TelethonMediaService:
                     })
 
             logger.info(
-                f"Found {len(media_messages)} media messages in "
-                f"chat {chat_identifier}"
+                'Found %s media messages in chat %s', len(media_messages), chat_identifier
             )
 
             return media_messages
 
         except Exception as e:
             logger.error(
-                f"Error getting media messages from chat {chat_identifier}: {e}",
+                'Error getting media messages from chat %s: %s', chat_identifier, e,
                 exc_info=True
             )
             raise
@@ -1343,7 +1316,7 @@ class TelethonMediaService:
     # UTILITY METHODS
     # ============================================================================
 
-    async def get_chat_info(self, chat_identifier: Union[int, str]) -> Dict[str, Any]:
+    async def get_chat_info(self, chat_identifier: Union[int, str]) -> dict[str, Any]:
         """
         Get information about a chat
 
@@ -1382,7 +1355,7 @@ class TelethonMediaService:
         await self._message_cache.clear()
         logger.info("Cleared all caches")
 
-    def get_cache_stats(self) -> Dict[str, Any]:
+    def get_cache_stats(self) -> dict[str, Any]:
         """Get statistics about cache usage"""
         return {
             "entity_cache_size": len(self._entity_cache.cache),

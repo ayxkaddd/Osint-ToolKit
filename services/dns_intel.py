@@ -7,13 +7,14 @@ transparency rows and Team Cymru ASN answers.
 
 import ipaddress
 import re
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Optional
+from collections.abc import Iterable
 
 HOSTNAME_RE = re.compile(r"^(?=.{1,253}$)(?:[a-z0-9_](?:[a-z0-9_-]{0,61}[a-z0-9])?\.)+[a-z]{2,24}$")
 EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,24}")
 
 # A token is per account: the same token on two domains means the same owner.
-VERIFICATION_PATTERNS: List[Tuple[re.Pattern, str]] = [
+VERIFICATION_PATTERNS: list[tuple[re.Pattern, str]] = [
     (re.compile(r"^google-site-verification=(.+)$", re.I), "Google Search Console"),
     (re.compile(r"^facebook-domain-verification=(.+)$", re.I), "Facebook / Meta Business"),
     (re.compile(r"^MS=(ms\d+)$", re.I), "Microsoft 365"),
@@ -77,7 +78,7 @@ NS_PROVIDERS = {
 }
 
 
-def match_provider(host: str, table: Dict[str, str]) -> Optional[str]:
+def match_provider(host: str, table: dict[str, str]) -> Optional[str]:
     """Dotted needles match as a domain suffix, bare words anywhere in the name."""
     host = (host or "").lower().rstrip(".")
     for needle, name in table.items():
@@ -92,7 +93,7 @@ def txt_value(raw: str) -> str:
     return "".join(parts) if parts else (raw or "").strip()
 
 
-def parse_spf(record: str) -> Dict[str, Any]:
+def parse_spf(record: str) -> dict[str, Any]:
     includes, ips, services = [], [], []
     policy = None
     for term in record.split()[1:]:
@@ -113,7 +114,7 @@ def parse_spf(record: str) -> Dict[str, Any]:
     return {"record": record, "includes": includes, "ips": ips, "services": services, "policy": policy}
 
 
-def parse_dmarc(record: str) -> Dict[str, Any]:
+def parse_dmarc(record: str) -> dict[str, Any]:
     tags = {}
     for part in record.split(";"):
         if "=" in part:
@@ -130,7 +131,7 @@ def parse_dmarc(record: str) -> Dict[str, Any]:
     return {"record": record, "policy": tags.get("p"), "report_emails": emails}
 
 
-def parse_verification(record: str) -> Optional[Dict[str, str]]:
+def parse_verification(record: str) -> Optional[dict[str, str]]:
     for pattern, service in VERIFICATION_PATTERNS:
         m = pattern.match(record.strip())
         if m:
@@ -141,7 +142,7 @@ def parse_verification(record: str) -> Optional[Dict[str, str]]:
     return None
 
 
-def analyze_records(records: Dict[str, List[str]], dmarc_txt: Iterable[str]) -> Dict[str, Any]:
+def analyze_records(records: dict[str, list[str]], dmarc_txt: Iterable[str]) -> dict[str, Any]:
     """Owner intel from the domain's own DNS answers."""
     txt = [txt_value(r) for r in records.get("TXT", [])]
     spf = next((parse_spf(t) for t in txt if t.lower().startswith("v=spf1")), None)
@@ -155,7 +156,7 @@ def analyze_records(records: Dict[str, List[str]], dmarc_txt: Iterable[str]) -> 
     dmarc_records = [txt_value(r) for r in dmarc_txt]
     dmarc = next((parse_dmarc(r) for r in dmarc_records if r.lower().startswith("v=dmarc1")), None)
 
-    def providers(values: List[str], table: Dict[str, str], strip_pref: bool = False) -> List[str]:
+    def providers(values: list[str], table: dict[str, str], strip_pref: bool = False) -> list[str]:
         out = []
         for value in values:
             host = value.split()[-1] if strip_pref else value
@@ -185,10 +186,10 @@ def analyze_records(records: Dict[str, List[str]], dmarc_txt: Iterable[str]) -> 
     }
 
 
-def parse_crtsh(rows: List[Dict[str, Any]], domain: str) -> Tuple[Dict[str, Dict[str, Any]], List[str]]:
+def parse_crtsh(rows: list[dict[str, Any]], domain: str) -> tuple[dict[str, dict[str, Any]], list[str]]:
     """Names (and the rare email) from certificate transparency rows."""
-    names: Dict[str, Dict[str, Any]] = {}
-    emails: List[str] = []
+    names: dict[str, dict[str, Any]] = {}
+    emails: list[str] = []
     for row in rows:
         seen = str(row.get("not_before") or row.get("entry_timestamp") or "")[:10]
         for name in str(row.get("name_value", "")).splitlines():
@@ -221,7 +222,7 @@ def cymru_query_name(ip: str) -> Optional[str]:
     return nibbles + ".origin6.asn.cymru.com"
 
 
-def parse_cymru_origin(txt: str) -> Dict[str, str]:
+def parse_cymru_origin(txt: str) -> dict[str, str]:
     # "15169 | 8.8.8.0/24 | US | arin | 2014-03-14"
     parts = [p.strip() for p in txt_value(txt).split("|")]
     keys = ["asn", "prefix", "country", "registry", "allocated"]

@@ -82,7 +82,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const response = await fetch('/api/face-search/detect-faces', {
                 method: 'POST',
-                body: formData
+                body: formData,
             });
 
             if (!response.ok) throw new Error('Failed to detect faces');
@@ -123,8 +123,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Check which face was clicked
         for (let i = 0; i < detectedFaces.length; i++) {
             const face = detectedFaces[i];
-            if (clickX >= face.x1 && clickX <= face.x2 &&
-                clickY >= face.y1 && clickY <= face.y2) {
+            if (clickX >= face.x1 && clickX <= face.x2 && clickY >= face.y1 && clickY <= face.y2) {
                 selectedFaceIndex = i;
                 drawFaces(detectedFaces, selectedFaceIndex);
                 break;
@@ -161,7 +160,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const response = await fetch('/api/face-search/search', {
                 method: 'POST',
-                body: formData
+                body: formData,
             });
 
             if (!response.ok) throw new Error('Failed to search faces');
@@ -238,7 +237,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.strokeStyle = selectedIndex === null ? '#a855f7' : '#6b7280';
                 ctx.lineWidth = 4;
             }
-            
+
             ctx.strokeRect(face.x1, face.y1, width, height);
 
             // Draw face number if multiple faces
@@ -274,15 +273,15 @@ document.addEventListener('DOMContentLoaded', () => {
             canvas.width = paddedWidth;
             canvas.height = paddedHeight;
 
-            ctx.drawImage(
-                imgElement,
-                x, y, paddedWidth, paddedHeight,
-                0, 0, paddedWidth, paddedHeight
-            );
+            ctx.drawImage(imgElement, x, y, paddedWidth, paddedHeight, 0, 0, paddedWidth, paddedHeight);
 
-            canvas.toBlob((blob) => {
-                resolve(new File([blob], 'cropped_face.jpg', { type: 'image/jpeg' }));
-            }, 'image/jpeg', 0.95);
+            canvas.toBlob(
+                (blob) => {
+                    resolve(new File([blob], 'cropped_face.jpg', { type: 'image/jpeg' }));
+                },
+                'image/jpeg',
+                0.95
+            );
         });
     }
 
@@ -296,18 +295,24 @@ document.addEventListener('DOMContentLoaded', () => {
         resultsGrid.innerHTML = '';
 
         if (queryImage && /^data:image\//.test(queryImage)) {
-            resultsGrid.insertAdjacentHTML('beforeend', `
+            resultsGrid.insertAdjacentHTML(
+                'beforeend',
+                `
                 <div class="col-span-full flex items-center gap-3 text-sm text-gray-400">
                     <img src="${escapeAttr(queryImage)}" alt="Searched face" data-image-view="" class="w-16 h-16 rounded-lg object-cover border border-gray-700">
                     <span>Searched face · ${results.length} match${results.length === 1 ? '' : 'es'}</span>
-                </div>`);
+                </div>`
+            );
         }
         if (results.length === 0) {
-            resultsGrid.insertAdjacentHTML('beforeend', '<p class="text-gray-400 col-span-full text-center">No matches found.</p>');
+            resultsGrid.insertAdjacentHTML(
+                'beforeend',
+                '<p class="text-gray-400 col-span-full text-center">No matches found.</p>'
+            );
             return;
         }
 
-        results.forEach(result => {
+        results.forEach((result) => {
             const similarity = parseFloat(result.similarity_rate);
             let similarityClass = 'similarity-low';
             if (similarity > 70 || (similarity <= 1 && similarity > 0.7)) similarityClass = 'similarity-high';
@@ -329,10 +334,14 @@ document.addEventListener('DOMContentLoaded', () => {
                             <i data-lucide="map-pin" class="w-4 h-4 mr-2"></i>
                             <span class="truncate">${escapeHtml(result.city || 'Unknown city')}</span>
                         </div>
-                        ${vkId ? `<div class="flex items-center gap-2 flex-wrap">
+                        ${
+                            vkId
+                                ? `<div class="flex items-center gap-2 flex-wrap">
                             ${pivotChip('vk', vkId, 'vk.com/id' + vkId)}
                             <a href="https://vk.com/id${vkId}" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:text-blue-300 text-xs">open</a>
-                        </div>` : ''}
+                        </div>`
+                                : ''
+                        }
                     </div>
                 </div>`;
             resultsGrid.appendChild(card);

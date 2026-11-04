@@ -1,8 +1,8 @@
 from fastapi import APIRouter, HTTPException, Request
 from auth.auth_handler import TelegramAuthHandler
 from fastapi.responses import JSONResponse
-from models.telegram_models import VKProfileHistoryResponse
-from services.telegram_service import TelegramService
+from models.vk_history_models import VKProfileHistoryResponse
+from services.vk_history_service import VkHistoryService
 from utils import telegram_client
 from utils.investigation_decorator import save_investigation
 
@@ -58,13 +58,13 @@ async def auth_status():
     status = await auth_handler.connect()
     return {"authorized": status, "configured": True}
 
-telegram_service = TelegramService()
+vk_history_service = VkHistoryService()
 
 @bot_router.get("/search")
 @save_investigation(service_name="vk_profile", method_name="lookup_vk_profile")
 async def search_vk_profile(user_id: str) -> VKProfileHistoryResponse:
     try:
-        result = await telegram_service.send_request(user_id)
+        result = await vk_history_service.send_request(user_id)
         return result
     except Exception as e:
         return JSONResponse(

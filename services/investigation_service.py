@@ -31,7 +31,7 @@ import tarfile
 import threading
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 from uuid import UUID, uuid4
 
 from services.entities import Entity, entities_from_parameters, extract_entities
@@ -44,6 +44,8 @@ logger = logging.getLogger(__name__)
 # templates each construct their own) so concurrent lookups writing to the same
 # JSON files cannot interleave and lose data.
 _STORE_LOCK = threading.RLock()
+# entities.json path -> (file version, {"raw": parsed file, "sorted": decorated list or None})
+_ENTITY_CACHE: dict[str, tuple[Any, dict[str, Any]]] = {}
 _MIGRATED_DIRS: set = set()
 
 # Bump when the index entry format / summary logic changes
@@ -142,7 +144,7 @@ def process_picture(data: bytes) -> bytes:
     return out.getvalue()
 
 
-def find_target(parameters: Dict[str, Any]) -> Optional[str]:
+def find_target(parameters: dict[str, Any]) -> Optional[str]:
     """Pick the human-meaningful target (username, domain, ...) out of call parameters."""
     if not isinstance(parameters, dict):
         return None
@@ -253,19 +255,19 @@ class InvestigationService:
     def _picture_file(self, investigation_id) -> Path:
         return self._inv_dir(investigation_id) / "picture.webp"
 
-    def _load_investigations(self) -> Dict[str, Any]:
+    def _load_investigations(self) -> dict[str, Any]:
         return _read_json(self.investigations_file, {})
 
-    def _save_investigations(self, investigations: Dict[str, Any]) -> None:
+    def _save_investigations(self, investigations: dict[str, Any]) -> None:
         _write_json_atomic(self.investigations_file, investigations)
 
-    def _load_index(self, investigation_id) -> Dict[str, Any]:
+    def _load_index(self, investigation_id) -> dict[str, Any]:
         return _read_json(self._index_file(investigation_id), {})
 
-    def _save_index(self, investigation_id, index: Dict[str, Any]) -> None:
+    def _save_index(self, investigation_id, index: dict[str, Any]) -> None:
         _write_json_atomic(self._index_file(investigation_id), index, compact=True)
 
-    def _public_info(self, info: Dict[str, Any]) -> Dict[str, Any]:
+    def _public_info(self, info: dict[str, Any]) -> dict[str, Any]:
         info = dict(info)
         info.pop("picture", None)
         if info.get("has_picture"):
@@ -275,7 +277,7 @@ class InvestigationService:
             info["picture_url"] = None
         return info
 
-    def _touch(self, investigation_id, investigations: Optional[Dict[str, Any]] = None) -> None:
+    def _touch(self, investigation_id, investigations: Optional[dict[str, Any]] = None) -> None:
         """Refresh counts + updated_at for an investigation."""
         with _STORE_LOCK:
             investigations = investigations if investigations is not None else self._load_investigations()
@@ -329,7 +331,7 @@ class InvestigationService:
 
         return investigation_id
 
-    def get_investigation_info(self, investigation_id) -> Optional[Dict[str, Any]]:
+    def get_investigation_info(self, investigation_id) -> Optional[dict[str, Any]]:
         """Get investigation metadata"""
         try:
             info = self._load_investigations().get(str(UUID(str(investigation_id))))
@@ -384,7 +386,7 @@ class InvestigationService:
             return None
         return path if path.exists() else None
 
-    def list_all_investigations(self) -> List[Dict[str, Any]]:
+    def list_all_investigations(self) -> list[dict[str, Any]]:
         """List all created investigations, newest first"""
         investigations = [self._public_info(i) for i in self._load_investigations().values()]
         investigations.sort(key=lambda x: x.get("created_at", ""), reverse=True)
@@ -415,7 +417,7 @@ class InvestigationService:
         investigation_id: UUID,
         service_name: str,
         method_name: str,
-        parameters: Dict[str, Any],
+        parameters: dict[str, Any],
         result: Any,
         result_id: Optional[str] = None,
         parent_result_id: Optional[str] = None,
@@ -474,7 +476,7 @@ class InvestigationService:
             return record["result_id"]
 
     @staticmethod
-    def _index_entry(record: Dict[str, Any], size: int) -> Dict[str, Any]:
+    def _index_entry(record: dict[str, Any], size: int) -> dict[str, Any]:
         return {
             "result_id": record["result_id"],
             "service_name": record["service_name"],
@@ -499,7 +501,7 @@ class InvestigationService:
             "triage": record.get("triage"),
         }
 
-    def _write_result(self, investigation_id, record: Dict[str, Any]) -> None:
+    def _write_result(self, investigation_id, record: dict[str, Any]) -> None:
         """Write a full record and refresh its index entry and entities."""
         with _STORE_LOCK:
             size = _write_gz_atomic(self._result_file(investigation_id, record["result_id"]), record)
@@ -536,20 +538,20 @@ class InvestigationService:
             self._touch(inv_id, investigations)
         version_file.write_text(str(INDEX_VERSION))
 
-    def get_investigation_results(self, investigation_id: UUID) -> List[Dict[str, Any]]:
+    def get_investigation_results(self, investigation_id: UUID) -> list[dict[str, Any]]:
         """Result summaries for an investigation, newest first (no result payloads)."""
         results = list(self._load_index(investigation_id).values())
         results.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
         return results
 
-    def get_result(self, investigation_id: UUID, result_id: str) -> Optional[Dict[str, Any]]:
+    def get_result(self, investigation_id: UUID, result_id: str) -> Optional[dict[str, Any]]:
         """Full record for one result, including its children."""
         try:
             return _read_gz(self._result_file(investigation_id, result_id))
         except (ValueError, TypeError):
             return None
 
-    def get_full_results(self, investigation_id: UUID) -> List[Dict[str, Any]]:
+    def get_full_results(self, investigation_id: UUID) -> list[dict[str, Any]]:
         """Every full result record (used for export)."""
         records = []
         for summary in self.get_investigation_results(investigation_id):
@@ -572,7 +574,7 @@ class InvestigationService:
             self._touch(investigation_id)
             return True
 
-    def delete_results(self, investigation_id: UUID, result_ids: List[str]) -> List[str]:
+    def delete_results(self, investigation_id: UUID, result_ids: list[str]) -> list[str]:
         """Delete several results; returns the ids that were deleted."""
         with _STORE_LOCK:
             index = self._load_index(investigation_id)
@@ -581,7 +583,7 @@ class InvestigationService:
                 self._remove_from_store(investigation_id, index, deleted)
             return deleted
 
-    def _remove_from_store(self, investigation_id, index: Dict[str, Any], result_ids: List[str]) -> None:
+    def _remove_from_store(self, investigation_id, index: dict[str, Any], result_ids: list[str]) -> None:
         """Take results out of an investigation, writing its index and entities once."""
         for result_id in result_ids:
             del index[result_id]
@@ -593,7 +595,7 @@ class InvestigationService:
         self._save_entities(investigation_id, entities)
         self._touch(investigation_id)
 
-    def move_results(self, investigation_id: UUID, target_id: UUID, result_ids: List[str]) -> List[str]:
+    def move_results(self, investigation_id: UUID, target_id: UUID, result_ids: list[str]) -> list[str]:
         """Move results (with their follow-ups) to another investigation; returns the
         ids that were moved. The copy is written first, so a crash can't lose a result.
         Snapshots stay with the notes that hold them."""
@@ -622,7 +624,7 @@ class InvestigationService:
     # ==================== TRIAGE ====================
 
     def set_result_triage(self, investigation_id: UUID, result_id: str,
-                          status: Optional[str], note: Optional[str]) -> Optional[Dict[str, Any]]:
+                          status: Optional[str], note: Optional[str]) -> Optional[dict[str, Any]]:
         """Mark a result confirmed / important / false positive, with a note."""
         if status not in TRIAGE_STATUSES:
             raise ValueError(f"status must be one of {sorted(s for s in TRIAGE_STATUSES if s)}")
@@ -636,8 +638,8 @@ class InvestigationService:
             self._write_result(investigation_id, record)
             return record["triage"]
 
-    def set_results_triage(self, investigation_id: UUID, result_ids: List[str],
-                           status: Optional[str]) -> Dict[str, Any]:
+    def set_results_triage(self, investigation_id: UUID, result_ids: list[str],
+                           status: Optional[str]) -> dict[str, Any]:
         """Set the same assessment on several results, keeping each one's own note.
         Returns {result_id: triage} for the results that exist."""
         if status not in TRIAGE_STATUSES:
@@ -664,14 +666,14 @@ class InvestigationService:
     def _entities_file(self, investigation_id) -> Path:
         return self._inv_dir(investigation_id) / "entities.json"
 
-    def _load_entities(self, investigation_id) -> Dict[str, Any]:
+    def _load_entities(self, investigation_id) -> dict[str, Any]:
         return _read_json(self._entities_file(investigation_id), {})
 
-    def _save_entities(self, investigation_id, entities: Dict[str, Any]) -> None:
+    def _save_entities(self, investigation_id, entities: dict[str, Any]) -> None:
         _write_json_atomic(self._entities_file(investigation_id), entities, compact=True)
 
     @staticmethod
-    def _drop_entity_sources(entities: Dict[str, Any], result_ids: set) -> None:
+    def _drop_entity_sources(entities: dict[str, Any], result_ids: set) -> None:
         for key in list(entities):
             entity = entities[key]
             entity["sources"] = [src for src in entity.get("sources", []) if src.get("result_id") not in result_ids]
@@ -679,7 +681,7 @@ class InvestigationService:
                 del entities[key]
 
     @staticmethod
-    def _apply_record_entities(entities: Dict[str, Any], record: Dict[str, Any], remove_only: bool = False) -> None:
+    def _apply_record_entities(entities: dict[str, Any], record: dict[str, Any], remove_only: bool = False) -> None:
         """Replace the sources one result contributes (idempotent: results are
         rewritten when follow-ups are attached)."""
         result_id = record.get("result_id")
@@ -714,21 +716,46 @@ class InvestigationService:
                 if entity.key not in searched:
                     add(entity, "found", service, method, timestamp, child_id, path)
 
-    def get_entities(self, investigation_id: UUID) -> List[Dict[str, Any]]:
-        """All identifiers in the investigation with where they were found."""
-        entities = list(self._load_entities(investigation_id).values())
-        for entity in entities:
-            found_in = {src.get("result_id") for src in entity.get("sources", []) if src.get("role") == "found"}
-            entity["found_count"] = len(found_in)
-            entity["searched"] = sorted({src.get("service") for src in entity.get("sources", [])
-                                         if src.get("role") == "searched"})
-            entity["services"] = sorted({src.get("service") for src in entity.get("sources", [])})
+    @staticmethod
+    def _decorate_entity(entity: dict[str, Any]) -> dict[str, Any]:
+        """Counts shown in the identifier list (computed, not stored)."""
+        sources = entity.get("sources", [])
+        entity["found_count"] = len({src.get("result_id") for src in sources if src.get("role") == "found"})
+        entity["searched"] = sorted({src.get("service") for src in sources if src.get("role") == "searched"})
+        entity["services"] = sorted({src.get("service") for src in sources})
+        return entity
+
+    @staticmethod
+    def _entity_order(entity: dict[str, Any]):
         rank = {"confirmed": 0, "important": 1, None: 2, "false_positive": 3}
-        entities.sort(key=lambda e: (rank.get(e.get("status"), 2), -e["found_count"], e["type"], e["value"]))
-        return entities
+        return (rank.get(entity.get("status"), 2), -entity["found_count"], entity["type"], entity["value"])
+
+    def _entities_snapshot(self, investigation_id) -> dict[str, Any]:
+        """Read-only view of entities.json, parsed once per version of the file.
+        Large investigations have tens of thousands of identifiers (several MB)."""
+        path = self._entities_file(investigation_id)
+        try:
+            stat = path.stat()
+        except FileNotFoundError:
+            return {"raw": {}, "sorted": []}
+        version = (stat.st_mtime_ns, stat.st_size, stat.st_ino)
+        cached = _ENTITY_CACHE.get(str(path))
+        if cached is None or cached[0] != version:
+            cached = _ENTITY_CACHE[str(path)] = (version, {"raw": self._load_entities(investigation_id), "sorted": None})
+        return cached[1]
+
+    def get_entities(self, investigation_id: UUID) -> list[dict[str, Any]]:
+        """All identifiers in the investigation with where they were found.
+        Callers get copies they may modify."""
+        snapshot = self._entities_snapshot(investigation_id)
+        if snapshot["sorted"] is None:
+            entities = [self._decorate_entity(dict(e)) for e in snapshot["raw"].values()]
+            entities.sort(key=self._entity_order)
+            snapshot["sorted"] = entities
+        return [dict(e) for e in snapshot["sorted"]]
 
     def set_entity_triage(self, investigation_id: UUID, key: str,
-                          status: Optional[str], note: Optional[str]) -> Optional[Dict[str, Any]]:
+                          status: Optional[str], note: Optional[str]) -> Optional[dict[str, Any]]:
         if status not in TRIAGE_STATUSES:
             raise ValueError(f"status must be one of {sorted(s for s in TRIAGE_STATUSES if s)}")
         with _STORE_LOCK:
@@ -742,18 +769,21 @@ class InvestigationService:
             self._save_entities(investigation_id, entities)
             return entity
 
-    def entities_for_result(self, investigation_id: UUID, result_id: str) -> List[Dict[str, Any]]:
-        return [e for e in self.get_entities(investigation_id)
-                if any(src.get("result_id") == result_id for src in e.get("sources", []))]
+    def entities_for_result(self, investigation_id: UUID, result_id: str) -> list[dict[str, Any]]:
+        """Identifiers one result contributes, without building the whole list."""
+        entities = [self._decorate_entity(dict(e)) for e in self._entities_snapshot(investigation_id)["raw"].values()
+                    if any(src.get("result_id") == result_id for src in e.get("sources", []))]
+        entities.sort(key=self._entity_order)
+        return entities
 
-    def previous_lookups(self, investigation_id: UUID, entity_key: str) -> List[Dict[str, Any]]:
+    def previous_lookups(self, investigation_id: UUID, entity_key: str) -> list[dict[str, Any]]:
         """Earlier lookups run on this identifier (to avoid paying twice)."""
         entity = self._load_entities(investigation_id).get(entity_key)
         if not entity:
             return []
         return [src for src in entity.get("sources", []) if src.get("role") == "searched"]
 
-    def get_investigation_result(self, investigation_id: UUID) -> Optional[Dict[str, Any]]:
+    def get_investigation_result(self, investigation_id: UUID) -> Optional[dict[str, Any]]:
         """Investigation info + result summaries"""
         investigation_info = self.get_investigation_info(investigation_id)
         if not investigation_info:
@@ -768,7 +798,7 @@ class InvestigationService:
         service_name: Optional[str] = None,
         method_name: Optional[str] = None,
         limit: Optional[int] = None
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Result summaries of the *current* investigation, optionally filtered by module."""
         investigation_id = self.get_current_investigation()
         if not investigation_id:
@@ -795,7 +825,7 @@ class InvestigationService:
                 _write_json_atomic(self.current_file, {"investigation_id": str(investigation_id)})
             return True
         except OSError as e:
-            logger.error(f"Failed to set current investigation: {e}")
+            logger.error('Failed to set current investigation: %s', e)
             return False
 
     def get_current_investigation(self) -> Optional[UUID]:
@@ -810,7 +840,7 @@ class InvestigationService:
             return None
         return inv_uuid if str(inv_uuid) in self._load_investigations() else None
 
-    def get_current_investigation_details(self) -> Optional[Dict[str, Any]]:
+    def get_current_investigation_details(self) -> Optional[dict[str, Any]]:
         current_id = self.get_current_investigation()
         return self.get_investigation_info(current_id) if current_id else None
 
@@ -820,7 +850,7 @@ class InvestigationService:
                 _write_json_atomic(self.current_file, {"investigation_id": None})
             return True
         except OSError as e:
-            logger.error(f"Failed to clear investigation: {e}")
+            logger.error('Failed to clear investigation: %s', e)
             return False
 
     # ==================== NOTES ====================
@@ -835,7 +865,7 @@ class InvestigationService:
         content: str,
         note_type: str = "manual",
         related_result_id: Optional[str] = None,
-        tags: Optional[List[str]] = None,
+        tags: Optional[list[str]] = None,
         note_id: Optional[UUID] = None
     ) -> UUID:
         if not self.get_investigation_info(investigation_id):
@@ -863,8 +893,8 @@ class InvestigationService:
         self,
         investigation_id: UUID,
         note_type: Optional[str] = None,
-        tags: Optional[List[str]] = None
-    ) -> List[Dict[str, Any]]:
+        tags: Optional[list[str]] = None
+    ) -> list[dict[str, Any]]:
         notes_dir = self._notes_dir(investigation_id)
         if not notes_dir.exists():
             return []
@@ -881,7 +911,7 @@ class InvestigationService:
         notes.sort(key=lambda x: x.get("created_at", ""), reverse=True)
         return notes
 
-    def get_note(self, investigation_id: UUID, note_id: UUID) -> Optional[Dict[str, Any]]:
+    def get_note(self, investigation_id: UUID, note_id: UUID) -> Optional[dict[str, Any]]:
         return _read_json(self._note_file(investigation_id, note_id), None)
 
     def update_note(
@@ -890,7 +920,7 @@ class InvestigationService:
         note_id: UUID,
         title: Optional[str] = None,
         content: Optional[str] = None,
-        tags: Optional[List[str]] = None
+        tags: Optional[list[str]] = None
     ) -> bool:
         with _STORE_LOCK:
             note_file = self._note_file(investigation_id, note_id)
@@ -942,7 +972,7 @@ class InvestigationService:
     def _snapshots_dir(self, investigation_id) -> Path:
         return self._notes_dir(investigation_id) / "snapshots"
 
-    def create_snapshot(self, investigation_id: UUID, result_id: str) -> Optional[Dict[str, Any]]:
+    def create_snapshot(self, investigation_id: UUID, result_id: str) -> Optional[dict[str, Any]]:
         """Copy a result so a note keeps it as it was, even if the result is deleted later."""
         record = self.get_result(investigation_id, result_id) if _valid_id(result_id) else None
         if record is None:
@@ -966,16 +996,16 @@ class InvestigationService:
             _write_json_atomic(directory / "index.json", index)
         return meta
 
-    def get_snapshot(self, investigation_id: UUID, snapshot_id: str) -> Optional[Dict[str, Any]]:
+    def get_snapshot(self, investigation_id: UUID, snapshot_id: str) -> Optional[dict[str, Any]]:
         if not re.fullmatch(r"[0-9a-f]{32}", snapshot_id or ""):
             return None
         return _read_gz(self._snapshots_dir(investigation_id) / f"{snapshot_id}.json.gz")
 
-    def get_snapshots(self, investigation_id: UUID) -> List[Dict[str, Any]]:
+    def get_snapshots(self, investigation_id: UUID) -> list[dict[str, Any]]:
         directory = self._snapshots_dir(investigation_id)
         return [snap for path in sorted(directory.glob("*.json.gz")) if (snap := _read_gz(path))]
 
-    def result_references(self, investigation_id: UUID, result_id: str) -> List[Dict[str, Any]]:
+    def result_references(self, investigation_id: UUID, result_id: str) -> list[dict[str, Any]]:
         """Notes that link to a result or hold a snapshot of it."""
         snapshots = [s for s, r in _read_json(self._snapshots_dir(investigation_id) / "index.json", {}).items() if r == result_id]
         link = re.compile(r"\[\[result:" + re.escape(result_id) + r"(?:[|\]])")
@@ -1057,7 +1087,7 @@ class InvestigationService:
         if repaired:
             logger.info("Converted %d legacy investigation results to structured data", repaired)
 
-    def _legacy_files(self) -> Tuple[List[Path], Optional[Path], Optional[Path]]:
+    def _legacy_files(self) -> tuple[list[Path], Optional[Path], Optional[Path]]:
         result_files = [
             p for p in self.results_dir.glob("*_*.json")
             if p.name not in ("current_investigation.json",)
@@ -1104,7 +1134,7 @@ class InvestigationService:
         self._save_investigations(investigations)
 
         # 3. Results -> gzip per investigation
-        by_inv: Dict[str, List[Dict[str, Any]]] = {}
+        by_inv: dict[str, list[dict[str, Any]]] = {}
         for path in result_files:
             record = _read_json(path, None)
             if not isinstance(record, dict) or record.get("investigation_id") not in investigations:
@@ -1147,7 +1177,7 @@ class InvestigationService:
         logger.info("Investigation storage migration complete")
 
     @staticmethod
-    def _group_ns_whois(records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _group_ns_whois(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Fold the per-domain WHOIS lookups made by the NS module into one
         ``whois_analysis`` child of the NS lookup they followed."""
         def ts(record):
@@ -1162,7 +1192,7 @@ class InvestigationService:
             return records
 
         # Cluster lookups that happened within 10 minutes of each other
-        clusters: List[List[Dict[str, Any]]] = []
+        clusters: list[list[dict[str, Any]]] = []
         for record in whois:
             if clusters and (ts(record) - ts(clusters[-1][-1])).total_seconds() <= 600:
                 clusters[-1].append(record)
@@ -1205,3 +1235,7 @@ class InvestigationService:
                     "children": [],
                 })
         return others
+
+
+# The one instance the app uses (routes, the saving decorator, reports)
+investigation_service = InvestigationService()

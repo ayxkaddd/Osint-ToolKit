@@ -3,15 +3,15 @@ import re
 from fastapi import APIRouter, Request, Form, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel, EmailStr, validator
+from pydantic import BaseModel, EmailStr, field_validator
 import bcrypt
 import secrets
 import os
 import subprocess
 import shutil
-import requests
+import httpx
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Optional, Any
 import json
 import platform
 
@@ -34,14 +34,15 @@ class SetupState(BaseModel):
     features_selected: bool = False
     apis_configured: bool = False
     tools_installed: bool = False
-    selected_features: Dict[str, bool] = {}
+    selected_features: dict[str, bool] = {}
 
 
 class AdminCredentials(BaseModel):
     email: EmailStr
     password: str
 
-    @validator('password')
+    @field_validator('password')
+    @classmethod
     def password_strength(cls, v):
         if len(v) < 8:
             raise ValueError('Password must be at least 8 characters')
@@ -66,7 +67,7 @@ def get_setup_state() -> SetupState:
 def save_setup_state(state: SetupState):
     """Save setup state to file"""
     with open(SETUP_STATE_PATH, 'w') as f:
-        json.dump(state.dict(), f, indent=2)
+        json.dump(state.model_dump(), f, indent=2)
 
 
 def check_setup_complete() -> bool:
@@ -89,11 +90,10 @@ def get_go_path() -> Optional[Path]:
     return home / "go" / "bin"
 
 
-def check_go_tools() -> Dict[str, Dict[str, Any]]:
+def check_go_tools() -> dict[str, dict[str, Any]]:
     """Check if Go tools are installed with detailed info"""
     tools = {}
-    go_bin = get_go_path()
-    
+
     tool_checks = {
         "subfinder": {
             "command": "subfinder",
@@ -148,7 +148,7 @@ def check_go_tools() -> Dict[str, Dict[str, Any]]:
     return tools
 
 
-def check_gitfive_detailed() -> Dict[str, Any]:
+def check_gitfive_detailed() -> dict[str, Any]:
     """Check GitFive installation with detailed information"""
     possible_paths = [
         Path("../GitFive"),
@@ -195,7 +195,7 @@ def check_gitfive_detailed() -> Dict[str, Any]:
     }
 
 
-def check_python_packages() -> Dict[str, bool]:
+def check_python_packages() -> dict[str, bool]:
     """Check if required Python packages are installed"""
     packages = {
         "fastapi": "Web framework",
@@ -204,9 +204,8 @@ def check_python_packages() -> Dict[str, bool]:
         "python-multipart": "Form data handling",
         "pydantic": "Data validation",
         "bcrypt": "Password hashing",
-        "python-jose": "JWT handling",
-        "requests": "HTTP client",
-        "aiohttp": "Async HTTP client"
+        "jwt": "JWT handling",
+        "httpx": "HTTP client",
     }
     
     results = {}
@@ -220,12 +219,12 @@ def check_python_packages() -> Dict[str, bool]:
     return results
 
 
-def validate_hacker_target_api(api_key: str) -> Dict[str, Any]:
+def validate_hacker_target_api(api_key: str) -> dict[str, Any]:
     """Validate HackerTarget API key with actual request"""
     try:
-        response = requests.get(
+        response = httpx.get(
             f"https://api.hackertarget.com/findshareddns/?q=google.com&apikey={api_key}",
-            timeout=10
+            timeout=10, follow_redirects=True
         )
         
         if response.status_code == 200 and "error" not in response.text.lower():
@@ -238,18 +237,18 @@ def validate_hacker_target_api(api_key: str) -> Dict[str, Any]:
             return {"valid": False, "message": f"API Error: {response.text}"}
         else:
             return {"valid": False, "message": f"HTTP {response.status_code}: Invalid API key"}
-    except requests.RequestException as e:
+    except (httpx.HTTPError, ValueError) as e:  # ValueError: not JSON
         return {"valid": False, "message": f"Connection error: {str(e)}"}
 
 
-def validate_osint_industries_api(api_key: str) -> Dict[str, Any]:
+def validate_osint_industries_api(api_key: str) -> dict[str, Any]:
     """Validate OSINT Industries API key"""
     try:
         headers = {"api-key": api_key}
-        response = requests.get(
+        response = httpx.get(
             "https://api.osint.industries/misc/credits",
             headers=headers,
-            timeout=10
+            timeout=10, follow_redirects=True
         )
         
         if response.status_code == 200:
@@ -263,16 +262,16 @@ def validate_osint_industries_api(api_key: str) -> Dict[str, Any]:
             return {"valid": False, "message": "Invalid API key"}
         else:
             return {"valid": False, "message": f"HTTP {response.status_code}"}
-    except requests.RequestException as e:
+    except (httpx.HTTPError, ValueError) as e:  # ValueError: not JSON
         return {"valid": False, "message": f"Connection error: {str(e)}"}
 
 
-def validate_whois_history_api(api_key: str) -> Dict[str, Any]:
+def validate_whois_history_api(api_key: str) -> dict[str, Any]:
     """Validate WhoisXML API key"""
     try:
-        response = requests.get(
+        response = httpx.get(
             f"https://whois-history.whoisxmlapi.com/api/v1?apiKey={api_key}&domainName=google.com&mode=purchase",
-            timeout=10
+            timeout=10, follow_redirects=True
         )
         
         if response.status_code == 200:
@@ -286,18 +285,18 @@ def validate_whois_history_api(api_key: str) -> Dict[str, Any]:
             return {"valid": False, "message": data.get("error", {}).get("message", "Unknown error")}
         else:
             return {"valid": False, "message": f"HTTP {response.status_code}"}
-    except requests.RequestException as e:
+    except (httpx.HTTPError, ValueError) as e:  # ValueError: not JSON
         return {"valid": False, "message": f"Connection error: {str(e)}"}
 
 
-def validate_securitytrails_api(api_key: str) -> Dict[str, Any]:
+def validate_securitytrails_api(api_key: str) -> dict[str, Any]:
     """Validate SecurityTrails API key"""
     try:
         headers = {"APIKEY": api_key}
-        response = requests.get(
+        response = httpx.get(
             "https://api.securitytrails.com/v1/ping",
             headers=headers,
-            timeout=10
+            timeout=10, follow_redirects=True
         )
         
         if response.status_code == 200:
@@ -311,18 +310,18 @@ def validate_securitytrails_api(api_key: str) -> Dict[str, Any]:
             return {"valid": False, "message": "Invalid API key"}
         else:
             return {"valid": False, "message": f"HTTP {response.status_code}"}
-    except requests.RequestException as e:
+    except (httpx.HTTPError, ValueError) as e:  # ValueError: not JSON
         return {"valid": False, "message": f"Connection error: {str(e)}"}
 
 
-def validate_virustotal_api(api_key: str) -> Dict[str, Any]:
+def validate_virustotal_api(api_key: str) -> dict[str, Any]:
     """Validate VirusTotal API key"""
     try:
         headers = {"x-apikey": api_key}
-        response = requests.get(
+        response = httpx.get(
             "https://www.virustotal.com/api/v3/domains/google.com",
             headers=headers,
-            timeout=10
+            timeout=10, follow_redirects=True
         )
         
         if response.status_code == 200:
@@ -333,11 +332,11 @@ def validate_virustotal_api(api_key: str) -> Dict[str, Any]:
             return {"valid": False, "message": "API key lacks required permissions"}
         else:
             return {"valid": False, "message": f"HTTP {response.status_code}"}
-    except requests.RequestException as e:
+    except (httpx.HTTPError, ValueError) as e:  # ValueError: not JSON
         return {"valid": False, "message": f"Connection error: {str(e)}"}
 
 
-def validate_api_key(service: str, api_key: str) -> Dict[str, Any]:
+def validate_api_key(service: str, api_key: str) -> dict[str, Any]:
     validators = {
         "hacker_target": validate_hacker_target_api,
         "osint_industries": validate_osint_industries_api,
@@ -356,7 +355,7 @@ def validate_api_key(service: str, api_key: str) -> Dict[str, Any]:
         return {"valid": False, "message": f"Validation error: {str(e)}"}
 
 
-def save_env_config(config: Dict[str, str]):
+def save_env_config(config: dict[str, str]):
     """Save configuration to the .env file, preserving existing keys and comments."""
     try:
         update_env({k: v for k, v in config.items() if v not in (None, "")})
@@ -364,7 +363,7 @@ def save_env_config(config: Dict[str, str]):
         raise HTTPException(status_code=400, detail=str(e)) from e
 
 
-def install_go_tool(tool_name: str, package: str) -> Dict[str, Any]:
+def install_go_tool(tool_name: str, package: str) -> dict[str, Any]:
     """Install a single Go tool with detailed logging"""
     try:
         # Check if Go is installed
@@ -374,13 +373,6 @@ def install_go_tool(tool_name: str, package: str) -> Dict[str, Any]:
                 "message": "Go is not installed",
                 "install_url": "https://golang.org/dl/"
             }
-        
-        # Get Go version
-        go_version = subprocess.run(
-            ["go", "version"],
-            capture_output=True,
-            text=True
-        ).stdout.strip()
         
         # Install the tool
         process = subprocess.Popen(
@@ -428,7 +420,7 @@ def install_go_tool(tool_name: str, package: str) -> Dict[str, Any]:
         }
 
 
-def install_go_tools() -> Dict[str, Any]:
+def install_go_tools() -> dict[str, Any]:
     """Install all required Go tools"""
     if not check_dependency("go"):
         return {
@@ -455,7 +447,7 @@ def install_go_tools() -> Dict[str, Any]:
     }
 
 
-def setup_gitfive_guide() -> Dict[str, Any]:
+def setup_gitfive_guide() -> dict[str, Any]:
     """Provide detailed GitFive setup instructions"""
     return {
         "steps": [
@@ -505,12 +497,9 @@ def setup_gitfive_guide() -> Dict[str, Any]:
 
 
 @router.get("/setup", response_class=HTMLResponse)
-async def setup_page(request: Request):
+def setup_page(request: Request):
+    """Main setup page"""
     try:
-        """Main setup page"""
-        # if check_setup_complete():
-            # return RedirectResponse(url="/setup/complete")
-        
         state = get_setup_state()
         
         # Get comprehensive system status
@@ -543,7 +532,7 @@ async def setup_page(request: Request):
             {
                 "step": state.step,
                 "system_status": system_status,
-                "state": state.dict()
+                "state": state.model_dump()
             }
         )
     except Exception as e:
@@ -552,7 +541,7 @@ async def setup_page(request: Request):
 
 
 @router.post("/setup/admin")
-async def setup_admin(
+def setup_admin(
     email: str = Form(...),
     password: str = Form(...),
     confirm_password: str = Form(...)
@@ -562,11 +551,11 @@ async def setup_admin(
         if password != confirm_password:
             raise HTTPException(status_code=400, detail="Passwords do not match")
         
-        # Validate credentials with enhanced rules
-        creds = AdminCredentials(email=email, password=password)
+        # Raises if the email or password doesn't meet the rules
+        AdminCredentials(email=email, password=password)
         
         # Hash password with bcrypt
-        hashed = bcrypt.hashpw(password.encode(), bcrypt.gensalt(rounds=12))
+        hashed = bcrypt.hashpw(password.encode()[:72], bcrypt.gensalt(rounds=12))  # bcrypt uses 72 bytes
         
         # Generate secure JWT secret
         jwt_secret = secrets.token_urlsafe(32)
@@ -612,7 +601,7 @@ async def setup_admin(
 
 
 @router.post("/setup/features")
-async def setup_features(
+def setup_features(
     enable_github: bool = Form(False),
     enable_dns_recon: bool = Form(False),
     enable_ns_lookup: bool = Form(False),
@@ -667,7 +656,7 @@ async def setup_features(
 
 
 @router.post("/setup/apis")
-async def setup_apis(
+def setup_apis(
     hacker_target: Optional[str] = Form(None),
     osint_industries: Optional[str] = Form(None),
     whois_history: Optional[str] = Form(None),
@@ -722,7 +711,7 @@ async def setup_apis(
 
 
 @router.post("/setup/install-tools")
-async def install_tools():
+def install_tools():
     """Install Go tools automatically with detailed progress"""
     if not check_dependency("go"):
         raise HTTPException(
@@ -741,7 +730,7 @@ async def install_tools():
 
 
 @router.post("/setup/validate-api")
-async def validate_api(
+def validate_api(
     service: str = Form(...),
     api_key: str = Form(...)
 ):
@@ -757,7 +746,7 @@ async def validate_api(
 
 
 @router.get("/setup/gitfive-guide")
-async def gitfive_guide():
+def gitfive_guide():
     """Get detailed GitFive setup instructions"""
     guide = setup_gitfive_guide()
     gitfive_status = check_gitfive_detailed()
@@ -769,7 +758,7 @@ async def gitfive_guide():
 
 
 @router.get("/setup/system-check")
-async def system_check():
+def system_check():
     """Comprehensive system status check"""
     return JSONResponse({
         "python": {
@@ -793,7 +782,7 @@ async def system_check():
 
 
 @router.post("/setup/complete")
-async def complete_setup():
+def complete_setup():
     """Mark setup as complete"""
     if not CONFIG_PATH.exists():
         raise HTTPException(status_code=400, detail="Configuration not found")
@@ -823,19 +812,19 @@ async def complete_setup():
 
 
 @router.get("/setup/complete")
-async def setup_complete_page():
+def setup_complete_page():
     """Setup completion: send the user to the login page."""
     return RedirectResponse(url="/", status_code=303)
 
 
 @router.get("/setup/status")
-async def setup_status():
+def setup_status():
     """Get current setup status"""
     state = get_setup_state()
     return JSONResponse({
         "setup_complete": check_setup_complete(),
         "config_exists": CONFIG_PATH.exists(),
-        "state": state.dict(),
+        "state": state.model_dump(),
         "system_status": {
             "go_installed": check_dependency("go"),
             "go_tools": check_go_tools(),
@@ -845,7 +834,7 @@ async def setup_status():
 
 
 @router.post("/setup/reset")
-async def reset_setup(confirm: str = Form(...)):
+def reset_setup(confirm: str = Form(...)):
     """Reset setup (for development/testing)"""
     if confirm != "RESET":
         raise HTTPException(status_code=400, detail="Invalid confirmation")

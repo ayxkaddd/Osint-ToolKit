@@ -1,6 +1,6 @@
 import asyncio
 import json
-from typing import Any, Dict, List
+from typing import Any
 
 
 from utils.config import get_setting
@@ -20,7 +20,7 @@ class ShareTraceService:
     def sharetrace_dir(self):
         return get_setting('SHARETRACE_MODULE_PATH')
 
-    async def run_sharetrace(self, link: str) -> Dict[str, Any]:
+    async def run_sharetrace(self, link: str) -> dict[str, Any]:
         """Run sharetrace for one link; errors are returned in the result."""
         result = await run_command(
             [self.python_path, '-m', 'sharetrace', link, '--json'],
@@ -37,11 +37,11 @@ class ShareTraceService:
         except json.JSONDecodeError:
             return {"error": "Failed to parse JSON output", "raw_output": result.stdout[:2000], "link": link}
 
-    async def run_many(self, links: List[str]) -> List[Dict[str, Any]]:
+    async def run_many(self, links: list[str]) -> list[dict[str, Any]]:
         """Enrich several links in parallel (bounded), keeping input order."""
         semaphore = asyncio.Semaphore(SHARETRACE_CONCURRENCY)
 
-        async def one(link: str) -> Dict[str, Any]:
+        async def one(link: str) -> dict[str, Any]:
             async with semaphore:
                 return await self.run_sharetrace(link)
 

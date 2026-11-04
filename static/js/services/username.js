@@ -12,7 +12,7 @@ class OSINTSearch {
             scanned: 0,
             total: 0,
             found: 0,
-            unchecked: 0
+            unchecked: 0,
         };
 
         this.initializeElements();
@@ -41,7 +41,7 @@ class OSINTSearch {
             filterSection: document.getElementById('filterSection'),
             categoryFilter: document.getElementById('categoryFilter'),
             flatViewBtn: document.getElementById('flatViewBtn'),
-            groupedViewBtn: document.getElementById('groupedViewBtn')
+            groupedViewBtn: document.getElementById('groupedViewBtn'),
         };
     }
 
@@ -106,7 +106,8 @@ class OSINTSearch {
 
         // Developer platforms
         if (name.includes('gitlab')) return { class: 'gitlab-orange', icon: 'GL' };
-        if (name.includes('stackoverflow') || name.includes('stack overflow')) return { class: 'stackoverflow-orange', icon: 'SO' };
+        if (name.includes('stackoverflow') || name.includes('stack overflow'))
+            return { class: 'stackoverflow-orange', icon: 'SO' };
 
         // Other platforms
         if (name.includes('cashapp')) return { class: 'cashapp-green', icon: '$' };
@@ -117,7 +118,7 @@ class OSINTSearch {
 
         return {
             class: 'bg-gray-600',
-            icon: firstLetter + secondLetter
+            icon: firstLetter + secondLetter,
         };
     }
 
@@ -144,7 +145,7 @@ class OSINTSearch {
         this.elements.searchBtn.disabled = true;
         this.elements.stopBtn.classList.remove('hidden');
 
-        const only = (retrySites || []).map(name => `&only_sites=${encodeURIComponent(name)}`).join('');
+        const only = (retrySites || []).map((name) => `&only_sites=${encodeURIComponent(name)}`).join('');
         const url = `/api/username/search/stream?username=${encodeURIComponent(username)}&include_duckduckgo=false&extract_profile=true${only}`;
 
         this.eventSource = new EventSource(url);
@@ -212,7 +213,7 @@ class OSINTSearch {
             statusCode: data.status_code,
             profileData: data.profile_data,
             responseTime: data.response_time,
-            checkedAt: data.checked_at
+            checkedAt: data.checked_at,
         };
 
         this.results.push(result);
@@ -230,15 +231,15 @@ class OSINTSearch {
 
     getCategoryColor(category) {
         const colors = {
-            'social': 'bg-blue-500',
-            'gaming': 'bg-purple-500',
-            'forums': 'bg-green-500',
-            'developer': 'bg-orange-500',
-            'marketplace': 'bg-yellow-500',
-            'streaming': 'bg-pink-500',
-            'adult': 'bg-red-500',
-            'miscellaneous': 'bg-gray-500',
-            'default': 'bg-gray-500'
+            social: 'bg-blue-500',
+            gaming: 'bg-purple-500',
+            forums: 'bg-green-500',
+            developer: 'bg-orange-500',
+            marketplace: 'bg-yellow-500',
+            streaming: 'bg-pink-500',
+            adult: 'bg-red-500',
+            miscellaneous: 'bg-gray-500',
+            default: 'bg-gray-500',
         };
 
         return colors[category.toLowerCase()] || colors['default'];
@@ -273,9 +274,8 @@ class OSINTSearch {
 
     findResultCard(result) {
         const cards = this.elements.resultsContainer.querySelectorAll('.username-result-card');
-        return Array.from(cards).find(card =>
-            card.dataset.resultUrl === result.url &&
-            card.dataset.siteName === result.siteName
+        return Array.from(cards).find(
+            (card) => card.dataset.resultUrl === result.url && card.dataset.siteName === result.siteName
         );
     }
 
@@ -301,92 +301,138 @@ class OSINTSearch {
             <div class="username-card-header">
                 <div class="username-card-heading">
                     <div class="username-site-mark">
-                        ${faviconUrl ? `
-                            <img src="${this.escapeHtml(faviconUrl)}" alt="" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                        ${
+                            faviconUrl
+                                ? `
+                            <img src="${escapeHtml(faviconUrl)}" alt="" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
                             <div class="platform-icon ${platformInfo.class} username-site-mark-fallback">
-                                ${this.escapeHtml(platformInfo.icon)}
+                                ${escapeHtml(platformInfo.icon)}
                             </div>
-                        ` : `
+                        `
+                                : `
                             <div class="platform-icon ${platformInfo.class}">
-                                ${this.escapeHtml(platformInfo.icon)}
+                                ${escapeHtml(platformInfo.icon)}
                             </div>
-                        `}
+                        `
+                        }
                     </div>
                     <div class="username-card-title">
-                        <h3 title="${this.escapeHtml(result.siteName)}">${this.escapeHtml(result.siteName)}</h3>
-                        <span>${this.escapeHtml(result.category || 'unknown')}</span>
+                        <h3 title="${escapeHtml(result.siteName)}">${escapeHtml(result.siteName)}</h3>
+                        <span>${escapeHtml(result.category || 'unknown')}</span>
                     </div>
                 </div>
-                ${profileImageUrl ? `
+                ${
+                    profileImageUrl
+                        ? `
                     <div class="username-card-media">
-                        <button type="button" class="username-avatar-preview-btn" data-image-view="${this.escapeHtml(profileImageUrl)}" data-image-title="${this.escapeHtml(result.siteName)}" data-image-note="Profile picture preview" title="Preview profile picture">
-                            <img src="${this.escapeHtml(keyInfo.profileImage)}" alt="" class="username-card-avatar" onerror="this.closest('.username-result-card').classList.remove('has-profile-image'); this.closest('.username-card-media').style.display='none';">
+                        <button type="button" class="username-avatar-preview-btn" data-image-view="${escapeHtml(profileImageUrl)}" data-image-title="${escapeHtml(result.siteName)}" data-image-note="Profile picture preview" title="Preview profile picture">
+                            <img src="${escapeHtml(keyInfo.profileImage)}" alt="" class="username-card-avatar" onerror="this.closest('.username-result-card').classList.remove('has-profile-image'); this.closest('.username-card-media').style.display='none';">
                         </button>
                         <div class="username-reverse-search" aria-label="Reverse image search">
-                            ${reverseSearchLinks.map(link => `
-                                <a href="${this.escapeHtml(link.url)}" target="_blank" rel="noopener noreferrer" title="${this.escapeHtml(link.label)} reverse image search">
-                                    <i class="${this.escapeHtml(link.icon)}"></i>
+                            ${reverseSearchLinks
+                                .map(
+                                    (link) => `
+                                <a href="${escapeHtml(link.url)}" target="_blank" rel="noopener noreferrer" title="${escapeHtml(link.label)} reverse image search">
+                                    <i class="${escapeHtml(link.icon)}"></i>
                                 </a>
-                            `).join('')}
+                            `
+                                )
+                                .join('')}
                         </div>
                     </div>
-                ` : ''}
+                `
+                        : ''
+                }
             </div>
 
-            ${keyInfo.username ? `
+            ${
+                keyInfo.username
+                    ? `
                 <div class="username-handle-row">
-                    <span title="@${this.escapeHtml(String(keyInfo.username))}">${pivotText('username', String(keyInfo.username), '@' + keyInfo.username)}</span>
-                    <button class="copy-username-btn" data-username="${this.escapeHtml(String(keyInfo.username))}" title="Copy username">
+                    <span title="@${escapeHtml(String(keyInfo.username))}">${pivotText('username', String(keyInfo.username), '@' + keyInfo.username)}</span>
+                    <button class="copy-username-btn" data-username="${escapeHtml(String(keyInfo.username))}" title="Copy username">
                         <i class="fas fa-copy"></i>
                     </button>
                 </div>
-            ` : ''}
+            `
+                    : ''
+            }
 
             <div class="username-card-content">
-                ${keyInfo.bio ? `
+                ${
+                    keyInfo.bio
+                        ? `
                     <p class="username-card-bio">${pivotInText(String(keyInfo.bio))}</p>
-                ` : ''}
+                `
+                        : ''
+                }
 
-                ${metaRows.map(row => `
+                ${metaRows
+                    .map(
+                        (row) => `
                     <div class="username-data-row">
-                        <strong>${this.escapeHtml(row.label)}</strong>
-                        <span title="${this.escapeHtml(String(row.value))}">${pivotField(row.label, row.value)}</span>
+                        <strong>${escapeHtml(row.label)}</strong>
+                        <span title="${escapeHtml(String(row.value))}">${pivotField(row.label, row.value)}</span>
                     </div>
-                `).join('')}
+                `
+                    )
+                    .join('')}
 
-                ${keyInfo.numericStats && keyInfo.numericStats.length > 0 ? `
+                ${
+                    keyInfo.numericStats && keyInfo.numericStats.length > 0
+                        ? `
                     <div class="username-mini-stats">
-                        ${keyInfo.numericStats.slice(0, 6).map(stat => `
+                        ${keyInfo.numericStats
+                            .slice(0, 6)
+                            .map(
+                                (stat) => `
                             <div>
-                                <span>${this.escapeHtml(stat.key)}</span>
-                                <strong>${this.escapeHtml(this.formatFieldValue(stat.rawKey || stat.key, stat.value, { compactCounts: true }))}</strong>
+                                <span>${escapeHtml(stat.key)}</span>
+                                <strong>${escapeHtml(this.formatFieldValue(stat.rawKey || stat.key, stat.value, { compactCounts: true }))}</strong>
                             </div>
-                        `).join('')}
+                        `
+                            )
+                            .join('')}
                     </div>
-                ` : ''}
+                `
+                        : ''
+                }
 
-                ${keyInfo.socialLinks && keyInfo.socialLinks.length > 0 ? `
+                ${
+                    keyInfo.socialLinks && keyInfo.socialLinks.length > 0
+                        ? `
                     <div class="username-link-strip">
-                        ${keyInfo.socialLinks.slice(0, 5).map(link => `
-                            <a href="${this.escapeHtml(link)}" target="_blank" title="${this.escapeHtml(link)}">
+                        ${keyInfo.socialLinks
+                            .slice(0, 5)
+                            .map(
+                                (link) => `
+                            <a href="${escapeHtml(link)}" target="_blank" title="${escapeHtml(link)}">
                                 <i class="fas fa-link"></i>
                             </a>
-                        `).join('')}
+                        `
+                            )
+                            .join('')}
                     </div>
-                ` : ''}
+                `
+                        : ''
+                }
             </div>
 
             <div class="username-card-actions">
-                <a href="${this.escapeHtml(result.url)}" target="_blank" title="${this.escapeHtml(result.url)}">
+                <a href="${escapeHtml(result.url)}" target="_blank" title="${escapeHtml(result.url)}">
                     <i class="fas fa-external-link-alt"></i>
                     <span>View</span>
                 </a>
-                ${hasProfileData ? `
+                ${
+                    hasProfileData
+                        ? `
                     <button class="expand-btn">
                         <i class="fas fa-code"></i>
                         <span>Data</span>
                     </button>
-                ` : ''}
+                `
+                        : ''
+                }
             </div>
         `;
 
@@ -435,13 +481,13 @@ class OSINTSearch {
             {
                 label: 'Google',
                 icon: 'fab fa-google',
-                url: `https://lens.google.com/uploadbyurl?url=${encodedUrl}`
+                url: `https://lens.google.com/uploadbyurl?url=${encodedUrl}`,
             },
             {
                 label: 'Yandex',
                 icon: 'fas fa-search',
-                url: `https://yandex.com/images/search?rpt=imageview&url=${encodedUrl}`
-            }
+                url: `https://yandex.com/images/search?rpt=imageview&url=${encodedUrl}`,
+            },
         ];
     }
 
@@ -466,7 +512,7 @@ class OSINTSearch {
 
         if (keyInfo.verified) add('Verified', 'Yes');
         if (keyInfo.otherFields) {
-            keyInfo.otherFields.slice(0, Math.max(0, 6 - rows.length)).forEach(field => {
+            keyInfo.otherFields.slice(0, Math.max(0, 6 - rows.length)).forEach((field) => {
                 add(field.key, this.formatFieldValue(field.rawKey || field.key, field.value));
             });
         }
@@ -475,9 +521,7 @@ class OSINTSearch {
     }
 
     handleProfileExtracted(data) {
-        const result = this.results.find(item =>
-            item.url === data.url && item.siteName === data.site_name
-        );
+        const result = this.results.find((item) => item.url === data.url && item.siteName === data.site_name);
 
         if (!result) return;
 
@@ -486,23 +530,27 @@ class OSINTSearch {
     }
 
     copyToClipboard(text, button) {
-        navigator.clipboard.writeText(text).then(() => {
-            const originalHTML = button.innerHTML;
-            button.innerHTML = '<i class="fas fa-check text-xs"></i>';
-            button.classList.add('text-green-400');
+        navigator.clipboard
+            .writeText(text)
+            .then(() => {
+                const originalHTML = button.innerHTML;
+                button.innerHTML = '<i class="fas fa-check text-xs"></i>';
+                button.classList.add('text-green-400');
 
-            setTimeout(() => {
-                button.innerHTML = originalHTML;
-                button.classList.remove('text-green-400');
-            }, 1500);
-        }).catch(err => {
-            console.error('Failed to copy:', err);
-        });
+                setTimeout(() => {
+                    button.innerHTML = originalHTML;
+                    button.classList.remove('text-green-400');
+                }, 1500);
+            })
+            .catch((err) => {
+                console.error('Failed to copy:', err);
+            });
     }
 
     updateCategoryCount(category) {
-        const section = Array.from(this.elements.groupedResults.querySelectorAll('[data-category]'))
-            .find(item => item.dataset.category === category);
+        const section = Array.from(this.elements.groupedResults.querySelectorAll('[data-category]')).find(
+            (item) => item.dataset.category === category
+        );
         if (section) {
             const count = this.resultsByCategory[category].length;
             const countElement = section.querySelector('.category-count');
@@ -523,17 +571,19 @@ class OSINTSearch {
             this.elements.categoryStats.classList.remove('hidden');
             this.elements.filterSection.classList.remove('hidden');
 
-            this.elements.categoryStatsGrid.innerHTML = categories.map(category => {
-                const count = this.resultsByCategory[category].length;
-                return `
-                    <button type="button" class="username-category-pill" data-category="${this.escapeHtml(category)}">
-                        <span>${this.escapeHtml(category)}</span>
+            this.elements.categoryStatsGrid.innerHTML = categories
+                .map((category) => {
+                    const count = this.resultsByCategory[category].length;
+                    return `
+                    <button type="button" class="username-category-pill" data-category="${escapeHtml(category)}">
+                        <span>${escapeHtml(category)}</span>
                         <strong>${count}</strong>
                     </button>
                 `;
-            }).join('');
+                })
+                .join('');
 
-            this.elements.categoryStatsGrid.querySelectorAll('.username-category-pill').forEach(button => {
+            this.elements.categoryStatsGrid.querySelectorAll('.username-category-pill').forEach((button) => {
                 button.addEventListener('click', () => {
                     this.switchView('grouped');
                     this.filterByCategory(button.dataset.category);
@@ -548,17 +598,21 @@ class OSINTSearch {
         const categories = Object.keys(this.resultsByCategory).sort();
         const currentValue = this.elements.categoryFilter.value;
 
-        this.elements.categoryFilter.innerHTML = '<option value="all">All Categories</option>' +
-            categories.map(category =>
-                `<option value="${category}" ${currentValue === category ? 'selected' : ''}>${category.charAt(0).toUpperCase() + category.slice(1)}</option>`
-            ).join('');
+        this.elements.categoryFilter.innerHTML =
+            '<option value="all">All Categories</option>' +
+            categories
+                .map(
+                    (category) =>
+                        `<option value="${category}" ${currentValue === category ? 'selected' : ''}>${category.charAt(0).toUpperCase() + category.slice(1)}</option>`
+                )
+                .join('');
     }
 
     filterByCategory(category) {
         this.activeCategory = category;
         const sections = this.elements.groupedResults.querySelectorAll('[data-category]');
 
-        sections.forEach(section => {
+        sections.forEach((section) => {
             if (category === 'all' || section.dataset.category === category) {
                 section.style.display = 'block';
             } else {
@@ -584,25 +638,28 @@ class OSINTSearch {
         this.elements.groupedResults.innerHTML = '';
 
         if (this.viewMode === 'grouped') {
-            Object.keys(this.resultsByCategory).sort().forEach(category => {
-                const section = this.createGroupedCategory(category);
-                const grid = section.querySelector('.username-category-results');
-                this.resultsByCategory[category].forEach(result => {
-                    masonryAppend(grid, this.createResultCard(result));
+            Object.keys(this.resultsByCategory)
+                .sort()
+                .forEach((category) => {
+                    const section = this.createGroupedCategory(category);
+                    const grid = section.querySelector('.username-category-results');
+                    this.resultsByCategory[category].forEach((result) => {
+                        masonryAppend(grid, this.createResultCard(result));
+                    });
+                    this.elements.groupedResults.appendChild(section);
                 });
-                this.elements.groupedResults.appendChild(section);
-            });
             this.filterByCategory(this.activeCategory);
         } else {
-            this.results.forEach(result => {
+            this.results.forEach((result) => {
                 masonryAppend(this.elements.resultsMasonry, this.createResultCard(result));
             });
         }
     }
 
     getGroupedCategory(category) {
-        let section = Array.from(this.elements.groupedResults.querySelectorAll('[data-category]'))
-            .find(item => item.dataset.category === category);
+        let section = Array.from(this.elements.groupedResults.querySelectorAll('[data-category]')).find(
+            (item) => item.dataset.category === category
+        );
         if (!section) {
             section = this.createGroupedCategory(category);
             this.elements.groupedResults.appendChild(section);
@@ -616,7 +673,7 @@ class OSINTSearch {
         section.dataset.category = category;
         section.innerHTML = `
             <div class="username-category-heading">
-                <h2>${this.escapeHtml(category)}</h2>
+                <h2>${escapeHtml(category)}</h2>
                 <span class="category-count">${this.resultsByCategory[category]?.length || 0}</span>
             </div>
             <div class="username-category-results"></div>
@@ -664,7 +721,7 @@ class OSINTSearch {
             document.body.removeChild(modal);
         });
 
-        modal.querySelectorAll('.copy-btn').forEach(btn => {
+        modal.querySelectorAll('.copy-btn').forEach((btn) => {
             btn.addEventListener('click', () => {
                 const format = btn.dataset.format;
                 let textToCopy = '';
@@ -707,7 +764,7 @@ class OSINTSearch {
             const formattedKey = key
                 .replace(/_/g, ' ')
                 .split(' ')
-                .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
                 .join(' ');
 
             text += this.renderValue(formattedKey, value, indent);
@@ -739,12 +796,25 @@ class OSINTSearch {
             socialLinks: [],
             numericStats: [],
             otherFields: [],
-            socialProfiles: {}
+            socialProfiles: {},
         };
 
-        const usernameFields = ['username', 'user_name', 'userName', 'disqus_username',
-            'imgur_username', 'name', 'handle', 'login', 'screen_name',
-            'screenName', 'display', 'nickname', 'nick', 'account_name'];
+        const usernameFields = [
+            'username',
+            'user_name',
+            'userName',
+            'disqus_username',
+            'imgur_username',
+            'name',
+            'handle',
+            'login',
+            'screen_name',
+            'screenName',
+            'display',
+            'nickname',
+            'nick',
+            'account_name',
+        ];
         for (const field of usernameFields) {
             if (profileData[field]) {
                 info.username = profileData[field];
@@ -752,8 +822,16 @@ class OSINTSearch {
             }
         }
 
-        const nameFields = ['fullname', 'full_name', 'fullName', 'displayName',
-            'display_name', 'realName', 'real_name', 'name'];
+        const nameFields = [
+            'fullname',
+            'full_name',
+            'fullName',
+            'displayName',
+            'display_name',
+            'realName',
+            'real_name',
+            'name',
+        ];
         for (const field of nameFields) {
             if (profileData[field] && profileData[field] !== info.username) {
                 info.fullName = profileData[field];
@@ -761,9 +839,21 @@ class OSINTSearch {
             }
         }
 
-        const bioFields = ['bio', 'description', 'about', 'aboutMe', 'about_me',
-            'motto', 'statusMessage', 'status_message', 'blurb', 'note',
-            'summary', 'headline', 'tagline'];
+        const bioFields = [
+            'bio',
+            'description',
+            'about',
+            'aboutMe',
+            'about_me',
+            'motto',
+            'statusMessage',
+            'status_message',
+            'blurb',
+            'note',
+            'summary',
+            'headline',
+            'tagline',
+        ];
         for (const field of bioFields) {
             if (profileData[field]) {
                 info.bio = profileData[field];
@@ -771,10 +861,23 @@ class OSINTSearch {
             }
         }
 
-        const imageFields = ['profileImageUrl', 'profile_image_url', 'profilePic',
-            'profile_pic', 'image', 'avatar', 'avatar_static',
-            'avatar_url', 'icon_img', 'logo', 'logoUrl', 'pic_url',
-            'photo', 'photo_url', 'picture'];
+        const imageFields = [
+            'profileImageUrl',
+            'profile_image_url',
+            'profilePic',
+            'profile_pic',
+            'image',
+            'avatar',
+            'avatar_static',
+            'avatar_url',
+            'icon_img',
+            'logo',
+            'logoUrl',
+            'pic_url',
+            'photo',
+            'photo_url',
+            'picture',
+        ];
         for (const field of imageFields) {
             if (profileData[field]) {
                 if (typeof profileData[field] === 'object' && profileData[field].url) {
@@ -786,8 +889,7 @@ class OSINTSearch {
             }
         }
 
-        const countryFields = ['country', 'location', 'city', 'place', 'nationality',
-            'region', 'area', 'locale'];
+        const countryFields = ['country', 'location', 'city', 'place', 'nationality', 'region', 'area', 'locale'];
         for (const field of countryFields) {
             if (profileData[field]) {
                 if (typeof profileData[field] === 'object') {
@@ -807,9 +909,16 @@ class OSINTSearch {
             }
         }
 
-        const followerFields = ['follower_count', 'followers_count', 'followersCount',
-            'followerCount', 'followers', 'subscriber_count',
-            'subscribers', 'fans'];
+        const followerFields = [
+            'follower_count',
+            'followers_count',
+            'followersCount',
+            'followerCount',
+            'followers',
+            'subscriber_count',
+            'subscribers',
+            'fans',
+        ];
         for (const field of followerFields) {
             if (profileData[field] !== undefined && profileData[field] !== null) {
                 info.followers = parseInt(profileData[field]);
@@ -827,9 +936,16 @@ class OSINTSearch {
             }
         }
 
-        const followingFields = ['following_count', 'follows_count', 'followsCount',
-            'followingCount', 'following', 'followeeCount',
-            'followees', 'subscriptions'];
+        const followingFields = [
+            'following_count',
+            'follows_count',
+            'followsCount',
+            'followingCount',
+            'following',
+            'followeeCount',
+            'followees',
+            'subscriptions',
+        ];
         for (const field of followingFields) {
             if (profileData[field] !== undefined && profileData[field] !== null) {
                 info.following = parseInt(profileData[field]);
@@ -847,9 +963,19 @@ class OSINTSearch {
             }
         }
 
-        const postsFields = ['posts', 'post_count', 'postCount', 'statuses_count',
-            'statusesCount', 'tweets', 'updates', 'contributions',
-            'cloudcast_count', 'videos', 'photos'];
+        const postsFields = [
+            'posts',
+            'post_count',
+            'postCount',
+            'statuses_count',
+            'statusesCount',
+            'tweets',
+            'updates',
+            'contributions',
+            'cloudcast_count',
+            'videos',
+            'photos',
+        ];
         for (const field of postsFields) {
             if (profileData[field] !== undefined && profileData[field] !== null) {
                 info.posts = parseInt(profileData[field]);
@@ -860,8 +986,7 @@ class OSINTSearch {
             info.posts = parseInt(profileData.counters.posts);
         }
 
-        const reputationFields = ['reputation', 'karma', 'total_karma', 'points',
-            'score', 'rating'];
+        const reputationFields = ['reputation', 'karma', 'total_karma', 'points', 'score', 'rating'];
         for (const field of reputationFields) {
             if (profileData[field] !== undefined && profileData[field] !== null) {
                 info.reputation = parseInt(profileData[field]);
@@ -872,9 +997,21 @@ class OSINTSearch {
             info.reputation = parseInt(profileData.data.total_karma);
         }
 
-        const dateFields = ['created_at', 'createdAt', 'createdOn', 'created',
-            'memberSince', 'member_since', 'createdDate', 'created_date', 'joined',
-            'joinedAt', 'joined_at', 'registered', 'signup_date'];
+        const dateFields = [
+            'created_at',
+            'createdAt',
+            'createdOn',
+            'created',
+            'memberSince',
+            'member_since',
+            'createdDate',
+            'created_date',
+            'joined',
+            'joinedAt',
+            'joined_at',
+            'registered',
+            'signup_date',
+        ];
         for (const field of dateFields) {
             if (profileData[field]) {
                 const date = this.parseDate(profileData[field]);
@@ -889,9 +1026,20 @@ class OSINTSearch {
             info.createdAt = date.toLocaleDateString();
         }
 
-        const lastActiveFields = ['last_active', 'lastActive', 'last_seen', 'lastSeen',
-            'updated_at', 'updatedAt', 'last_login', 'lastLogin', 'last_online',
-            'lastOnline', 'lastOnlineAt', 'online_at'];
+        const lastActiveFields = [
+            'last_active',
+            'lastActive',
+            'last_seen',
+            'lastSeen',
+            'updated_at',
+            'updatedAt',
+            'last_login',
+            'lastLogin',
+            'last_online',
+            'lastOnline',
+            'lastOnlineAt',
+            'online_at',
+        ];
         for (const field of lastActiveFields) {
             if (profileData[field]) {
                 const date = this.parseDate(profileData[field]);
@@ -902,11 +1050,21 @@ class OSINTSearch {
             }
         }
 
-        const verifiedFields = ['verified', 'isVerified', 'is_verified',
-            'is_twitter_verified', 'verified_account', 'badge'];
+        const verifiedFields = [
+            'verified',
+            'isVerified',
+            'is_verified',
+            'is_twitter_verified',
+            'verified_account',
+            'badge',
+        ];
         for (const field of verifiedFields) {
-            if (profileData[field] === true || profileData[field] === 'True' ||
-                profileData[field] === 'true' || profileData[field] === 1) {
+            if (
+                profileData[field] === true ||
+                profileData[field] === 'True' ||
+                profileData[field] === 'true' ||
+                profileData[field] === 1
+            ) {
                 info.verified = true;
                 break;
             }
@@ -914,8 +1072,7 @@ class OSINTSearch {
 
         const websiteFields = ['website', 'url', 'homepage', 'blog', 'site', 'web'];
         for (const field of websiteFields) {
-            if (profileData[field] && typeof profileData[field] === 'string' &&
-                profileData[field].startsWith('http')) {
+            if (profileData[field] && typeof profileData[field] === 'string' && profileData[field].startsWith('http')) {
                 info.website = profileData[field];
                 break;
             }
@@ -925,20 +1082,30 @@ class OSINTSearch {
         for (const field of socialFields) {
             if (profileData[field]) {
                 if (Array.isArray(profileData[field])) {
-                    info.socialLinks = profileData[field].filter(link =>
-                        typeof link === 'string' && link.startsWith('http')
+                    info.socialLinks = profileData[field].filter(
+                        (link) => typeof link === 'string' && link.startsWith('http')
                     );
                 } else if (typeof profileData[field] === 'object') {
-                    info.socialLinks = Object.values(profileData[field]).filter(link =>
-                        typeof link === 'string' && link.startsWith('http')
+                    info.socialLinks = Object.values(profileData[field]).filter(
+                        (link) => typeof link === 'string' && link.startsWith('http')
                     );
                 }
                 if (info.socialLinks.length > 0) break;
             }
         }
 
-        const socialPlatforms = ['youtube', 'twitter', 'twitch', 'instagram', 'facebook',
-            'tiktok', 'snapchat', 'linkedin', 'github', 'gitlab'];
+        const socialPlatforms = [
+            'youtube',
+            'twitter',
+            'twitch',
+            'instagram',
+            'facebook',
+            'tiktok',
+            'snapchat',
+            'linkedin',
+            'github',
+            'gitlab',
+        ];
         for (const platform of socialPlatforms) {
             if (profileData[platform] && profileData[platform] !== null) {
                 info.socialProfiles[platform] = profileData[platform];
@@ -946,11 +1113,30 @@ class OSINTSearch {
         }
 
         const alreadyCaptured = ['followers', 'following', 'posts', 'reputation'];
-        const skipFields = [...usernameFields, ...nameFields, ...bioFields, ...imageFields,
-        ...countryFields, ...genderFields, ...followerFields, ...followingFields,
-        ...postsFields, ...reputationFields, ...dateFields, ...lastActiveFields,
-        ...verifiedFields, ...websiteFields, ...socialFields, ...socialPlatforms,
-            'data', 'counters', 'stats', 'picture', 'backgroundPicture', 'links'];
+        const skipFields = [
+            ...usernameFields,
+            ...nameFields,
+            ...bioFields,
+            ...imageFields,
+            ...countryFields,
+            ...genderFields,
+            ...followerFields,
+            ...followingFields,
+            ...postsFields,
+            ...reputationFields,
+            ...dateFields,
+            ...lastActiveFields,
+            ...verifiedFields,
+            ...websiteFields,
+            ...socialFields,
+            ...socialPlatforms,
+            'data',
+            'counters',
+            'stats',
+            'picture',
+            'backgroundPicture',
+            'links',
+        ];
 
         for (const [key, value] of Object.entries(profileData)) {
             if (skipFields.includes(key) || typeof value === 'object') continue;
@@ -963,11 +1149,14 @@ class OSINTSearch {
                 } else {
                     info.otherFields.push({ key: formattedKey, rawKey: key, value: value });
                 }
-            } else if ((typeof value === 'string' || typeof value === 'boolean') &&
+            } else if (
+                (typeof value === 'string' || typeof value === 'boolean') &&
                 !key.toLowerCase().includes('id') &&
                 !key.toLowerCase().includes('color') &&
                 !key.toLowerCase().includes('col') &&
-                value !== '' && value !== null) {
+                value !== '' &&
+                value !== null
+            ) {
                 info.otherFields.push({ key: this.formatFieldLabel(key), rawKey: key, value: value });
             }
         }
@@ -981,7 +1170,7 @@ class OSINTSearch {
             .replace(/_/g, ' ')
             .trim()
             .split(' ')
-            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+            .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
             .join(' ');
     }
 
@@ -994,13 +1183,19 @@ class OSINTSearch {
 
     isDateLikeField(key) {
         const normalized = this.normalizeFieldKey(key);
-        return /(date|time|timestamp|created|joined|registered|updated|active|seen|online|login|last_online|member_since)/.test(normalized);
+        return /(date|time|timestamp|created|joined|registered|updated|active|seen|online|login|last_online|member_since)/.test(
+            normalized
+        );
     }
 
     isIdentifierField(key) {
         const normalized = this.normalizeFieldKey(key);
-        return /(^|_)(id|uid|uuid|guid|sid)$/.test(normalized) ||
-            /(user_id|userid|player_id|playerid|account_id|accountid|profile_id|profileid|steam_id|steamid|member_id|memberid)/.test(normalized);
+        return (
+            /(^|_)(id|uid|uuid|guid|sid)$/.test(normalized) ||
+            /(user_id|userid|player_id|playerid|account_id|accountid|profile_id|profileid|steam_id|steamid|member_id|memberid)/.test(
+                normalized
+            )
+        );
     }
 
     shouldCompactNumber(key) {
@@ -1009,7 +1204,9 @@ class OSINTSearch {
         if (this.isIdentifierField(normalized) || this.isDateLikeField(normalized)) return false;
         if (/(rank|level|tier|xp|experience|year|age|percent|percentage|ratio)/.test(normalized)) return false;
 
-        return /(count|total|followers?|following|followees?|subscribers?|subscriptions?|fans?|posts?|statuses?|tweets?|updates?|contributions?|videos?|photos?|views?|likes?|comments?|reputation|karma|points|score|rating)/.test(normalized);
+        return /(count|total|followers?|following|followees?|subscribers?|subscriptions?|fans?|posts?|statuses?|tweets?|updates?|contributions?|videos?|photos?|views?|likes?|comments?|reputation|karma|points|score|rating)/.test(
+            normalized
+        );
     }
 
     formatFieldValue(key, value, options = {}) {
@@ -1080,7 +1277,7 @@ class OSINTSearch {
     formatPlainNumber(num) {
         if (num === null || num === undefined) return '';
         return new Intl.NumberFormat(undefined, {
-            maximumFractionDigits: Number.isInteger(num) ? 0 : 2
+            maximumFractionDigits: Number.isInteger(num) ? 0 : 2,
         }).format(num);
     }
 
@@ -1095,7 +1292,7 @@ class OSINTSearch {
             const formattedKey = key
                 .replace(/_/g, ' ')
                 .split(' ')
-                .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
                 .join(' ');
 
             html += this.renderValue(formattedKey, value);
@@ -1117,7 +1314,7 @@ class OSINTSearch {
 
             html += `
                 <div class="${indentClass} mb-2">
-                    <span class="text-gray-400 text-sm font-medium">${this.escapeHtml(key)}:</span>
+                    <span class="text-gray-400 text-sm font-medium">${escapeHtml(key)}:</span>
             `;
 
             value.forEach((item, index) => {
@@ -1142,7 +1339,7 @@ class OSINTSearch {
 
             html += `
                 <div class="${indentClass} mb-2">
-                    <span class="text-gray-400 text-sm font-medium">${this.escapeHtml(key)}:</span>
+                    <span class="text-gray-400 text-sm font-medium">${escapeHtml(key)}:</span>
                     <div class="ml-4 mt-1 p-2 bg-gray-800/50 rounded border border-gray-700">
             `;
 
@@ -1157,8 +1354,8 @@ class OSINTSearch {
         if (typeof value === 'string' && (value.startsWith('http://') || value.startsWith('https://'))) {
             return `
                 <div class="${indentClass} flex justify-between items-start gap-4 mb-2">
-                    <span class="text-gray-400 text-sm whitespace-nowrap">${this.escapeHtml(key)}</span>
-                    <a href="${this.escapeHtml(safeUrl(value))}" target="_blank" rel="noopener noreferrer" class="text-purple-400 hover:text-purple-300 hover:underline text-sm text-right break-all">${this.escapeHtml(this.truncateUrl(value))}</a>
+                    <span class="text-gray-400 text-sm whitespace-nowrap">${escapeHtml(key)}</span>
+                    <a href="${escapeHtml(safeUrl(value))}" target="_blank" rel="noopener noreferrer" class="text-purple-400 hover:text-purple-300 hover:underline text-sm text-right break-all">${escapeHtml(this.truncateUrl(value))}</a>
                 </div>
             `;
         }
@@ -1167,20 +1364,24 @@ class OSINTSearch {
             const boolValue = value === true || value === 'True';
             return `
                 <div class="${indentClass} flex justify-between items-start gap-4 mb-2">
-                    <span class="text-gray-400 text-sm whitespace-nowrap">${this.escapeHtml(key)}</span>
+                    <span class="text-gray-400 text-sm whitespace-nowrap">${escapeHtml(key)}</span>
                     <span class="px-2 py-0.5 rounded ${boolValue ? 'bg-green-900 text-green-300' : 'bg-red-900 text-red-300'} text-xs">${boolValue ? 'Yes' : 'No'}</span>
                 </div>
             `;
         }
 
-        if (typeof value === 'string' && (value.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/) || value.match(/^\d{4}-\d{2}-\d{2}/))) {
+        if (
+            typeof value === 'string' &&
+            (value.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/) || value.match(/^\d{4}-\d{2}-\d{2}/))
+        ) {
             const date = new Date(value);
             if (!isNaN(date.getTime())) {
-                const formattedValue = date.toLocaleDateString() + (value.includes('T') ? ' ' + date.toLocaleTimeString() : '');
+                const formattedValue =
+                    date.toLocaleDateString() + (value.includes('T') ? ' ' + date.toLocaleTimeString() : '');
                 return `
                     <div class="${indentClass} flex justify-between items-start gap-4 mb-2">
-                        <span class="text-gray-400 text-sm whitespace-nowrap">${this.escapeHtml(key)}</span>
-                        <span class="text-white text-sm text-right">${this.escapeHtml(formattedValue)}</span>
+                        <span class="text-gray-400 text-sm whitespace-nowrap">${escapeHtml(key)}</span>
+                        <span class="text-white text-sm text-right">${escapeHtml(formattedValue)}</span>
                     </div>
                 `;
             }
@@ -1188,7 +1389,7 @@ class OSINTSearch {
 
         return `
             <div class="${indentClass} flex justify-between items-start gap-4 mb-2">
-                <span class="text-gray-400 text-sm whitespace-nowrap">${this.escapeHtml(key)}</span>
+                <span class="text-gray-400 text-sm whitespace-nowrap">${escapeHtml(key)}</span>
                 <span class="text-white text-sm text-right break-words">${pivotField(key, value)}</span>
             </div>
         `;
@@ -1197,18 +1398,6 @@ class OSINTSearch {
     truncateUrl(url) {
         if (url.length <= 40) return url;
         return url.substring(0, 37) + '...';
-    }
-
-    escapeHtml(text) {
-        text = String(text);
-        const map = {
-            '&': '&amp;',
-            '<': '&lt;',
-            '>': '&gt;',
-            '"': '&quot;',
-            "'": '&#039;'
-        };
-        return text.replace(/[&<>"']/g, m => map[m]);
     }
 
     getTimeAgo(timestamp) {
@@ -1272,15 +1461,19 @@ class OSINTSearch {
         this.stopSearch();
         const errored = [...new Set(this.erroredSites || [])];
         if (wasRetry) {
-            showTemporaryNotification(errored.length
-                ? `Retried - ${errored.length} site${errored.length === 1 ? '' : 's'} still couldn't be checked`
-                : 'Retried - every site was checked this time', errored.length ? 'info' : 'success');
+            showTemporaryNotification(
+                errored.length
+                    ? `Retried - ${errored.length} site${errored.length === 1 ? '' : 's'} still couldn't be checked`
+                    : 'Retried - every site was checked this time',
+                errored.length ? 'info' : 'success'
+            );
         }
         if (!errored.length) return;
         // Absence on a site that errored isn't proof the account doesn't exist: offer a re-check
         const box = document.createElement('div');
         box.id = 'usernameRetryBox';
-        box.className = 'mt-3 flex items-center justify-between gap-3 flex-wrap bg-yellow-900/20 border border-yellow-700/50 rounded-lg px-4 py-2 text-sm text-yellow-100';
+        box.className =
+            'mt-3 flex items-center justify-between gap-3 flex-wrap bg-yellow-900/20 border border-yellow-700/50 rounded-lg px-4 py-2 text-sm text-yellow-100';
         box.innerHTML = `
             <span>${errored.length} site${errored.length === 1 ? '' : 's'} couldn't be checked (errors, blocks or rate limits) - no result there isn't proof the account doesn't exist.
                 <details class="inline"><summary class="inline cursor-pointer text-yellow-300/80 underline">which</summary>
@@ -1326,7 +1519,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Load results
         if (data.results && Array.isArray(data.results)) {
-            data.results.forEach(result => {
+            data.results.forEach((result) => {
                 if (result.status === 'found') {
                     search.handleFoundResult(result);
                 }

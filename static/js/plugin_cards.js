@@ -25,8 +25,10 @@ function isPluginResult(data) {
 }
 
 function pluginItemText(item) {
-    return [item.title, item.subtitle, item.category, ...(item.fields || []).map(f => f[1])]
-        .filter(v => v !== undefined && v !== null).join(' ').toLowerCase();
+    return [item.title, item.subtitle, item.category, ...(item.fields || []).map((f) => f[1])]
+        .filter((v) => v !== undefined && v !== null)
+        .join(' ')
+        .toLowerCase();
 }
 
 // Identifiers the plugin found that no row shows (rows show theirs inline)
@@ -36,7 +38,10 @@ function pluginEntityChips(entities, shownValues = new Set()) {
         for (const value of values) if (!shownValues.has(String(value))) chips.push([type, value]);
     }
     if (!chips.length || typeof pivotChip !== 'function') return '';
-    return `<div class="flex flex-wrap gap-1.5 mt-3">${chips.slice(0, 8).map(([type, value]) => pivotChip(type, value)).join('')}
+    return `<div class="flex flex-wrap gap-1.5 mt-3">${chips
+        .slice(0, 8)
+        .map(([type, value]) => pivotChip(type, value))
+        .join('')}
         ${chips.length > 8 ? `<span class="text-xs text-gray-500 self-center">+${chips.length - 8}</span>` : ''}</div>`;
 }
 
@@ -46,10 +51,11 @@ function pluginCardHtml(item) {
     for (const [type, values] of Object.entries(item.entities || {})) {
         for (const value of values) if (!typeOf.has(String(value))) typeOf.set(String(value), type);
     }
-    const rows = (item.fields || []).filter(([, value]) => value !== undefined && value !== null && value !== '')
+    const rows = (item.fields || [])
+        .filter(([, value]) => value !== undefined && value !== null && value !== '')
         .map(([label, value]) => [label, value, typeOf.get(String(value)) || null]);
     const { html, hidden } = oiRows(rows);
-    const chips = pluginEntityChips(item.entities, new Set(rows.filter(r => r[2]).map(r => String(r[1]))));
+    const chips = pluginEntityChips(item.entities, new Set(rows.filter((r) => r[2]).map((r) => String(r[1]))));
     return `
         <div class="result-card username-result-card fade-in${picture ? ' has-profile-image' : ''}" data-plugin-text="${escapeAttr(pluginItemText(item))}">
             ${oiHeader(item.title || '', item.subtitle || item.category || '', [item.icon || ''], picture, '!normal-case')}
@@ -92,8 +98,12 @@ function pluginGroupHead(name, count) {
 function pluginLookupsHtml(lookups) {
     if (!(lookups || []).length) return '';
     const chip = (l) => {
-        const [cls, text] = l.status === 'found' ? ['bg-emerald-500/10 text-emerald-300', `${l.count}`]
-            : l.status === 'failed' ? ['bg-red-500/10 text-red-300', 'failed'] : ['bg-gray-800 text-gray-400', 'nothing found'];
+        const [cls, text] =
+            l.status === 'found'
+                ? ['bg-emerald-500/10 text-emerald-300', `${l.count}`]
+                : l.status === 'failed'
+                  ? ['bg-red-500/10 text-red-300', 'failed']
+                  : ['bg-gray-800 text-gray-400', 'nothing found'];
         return `<span class="px-2 py-0.5 rounded-md text-xs ${cls}">${escapeHtml(l.name)} · ${escapeHtml(text)}</span>`;
     };
     return `<div class="flex flex-wrap gap-1.5 mb-4">${lookups.map(chip).join('')}</div>`;
@@ -102,10 +112,14 @@ function pluginLookupsHtml(lookups) {
 function pluginNoticeHtml(result) {
     const parts = [];
     if (result.error) {
-        parts.push(`<p class="text-sm text-red-300 mb-4"><i class="fas fa-exclamation-triangle mr-2"></i>${escapeHtml(result.error)}</p>`);
+        parts.push(
+            `<p class="text-sm text-red-300 mb-4"><i class="fas fa-exclamation-triangle mr-2"></i>${escapeHtml(result.error)}</p>`
+        );
     }
     for (const warning of result.warnings || []) {
-        parts.push(`<p class="text-sm text-amber-300/90 mb-2"><i class="fas fa-exclamation-triangle mr-2"></i>${escapeHtml(warning)}</p>`);
+        parts.push(
+            `<p class="text-sm text-amber-300/90 mb-2"><i class="fas fa-exclamation-triangle mr-2"></i>${escapeHtml(warning)}</p>`
+        );
     }
     parts.push(pluginLookupsHtml(result.lookups));
     if (!result.error && result.completed === false) {
@@ -130,14 +144,21 @@ function renderPluginResult(result) {
     }
     const items = result.items || [];
     const groups = pluginGroups(items);
-    const cards = groups.length > 1 || (groups[0] && groups[0][0])
-        ? groups.map(([name, group]) => pluginGroupHead(name, group.length) + pluginCardsHtml(group)).join('')
-        : pluginCardsHtml(items);
-    return pluginNoticeHtml(result)
-        + (items.length ? `<p class="text-xs text-gray-500 mb-3">${items.length} result${items.length === 1 ? '' : 's'}</p>` : '')
-        + cards
-        + (result.data !== undefined && result.data !== null ? `<div class="mt-4">${renderValue(result.data)}</div>` : '')
-        + pluginRawHtml(result.raw);
+    const cards =
+        groups.length > 1 || (groups[0] && groups[0][0])
+            ? groups.map(([name, group]) => pluginGroupHead(name, group.length) + pluginCardsHtml(group)).join('')
+            : pluginCardsHtml(items);
+    return (
+        pluginNoticeHtml(result) +
+        (items.length
+            ? `<p class="text-xs text-gray-500 mb-3">${items.length} result${items.length === 1 ? '' : 's'}</p>`
+            : '') +
+        cards +
+        (result.data !== undefined && result.data !== null
+            ? `<div class="mt-4">${renderValue(result.data)}</div>`
+            : '') +
+        pluginRawHtml(result.raw)
+    );
 }
 
 // Live results: cards are added as the plugin finds them
@@ -147,8 +168,8 @@ class PluginResultsView {
         this.pluginId = pluginId;
         this.result = { kind: 'plugin_result', plugin: pluginId, items: [], completed: false };
         this.custom = !!PLUGIN_RENDERERS[pluginId];
-        this.items = [];          // {el, group}
-        this.grids = new Map();   // lookup name -> its cards (one unnamed grid for single-lookup plugins)
+        this.items = []; // {el, group}
+        this.grids = new Map(); // lookup name -> its cards (one unnamed grid for single-lookup plugins)
         root.innerHTML = `
             <div data-plugin-notice></div>
             <div data-plugin-filter-box class="hidden mb-4 relative">
@@ -179,7 +200,8 @@ class PluginResultsView {
         } else if (event.event === 'data') {
             this.result.data = this.result.data === undefined ? event.data : [].concat(this.result.data, [event.data]);
             if (this.custom) return this.renderAll();
-            this.root.querySelector('[data-plugin-data]').innerHTML = `<div class="mt-4">${renderValue(this.result.data)}</div>`;
+            this.root.querySelector('[data-plugin-data]').innerHTML =
+                `<div class="mt-4">${renderValue(this.result.data)}</div>`;
         } else if (event.event === 'error') {
             this.result.error = event.detail;
         } else if (event.event === 'warning') {
@@ -230,7 +252,7 @@ class PluginResultsView {
 
     applyFilter() {
         for (const [group, grid] of this.grids) {
-            const shown = this.items.filter(i => i.group === group && this.matches(i.el)).map(i => i.el);
+            const shown = this.items.filter((i) => i.group === group && this.matches(i.el)).map((i) => i.el);
             masonryLayout(grid, shown);
             grid.parentElement.classList.toggle('hidden', !shown.length);
         }
@@ -243,14 +265,15 @@ class PluginResultsView {
         for (const [group, grid] of this.grids) {
             const counter = grid.parentElement.querySelector('[data-plugin-group-count]');
             if (counter) {
-                const all = this.items.filter(i => i.group === group).length;
+                const all = this.items.filter((i) => i.group === group).length;
                 const visible = grid.querySelectorAll('.username-result-card').length;
                 counter.textContent = visible === all ? all : `${visible} of ${all}`;
             }
         }
         const count = this.root.querySelector('[data-plugin-count]');
         count.classList.toggle('hidden', !total);
-        count.textContent = shown === total ? `${total} result${total === 1 ? '' : 's'}` : `${shown} of ${total} results`;
+        count.textContent =
+            shown === total ? `${total} result${total === 1 ? '' : 's'}` : `${shown} of ${total} results`;
         this.root.querySelector('[data-plugin-filter-box]').classList.toggle('hidden', total < 6);
     }
 }

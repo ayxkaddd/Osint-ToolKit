@@ -1,18 +1,18 @@
 import os
 import threading
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Optional
 
 from dotenv import dotenv_values, load_dotenv
 
 ENV_PATH = Path(".env")
 
 _lock = threading.Lock()
-_cache: Dict[str, Optional[str]] = {}
+_cache: dict[str, Optional[str]] = {}
 _cache_mtime: Optional[float] = None
 
 
-def _load() -> Dict[str, Optional[str]]:
+def _load() -> dict[str, Optional[str]]:
     """Return .env contents, re-reading the file only when it changed on disk."""
     global _cache, _cache_mtime
     try:
@@ -43,7 +43,7 @@ def get_setting(key: str, default: Optional[str] = None) -> Optional[str]:
     return value
 
 
-def update_env(values: Dict[str, Optional[str]]) -> None:
+def update_env(values: dict[str, Optional[str]]) -> None:
     """Set keys in .env in place, keeping comments, ordering and unrelated keys.
 
     A value of None removes the key. Updated values are also exported to

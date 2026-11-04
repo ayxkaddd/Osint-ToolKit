@@ -27,18 +27,20 @@ async function checkAuth() {
         const { authorized, configured } = await response.json();
 
         if (configured === false) {
-            showStatus('Telegram API ID and hash are not set. Add them under VK Profile History in <a href="/settings" class="underline">Settings</a>, then come back here to log in.');
+            showStatus(
+                'Telegram API ID and hash are not set. Add them under VK Profile History in <a href="/settings" class="underline">Settings</a>, then come back here to log in.'
+            );
             document.getElementById('phoneForm').classList.add('hidden');
         } else if (authorized) {
-            showStatus("✅ Authenticated successfully!");
+            showStatus('✅ Authenticated successfully!');
             document.getElementById('phoneForm').classList.add('hidden');
             document.getElementById('codeForm').classList.add('hidden');
         } else {
-            showStatus("🔒 Please authenticate with Telegram");
+            showStatus('🔒 Please authenticate with Telegram');
             document.getElementById('phoneForm').classList.remove('hidden');
         }
     } catch (error) {
-        showError("Failed to check authentication status");
+        showError('Failed to check authentication status');
     }
 }
 
@@ -50,19 +52,19 @@ async function handlePhoneSubmit(e) {
         const response = await fetch('/auth/tg/request-code', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ phone_number: currentPhoneNumber })
+            body: JSON.stringify({ phone_number: currentPhoneNumber }),
         });
 
         if (response.ok) {
             document.getElementById('phoneForm').classList.add('hidden');
             document.getElementById('codeForm').classList.remove('hidden');
-            showStatus("📲 Verification code sent to your Telegram");
+            showStatus('📲 Verification code sent to your Telegram');
         } else {
             const error = await response.json();
             showError(error.detail);
         }
     } catch (error) {
-        showError("Failed to send verification code");
+        showError('Failed to send verification code');
     }
 }
 
@@ -76,8 +78,8 @@ async function handleCodeSubmit(e) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 phone_number: currentPhoneNumber,
-                code: code
-            })
+                code: code,
+            }),
         });
 
         if (response.ok) {
@@ -94,7 +96,7 @@ async function handleCodeSubmit(e) {
             showError(error.detail);
         }
     } catch (error) {
-        showError("Failed to verify code");
+        showError('Failed to verify code');
     }
 }
 
@@ -105,7 +107,7 @@ async function handlePasswordSubmit(e) {
         const response = await fetch('/auth/tg/verify-password', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ password })
+            body: JSON.stringify({ password }),
         });
         if (response.ok) {
             passwordForm.classList.add('hidden');
@@ -115,7 +117,7 @@ async function handlePasswordSubmit(e) {
             showError(error.detail);
         }
     } catch (error) {
-        showError("Failed to verify password");
+        showError('Failed to verify password');
     }
 }
 

@@ -31,7 +31,8 @@ import time
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, AsyncGenerator, AsyncIterator, Callable, Dict, List, Literal, Mapping, Optional, Tuple, Union
+from typing import Any, Literal, Optional, Union
+from collections.abc import AsyncGenerator, AsyncIterator, Callable, Mapping
 from urllib.parse import quote, urlsplit
 
 import httpx
@@ -69,7 +70,7 @@ RESERVED_IDS = {m.id for m in MODULES} | {m.service for m in MODULES} | {
     "sdk", "new", "reload", "client", "builder",
 }
 
-FILTERS: Dict[str, Callable[[str], str]] = {
+FILTERS: dict[str, Callable[[str], str]] = {
     "lower": str.lower,
     "upper": str.upper,
     "trim": lambda s: s.strip().lstrip("@"),
@@ -100,12 +101,12 @@ class RequestSpec(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
     method: Literal["GET", "POST"] = "GET"
     url: str
-    query: Dict[str, Scalar] = {}
-    headers: Dict[str, Scalar] = {}
+    query: dict[str, Scalar] = {}
+    headers: dict[str, Scalar] = {}
     json_body: Any = Field(None, alias="json")
-    form: Dict[str, Scalar] = {}
+    form: dict[str, Scalar] = {}
     timeout: float = Field(30, ge=1, le=300)
-    empty_status: List[int] = [404]
+    empty_status: list[int] = [404]
 
     @field_validator("url")
     @classmethod
@@ -129,8 +130,8 @@ class ResponseSpec(BaseModel):
     image: str = ""
     site: str = ""
     category: str = ""
-    fields: Optional[Dict[str, str]] = None
-    entities: Dict[str, Union[str, List[str]]] = {}
+    fields: Optional[dict[str, str]] = None
+    entities: dict[str, Union[str, list[str]]] = {}
     # Work the cards out from every answer (APIs whose answers change shape). What is
     # set above still wins: title, link...; fields and entities are added to the detected ones.
     auto: bool = False
@@ -150,7 +151,7 @@ class ActionSpec(BaseModel):
     model_config = ConfigDict(extra="forbid")
     id: str = Field(pattern=r"^[a-z][a-z0-9_]{0,39}$")
     name: str = Field(min_length=1, max_length=80)
-    accepts: List[str] = Field(min_length=1)
+    accepts: list[str] = Field(min_length=1)
     request: RequestSpec
     response: ResponseSpec = Field(default_factory=lambda: ResponseSpec())
 
@@ -176,12 +177,12 @@ class Manifest(BaseModel):
     speed: Literal["fast", "medium", "slow"] = "fast"
     concurrency: int = Field(2, ge=1, le=5)
     timeout: float = Field(120, ge=5, le=1800)                   # Python plugins: the whole run
-    accepts: List[str] = []              # with requests: defaults to what its lookups accept
-    settings: Dict[str, SettingSpec] = {}
+    accepts: list[str] = []              # with requests: defaults to what its lookups accept
+    settings: dict[str, SettingSpec] = {}
     request: Optional[RequestSpec] = None
-    request_by_type: Dict[str, RequestSpec] = {}
+    request_by_type: dict[str, RequestSpec] = {}
     response: ResponseSpec = Field(default_factory=lambda: ResponseSpec())
-    requests: List[ActionSpec] = []      # several lookups instead of request:/response:
+    requests: list[ActionSpec] = []      # several lookups instead of request:/response:
 
     @field_validator("accepts")
     @classmethod
@@ -234,7 +235,7 @@ def builtin_setting_keys() -> set:
     return {key.upper() for module in modules for key in (module.get("settings") or {})}
 
 
-def _templates(manifest: Manifest) -> Tuple[List[str], List[str]]:
+def _templates(manifest: Manifest) -> tuple[list[str], list[str]]:
     """(request templates, response templates) for checking placeholders."""
     request, response = [], []
     specs = [manifest.request, *manifest.request_by_type.values(), *(a.request for a in manifest.requests)]
@@ -315,7 +316,7 @@ class Plugin:
     run: Optional[Callable] = None
     has_renderer: bool = False
     icon_file: Optional[Path] = None
-    settings_override: Optional[Dict[str, Optional[str]]] = None   # plugin builder drafts
+    settings_override: Optional[dict[str, Optional[str]]] = None   # plugin builder drafts
 
     def setting(self, key: str) -> Optional[str]:
         if self.settings_override is not None and self.settings_override.get(key):
@@ -349,13 +350,13 @@ class Plugin:
         site = self.manifest.site if self.manifest else ""
         return f"/api/oi/icon/{quote(site)}" if site else ""
 
-    def requests(self) -> List[RequestSpec]:
+    def requests(self) -> list[RequestSpec]:
         if not self.manifest:
             return []
         specs = [self.manifest.request, *self.manifest.request_by_type.values(), *(a.request for a in self.manifest.requests)]
         return [s for s in specs if s]
 
-    def actions(self, kind: str) -> List["Action"]:
+    def actions(self, kind: str) -> list["Action"]:
         """The lookups a no-code plugin runs for this input type."""
         m = self.manifest
         if not m:
@@ -365,23 +366,23 @@ class Plugin:
         spec = m.request_by_type.get(kind) or m.request
         return [Action("lookup", m.name, spec, m.response)] if spec else []
 
-    def hosts(self) -> List[str]:
+    def hosts(self) -> list[str]:
         return sorted({urlsplit(s.url).hostname or "" for s in self.requests()} - {""})
 
-    def foreign_keys(self) -> List[str]:
+    def foreign_keys(self) -> list[str]:
         prefix = self.id.upper() + "_"
         return [k for k in (self.manifest.settings if self.manifest else {}) if not k.startswith(prefix)]
 
-    def settings_values(self) -> Dict[str, Optional[str]]:
+    def settings_values(self) -> dict[str, Optional[str]]:
         return {k: self.setting(k) for k in (self.manifest.settings if self.manifest else {})}
 
-    def secret_values(self) -> List[str]:
+    def secret_values(self) -> list[str]:
         if not self.manifest:
             return []
         values = [self.setting(k) for k, s in self.manifest.settings.items() if s.secret]
         return [v for v in values if v and len(v) >= 4]
 
-    def missing_settings(self) -> List[str]:
+    def missing_settings(self) -> list[str]:
         if not self.manifest:
             return []
         return [k for k, s in self.manifest.settings.items() if s.required and not self.setting(k)]
@@ -407,14 +408,14 @@ class Plugin:
         where = "Changed since you enabled it" if self.source == "changed" else "From another source"
         return f"{where}: {', '.join(reasons)}. Review and enable it on the Plugins page."
 
-    def warnings(self) -> List[str]:
+    def warnings(self) -> list[str]:
         if self.trusted or not self.manifest or self.blocked():
             return []   # a blocked plugin already says why
         where = "changed since you reviewed it" if self.source == "changed" else "from another source and not reviewed"
         hosts = ", ".join(self.hosts()) or "the sites its code chooses"
         return [f"This plugin is {where}. What you look up with it is sent to {hosts}."]
 
-    def public(self) -> Dict[str, Any]:
+    def public(self) -> dict[str, Any]:
         m = self.manifest
         blocked = self.blocked()
         return {
@@ -476,19 +477,19 @@ class _RedactFilter(logging.Filter):
         return True
 
 
-_plugins: Dict[str, Plugin] = {}
-_state: Dict[str, Any] = {"signature": None, "checked": 0.0}
+_plugins: dict[str, Plugin] = {}
+_state: dict[str, Any] = {"signature": None, "checked": 0.0}
 _lock = threading.RLock()
 
 
-def _folders() -> List[Path]:
+def _folders() -> list[Path]:
     if not PLUGINS_DIR.is_dir():
         return []
     return sorted(p for p in PLUGINS_DIR.iterdir()
                   if p.is_dir() and not p.name.startswith((".", "_")) and (p / "plugin.yaml").is_file())
 
 
-def _files(folder: Path) -> List[Path]:
+def _files(folder: Path) -> list[Path]:
     files = [p for p in folder.rglob("*") if p.is_file()
              and "__pycache__" not in p.parts and not any(part.startswith(".") for part in p.relative_to(folder).parts)
              and p.suffix != ".pyc"]
@@ -514,7 +515,7 @@ def _signature() -> tuple:
     return tuple(entries), trust, resources
 
 
-def load_trust() -> Dict[str, Dict[str, Any]]:
+def load_trust() -> dict[str, dict[str, Any]]:
     try:
         data = json.loads(TRUST_FILE.read_text())
         return data if isinstance(data, dict) else {}
@@ -535,7 +536,7 @@ def write_trust(plugin_id: str, mode: Optional[str], sha: str = "") -> None:
         TRUST_FILE.write_text(json.dumps(trust, indent=2) + "\n")
 
 
-def _source(plugin_id: str, sha: str, trust: Dict[str, Dict[str, Any]]) -> str:
+def _source(plugin_id: str, sha: str, trust: dict[str, dict[str, Any]]) -> str:
     entry = trust.get(plugin_id) or {}
     if entry.get("mode") == "local":
         return "local"
@@ -563,7 +564,7 @@ def _import_run(plugin: Plugin) -> Optional[Callable]:
     return run
 
 
-def _load(folder: Path, trust: Dict[str, Dict[str, Any]], previous: Optional[Plugin]) -> Plugin:
+def _load(folder: Path, trust: dict[str, dict[str, Any]], previous: Optional[Plugin]) -> Plugin:
     plugin = Plugin(id=folder.name, path=folder)
     plugin.kind = "python" if (folder / "plugin.py").is_file() else "yaml"
     plugin.has_renderer = (folder / "renderer.js").is_file()
@@ -627,7 +628,7 @@ def _register() -> None:
     MODULES_BY_ID.update({m.id: m for m in MODULES})
 
 
-def refresh(force: bool = False) -> Dict[str, Plugin]:
+def refresh(force: bool = False) -> dict[str, Plugin]:
     """Rescan plugins/ when its files (or the trust list) changed; cheap to call often."""
     now = time.monotonic()
     if not force and now - _state["checked"] < 1.0:
@@ -656,7 +657,7 @@ def get(plugin_id: str) -> Optional[Plugin]:
     return refresh().get(plugin_id)
 
 
-def plugin_files(plugin: Plugin) -> List[Dict[str, Any]]:
+def plugin_files(plugin: Plugin) -> list[dict[str, Any]]:
     """The plugin's files for review (text files with their content)."""
     out = []
     for path in _files(plugin.path):
@@ -750,7 +751,7 @@ def _default_title(row: Any, fallback: str) -> str:
     return _text(row) or fallback
 
 
-def _auto_fields(row: Any) -> List[Tuple[str, Any]]:
+def _auto_fields(row: Any) -> list[tuple[str, Any]]:
     if not isinstance(row, dict):
         return []
     rows = []
@@ -773,7 +774,7 @@ def _auto_spec(spec: ResponseSpec, data: Any) -> ResponseSpec:
         if not merged[key] and detected.get(key):
             merged[key] = detected[key]
     merged["fields"] = {**(detected.get("fields") or {}), **(spec.fields or {})}
-    entities: Dict[str, List[str]] = {}
+    entities: dict[str, list[str]] = {}
     for source in (detected.get("entities") or {}, spec.entities):
         for etype, paths in source.items():
             for path in paths if isinstance(paths, list) else [paths]:
@@ -784,7 +785,7 @@ def _auto_spec(spec: ResponseSpec, data: Any) -> ResponseSpec:
 
 
 def build_items(plugin: Plugin, data: Any, value: str, kind: str,
-                spec: Optional[ResponseSpec] = None) -> List[Dict[str, Any]]:
+                spec: Optional[ResponseSpec] = None) -> list[dict[str, Any]]:
     """Cards from an API answer, as described by a response: section."""
     assert plugin.manifest is not None
     spec = spec or plugin.manifest.response
@@ -837,13 +838,13 @@ def build_items(plugin: Plugin, data: Any, value: str, kind: str,
 ITEM_KEYS = {f.name for f in dataclasses.fields(Item)}
 
 
-def _flatten(values: Any) -> List[Any]:
+def _flatten(values: Any) -> list[Any]:
     if isinstance(values, (list, tuple)):
         return [v for value in values for v in _flatten(value)]
     return [values]
 
 
-def normalize_item(obj: Union[Item, Mapping[str, Any]], plugin: Plugin) -> Dict[str, Any]:
+def normalize_item(obj: Union[Item, Mapping[str, Any]], plugin: Plugin) -> dict[str, Any]:
     """An Item / item dict -> the stored card: {title, subtitle, url, image, site, icon,
     category, fields: [[label, value]], entities: {type: [values]}}."""
     if isinstance(obj, Item):
@@ -865,7 +866,7 @@ def normalize_item(obj: Union[Item, Mapping[str, Any]], plugin: Plugin) -> Dict[
             lines = [line.strip() for line in value.strip().splitlines() if line.strip()]
             value = (", " if all(len(line) <= 80 for line in lines) else " ").join(lines)[:2000]
         fields.append([_text(label)[:80], value])
-    entities: Dict[str, List[str]] = {}
+    entities: dict[str, list[str]] = {}
     for etype, values in (obj.get("entities") or {}).items():
         if etype not in ENTITY_TYPES:
             continue
@@ -903,7 +904,7 @@ def _json_safe(value: Any) -> Any:
     return json.loads(json.dumps(value, default=str, ensure_ascii=False))
 
 
-def split_output(result: Any, plugin: Plugin) -> Tuple[List[Dict[str, Any]], Any]:
+def split_output(result: Any, plugin: Plugin) -> tuple[list[dict[str, Any]], Any]:
     """What run() returned/yielded -> (cards, other data shown as a tree)."""
     if result is None:
         return [], None
@@ -917,7 +918,7 @@ def split_output(result: Any, plugin: Plugin) -> Tuple[List[Dict[str, Any]], Any
     return [], _json_safe(result)
 
 
-def redact(value: Any, secrets: List[str]) -> Any:
+def redact(value: Any, secrets: list[str]) -> Any:
     if not secrets:
         return value
     if isinstance(value, str):
@@ -963,17 +964,17 @@ class PreparedRun:
     plugin: Plugin
     value: str
     type: str
-    items: List[Dict[str, Any]] = dataclasses.field(default_factory=list)
+    items: list[dict[str, Any]] = dataclasses.field(default_factory=list)
     data: Any = None
     raw: Any = None
     note: Optional[str] = None
-    stream: Optional[AsyncGenerator[Tuple[str, Any], None]] = None
-    actions: Optional[List[str]] = None    # only these lookups (requests: plugins)
-    warnings: List[str] = dataclasses.field(default_factory=list)
-    lookups: List[Dict[str, Any]] = dataclasses.field(default_factory=list)   # what each of several did
+    stream: Optional[AsyncGenerator[tuple[str, Any], None]] = None
+    actions: Optional[list[str]] = None    # only these lookups (requests: plugins)
+    warnings: list[str] = dataclasses.field(default_factory=list)
+    lookups: list[dict[str, Any]] = dataclasses.field(default_factory=list)   # what each of several did
 
 
-def _check_input(plugin: Plugin, value: str, kind: Optional[str]) -> Tuple[str, str]:
+def _check_input(plugin: Plugin, value: str, kind: Optional[str]) -> tuple[str, str]:
     assert plugin.manifest is not None
     accepts = plugin.manifest.accepts
     value = (value or "").strip()
@@ -1017,7 +1018,7 @@ async def send_request(plugin: Plugin, value: str, kind: str, spec: RequestSpec)
     """Render and send one of a no-code plugin's requests (also used by the plugin builder)."""
     settings = plugin.settings_values()
 
-    def request_lookup(empty: List[str]) -> Callable[[str], Any]:
+    def request_lookup(empty: list[str]) -> Callable[[str], Any]:
         def lookup(name: str) -> Any:
             if name == "value":
                 return value
@@ -1029,10 +1030,10 @@ async def send_request(plugin: Plugin, value: str, kind: str, spec: RequestSpec)
             return setting
         return lookup
 
-    def render_map(entries: Dict[str, Scalar]) -> Dict[str, str]:
+    def render_map(entries: dict[str, Scalar]) -> dict[str, str]:
         out = {}
         for key, template in entries.items():
-            empty: List[str] = []
+            empty: list[str] = []
             text = render(str(template).lower() if isinstance(template, bool) else str(template), request_lookup(empty))
             if not empty:   # entries using an unset optional setting are left out
                 out[key] = text
@@ -1047,12 +1048,12 @@ async def send_request(plugin: Plugin, value: str, kind: str, spec: RequestSpec)
             return [render_json(v) for v in body]
         return body
 
-    empty: List[str] = []
+    empty: list[str] = []
     url = render(spec.url, request_lookup(empty), quote_values=True)
     if empty:
         raise RunRefused(400, f"{empty[0]} is not set - add it in Settings")
     host = urlsplit(url).hostname or url
-    kwargs: Dict[str, Any] = {"params": render_map(spec.query), "headers": render_map(spec.headers)}
+    kwargs: dict[str, Any] = {"params": render_map(spec.query), "headers": render_map(spec.headers)}
     if spec.json_body is not None:
         kwargs["json"] = render_json(spec.json_body)
     elif spec.form:
@@ -1074,7 +1075,7 @@ def parse_response(response: httpx.Response, format: str) -> Any:
     return {"text": text, "lines": [line.strip() for line in text.splitlines() if line.strip()]}
 
 
-async def _run_action(plugin: Plugin, action: Action, value: str, kind: str) -> Tuple[List[Dict[str, Any]], Any]:
+async def _run_action(plugin: Plugin, action: Action, value: str, kind: str) -> tuple[list[dict[str, Any]], Any]:
     """One lookup: (cards, answer). Cards are [] when the answer means "nothing found"."""
     response = await send_request(plugin, value, kind, action.request)
     host = response.request.url.host
@@ -1187,7 +1188,7 @@ async def _run_python(run: PreparedRun) -> None:
 
 
 async def prepare(plugin_id: str, value: str, kind: Optional[str],
-                  actions: Optional[List[str]] = None) -> PreparedRun:
+                  actions: Optional[list[str]] = None) -> PreparedRun:
     """Check the input and run the lookup (async-generator plugins start streaming
     later). Raises RunRefused, or PluginError when the lookup itself failed."""
     plugin = get(plugin_id)
@@ -1216,7 +1217,7 @@ async def events(run: PreparedRun) -> AsyncIterator[str]:
     plugin = run.plugin
     secrets = plugin.secret_values()
 
-    def line(event: Dict[str, Any]) -> str:
+    def line(event: dict[str, Any]) -> str:
         return json.dumps(redact(event, secrets), ensure_ascii=False, default=str) + "\n"
 
     yield line({"event": "started", "plugin": plugin.id, "name": plugin.name, "value": run.value, "type": run.type})

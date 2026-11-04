@@ -17,19 +17,19 @@ from routes import (
     sharetrace_routes,
     username_routes,
     dnsrecon_routes,
-    git_routes,
+    gitfive_routes,
     ghunt_routes,
     hlr_routes,
     lookup_routes,
     oi_routes,
     plugin_routes,
-    rosources_routes,
+    resources_routes,
     settings_routes,
-    templates,
-    ns_routers,
+    pages_routes,
+    ns_routes,
     updates_routes,
     web_search_routes,
-    whois_route,
+    whois_routes,
     telegram_routes,
     funstat_routes,
 )
@@ -65,7 +65,7 @@ async def lifespan(app: FastAPI):
     await telethon_service.stop()
 
 
-class OsintFrameWork:
+class OsintFramework:
     def __init__(self):
         self.app = FastAPI(title="Osint Framework", version="1.0.0", lifespan=lifespan)
         self.auth_handler = AuthHandler()
@@ -140,6 +140,20 @@ class OsintFrameWork:
             return JSONResponse({"detail": "Not authenticated"}, status_code=401)
         return RedirectResponse(url="/")
 
+    @staticmethod
+    def _login_key(request: Request) -> str:
+        """Who a login attempt counts against.
+
+        uvicorn replaces the client address with X-Forwarded-For when the connection
+        comes from a trusted proxy, which by default is any local connection (a local
+        process, an SSH tunnel). The header is then whatever the caller sent, so unless
+        TRUST_PROXY_HEADERS is set, all requests carrying it share one counter.
+        """
+        if "x-forwarded-for" in request.headers and \
+                (get_setting('TRUST_PROXY_HEADERS', 'false') or '').lower() != 'true':
+            return "forwarded"
+        return request.client.host if request.client else "unknown"
+
     def _login_blocked(self, ip: str) -> bool:
         attempts = self.failed_logins[ip]
         cutoff = time.monotonic() - LOGIN_WINDOW_SECONDS
@@ -150,7 +164,7 @@ class OsintFrameWork:
     def setup_auth(self):
         @self.app.post("/login")
         async def login(data: AuthDetails, request: Request, response: Response):
-            ip = request.client.host if request.client else "unknown"
+            ip = self._login_key(request)
             if self._login_blocked(ip):
                 raise HTTPException(status_code=429, detail='Too many failed attempts, try again later')
 
@@ -188,21 +202,21 @@ class OsintFrameWork:
 
         routes_config = [
             (setup_routes.router, "Setup"),
-            (git_routes.router, "GitFive"),
-            (ns_routers.router, "DNS"),
-            (whois_route.router, "WHOIS"),
+            (gitfive_routes.router, "GitFive"),
+            (ns_routes.router, "DNS"),
+            (whois_routes.router, "WHOIS"),
             (oi_routes.router, "OSINT"),
             (telegram_routes.auth_router, "Telegram Auth"),
             (telegram_routes.bot_router, "Telegram Bot"),
             (dnsrecon_routes.router, "DNS Reconnaissance"),
             (hlr_routes.router, "HLR"),
             (username_routes.router, "Username"),
-            (rosources_routes.router, "Resources"),
+            (resources_routes.router, "Resources"),
             (settings_routes.router, "Settings"),
             (cavalier_routes.router, "Cavalier"),
             (lookup_routes.router, "Lookup & jobs"),
             (updates_routes.router, "Updates"),
-            (templates.router, "Templates"),
+            (pages_routes.router, "Pages"),
             (investigation_routes.router, "Investigations"),
             (ghunt_routes.router, "GHunt"),
             (face_search_routes.router, "Face Search"),
@@ -223,8 +237,9 @@ class OsintFrameWork:
                 tags=[tag],
             )
 
-        logger.info(f"Registered {len(routes_config)} route groups")
+        logger.info('Registered %s route groups', len(routes_config))
         plugin_loader.refresh(force=True)
 
 
-app = OsintFrameWork().app
+framework = OsintFramework()
+app = framework.app

@@ -20,7 +20,7 @@ class GitFiveError(Exception):
     pass
 
 
-class GitService:
+class GitFiveService:
     def __init__(self):
         self.assets_path = Path('./assets')
         self.assets_path.mkdir(exist_ok=True)

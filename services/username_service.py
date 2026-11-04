@@ -1,4 +1,3 @@
-import aiohttp
 import asyncio
 from pathlib import Path
 import random
@@ -6,7 +5,8 @@ import json
 import time
 import os
 import logging
-from typing import List, Optional, AsyncGenerator
+from typing import Optional
+from collections.abc import AsyncGenerator
 from urllib.parse import parse_qsl, urlparse, parse_qs, quote
 from bs4 import BeautifulSoup
 from fastapi import HTTPException
@@ -14,12 +14,14 @@ from dataclasses import dataclass, asdict
 from enum import Enum
 from collections import defaultdict
 import re
-from aiohttp import TCPConnector, ClientTimeout
+import httpx
 from datetime import datetime
 import uuid
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+ACCOUNT = "{account}"  # where the username goes in WhatsMyName URLs and bodies
 
 try:
     from socid_extractor import extract
@@ -167,12 +169,16 @@ class StreamingUsernameSearchService:
         self.max_concurrent_requests = max_concurrent_requests
         # Blocked/dead hosts never complete the TCP connect: give up on those
         # early instead of holding a slot for the whole timeout
-        self.timeout = ClientTimeout(total=timeout_seconds, sock_connect=connect_timeout_seconds)
+        self.timeout_seconds = timeout_seconds
+        self.timeout = httpx.Timeout(timeout_seconds, connect=connect_timeout_seconds)
         self.max_retries = max_retries
         self.stream_delay = stream_delay
         self._metadata_cache = None
         self.rate_limiter = RateLimiter()
         self.semaphore = asyncio.Semaphore(max_concurrent_requests)
+        # At most this many requests to one host at a time (sites sharing a host)
+        self.per_host_limit = 5
+        self._host_slots: dict = defaultdict(lambda: asyncio.Semaphore(self.per_host_limit))
 
         # Modern user agents
         self.user_agents = [
@@ -235,14 +241,13 @@ class StreamingUsernameSearchService:
             self._refresh_metadata(raise_errors=True)
             return self._metadata_cache
         except Exception as e:
-            logger.error(f"Failed to fetch metadata: {str(e)}")
+            logger.error('Failed to fetch metadata: %s', str(e))
             raise HTTPException(status_code=500, detail=f"Failed to fetch the WhatsMyName site list: {str(e)}")
 
     def _refresh_metadata(self, raise_errors: bool = False):
         """Download the current WhatsMyName list and save it to assets/."""
-        import requests
         try:
-            response = requests.get(self.WMN_URL, timeout=(5, 20))
+            response = httpx.get(self.WMN_URL, timeout=httpx.Timeout(20, connect=5), follow_redirects=True)
             response.raise_for_status()
             data = response.json()
             if not data.get("sites"):
@@ -256,7 +261,7 @@ class StreamingUsernameSearchService:
         except Exception as e:
             if raise_errors:
                 raise
-            logger.warning(f"Could not update the WhatsMyName list ({e}); keeping the local copy")
+            logger.warning('Could not update the WhatsMyName list (%s); keeping the local copy', e)
             try:
                 # Don't retry on every search when GitHub is unreachable
                 os.utime(self.WMN_LOCAL)
@@ -355,11 +360,11 @@ class StreamingUsernameSearchService:
             pass
         return None
 
-    async def _check_response_match(self,
+    def _check_response_match(self,
                                    response_status: int,
                                    text: str,
                                    site: dict,
-                                   redirect_statuses: Optional[List[int]] = None) -> tuple[bool, bool]:
+                                   redirect_statuses: Optional[list[int]] = None) -> tuple[bool, bool]:
         """Check if response matches expected patterns"""
         redirect_statuses = redirect_statuses or []
 
@@ -384,179 +389,95 @@ class StreamingUsernameSearchService:
 
         return False, False
 
+    def _build_request(self, site: dict, username: str) -> tuple:
+        """(url, method, request kwargs) for one site: GET, JSON POST or form POST."""
+        url = self._url_pattern.sub(quote(username), site["uri_check"]).replace(ACCOUNT, quote(username))
+        headers = self.base_headers.copy()
+        headers["User-Agent"] = self.get_random_user_agent()
+        headers.update(site.get("headers") or {})
+        kwargs = {"headers": headers}
+        if not site.get("post_body"):
+            return url, "GET", kwargs
+
+        post_body = site["post_body"].replace(ACCOUNT, username)
+        content_type = headers.get("Content-Type", "").lower()
+        if "json" in content_type:
+            try:
+                json_data = json.loads(post_body)
+            except json.JSONDecodeError:
+                json_data = None
+            if isinstance(json_data, dict):
+                kwargs["json"] = json_data
+        elif "form-urlencoded" in content_type:
+            form = dict(parse_qsl(post_body))
+            if form:
+                kwargs["data"] = form
+        elif post_body:
+            kwargs["content"] = post_body
+        return url, "POST", kwargs
+
+    def _outcome(self, site: dict, username: str, url: str, response: httpx.Response,
+                 response_time: float, extract_profile: bool) -> SiteCheckOutcome:
+        """Found / not found / no match, from a site's response."""
+        raw = response.content
+        try:
+            text = raw.decode('utf-8')
+        except UnicodeDecodeError:
+            text = raw.decode('latin-1', errors='ignore')
+        is_found, is_not_found = self._check_response_match(
+            response.status_code, text, site, [r.status_code for r in response.history])
+        if is_found and not self._response_confirms_account(site, username, text):
+            is_found, is_not_found = False, True
+
+        base = {"site_name": site["name"], "category": site.get("cat", "unknown"),
+                "status_code": response.status_code, "response_time": response_time}
+        if is_found:
+            pretty = site.get("uri_pretty", site["uri_check"]).replace(ACCOUNT, username)
+            return SiteCheckOutcome(result=SiteResult(**base, url=pretty, status=CheckStatus.FOUND),
+                                    response_text=text if extract_profile else None)
+        if is_not_found:
+            return SiteCheckOutcome(result=SiteResult(**base, url=url, status=CheckStatus.NOT_FOUND))
+        return SiteCheckOutcome(result=SiteResult(**base, url=url, status=CheckStatus.ERROR,
+                                                  error_message="Response doesn't match expected patterns"))
+
+    @staticmethod
+    def _error(site: dict, url: str, message: str, start_time: float) -> SiteCheckOutcome:
+        return SiteCheckOutcome(result=SiteResult(
+            site_name=site["name"], category=site.get("cat", "unknown"), url=url,
+            status=CheckStatus.ERROR, error_message=message, response_time=time.time() - start_time))
+
     async def check_single_site(self,
-                                session: aiohttp.ClientSession,
+                                client: httpx.AsyncClient,
                                 site: dict,
                                 username: str,
                                 extract_profile: bool = False) -> SiteCheckOutcome:
         """Check username on a single site (supports GET, JSON POST, and form POST)."""
-        PLACEHOLDER = "{account}"
-
-        # --- Pre-compute URL and domain before semaphore ---
-        url = self._url_pattern.sub(quote(username), site["uri_check"])
-        url = url.replace(PLACEHOLDER, quote(username))
+        url, method, kwargs = self._build_request(site, username)
         domain = urlparse(url).netloc
 
-        # --- Prepare headers ---
-        headers = self.base_headers.copy()
-        headers["User-Agent"] = self.get_random_user_agent()
-        if "headers" in site:
-            headers.update(site["headers"])
-
-        # --- Prepare POST data if needed ---
-        is_post = bool(site.get("post_body"))
-        data = None
-        json_data = None
-
-        if is_post:
-            post_body = site["post_body"].replace(PLACEHOLDER, username)
-            content_type = headers.get("Content-Type", "").lower()
-
-            if "json" in content_type:
-                try:
-                    json_data = json.loads(post_body)
-                except json.JSONDecodeError:
-                    json_data = post_body
-            elif "form-urlencoded" in content_type:
-                data = dict(parse_qsl(post_body))
-            else:
-                data = post_body
-
-        # --- Base result info ---
-        base_result = {
-            "site_name": site["name"],
-            "category": site.get("cat", "unknown"),
-        }
-
         if site.get("name") == "Mixi" and not username.isdigit():
-            return SiteCheckOutcome(
-                result=SiteResult(
-                    **base_result,
-                    url=url,
-                    status=CheckStatus.NOT_FOUND,
-                    error_message="Mixi check requires a numeric community id"
-                )
-            )
+            return SiteCheckOutcome(result=SiteResult(
+                site_name=site["name"], category=site.get("cat", "unknown"), url=url,
+                status=CheckStatus.NOT_FOUND, error_message="Mixi check requires a numeric community id"))
 
-        async with self.semaphore:
+        async with self.semaphore, self._host_slots[domain]:
             start_time = time.time()
-            # --- Rate limiting ---
             wait_time = await self.rate_limiter.wait_if_needed(domain)
             if wait_time > 0:
-                logger.debug(f"Rate limited for {domain}, waited {wait_time:.2f}s")
-
+                logger.debug("Rate limited for %s, waited %.2fs", domain, wait_time)
             try:
-                # --- Unified request logic ---
-                method = 'POST' if is_post else 'GET'
-                request_kwargs = {
-                    'url': url,
-                    'headers': headers,
-                    'timeout': self.timeout,
-                    'allow_redirects': True,
-                    'ssl': False
-                }
-
-                if is_post:
-                    if isinstance(json_data, dict):
-                        request_kwargs['json'] = json_data
-                    elif data:
-                        request_kwargs['data'] = data
-
-                async with session.request(method, **request_kwargs) as response:
-                    raw_bytes = await response.read()
-
-                    # --- Optimized encoding detection ---
-                    try:
-                        text = raw_bytes.decode('utf-8')
-                    except UnicodeDecodeError:
-                        text = raw_bytes.decode('latin-1', errors='ignore')
-
-                    response_time = time.time() - start_time
-
-                    # --- Response pattern matching ---
-                    is_found, is_not_found = await self._check_response_match(
-                        response.status,
-                        text,
-                        site,
-                        [history_response.status for history_response in response.history]
-                    )
-
-                    if is_found and not self._response_confirms_account(site, username, text):
-                        is_found = False
-                        is_not_found = True
-
-                    if is_found:
-                        url = site.get("uri_pretty", site["uri_check"]).replace("{account}", username)
-
-                        result = SiteResult(
-                            **base_result,
-                            url=url,
-                            status=CheckStatus.FOUND,
-                            status_code=response.status,
-                            response_time=response_time
-                        )
-
-                        return SiteCheckOutcome(
-                            result=result,
-                            response_text=text if extract_profile else None
-                        )
-
-                    elif is_not_found:
-                        return SiteCheckOutcome(
-                            result=SiteResult(
-                                **base_result,
-                                url=url,
-                                status=CheckStatus.NOT_FOUND,
-                                status_code=response.status,
-                                response_time=response_time
-                            )
-                        )
-
-                    else:
-                        return SiteCheckOutcome(
-                            result=SiteResult(
-                                **base_result,
-                                url=url,
-                                status=CheckStatus.ERROR,
-                                status_code=response.status,
-                                error_message="Response doesn't match expected patterns",
-                                response_time=response_time
-                            )
-                        )
-
-            except asyncio.TimeoutError:
-                return SiteCheckOutcome(
-                    result=SiteResult(
-                        **base_result,
-                        url=url,
-                        status=CheckStatus.ERROR,
-                        error_message="Timeout",
-                        response_time=time.time() - start_time
-                    )
-                )
-            except aiohttp.ClientError as e:
-                return SiteCheckOutcome(
-                    result=SiteResult(
-                        **base_result,
-                        url=url,
-                        status=CheckStatus.ERROR,
-                        error_message=f"Client error: {e}",
-                        response_time=time.time() - start_time
-                    )
-                )
+                # The whole request, redirects included, within timeout_seconds
+                response = await asyncio.wait_for(client.request(method, url, **kwargs), self.timeout_seconds)
+            except (asyncio.TimeoutError, httpx.TimeoutException):
+                return self._error(site, url, "Timeout", start_time)
+            except httpx.HTTPError as e:
+                return self._error(site, url, f"Client error: {e}", start_time)
             except Exception as e:
-                return SiteCheckOutcome(
-                    result=SiteResult(
-                        **base_result,
-                        url=url,
-                        status=CheckStatus.ERROR,
-                        error_message=str(e),
-                        response_time=time.time() - start_time
-                    )
-                )
+                return self._error(site, url, str(e), start_time)
+            return self._outcome(site, username, url, response, time.time() - start_time, extract_profile)
 
     async def check_site_with_retry(self,
-                                   session: aiohttp.ClientSession,
+                                   client: httpx.AsyncClient,
                                    site: dict,
                                    username: str,
                                    extract_profile: bool = False) -> SiteCheckOutcome:
@@ -564,11 +485,8 @@ class StreamingUsernameSearchService:
         last_result = None
 
         for attempt in range(max(1, self.max_retries)):
-            outcome = await self.check_single_site(session, site, username, extract_profile)
+            outcome = await self.check_single_site(client, site, username, extract_profile)
             result = outcome.result
-            if site["name"] == "Github":
-                logger.info(f"Github check result: {result.status}, error: {result.error_message}")
-
             if result.status in [CheckStatus.FOUND, CheckStatus.NOT_FOUND]:
                 return outcome
 
@@ -578,10 +496,8 @@ class StreamingUsernameSearchService:
             if result.error_message and any(x in result.error_message.lower()
                                            for x in ['timeout', 'rate limit', 'too many']):
                 if attempt < self.max_retries - 1:
-                    backoff_time = 0.2 * (2 ** attempt)
-                    await asyncio.sleep(backoff_time)
+                    await asyncio.sleep(0.2 * (2 ** attempt))
             else:
-                # Don't retry other errors
                 break
 
         return last_result
@@ -594,7 +510,7 @@ class StreamingUsernameSearchService:
             try:
                 profile_data = await asyncio.to_thread(extract, text)
             except Exception as e:
-                logger.debug(f"socid_extractor failed for {url}: {e}")
+                logger.debug('socid_extractor failed for %s: %s', url, e)
 
         if not profile_data:
             parsed_json = self._try_parse_json(text)
@@ -603,8 +519,10 @@ class StreamingUsernameSearchService:
 
         return profile_data
 
+    DDG_URL = "https://duckduckgo.com/html/?q={query}"
+
     async def stream_duckduckgo_search(self,
-                                      session: aiohttp.ClientSession,
+                                      client: httpx.AsyncClient,
                                       username: str,
                                       queue_event):
         """Stream DuckDuckGo results"""
@@ -615,282 +533,167 @@ class StreamingUsernameSearchService:
         ))
 
         query = quote(f'"{username}"')
-        url = f"https://duckduckgo.com/html/?q={query}"
+        url = self.DDG_URL.format(query=query)
         headers = {
             "User-Agent": self.get_random_user_agent(),
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
         }
 
         try:
-            async with session.get(url, headers=headers, timeout=self.timeout) as response:
-                if response.status == 200:
-                    text = await response.text()
-                    soup = BeautifulSoup(text, "html.parser")
-                    seen_domains = set()
+            response = await client.get(url, headers=headers)
+            if response.status_code == 200:
+                soup = BeautifulSoup(response.text, "html.parser")
+                seen_domains = set()
 
-                    for a_tag in soup.find_all("a", class_="result__a", href=True):
-                        href = a_tag.get("href", "")
-                        real_url = None
+                for a_tag in soup.find_all("a", class_="result__a", href=True):
+                    href = a_tag.get("href", "")
+                    real_url = None
 
-                        if "duckduckgo.com/l/?" in href:
-                            parsed_url = urlparse(href)
-                            real_url = parse_qs(parsed_url.query).get("uddg", [None])[0]
-                        elif "duckduckgo.com" not in href:
-                            real_url = href
+                    if "duckduckgo.com/l/?" in href:
+                        parsed_url = urlparse(href)
+                        real_url = parse_qs(parsed_url.query).get("uddg", [None])[0]
+                    elif "duckduckgo.com" not in href:
+                        real_url = href
 
-                        if real_url:
-                            domain = urlparse(real_url).netloc
-                            if domain and domain not in seen_domains:
-                                seen_domains.add(domain)
+                    if real_url:
+                        domain = urlparse(real_url).netloc
+                        if domain and domain not in seen_domains:
+                            seen_domains.add(domain)
 
-                                # Stream each result
-                                await queue_event(StreamEvent(
-                                    event_type=EventType.DUCKDUCKGO_RESULT,
-                                    data={
-                                        "url": real_url,
-                                        "domain": domain,
-                                        "title": a_tag.get_text(strip=True)
-                                    }
-                                ))
-                                await asyncio.sleep(self.stream_delay)
+                            # Stream each result
+                            await queue_event(StreamEvent(
+                                event_type=EventType.DUCKDUCKGO_RESULT,
+                                data={
+                                    "url": real_url,
+                                    "domain": domain,
+                                    "title": a_tag.get_text(strip=True)
+                                }
+                            ))
+                            await asyncio.sleep(self.stream_delay)
 
         except Exception as e:
-            logger.error(f"DuckDuckGo search error: {str(e)}")
+            logger.error('DuckDuckGo search error: %s', str(e))
+
+    @staticmethod
+    def _select_sites(sites: list[dict], categories, only_sites, priority_sites) -> list[dict]:
+        if categories:
+            categories_set = set(categories)
+            sites = [s for s in sites if s.get("cat") in categories_set]
+        # Re-check just these (sites that errored in an earlier run)
+        if only_sites:
+            wanted = set(only_sites)
+            sites = [s for s in sites if s.get("name") in wanted]
+        if priority_sites:
+            priority_set = set(priority_sites)
+            sites = ([s for s in sites if s.get("name") in priority_set]
+                     + [s for s in sites if s.get("name") not in priority_set])
+        return sites
+
+    @staticmethod
+    def _event_priority(event: StreamEvent) -> int:
+        """Found sites and profiles go out before the high-volume "checking" events."""
+        if event.event_type == EventType.PROFILE_EXTRACTED:
+            return 0
+        if event.event_type == EventType.SITE_RESULT:
+            return 1 if event.data.get("status") == CheckStatus.FOUND.value else 2
+        if event.event_type in [EventType.DUCKDUCKGO_RESULT, EventType.DUCKDUCKGO_STARTED]:
+            return 3
+        return 4
+
+    @staticmethod
+    def _count_result(event: StreamEvent, stats: dict, total: int) -> None:
+        """Add a site result to the totals and attach the progress to the event."""
+        if event.event_type != EventType.SITE_RESULT:
+            return
+        stats["checked"] += 1
+        status = event.data["status"]
+        key = "found" if status == CheckStatus.FOUND.value else "not_found" if status == CheckStatus.NOT_FOUND.value else "errors"
+        stats[key] += 1
+        event.data["progress"] = {
+            "checked": stats["checked"], "total": total, "found": stats["found"],
+            "not_found": stats["not_found"], "errors": stats["errors"],
+            "percentage": round((stats["checked"] / total) * 100, 2),
+        }
+
+    async def _process_site(self, client: httpx.AsyncClient, site: dict, username: str,
+                            extract_profile: bool, queue_event) -> None:
+        """Check one site and queue its events (checking, result, extracted profile)."""
+        await queue_event(StreamEvent(
+            event_type=EventType.SITE_CHECKING,
+            data={"site_name": site["name"], "category": site.get("cat", "unknown"),
+                  "url": site["uri_check"].replace(ACCOUNT, username)}))
+        outcome = await self.check_site_with_retry(client, site, username, extract_profile)
+        result = outcome.result
+        await queue_event(StreamEvent(event_type=EventType.SITE_RESULT, data=result.to_dict()))
+
+        if extract_profile and result.status == CheckStatus.FOUND and outcome.response_text:
+            profile_data = await self.extract_profile_data(outcome.response_text, result.url)
+            if profile_data:
+                result.profile_data = profile_data
+                await queue_event(StreamEvent(
+                    event_type=EventType.PROFILE_EXTRACTED,
+                    data={"site_name": result.site_name, "category": result.category, "url": result.url,
+                          "profile_data": profile_data, "checked_at": result.checked_at}))
 
     async def stream_search(self,
                            username: str,
                            include_duckduckgo: bool = False,
                            extract_profile: bool = False,
-                           categories: Optional[List[str]] = None,
-                           priority_sites: Optional[List[str]] = None,
-                           only_sites: Optional[List[str]] = None) -> AsyncGenerator[StreamEvent, None]:
-        """
-        Stream search results as they become available
-        """
+                           categories: Optional[list[str]] = None,
+                           priority_sites: Optional[list[str]] = None,
+                           only_sites: Optional[list[str]] = None) -> AsyncGenerator[StreamEvent, None]:
+        """Stream search results as they become available."""
         search_id = str(uuid.uuid4())
         start_time = time.time()
-
-        # Get metadata
         metadata = await asyncio.to_thread(self.get_metadata)
-        sites = metadata.get("sites", [])
+        sites = self._select_sites(metadata.get("sites", []), categories, only_sites, priority_sites)
 
-        # Filter by categories
-        if categories:
-            categories_set = set(categories)
-            sites = [s for s in sites if s.get("cat") in categories_set]
-
-        # Re-check just these (sites that errored in an earlier run)
-        if only_sites:
-            wanted = set(only_sites)
-            sites = [s for s in sites if s.get("name") in wanted]
-
-        # Prioritize sites
-        if priority_sites:
-            priority_set = set(priority_sites)
-            priority = [s for s in sites if s.get("name") in priority_set]
-            regular = [s for s in sites if s.get("name") not in priority_set]
-            sites = priority + regular
-
-        # Yield search started event
         yield StreamEvent(
             event_type=EventType.SEARCH_STARTED,
-            data={
-                "search_id": search_id,
-                "username": username,
-                "total_sites": len(sites),
-                "categories": categories,
-                "include_duckduckgo": include_duckduckgo,
-                "extract_profile": extract_profile
-            }
-        )
+            data={"search_id": search_id, "username": username, "total_sites": len(sites),
+                  "categories": categories, "include_duckduckgo": include_duckduckgo,
+                  "extract_profile": extract_profile})
 
-        # Statistics
-        found_count = 0
-        not_found_count = 0
-        error_count = 0
-        checked_count = 0
-
-        # Prioritize found/profile events over high-volume "checking" noise.
-        result_queue = asyncio.PriorityQueue()
-        queue_sequence = 0
-
-        def event_priority(event: StreamEvent) -> int:
-            if event.event_type == EventType.PROFILE_EXTRACTED:
-                return 0
-            if (
-                event.event_type == EventType.SITE_RESULT
-                and event.data.get("status") == CheckStatus.FOUND.value
-            ):
-                return 1
-            if event.event_type == EventType.SITE_RESULT:
-                return 2
-            if event.event_type in [EventType.DUCKDUCKGO_RESULT, EventType.DUCKDUCKGO_STARTED]:
-                return 3
-            return 4
+        stats = {"checked": 0, "found": 0, "not_found": 0, "errors": 0}
+        result_queue: asyncio.PriorityQueue = asyncio.PriorityQueue()
+        sequence = 0
 
         async def queue_event(event: StreamEvent):
-            nonlocal queue_sequence
-            sequence = queue_sequence
-            queue_sequence += 1
-            await result_queue.put((event_priority(event), sequence, event))
+            nonlocal sequence
+            sequence += 1
+            await result_queue.put((self._event_priority(event), sequence, event))
 
-        async def process_site(site: dict):
-            """Process a single site and add to queue"""
-            # Notify checking started
-            await queue_event(StreamEvent(
-                event_type=EventType.SITE_CHECKING,
-                data={
-                    "site_name": site["name"],
-                    "category": site.get("cat", "unknown"),
-                    "url": site["uri_check"].replace("{account}", username)
-                }
-            ))
-
-            # Check the site
-            outcome = await self.check_site_with_retry(
-                session, site, username, extract_profile
-            )
-            result = outcome.result
-
-            # Add result to queue using the to_dict method
-            await queue_event(StreamEvent(
-                event_type=EventType.SITE_RESULT,
-                data=result.to_dict()
-            ))
-
-            if (
-                extract_profile
-                and result.status == CheckStatus.FOUND
-                and outcome.response_text
-            ):
-                profile_data = await self.extract_profile_data(outcome.response_text, result.url)
-                if profile_data:
-                    result.profile_data = profile_data
-                    await queue_event(StreamEvent(
-                        event_type=EventType.PROFILE_EXTRACTED,
-                        data={
-                            "site_name": result.site_name,
-                            "category": result.category,
-                            "url": result.url,
-                            "profile_data": profile_data,
-                            "checked_at": result.checked_at
-                        }
-                    ))
-
-        # Create session with optimized settings
-        connector = TCPConnector(
-            limit=self.max_concurrent_requests,
-            limit_per_host=5,
-            ttl_dns_cache=300,
-            force_close=False,
-            enable_cleanup_closed=True
-        )
-
-        async with aiohttp.ClientSession(
-            connector=connector,
-            timeout=self.timeout,
-            trust_env=True
-        ) as session:
-            # Start all site checks
-            tasks = []
-            for site in sites:
-                task = asyncio.create_task(process_site(site))
-                tasks.append(task)
-
-            # Start DuckDuckGo if requested
+        limits = httpx.Limits(max_connections=self.max_concurrent_requests,
+                              max_keepalive_connections=self.max_concurrent_requests)
+        async with httpx.AsyncClient(timeout=self.timeout, limits=limits, verify=False,
+                                     follow_redirects=True, trust_env=True) as client:
+            tasks = [asyncio.create_task(self._process_site(client, site, username, extract_profile, queue_event))
+                     for site in sites]
             if include_duckduckgo:
-                ddg_task = asyncio.create_task(
-                    self.stream_duckduckgo_search(session, username, queue_event)
-                )
-                tasks.append(ddg_task)
+                tasks.append(asyncio.create_task(self.stream_duckduckgo_search(client, username, queue_event)))
 
-            # Process results and profile enrichment as they come in.
             while any(not task.done() for task in tasks) or not result_queue.empty():
                 try:
-                    # Wait for next event with timeout
-                    _, _, event = await asyncio.wait_for(
-                        result_queue.get(),
-                        timeout=1.0
-                    )
-
-                    # Update statistics
-                    if event.event_type == EventType.SITE_RESULT:
-                        checked_count += 1
-                        site_data = event.data
-
-                        if site_data["status"] == CheckStatus.FOUND.value:
-                            found_count += 1
-                        elif site_data["status"] == CheckStatus.NOT_FOUND.value:
-                            not_found_count += 1
-                        else:
-                            error_count += 1
-
-                        # Add progress info
-                        event.data["progress"] = {
-                            "checked": checked_count,
-                            "total": len(sites),
-                            "found": found_count,
-                            "not_found": not_found_count,
-                            "errors": error_count,
-                            "percentage": round((checked_count / len(sites)) * 100, 2)
-                        }
-
-                    # Yield the event
-                    yield event
-
-                    if event.event_type == EventType.DUCKDUCKGO_RESULT and self.stream_delay > 0:
-                        await asyncio.sleep(self.stream_delay)
-
+                    _, _, event = await asyncio.wait_for(result_queue.get(), timeout=1.0)
                 except asyncio.TimeoutError:
-                    # Check if all tasks are done
-                    if all(task.done() for task in tasks):
-                        break
                     continue
-
-            # Wait for all tasks to complete
-            await asyncio.gather(*tasks, return_exceptions=True)
-
-            # Process any remaining events
-            while not result_queue.empty():
-                _, _, event = await result_queue.get()
-
-                # Update statistics for remaining events
-                if event.event_type == EventType.SITE_RESULT:
-                    checked_count += 1
-                    site_data = event.data
-
-                    if site_data["status"] == CheckStatus.FOUND.value:
-                        found_count += 1
-                    elif site_data["status"] == CheckStatus.NOT_FOUND.value:
-                        not_found_count += 1
-                    else:
-                        error_count += 1
-
-                    event.data["progress"] = {
-                        "checked": checked_count,
-                        "total": len(sites),
-                        "found": found_count,
-                        "not_found": not_found_count,
-                        "errors": error_count,
-                        "percentage": round((checked_count / len(sites)) * 100, 2)
-                    }
-
+                self._count_result(event, stats, len(sites))
                 yield event
                 if event.event_type == EventType.DUCKDUCKGO_RESULT and self.stream_delay > 0:
                     await asyncio.sleep(self.stream_delay)
 
-        # Yield completion event
-        elapsed_time = time.time() - start_time
+            await asyncio.gather(*tasks, return_exceptions=True)
+            while not result_queue.empty():
+                _, _, event = await result_queue.get()
+                self._count_result(event, stats, len(sites))
+                yield event
+                if event.event_type == EventType.DUCKDUCKGO_RESULT and self.stream_delay > 0:
+                    await asyncio.sleep(self.stream_delay)
+
         yield StreamEvent(
             event_type=EventType.SEARCH_COMPLETED,
-            data={
-                "search_id": search_id,
-                "username": username,
-                "total_found": found_count,
-                "total_not_found": not_found_count,
-                "total_errors": error_count,
-                "total_checked": checked_count,
-                "search_time_seconds": round(elapsed_time, 2),
-                "success_rate": round((found_count / checked_count) * 100, 2) if checked_count > 0 else 0
-            }
-        )
+            data={"search_id": search_id, "username": username,
+                  "total_found": stats["found"], "total_not_found": stats["not_found"],
+                  "total_errors": stats["errors"], "total_checked": stats["checked"],
+                  "search_time_seconds": round(time.time() - start_time, 2),
+                  "success_rate": round((stats["found"] / stats["checked"]) * 100, 2) if stats["checked"] > 0 else 0})

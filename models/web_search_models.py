@@ -2,8 +2,8 @@
 Pydantic models for OSINT Search Service
 """
 
-from pydantic import BaseModel, Field, validator
-from typing import List, Optional
+from pydantic import BaseModel, Field, field_validator
+from typing import Optional
 from enum import Enum
 
 
@@ -26,7 +26,7 @@ class SearchRequest(BaseModel):
     """Request model for OSINT search"""
     value: str = Field(..., description="Value to search for")
     input_type: InputTypeEnum = Field(..., description="Type of input data")
-    engines: List[SearchEngineEnum] = Field(
+    engines: list[SearchEngineEnum] = Field(
         default=[SearchEngineEnum.GOOGLE],
         description="Search engines to use"
     )
@@ -43,7 +43,8 @@ class SearchRequest(BaseModel):
         description="Delay between requests in seconds"
     )
 
-    @validator('value')
+    @field_validator('value')
+    @classmethod
     def value_not_empty(cls, v):
         if not v or not v.strip():
             raise ValueError('Value cannot be empty')
@@ -52,8 +53,8 @@ class SearchRequest(BaseModel):
 
 class CustomDorksRequest(BaseModel):
     """Request model for custom dorks search"""
-    dorks: List[str] = Field(..., description="List of custom dork queries", min_items=1)
-    engines: List[SearchEngineEnum] = Field(
+    dorks: list[str] = Field(..., description="List of custom dork queries", min_length=1)
+    engines: list[SearchEngineEnum] = Field(
         default=[SearchEngineEnum.GOOGLE],
         description="Search engines to use"
     )
@@ -70,7 +71,8 @@ class CustomDorksRequest(BaseModel):
         description="Delay between requests in seconds"
     )
 
-    @validator('dorks')
+    @field_validator('dorks')
+    @classmethod
     def dorks_not_empty(cls, v):
         if not v:
             raise ValueError('Dorks list cannot be empty')
@@ -84,12 +86,13 @@ class GetDorksRequest(BaseModel):
     """Request model for getting available dorks without searching"""
     value: str = Field(..., description="Value to generate dorks for")
     input_type: InputTypeEnum = Field(..., description="Type of input data")
-    engines: List[SearchEngineEnum] = Field(
+    engines: list[SearchEngineEnum] = Field(
         default=[SearchEngineEnum.GOOGLE],
         description="Search engines to generate dorks for"
     )
 
-    @validator('value')
+    @field_validator('value')
+    @classmethod
     def value_not_empty(cls, v):
         if not v or not v.strip():
             raise ValueError('Value cannot be empty')
@@ -109,18 +112,18 @@ class SearchResultItem(BaseModel):
 class SearchQuery(BaseModel):
     """Query information"""
     value: Optional[str] = Field(None, description="Search value (if not custom dorks)")
-    custom_dorks: Optional[List[str]] = Field(None, description="Custom dorks (if provided)")
+    custom_dorks: Optional[list[str]] = Field(None, description="Custom dorks (if provided)")
     type: str = Field(..., description="Type of search performed")
-    engines: List[str] = Field(..., description="Engines used")
+    engines: list[str] = Field(..., description="Engines used")
 
 
 class SearchResponse(BaseModel):
     """Response model for search results"""
     query: SearchQuery = Field(..., description="Query information")
     total_results: int = Field(..., description="Total number of unique results")
-    results: List[SearchResultItem] = Field(..., description="Search results")
+    results: list[SearchResultItem] = Field(..., description="Search results")
     dorks_executed: int = Field(0, description="Number of dork queries run")
-    errors: List[dict] = Field(default_factory=list, description="Dorks that failed, with the reason")
+    errors: list[dict] = Field(default_factory=list, description="Dorks that failed, with the reason")
 
 
 class DorksResponse(BaseModel):

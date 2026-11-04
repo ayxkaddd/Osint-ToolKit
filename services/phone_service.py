@@ -9,7 +9,7 @@ import json
 import re
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 from urllib.parse import quote
 
 import phonenumbers
@@ -61,7 +61,7 @@ def _parse(raw: str, default_region: str = ""):
     return number
 
 
-def _search_formats(number) -> List[str]:
+def _search_formats(number) -> list[str]:
     """Formats people actually write the number in - useful for searching."""
     e164 = phonenumbers.format_number(number, phonenumbers.PhoneNumberFormat.E164)
     plain = e164.lstrip("+")
@@ -71,12 +71,12 @@ def _search_formats(number) -> List[str]:
     return sorted({e164, plain, international, national, national_digits, f"+{plain}"})
 
 
-def search_formats(raw: str) -> List[str]:
+def search_formats(raw: str) -> list[str]:
     """The number's written formats, without loading the location tables."""
     return _search_formats(_parse(raw))
 
 
-def phone_info(raw: str, default_region: str = "") -> Dict[str, Any]:
+def phone_info(raw: str, default_region: str = "") -> dict[str, Any]:
     """The full analysis. Loads the location tables into this process: the server
     should use ``lookup_phone`` instead."""
     from phonenumbers import carrier, geocoder
@@ -113,7 +113,7 @@ def phone_info(raw: str, default_region: str = "") -> Dict[str, Any]:
     }
 
 
-async def lookup_phone(raw: str) -> Dict[str, Any]:
+async def lookup_phone(raw: str) -> dict[str, Any]:
     """``phone_info`` in a helper process, so the server never holds the tables."""
     global _helper_slots
     from utils.subprocess_runner import run_command

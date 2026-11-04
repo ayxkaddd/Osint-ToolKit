@@ -3,22 +3,32 @@
 // card is expanded (results can be large), then cached.
 
 let currentInvestigation = null;
-let allResults = [];       // summaries from /results
-const detailCache = {};    // result_id -> full record
+let allResults = []; // summaries from /results
+const detailCache = {}; // result_id -> full record
 const openCards = new Set();
-const selectedResults = new Set();  // ticked for bulk delete / move / assessment
+const selectedResults = new Set(); // ticked for bulk delete / move / assessment
 // Notes opened on this page (Ctrl+K) belong to this investigation, recording or not
 window.notesForInvestigation = investigationId;
 
 const TRIAGE = {
-    confirmed: { label: 'Confirmed', cls: 'bg-emerald-900/50 text-emerald-300 border-emerald-700/60', icon: 'fa-check-circle' },
+    confirmed: {
+        label: 'Confirmed',
+        cls: 'bg-emerald-900/50 text-emerald-300 border-emerald-700/60',
+        icon: 'fa-check-circle',
+    },
     important: { label: 'Important', cls: 'bg-amber-900/50 text-amber-300 border-amber-700/60', icon: 'fa-star' },
-    false_positive: { label: 'False positive', cls: 'bg-gray-800 text-gray-400 border-gray-700', icon: 'fa-times-circle' },
+    false_positive: {
+        label: 'False positive',
+        cls: 'bg-gray-800 text-gray-400 border-gray-700',
+        icon: 'fa-times-circle',
+    },
 };
 
 function triageBadge(status) {
     const t = TRIAGE[status];
-    return t ? `<span class="text-[10px] uppercase px-1.5 py-0.5 rounded border ${t.cls}"><i class="fas ${t.icon} mr-1"></i>${t.label}</span>` : '';
+    return t
+        ? `<span class="text-[10px] uppercase px-1.5 py-0.5 rounded border ${t.cls}"><i class="fas ${t.icon} mr-1"></i>${t.label}</span>`
+        : '';
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -30,13 +40,17 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('resultsContainer').addEventListener('click', onResultsClick);
     document.getElementById('bulkSelectAll').addEventListener('change', (e) => {
         selectedResults.clear();
-        if (e.target.checked) filteredResults().forEach(r => selectedResults.add(r.result_id));
-        document.querySelectorAll('[data-action="select"]').forEach(box => { box.checked = e.target.checked; });
+        if (e.target.checked) filteredResults().forEach((r) => selectedResults.add(r.result_id));
+        document.querySelectorAll('[data-action="select"]').forEach((box) => {
+            box.checked = e.target.checked;
+        });
         updateBulkBar();
     });
-    document.querySelectorAll('[data-bulk-triage]').forEach(button => button.addEventListener('click', () => {
-        bulkSetTriage(button.dataset.bulkTriage || null);
-    }));
+    document.querySelectorAll('[data-bulk-triage]').forEach((button) =>
+        button.addEventListener('click', () => {
+            bulkSetTriage(button.dataset.bulkTriage || null);
+        })
+    );
     document.getElementById('bulkMove').addEventListener('click', () => openMoveModal([...selectedResults]));
     document.getElementById('bulkDelete').addEventListener('click', bulkDelete);
     document.getElementById('resultsContainer').addEventListener('keydown', (e) => {
@@ -45,14 +59,16 @@ document.addEventListener('DOMContentLoaded', () => {
             saveResultTriage(e.target.closest('[data-result-id]').dataset.resultId, undefined);
         }
     });
-    document.querySelectorAll('[data-tab]').forEach(tab => tab.addEventListener('click', () => switchTab(tab.dataset.tab)));
+    document
+        .querySelectorAll('[data-tab]')
+        .forEach((tab) => tab.addEventListener('click', () => switchTab(tab.dataset.tab)));
     setupEntitiesPanel();
     if (location.hash === '#identifiers') switchTab('entities');
     window.addEventListener('hashchange', openLinkedResult);
 });
 
 function switchTab(name) {
-    document.querySelectorAll('[data-tab]').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+    document.querySelectorAll('[data-tab]').forEach((t) => t.classList.toggle('active', t.dataset.tab === name));
     document.getElementById('timelinePanel').classList.toggle('hidden', name !== 'timeline');
     document.getElementById('entitiesPanel').classList.toggle('hidden', name !== 'entities');
     history.replaceState(null, '', name === 'entities' ? '#identifiers' : location.pathname);
@@ -74,10 +90,12 @@ async function loadInvestigationData() {
             fetch(`/api/investigations/${investigationId}/results`),
         ]);
         if (infoResponse.status === 404) {
-            document.getElementById('loadingResults').innerHTML = '<p class="text-gray-400">This investigation no longer exists.</p>';
+            document.getElementById('loadingResults').innerHTML =
+                '<p class="text-gray-400">This investigation no longer exists.</p>';
             return;
         }
-        if (!infoResponse.ok || !resultsResponse.ok) throw new Error(`HTTP ${infoResponse.ok ? resultsResponse.status : infoResponse.status}`);
+        if (!infoResponse.ok || !resultsResponse.ok)
+            throw new Error(`HTTP ${infoResponse.ok ? resultsResponse.status : infoResponse.status}`);
         const infoData = await infoResponse.json();
         currentInvestigation = infoData.investigation;
         renderHeader(currentInvestigation);
@@ -90,7 +108,8 @@ async function loadInvestigationData() {
         openLinkedResult();
     } catch (error) {
         console.error('Error loading investigation data:', error);
-        document.getElementById('loadingResults').innerHTML = `<p class="text-red-400">Failed to load investigation: ${escapeHtml(error.message)}</p>`;
+        document.getElementById('loadingResults').innerHTML =
+            `<p class="text-red-400">Failed to load investigation: ${escapeHtml(error.message)}</p>`;
     }
 }
 
@@ -99,15 +118,21 @@ function openLinkedResult() {
     const match = /^#result-(.+)$/.exec(location.hash);
     if (!match) return;
     const id = decodeURIComponent(match[1]);
-    if (!allResults.some(r => r.result_id === id)) {
+    if (!allResults.some((r) => r.result_id === id)) {
         showTemporaryNotification('That result is no longer in this investigation', 'error');
         return;
     }
     switchTab('timeline');
     history.replaceState(null, '', `#result-${encodeURIComponent(id)}`);
     if (!document.querySelector(`[data-result-id="${CSS.escape(id)}"]`)) {
-        ['timelineSearchInput'].forEach(i => { const el = document.getElementById(i); if (el) el.value = ''; });
-        ['moduleFilterSelect', 'triageFilterSelect'].forEach(i => { const el = document.getElementById(i); if (el) el.selectedIndex = 0; });
+        ['timelineSearchInput'].forEach((i) => {
+            const el = document.getElementById(i);
+            if (el) el.value = '';
+        });
+        ['moduleFilterSelect', 'triageFilterSelect'].forEach((i) => {
+            const el = document.getElementById(i);
+            if (el) el.selectedIndex = 0;
+        });
         renderResults();
     }
     const card = document.querySelector(`[data-result-id="${CSS.escape(id)}"]`);
@@ -121,20 +146,23 @@ function openLinkedResult() {
 
 function renderHeader(investigation) {
     const header = document.getElementById('investigationHeader');
-    const isCurrent = window.getCurrentInvestigationId && window.getCurrentInvestigationId() === investigation.investigation_id;
+    const isCurrent =
+        window.getCurrentInvestigationId && window.getCurrentInvestigationId() === investigation.investigation_id;
     const statusColors = {
         active: 'bg-emerald-950/80 text-emerald-300 border-emerald-700/60',
         completed: 'bg-blue-950/80 text-blue-300 border-blue-700/60',
         archived: 'bg-gray-800 text-gray-400 border-gray-700',
     };
-    const fmt = (iso) => iso ? new Date(iso).toLocaleString() : '—';
+    const fmt = (iso) => (iso ? new Date(iso).toLocaleString() : '—');
 
     header.innerHTML = `
         <div class="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
             <div class="flex items-start gap-5 min-w-0">
-                ${investigation.picture_url
-                    ? `<img src="${escapeAttr(investigation.picture_url)}" alt="" data-image-view="" data-image-title="${escapeAttr(investigation.name)}" data-image-note="Investigation picture" class="w-20 h-20 rounded-2xl object-cover border border-gray-700 shrink-0">`
-                    : `<div class="w-20 h-20 rounded-2xl bg-purple-950/40 border border-purple-800/60 flex items-center justify-center shrink-0"><i data-lucide="folder-open" class="w-9 h-9 text-purple-400"></i></div>`}
+                ${
+                    investigation.picture_url
+                        ? `<img src="${escapeAttr(investigation.picture_url)}" alt="" data-image-view="" data-image-title="${escapeAttr(investigation.name)}" data-image-note="Investigation picture" class="w-20 h-20 rounded-2xl object-cover border border-gray-700 shrink-0">`
+                        : `<div class="w-20 h-20 rounded-2xl bg-purple-950/40 border border-purple-800/60 flex items-center justify-center shrink-0"><i data-lucide="folder-open" class="w-9 h-9 text-purple-400"></i></div>`
+                }
                 <div class="min-w-0">
                     <div class="flex items-center gap-2 flex-wrap mb-1">
                         <h1 class="text-2xl font-bold text-white truncate">${escapeHtml(investigation.name || 'Untitled Case')}</h1>
@@ -171,10 +199,15 @@ function populateModuleFilterOptions() {
     const select = document.getElementById('moduleFilterSelect');
     if (!select) return;
     const counts = {};
-    allResults.forEach(r => { counts[r.service_name] = (counts[r.service_name] || 0) + 1; });
-    select.innerHTML = '<option value="all">All modules</option>' + Object.keys(counts).sort().map(s =>
-        `<option value="${escapeAttr(s)}">${escapeHtml(moduleInfo(s).name)} (${counts[s]})</option>`
-    ).join('');
+    allResults.forEach((r) => {
+        counts[r.service_name] = (counts[r.service_name] || 0) + 1;
+    });
+    select.innerHTML =
+        '<option value="all">All modules</option>' +
+        Object.keys(counts)
+            .sort()
+            .map((s) => `<option value="${escapeAttr(s)}">${escapeHtml(moduleInfo(s).name)} (${counts[s]})</option>`)
+            .join('');
 }
 
 function filteredResults() {
@@ -183,7 +216,7 @@ function filteredResults() {
     const sort = document.getElementById('sortSelect')?.value || 'newest';
     const triage = document.getElementById('triageFilterSelect')?.value || 'all';
 
-    const list = allResults.filter(r => {
+    const list = allResults.filter((r) => {
         if (service !== 'all' && r.service_name !== service) return false;
         const status = (r.triage || {}).status || null;
         if (triage === 'marked' && !['confirmed', 'important'].includes(status)) return false;
@@ -192,15 +225,24 @@ function filteredResults() {
         if (triage === 'hide_fp' && status === 'false_positive') return false;
         if (!search) return true;
         const haystack = [
-            r.target, r.summary, r.service_name, r.method_name, moduleInfo(r.service_name).name,
-            JSON.stringify(r.parameters || {}), (r.triage || {}).note || '',
-            ...(r.children || []).map(c => `${c.method_name} ${c.target || ''} ${c.summary || ''}`),
-        ].join(' ').toLowerCase();
+            r.target,
+            r.summary,
+            r.service_name,
+            r.method_name,
+            moduleInfo(r.service_name).name,
+            JSON.stringify(r.parameters || {}),
+            (r.triage || {}).note || '',
+            ...(r.children || []).map((c) => `${c.method_name} ${c.target || ''} ${c.summary || ''}`),
+        ]
+            .join(' ')
+            .toLowerCase();
         return haystack.includes(search);
     });
-    list.sort((a, b) => sort === 'oldest'
-        ? (a.timestamp || '').localeCompare(b.timestamp || '')
-        : (b.timestamp || '').localeCompare(a.timestamp || ''));
+    list.sort((a, b) =>
+        sort === 'oldest'
+            ? (a.timestamp || '').localeCompare(b.timestamp || '')
+            : (b.timestamp || '').localeCompare(a.timestamp || '')
+    );
     return list;
 }
 
@@ -218,28 +260,38 @@ function renderResults() {
     const container = document.getElementById('resultsContainer');
     const results = filteredResults();
     // Only what's on screen stays selected, so a filter can't hide what a bulk action touches
-    const shown = new Set(results.map(r => r.result_id));
-    [...selectedResults].forEach(id => { if (!shown.has(id)) selectedResults.delete(id); });
+    const shown = new Set(results.map((r) => r.result_id));
+    [...selectedResults].forEach((id) => {
+        if (!shown.has(id)) selectedResults.delete(id);
+    });
     updateBulkBar(results.length);
     const badge = document.getElementById('resultsCountBadge');
     if (badge) {
-        badge.textContent = results.length === allResults.length ? allResults.length : `${results.length} / ${allResults.length}`;
+        badge.textContent =
+            results.length === allResults.length ? allResults.length : `${results.length} / ${allResults.length}`;
         badge.classList.remove('hidden');
     }
     document.getElementById('noResults').classList.toggle('hidden', results.length > 0);
-    document.getElementById('noResultsTitle').textContent = allResults.length ? 'Nothing matches the filter' : 'No results recorded yet';
+    document.getElementById('noResultsTitle').textContent = allResults.length
+        ? 'Nothing matches the filter'
+        : 'No results recorded yet';
 
     let lastDay = null;
-    container.innerHTML = results.map(r => {
-        const day = dayLabel(r.timestamp);
-        const heading = day !== lastDay ? `<h3 class="text-xs font-semibold uppercase tracking-wider text-gray-500 pt-4 pb-1">${escapeHtml(day)}</h3>` : '';
-        lastDay = day;
-        return heading + renderCard(r);
-    }).join('');
+    container.innerHTML = results
+        .map((r) => {
+            const day = dayLabel(r.timestamp);
+            const heading =
+                day !== lastDay
+                    ? `<h3 class="text-xs font-semibold uppercase tracking-wider text-gray-500 pt-4 pb-1">${escapeHtml(day)}</h3>`
+                    : '';
+            lastDay = day;
+            return heading + renderCard(r);
+        })
+        .join('');
 
     // Re-render cards that were open before filtering
-    openCards.forEach(id => {
-        if (results.some(r => r.result_id === id)) expandCard(id, true);
+    openCards.forEach((id) => {
+        if (results.some((r) => r.result_id === id)) expandCard(id, true);
     });
     refreshIcons();
 }
@@ -256,7 +308,9 @@ function updateBulkBar(shownCount = filteredResults().length) {
 
 function renderCard(r) {
     const info = moduleInfo(r.service_name);
-    const time = r.timestamp ? new Date(r.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+    const time = r.timestamp
+        ? new Date(r.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        : '';
     const children = r.children || [];
     const id = escapeAttr(r.result_id);
 
@@ -281,8 +335,16 @@ function renderCard(r) {
                         <div class="text-sm text-gray-300 truncate mt-0.5">
                             ${r.target ? `<span class="font-mono text-purple-200">${escapeHtml(r.target)}</span><span class="text-gray-600"> · </span>` : ''}${escapeHtml(r.summary || '')}
                         </div>
-                        ${children.length ? `<div class="flex flex-wrap gap-1.5 mt-1.5">${children.map(c =>
-                            `<span class="text-[11px] px-1.5 py-0.5 rounded bg-gray-800 text-gray-300 border border-gray-700">${escapeHtml(methodLabel(c.method_name))}${c.summary ? ` · ${escapeHtml(c.summary)}` : ''}</span>`).join('')}</div>` : ''}
+                        ${
+                            children.length
+                                ? `<div class="flex flex-wrap gap-1.5 mt-1.5">${children
+                                      .map(
+                                          (c) =>
+                                              `<span class="text-[11px] px-1.5 py-0.5 rounded bg-gray-800 text-gray-300 border border-gray-700">${escapeHtml(methodLabel(c.method_name))}${c.summary ? ` · ${escapeHtml(c.summary)}` : ''}</span>`
+                                      )
+                                      .join('')}</div>`
+                                : ''
+                        }
                     </div>
                 </div>
                 <div class="flex items-center gap-3 shrink-0">
@@ -310,8 +372,10 @@ function onResultsClick(event) {
         else expandCard(id);
     } else if (action === 'copy-json') {
         const record = detailCache[id];
-        if (record) copyTextToClipboard(JSON.stringify(record, null, 2)).then(ok =>
-            showTemporaryNotification(ok ? 'Result JSON copied' : 'Copy failed', ok ? 'success' : 'error'));
+        if (record)
+            copyTextToClipboard(JSON.stringify(record, null, 2)).then((ok) =>
+                showTemporaryNotification(ok ? 'Result JSON copied' : 'Copy failed', ok ? 'success' : 'error')
+            );
     } else if (action === 'note-link' || action === 'note-attach') {
         window.addResultToNote(id, { snapshot: action === 'note-attach' }).then(() => loadResultReferences(id));
     } else if (action === 'delete-result') {
@@ -354,7 +418,8 @@ async function expandCard(id, silent = false) {
     body.classList.remove('hidden');
 
     if (!detailCache[id]) {
-        body.innerHTML = '<div class="p-6 text-sm text-gray-400 flex items-center gap-2"><i class="fas fa-spinner fa-spin"></i> Loading result...</div>';
+        body.innerHTML =
+            '<div class="p-6 text-sm text-gray-400 flex items-center gap-2"><i class="fas fa-spinner fa-spin"></i> Loading result...</div>';
         try {
             const response = await fetch(`/api/investigations/${investigationId}/results/${encodeURIComponent(id)}`);
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -380,7 +445,9 @@ function renderDetail(record) {
         ? `${info.page}?load_result=${encodeURIComponent(record.result_id)}&investigation=${encodeURIComponent(investigationId)}`
         : null;
 
-    const children = (record.children || []).map((child, i) => `
+    const children = (record.children || [])
+        .map(
+            (child, i) => `
         <section class="mt-6">
             <div class="flex items-center justify-between mb-3 border-b border-gray-800 pb-2">
                 <h4 class="text-sm font-bold text-purple-300 flex items-center gap-2">
@@ -392,7 +459,9 @@ function renderDetail(record) {
             ${safeRender(child.service_name, child.method_name, child.result, child)}
             ${rawJsonBlock(String(i))}
         </section>
-    `).join('');
+    `
+        )
+        .join('');
 
     return `
         <div class="p-5">
@@ -443,15 +512,20 @@ async function saveResultTriage(resultId, status) {
     const card = document.querySelector(`[data-result-id="${CSS.escape(resultId)}"]`);
     const note = card?.querySelector('[data-triage-note]')?.value ?? null;
     const current = (detailCache[resultId] || {}).triage || {};
-    const body = { status: status === undefined ? (current.status || null) : status, note };
+    const body = { status: status === undefined ? current.status || null : status, note };
     try {
-        const response = await fetch(`/api/investigations/${investigationId}/results/${encodeURIComponent(resultId)}/triage`, {
-            method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
-        });
+        const response = await fetch(
+            `/api/investigations/${investigationId}/results/${encodeURIComponent(resultId)}/triage`,
+            {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            }
+        );
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(data.detail || `HTTP ${response.status}`);
         if (detailCache[resultId]) detailCache[resultId].triage = data.triage;
-        const summary = allResults.find(r => r.result_id === resultId);
+        const summary = allResults.find((r) => r.result_id === resultId);
         if (summary) summary.triage = data.triage;
         renderResults();
         showTemporaryNotification(status === undefined ? 'Note saved' : 'Assessment saved', 'success');
@@ -462,7 +536,8 @@ async function saveResultTriage(resultId, status) {
 
 function fetchResultReferences(resultId) {
     return fetch(`/api/investigations/${investigationId}/results/${encodeURIComponent(resultId)}/references`)
-        .then(r => r.json()).then(data => data.notes || []);
+        .then((r) => r.json())
+        .then((data) => data.notes || []);
 }
 
 // "Mentioned in" line on an expanded result
@@ -473,9 +548,15 @@ async function loadResultReferences(resultId) {
         const notes = await fetchResultReferences(resultId);
         box.classList.toggle('hidden', !notes.length);
         const notesPage = `/api/investigations/${investigationId}/notes/view`;
-        box.innerHTML = `<i class="fas fa-sticky-note text-purple-400"></i><span>In notes:</span>` + notes.map(n =>
-            `<a href="${escapeAttr(`${notesPage}#note-${n.note_id}`)}" class="px-2 py-0.5 rounded bg-purple-900/30 border border-purple-800/50 text-purple-200 hover:border-purple-500"
-                title="${escapeAttr([n.links && `${n.links} link${n.links === 1 ? '' : 's'}`, n.snapshots && `${n.snapshots} snapshot${n.snapshots === 1 ? '' : 's'}`].filter(Boolean).join(', '))}">${escapeHtml(n.title)}</a>`).join('');
+        box.innerHTML =
+            `<i class="fas fa-sticky-note text-purple-400"></i><span>In notes:</span>` +
+            notes
+                .map(
+                    (n) =>
+                        `<a href="${escapeAttr(`${notesPage}#note-${n.note_id}`)}" class="px-2 py-0.5 rounded bg-purple-900/30 border border-purple-800/50 text-purple-200 hover:border-purple-500"
+                title="${escapeAttr([n.links && `${n.links} link${n.links === 1 ? '' : 's'}`, n.snapshots && `${n.snapshots} snapshot${n.snapshots === 1 ? '' : 's'}`].filter(Boolean).join(', '))}">${escapeHtml(n.title)}</a>`
+                )
+                .join('');
     } catch (e) {
         box.classList.add('hidden');
     }
@@ -485,7 +566,9 @@ async function loadResultEntities(resultId) {
     const box = document.querySelector(`[data-entities-for="${CSS.escape(resultId)}"]`);
     if (!box) return;
     try {
-        const response = await fetch(`/api/investigations/${investigationId}/results/${encodeURIComponent(resultId)}/entities`);
+        const response = await fetch(
+            `/api/investigations/${investigationId}/results/${encodeURIComponent(resultId)}/entities`
+        );
         const { entities } = await response.json();
         if (!entities.length) {
             box.textContent = 'No identifiers recognised in this result.';
@@ -514,17 +597,21 @@ async function deleteResult(resultId) {
     } catch (e) {
         // the warning is best effort; deleting still asks for confirmation
     }
-    const titles = notes.map(n => `  • ${n.title}`).join('\n');
-    const linked = notes.some(n => n.links);
-    const snapshots = notes.some(n => n.snapshots);
-    const warning = notes.length ? [
-        `\n\nThis result is referenced in ${notes.length} note${notes.length === 1 ? '' : 's'}:\n${titles}`,
-        linked ? '\nLinks to it will show as a deleted result.' : '',
-        snapshots ? '\nSnapshots attached to notes are kept.' : '',
-    ].join('') : '';
+    const titles = notes.map((n) => `  • ${n.title}`).join('\n');
+    const linked = notes.some((n) => n.links);
+    const snapshots = notes.some((n) => n.snapshots);
+    const warning = notes.length
+        ? [
+              `\n\nThis result is referenced in ${notes.length} note${notes.length === 1 ? '' : 's'}:\n${titles}`,
+              linked ? '\nLinks to it will show as a deleted result.' : '',
+              snapshots ? '\nSnapshots attached to notes are kept.' : '',
+          ].join('')
+        : '';
     if (!confirm(`Delete this result (and any follow-ups grouped under it)? This cannot be undone.${warning}`)) return;
     try {
-        const response = await fetch(`/api/investigations/${investigationId}/results/${encodeURIComponent(resultId)}`, { method: 'DELETE' });
+        const response = await fetch(`/api/investigations/${investigationId}/results/${encodeURIComponent(resultId)}`, {
+            method: 'DELETE',
+        });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         removeResultsFromView([resultId]);
         showTemporaryNotification('Result deleted', 'success');
@@ -535,8 +622,8 @@ async function deleteResult(resultId) {
 
 function removeResultsFromView(ids) {
     const gone = new Set(ids);
-    allResults = allResults.filter(r => !gone.has(r.result_id));
-    ids.forEach(id => {
+    allResults = allResults.filter((r) => !gone.has(r.result_id));
+    ids.forEach((id) => {
         openCards.delete(id);
         selectedResults.delete(id);
         delete detailCache[id];
@@ -565,27 +652,35 @@ async function bulkRequest(body) {
 
 // What leaving this investigation means for its notes (best effort, never blocks the action)
 async function referencesWarning(ids, gerund) {
-    const lists = await Promise.all(ids.map(id => fetchResultReferences(id).catch(() => [])));
+    const lists = await Promise.all(ids.map((id) => fetchResultReferences(id).catch(() => [])));
     const notes = new Map();
-    lists.flat().forEach(n => notes.set(n.note_id, n));
+    lists.flat().forEach((n) => notes.set(n.note_id, n));
     if (!notes.size) return '';
-    const titles = [...notes.values()].map(n => `  • ${n.title}`).join('\n');
+    const titles = [...notes.values()].map((n) => `  • ${n.title}`).join('\n');
     const all = [...notes.values()];
     return [
         `${notes.size} note${notes.size === 1 ? '' : 's'} in this investigation ${notes.size === 1 ? 'mentions' : 'mention'} ${ids.length === 1 ? 'this result' : 'these results'}:\n${titles}`,
-        all.some(n => n.links) ? `\nLinks will show as a deleted result after ${gerund}.` : '',
-        all.some(n => n.snapshots) ? '\nSnapshots attached to notes are kept.' : '',
+        all.some((n) => n.links) ? `\nLinks will show as a deleted result after ${gerund}.` : '',
+        all.some((n) => n.snapshots) ? '\nSnapshots attached to notes are kept.' : '',
     ].join('');
 }
 
 async function bulkDelete() {
     const ids = [...selectedResults];
     const warning = await referencesWarning(ids, 'deleting');
-    if (!confirm(`Delete ${resultsWord(ids.length)} (and any follow-ups grouped under them)? This cannot be undone.${warning ? `\n\n${warning}` : ''}`)) return;
+    if (
+        !confirm(
+            `Delete ${resultsWord(ids.length)} (and any follow-ups grouped under them)? This cannot be undone.${warning ? `\n\n${warning}` : ''}`
+        )
+    )
+        return;
     try {
         const { done } = await bulkRequest({ action: 'delete', result_ids: ids });
         removeResultsFromView(done);
-        showTemporaryNotification(`${resultsWord(done.length)} deleted`, done.length === ids.length ? 'success' : 'error');
+        showTemporaryNotification(
+            `${resultsWord(done.length)} deleted`,
+            done.length === ids.length ? 'success' : 'error'
+        );
     } catch (e) {
         showTemporaryNotification(`Failed to delete: ${e.message}`, 'error');
     }
@@ -595,13 +690,16 @@ async function bulkSetTriage(status) {
     const ids = [...selectedResults];
     try {
         const { done, triage } = await bulkRequest({ action: 'triage', result_ids: ids, status });
-        done.forEach(id => {
+        done.forEach((id) => {
             if (detailCache[id]) detailCache[id].triage = triage[id];
-            const summary = allResults.find(r => r.result_id === id);
+            const summary = allResults.find((r) => r.result_id === id);
             if (summary) summary.triage = triage[id];
         });
         renderResults();
-        showTemporaryNotification(`Assessment saved for ${resultsWord(done.length)}`, done.length === ids.length ? 'success' : 'error');
+        showTemporaryNotification(
+            `Assessment saved for ${resultsWord(done.length)}`,
+            done.length === ids.length ? 'success' : 'error'
+        );
     } catch (e) {
         showTemporaryNotification(`Failed to save assessment: ${e.message}`, 'error');
     }
@@ -620,12 +718,14 @@ async function openMoveModal(ids) {
         const response = await fetch('/api/investigations/');
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const data = await response.json();
-        others = data.investigations.filter(i => i.investigation_id !== investigationId);
+        others = data.investigations.filter((i) => i.investigation_id !== investigationId);
     } catch (e) {
         showTemporaryNotification(`Could not load investigations: ${e.message}`, 'error');
         return;
     }
-    select.innerHTML = others.map(i => `<option value="${escapeAttr(i.investigation_id)}">${escapeHtml(i.name)}</option>`).join('');
+    select.innerHTML = others
+        .map((i) => `<option value="${escapeAttr(i.investigation_id)}">${escapeHtml(i.name)}</option>`)
+        .join('');
     select.classList.toggle('hidden', !others.length);
     document.getElementById('moveModalEmpty').classList.toggle('hidden', others.length > 0);
     document.getElementById('moveModalSubmit').disabled = !others.length;
@@ -657,10 +757,17 @@ async function submitMoveModal(event) {
     const button = document.getElementById('moveModalSubmit');
     button.disabled = true;
     try {
-        const { done } = await bulkRequest({ action: 'move', result_ids: moveIds, target_investigation_id: select.value });
+        const { done } = await bulkRequest({
+            action: 'move',
+            result_ids: moveIds,
+            target_investigation_id: select.value,
+        });
         removeResultsFromView(done);
         closeMoveModal();
-        showTemporaryNotification(`${resultsWord(done.length)} moved to ${name}`, done.length === moveIds.length ? 'success' : 'error');
+        showTemporaryNotification(
+            `${resultsWord(done.length)} moved to ${name}`,
+            done.length === moveIds.length ? 'success' : 'error'
+        );
     } catch (e) {
         showTemporaryNotification(`Failed to move: ${e.message}`, 'error');
     } finally {
@@ -679,7 +786,8 @@ function exportResults() {
 
 async function deleteInvestigation() {
     const name = currentInvestigation ? currentInvestigation.name : 'this investigation';
-    if (!confirm(`Delete "${name}" with all ${allResults.length} results and its notes? This cannot be undone.`)) return;
+    if (!confirm(`Delete "${name}" with all ${allResults.length} results and its notes? This cannot be undone.`))
+        return;
     try {
         const response = await fetch(`/api/investigations/${investigationId}`, { method: 'DELETE' });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -744,7 +852,8 @@ async function submitEditModal(e) {
 }
 
 document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !document.getElementById('editInvestigationModal').classList.contains('hidden')) closeEditModal();
+    if (e.key === 'Escape' && !document.getElementById('editInvestigationModal').classList.contains('hidden'))
+        closeEditModal();
 });
 document.addEventListener('investigation:changed', () => {
     if (currentInvestigation) renderHeader(currentInvestigation);
@@ -753,13 +862,16 @@ document.addEventListener('investigation:changed', () => {
 // ----------------- IDENTIFIERS TAB -----------------
 
 const entityState = { type: '', q: '', status: '', offset: 0, total: 0, loaded: false, pageSize: 200 };
-const entityCache = new Map();  // key -> entity as last rendered
+const entityCache = new Map(); // key -> entity as last rendered
 
 function setupEntitiesPanel() {
-    document.getElementById('entitySearchInput').addEventListener('input', debounce(() => {
-        entityState.q = document.getElementById('entitySearchInput').value.trim();
-        loadEntities(true);
-    }, 250));
+    document.getElementById('entitySearchInput').addEventListener(
+        'input',
+        debounce(() => {
+            entityState.q = document.getElementById('entitySearchInput').value.trim();
+            loadEntities(true);
+        }, 250)
+    );
     document.getElementById('entityStatusSelect').addEventListener('change', (e) => {
         entityState.status = e.target.value;
         loadEntities(true);
@@ -779,9 +891,12 @@ function setupEntitiesPanel() {
         }
     });
     // Counts for the tab badge without switching to it
-    fetch(`/api/investigations/${investigationId}/entities?limit=1`).then(r => r.json()).then(d => {
-        document.getElementById('entitiesCountBadge').textContent = d.total ?? '';
-    }).catch(() => {});
+    fetch(`/api/investigations/${investigationId}/entities?limit=1`)
+        .then((r) => r.json())
+        .then((d) => {
+            document.getElementById('entitiesCountBadge').textContent = d.total ?? '';
+        })
+        .catch(() => {});
 }
 
 async function loadEntities(reset) {
@@ -815,8 +930,15 @@ function renderFacets(types) {
     const box = document.getElementById('entityTypeFacets');
     const total = types.reduce((n, t) => n + t.count, 0);
     document.getElementById('entitiesCountBadge').textContent = total;
-    box.innerHTML = [`<button type="button" data-facet="" class="facet ${entityState.type ? '' : 'active'}">All <span>${total.toLocaleString()}</span></button>`]
-        .concat(types.map(t => `<button type="button" data-facet="${escapeAttr(t.type)}" class="facet ${entityState.type === t.type ? 'active' : ''}">${escapeHtml(t.label)} <span>${t.count.toLocaleString()}</span></button>`))
+    box.innerHTML = [
+        `<button type="button" data-facet="" class="facet ${entityState.type ? '' : 'active'}">All <span>${total.toLocaleString()}</span></button>`,
+    ]
+        .concat(
+            types.map(
+                (t) =>
+                    `<button type="button" data-facet="${escapeAttr(t.type)}" class="facet ${entityState.type === t.type ? 'active' : ''}">${escapeHtml(t.label)} <span>${t.count.toLocaleString()}</span></button>`
+            )
+        )
         .join('');
 }
 
@@ -829,7 +951,8 @@ function entityRow(e) {
             class="w-7 h-7 rounded border text-xs ${status === s ? t.cls : 'border-gray-800 text-gray-500 hover:text-white hover:border-gray-600'}"><i class="fas ${t.icon}"></i></button>`;
     };
     const searched = (e.searched || []).length
-        ? `<span class="text-[10px] px-1.5 py-0.5 rounded bg-purple-900/50 text-purple-300" title="Looked up with ${escapeAttr(e.searched.join(', '))}">looked up</span>` : '';
+        ? `<span class="text-[10px] px-1.5 py-0.5 rounded bg-purple-900/50 text-purple-300" title="Looked up with ${escapeAttr(e.searched.join(', '))}">looked up</span>`
+        : '';
     return `
         <div class="flex items-center gap-3 bg-[#14151f] border border-[#24283b] rounded-lg px-3 py-2 ${status === 'false_positive' ? 'opacity-50' : ''}" data-entity-key="${escapeAttr(e.key)}">
             <span class="text-[11px] text-gray-500 w-28 shrink-0 truncate">${escapeHtml(e.label || e.type)}</span>
@@ -860,8 +983,9 @@ async function saveEntityTriage(key, status) {
     const note = row?.querySelector('[data-entity-note]')?.value ?? entity.note ?? null;
     try {
         const response = await fetch(`/api/investigations/${investigationId}/entities`, {
-            method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ key, status: status === undefined ? (entity.status || null) : status, note })
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key, status: status === undefined ? entity.status || null : status, note }),
         });
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(data.detail || `HTTP ${response.status}`);

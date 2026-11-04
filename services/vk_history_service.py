@@ -1,14 +1,13 @@
 import asyncio
 import re
 import time
-from typing import List
 from utils import telegram_client
 import logging
 
 
-from models.telegram_models import VKProfileHistoryResponse, ProfileEntry
+from models.vk_history_models import VKProfileHistoryResponse, ProfileEntry
 
-class TelegramService:
+class VkHistoryService:
     def __init__(self):
         self.session_name = "telegram_session"
         self.logger = logging.getLogger(__name__)
@@ -66,7 +65,7 @@ class TelegramService:
 
     async def send_request(self, user_id: str) -> VKProfileHistoryResponse:
         try:
-            self.logger.info(f"Starting request for user_id: {user_id}")
+            self.logger.info('Starting request for user_id: %s', user_id)
             await self.ensure_client()
 
             user_id = self.normalize_target(user_id)
@@ -78,7 +77,7 @@ class TelegramService:
             async with self._bot_lock:
                 return await self._converse(user_id)
         except Exception as e:
-            self.logger.error(f"Error in send_request: {str(e)}", exc_info=True)
+            self.logger.error('Error in send_request: %s', str(e), exc_info=True)
             raise
 
     async def _converse(self, user_id: str) -> VKProfileHistoryResponse:
@@ -88,7 +87,7 @@ class TelegramService:
 
         # Send the initial message
         sent_msg = await self.client.send_message(bot_entity, user_id)
-        self.logger.info(f"Message sent with ID: {sent_msg.id}")
+        self.logger.info('Message sent with ID: %s', sent_msg.id)
 
         timeout = 60  # Increased timeout
         start_time = time.time()
@@ -109,7 +108,7 @@ class TelegramService:
 
             for message in messages:
                 plain_text = self.strip_telegram_formatting(message.text or '')
-                self.logger.info(f"Processing message ID {message.id}: {plain_text[:100]}...")
+                self.logger.info('Processing message ID %s: %s...', message.id, plain_text[:100])
 
                 # Update last processed message ID
                 last_message_id = max(last_message_id, message.id)
@@ -168,7 +167,7 @@ class TelegramService:
                         try:
                             value = int(value)
                         except (ValueError, TypeError):
-                            self.logger.warning(f"Could not convert followers value to int: {value}")
+                            self.logger.warning('Could not convert followers value to int: %s', value)
                             value = None
 
                     # Handle URLs
@@ -176,18 +175,17 @@ class TelegramService:
                         value = f"https://{value}"
 
                     data[mapped_key] = value
-                    # self.logger.debug(f"Mapped {key} -> {mapped_key}: {value}")
 
-            self.logger.debug(f"Final parsed data: {data}")
+            self.logger.debug('Final parsed data: %s', data)
 
             return ProfileEntry(**data)
         except Exception as e:
-            self.logger.info(f"Error parsing profile entry: {str(e)}")
-            self.logger.info(f"Text being parsed: {text}")
+            self.logger.info('Error parsing profile entry: %s', str(e))
+            self.logger.info('Text being parsed: %s', text)
             raise
 
 
-    def parse_photo_urls(self, text: str) -> List[str]:
+    def parse_photo_urls(self, text: str) -> list[str]:
         try:
             urls = []
             lines = text.split('\n')[1:]  # Skip the header line
@@ -200,10 +198,10 @@ class TelegramService:
                         if not url.startswith('http'):
                             url = f"https://{url}"
                         urls.append(url)
-                        self.logger.debug(f"Parsed photo URL: {url}")
+                        self.logger.debug('Parsed photo URL: %s', url)
 
             return urls
         except Exception as e:
-            self.logger.error(f"Error parsing photo URLs: {str(e)}")
-            self.logger.error(f"Text being parsed: {text}")
+            self.logger.error('Error parsing photo URLs: %s', str(e))
+            self.logger.error('Text being parsed: %s', text)
             return []

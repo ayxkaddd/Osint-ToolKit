@@ -1,5 +1,5 @@
 """Plugins (services/plugin_loader.py): list, run, review/enable, pages."""
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Literal, Optional
 
 from fastapi import APIRouter, Body, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
@@ -26,7 +26,7 @@ def _plugin(plugin_id: str) -> plugin_loader.Plugin:
     return plugin
 
 
-async def _stream(plugin_id: str, value: str, type: Optional[str], actions: Optional[List[str]] = None):
+async def _stream(plugin_id: str, value: str, type: Optional[str], actions: Optional[list[str]] = None):
     try:
         run = await plugin_loader.prepare(plugin_id, value, type, actions)
     except RunRefused as e:
@@ -39,19 +39,19 @@ async def _stream(plugin_id: str, value: str, type: Optional[str], actions: Opti
 
 
 @router.get("")
-async def list_plugins():
+def list_plugins():
     plugins = plugin_loader.refresh()
     return {"plugins": [p.public() for p in plugins.values()]}
 
 
 @router.post("/reload")
-async def reload_plugins():
+def reload_plugins():
     plugins = plugin_loader.refresh(force=True)
     return {"plugins": [p.public() for p in plugins.values()]}
 
 
 @router.get("/client.js")
-async def client_script():
+def client_script():
     return Response(plugin_loader.client_script(), media_type="text/javascript",
                     headers={"Cache-Control": "no-cache"})
 
@@ -67,16 +67,16 @@ class CurlRequest(BaseModel):
 
 class DraftRequest(BaseModel):
     id: str
-    manifest: Dict[str, Any]
+    manifest: dict[str, Any]
     value: str = ""
     type: Optional[str] = None
-    settings: Dict[str, Optional[str]] = {}   # API keys typed in the builder (not saved by test)
+    settings: dict[str, Optional[str]] = {}   # API keys typed in the builder (not saved by test)
     detect: bool = False
 
 
 class PreviewRequest(BaseModel):
     id: str
-    manifest: Dict[str, Any]
+    manifest: dict[str, Any]
     raw: Any = None
     value: str = ""
     type: str = ""
@@ -84,9 +84,9 @@ class PreviewRequest(BaseModel):
 
 class SaveRequest(BaseModel):
     id: str
-    manifest: Optional[Dict[str, Any]] = None
+    manifest: Optional[dict[str, Any]] = None
     yaml: Optional[str] = None
-    settings: Dict[str, Optional[str]] = {}
+    settings: dict[str, Optional[str]] = {}
     editing: bool = False
 
 
@@ -95,7 +95,7 @@ def _draft_error(e: DraftError) -> HTTPException:
 
 
 @router.post("/builder/curl")
-async def builder_curl(body: CurlRequest):
+def builder_curl(body: CurlRequest):
     try:
         return plugin_builder.parse_curl(body.command, body.example)
     except DraftError as e:
@@ -112,7 +112,7 @@ async def builder_test(body: DraftRequest):
 
 
 @router.post("/builder/preview")
-async def builder_preview(body: PreviewRequest):
+def builder_preview(body: PreviewRequest):
     try:
         return {"items": plugin_builder.preview(body.id, body.manifest, body.raw, body.value, body.type)}
     except DraftError as e:
@@ -125,13 +125,13 @@ class DetectRequest(BaseModel):
 
 
 @router.post("/builder/detect")
-async def builder_detect(body: DetectRequest):
+def builder_detect(body: DetectRequest):
     """A results mapping for an answer already fetched (no request)."""
     return {"suggestion": plugin_builder.suggest_mapping(body.raw, body.format)}
 
 
 @router.post("/builder/yaml")
-async def builder_yaml(body: PreviewRequest):
+def builder_yaml(body: PreviewRequest):
     """plugin.yaml for the form's manifest, and whether it is valid."""
     error = None
     try:
@@ -142,7 +142,7 @@ async def builder_yaml(body: PreviewRequest):
 
 
 @router.post("/builder/save")
-async def builder_save(body: SaveRequest):
+def builder_save(body: SaveRequest):
     try:
         plugin = plugin_builder.save_draft(body.id, body.manifest, body.yaml, body.settings, body.editing)
     except DraftError as e:
@@ -151,7 +151,7 @@ async def builder_save(body: SaveRequest):
 
 
 @router.get("/{plugin_id}/manifest")
-async def plugin_manifest(plugin_id: str):
+def plugin_manifest(plugin_id: str):
     """plugin.yaml of a plugin, for editing or duplicating it in the builder."""
     try:
         return plugin_builder.load_for_builder(_plugin(plugin_id))
@@ -160,7 +160,7 @@ async def plugin_manifest(plugin_id: str):
 
 
 @router.delete("/{plugin_id}")
-async def delete_plugin(plugin_id: str):
+def delete_plugin(plugin_id: str):
     try:
         plugin_builder.delete_plugin(_plugin(plugin_id))
     except DraftError as e:
@@ -172,14 +172,14 @@ async def delete_plugin(plugin_id: str):
 @save_investigation(service_name=lambda kwargs: kwargs["plugin_id"], method_name="run",
                     stream_reducer=reduce_plugin_stream)
 async def run_plugin(plugin_id: str, value: str = Body(..., max_length=2000), type: Optional[str] = Body(None),
-                     actions: Optional[List[str]] = Body(None)):
+                     actions: Optional[list[str]] = Body(None)):
     """Run a plugin (only the lookups in actions, if given); NDJSON events, saved to the investigation."""
     return await _stream(plugin_id, value, type, actions)
 
 
 @router.post("/{plugin_id}/test")
 async def test_plugin(plugin_id: str, value: str = Body(..., max_length=2000), type: Optional[str] = Body(None),
-                      actions: Optional[List[str]] = Body(None)):
+                      actions: Optional[list[str]] = Body(None)):
     """Same as run, but not saved (trying a plugin out)."""
     return await _stream(plugin_id, value, type, actions)
 
@@ -189,20 +189,20 @@ class TrustRequest(BaseModel):
 
 
 @router.get("/{plugin_id}/files")
-async def plugin_files(plugin_id: str):
+def plugin_files(plugin_id: str):
     plugin = _plugin(plugin_id)
     return {"plugin": plugin.public(), "files": plugin_loader.plugin_files(plugin)}
 
 
 @router.post("/{plugin_id}/trust")
-async def trust_plugin(plugin_id: str, body: TrustRequest):
+def trust_plugin(plugin_id: str, body: TrustRequest):
     plugin = _plugin(plugin_id)
     plugin_loader.write_trust(plugin.id, body.mode, plugin.sha)
     return _plugin_after_change(plugin.id)
 
 
 @router.delete("/{plugin_id}/trust")
-async def untrust_plugin(plugin_id: str):
+def untrust_plugin(plugin_id: str):
     plugin = _plugin(plugin_id)
     plugin_loader.write_trust(plugin.id, None)
     return _plugin_after_change(plugin.id)
@@ -216,7 +216,7 @@ def _plugin_after_change(plugin_id: str) -> JSONResponse:
 
 
 @router.get("/{plugin_id}/icon")
-async def plugin_icon(plugin_id: str):
+def plugin_icon(plugin_id: str):
     plugin = _plugin(plugin_id)
     if not plugin.icon_file:
         raise HTTPException(status_code=404, detail="No icon")

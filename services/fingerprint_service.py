@@ -10,7 +10,8 @@ import json
 import os
 import re
 import tempfile
-from typing import Any, AsyncGenerator, Dict, List
+from typing import Any
+from collections.abc import AsyncGenerator
 
 from utils.config import get_setting
 
@@ -36,9 +37,9 @@ class FingerprintError(Exception):
     pass
 
 
-def _ids(kind: str, matches: List[str]) -> List[str]:
+def _ids(kind: str, matches: list[str]) -> list[str]:
     _, _, id_pattern = TRACKERS[kind]
-    out: List[str] = []
+    out: list[str] = []
     for match in matches:
         if kind == "email":
             value = match.lower()
@@ -56,10 +57,10 @@ def _ids(kind: str, matches: List[str]) -> List[str]:
     return out[:20]
 
 
-def normalize(line: Dict[str, Any]) -> Dict[str, Any]:
+def normalize(line: dict[str, Any]) -> dict[str, Any]:
     """httpx JSON line -> compact fingerprint."""
     extracts = line.get("extracts") or {}
-    trackers: Dict[str, List[str]] = {}
+    trackers: dict[str, list[str]] = {}
     for kind, (_, go_pattern, _) in TRACKERS.items():
         ids = _ids(kind, extracts.get(go_pattern) or [])
         if ids:
@@ -93,7 +94,7 @@ def normalize(line: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-async def fingerprint_domains(domains: List[str]) -> AsyncGenerator[Dict[str, Any], None]:
+async def fingerprint_domains(domains: list[str]) -> AsyncGenerator[dict[str, Any], None]:
     """Yields {"type": "domain", ...} per answering domain, then {"type": "complete"}."""
     domains = list(dict.fromkeys(d.strip().lower() for d in domains if d.strip()))[:MAX_DOMAINS]
     binary = get_setting("HTTPX_PATH", "httpx-toolkit") or "httpx-toolkit"

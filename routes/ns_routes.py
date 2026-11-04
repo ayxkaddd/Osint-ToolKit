@@ -1,6 +1,6 @@
 import asyncio
 import json
-from typing import List, Optional
+from typing import Optional
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
@@ -20,12 +20,12 @@ WHOIS_CONCURRENCY = 8
 
 
 class WhoisAnalysisRequest(BaseModel):
-    domains: List[str] = Field(..., min_length=1, max_length=1000)
+    domains: list[str] = Field(..., min_length=1, max_length=1000)
 
 
 @router.get("/search")
 @save_investigation(service_name="ns", method_name="lookup_ns")
-async def get_domains(ns1: str, ns2: str, investigation_id: Optional[str] = None) -> List[str]:
+async def get_domains(ns1: str, ns2: str, investigation_id: Optional[str] = None) -> list[str]:
     try:
         return await asyncio.to_thread(ns_service.get_shared_domains, ns1.strip(), ns2.strip())
     except HTTPException:

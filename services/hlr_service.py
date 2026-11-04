@@ -3,9 +3,8 @@ import json
 import re
 import threading
 import time
-import requests
+import httpx
 import logging
-from typing import Dict
 from fastapi import HTTPException
 import os
 
@@ -40,25 +39,25 @@ class HLRService:
         self.login = self.current_creds.get('login')
         self.password = self.current_creds.get('psw')
 
-    def load_credentials(self) -> Dict:
+    def load_credentials(self) -> dict:
         """Load credentials from JSON file"""
         try:
             json_path = os.path.join(os.path.dirname(__file__), '..', 'assets', 'sms_logins.json')
-            logger.info(f"Loading credentials from: {json_path}")
+            logger.info('Loading credentials from: %s', json_path)
             with open(json_path, 'r') as f:
                 creds = json.load(f)
-            logger.info(f"Loaded credentials for regions: {', '.join(creds.keys())}")
+            logger.info('Loaded credentials for regions: %s', ', '.join(creds.keys()))
             return creds
         except Exception as e:
-            logger.error(f"Failed to load credentials: {str(e)}")
+            logger.error('Failed to load credentials: %s', str(e))
             raise HTTPException(status_code=503, detail=f"HLR credentials could not be loaded: {e}")
 
     def switch_credentials(self, region: str = 'ru') -> bool:
         """Switch to next available credential for given region"""
-        logger.info(f"Attempting to switch credentials for region: {region}")
+        logger.info('Attempting to switch credentials for region: %s', region)
         creds_list = self.credentials.get(region, [])
         if not creds_list:
-            logger.warning(f"No credentials available for region: {region}")
+            logger.warning('No credentials available for region: %s', region)
             return False
 
         # Find current credential index
@@ -73,35 +72,35 @@ class HLRService:
         self.current_creds = creds_list[next_index]
         self.login = self.current_creds.get('login')
         self.password = self.current_creds.get('psw')
-        logger.info(f"Switched to new credentials: {self.login}")
+        logger.info('Switched to new credentials: %s', self.login)
         return True
 
     def check_balance(self) -> str:
         """Check account balance"""
-        logger.info(f"Checking balance for login: {self.login}")
+        logger.info('Checking balance for login: %s', self.login)
         data = {
             'login': self.login,
             'psw': self.password
         }
-        response = requests.get(f'{self.url}/sys/balance.php', params=data, timeout=30)
+        response = httpx.get(f'{self.url}/sys/balance.php', params=data, timeout=30, follow_redirects=True)
         if response.status_code != 200:
-            logger.error(f"Balance check failed with status code: {response.status_code}")
+            logger.error('Balance check failed with status code: %s', response.status_code)
             raise HTTPException(status_code=response.status_code, detail="Failed to check balance")
-        logger.info(f"Balance check successful: {response.text}")
+        logger.info('Balance check successful: %s', response.text)
         return response.text
 
-    def fetch_status(self, phone: str, sms_id: str) -> Dict:
+    def fetch_status(self, phone: str, sms_id: str) -> dict:
         """Fetch HLR status for a specific phone number"""
-        logger.info(f"Fetching status for phone: {phone} with SMS ID: {sms_id}")
+        logger.info('Fetching status for phone: %s with SMS ID: %s', phone, sms_id)
         data = {
             'login': self.login,
             'psw': self.password,
             'phone': phone,
             'id': sms_id
         }
-        response = requests.get(f'{self.url}/sys/status.php', params=data, timeout=30)
+        response = httpx.get(f'{self.url}/sys/status.php', params=data, timeout=30, follow_redirects=True)
         if response.status_code != 200:
-            logger.error(f"Status fetch failed with status code: {response.status_code}")
+            logger.error('Status fetch failed with status code: %s', response.status_code)
             raise HTTPException(status_code=response.status_code, detail="Failed to fetch status")
 
         # Initialize default result
@@ -119,7 +118,7 @@ class HLRService:
 
         try:
             # Parse the response
-            logger.debug(f"Raw status response: {response.text}")
+            logger.debug('Raw status response: %s', response.text)
 
             # Split by comma and handle each parameter
             params = [param.strip() for param in response.text.split(',')]
@@ -152,27 +151,27 @@ class HLRService:
                     result['operator'] = value
 
             # Log the parsed result
-            logger.info(f"Status parsed for {phone}:")
-            logger.info(f"  Status: {result['status']}")
-            logger.info(f"  Operator: {result['operator']}")
-            logger.info(f"  Region: {result['region']}")
-            logger.info(f"  MCC: {result['mcc']}")
-            logger.info(f"  MNC: {result['mnc']}")
-            logger.info(f"  IMSI: {result['imsi']}")
+            logger.info('Status parsed for %s:', phone)
+            logger.info('  Status: %s', result['status'])
+            logger.info('  Operator: %s', result['operator'])
+            logger.info('  Region: %s', result['region'])
+            logger.info('  MCC: %s', result['mcc'])
+            logger.info('  MNC: %s', result['mnc'])
+            logger.info('  IMSI: %s', result['imsi'])
             if result['error']:
-                logger.warning(f"  Error code: {result['error']}")
+                logger.warning('  Error code: %s', result['error'])
 
         except Exception as e:
-            logger.error(f"Error parsing status response: {str(e)}")
-            logger.error(f"Raw response was: {response.text}")
+            logger.error('Error parsing status response: %s', str(e))
+            logger.error('Raw response was: %s', response.text)
 
         return result
 
-    async def lookup_numbers(self, phones: str) -> Dict:
+    async def lookup_numbers(self, phones: str) -> dict:
         """Perform HLR lookup, running the blocking HTTP/sleep work off the event loop."""
         return await asyncio.to_thread(self._lookup_locked, phones)
 
-    def _lookup_locked(self, phones: str) -> Dict:
+    def _lookup_locked(self, phones: str) -> dict:
         with self._lock:
             self._ensure_credentials()
             numbers = [normalize_phone(p) for p in re.split(r"[,;\n]+", phones or "")]
@@ -181,9 +180,9 @@ class HLRService:
                 raise HTTPException(status_code=400, detail="Enter at least one phone number")
             return self._lookup_numbers_sync(",".join(dict.fromkeys(numbers)))
 
-    def _lookup_numbers_sync(self, phones: str) -> Dict:
+    def _lookup_numbers_sync(self, phones: str) -> dict:
         """Perform HLR lookup for multiple phone numbers"""
-        logger.info(f"Starting HLR lookup for phones: {phones}")
+        logger.info('Starting HLR lookup for phones: %s', phones)
 
         if not self.login or not self.password:
             logger.error("No valid credentials available")
@@ -192,10 +191,10 @@ class HLRService:
         # Determine region based on first phone number
         first_phone = phones.split(',')[0].strip()
         region = 'ua' if first_phone.startswith('380') else 'ru'
-        logger.info(f"Detected region: {region} based on number: {first_phone}")
+        logger.info('Detected region: %s based on number: %s', region, first_phone)
 
         retry_count = len(self.credentials.get(region, []))
-        logger.info(f"Will attempt up to {retry_count} retries with different credentials")
+        logger.info('Will attempt up to %s retries with different credentials', retry_count)
 
         balance = None
         results = []
@@ -207,7 +206,7 @@ class HLRService:
                 try:
                     # Check balance first
                     balance = self.check_balance()
-                    logger.info(f"Current balance: {balance}")
+                    logger.info('Current balance: %s', balance)
 
                     # Prepare the HLR request for single number
                     data = {
@@ -217,16 +216,16 @@ class HLRService:
                         'hlr': '1'
                     }
 
-                    logger.info(f"Sending HLR request for {phone}...")
-                    response = requests.get(f'{self.url}/sys/send.php', params=data, timeout=30)
+                    logger.info('Sending HLR request for %s...', phone)
+                    response = httpx.get(f'{self.url}/sys/send.php', params=data, timeout=30, follow_redirects=True)
                     if response.status_code != 200:
-                        logger.error(f"HLR request failed with status code: {response.status_code}")
+                        logger.error('HLR request failed with status code: %s', response.status_code)
                         raise HTTPException(status_code=response.status_code, detail="Failed to send HLR request")
 
                     if 'OK' in response.text:
                         try:
                             sms_id = response.text.split('ID - ')[1]
-                            logger.info(f"HLR request successful for {phone}. SMS ID: {sms_id}")
+                            logger.info('HLR request successful for %s. SMS ID: %s', phone, sms_id)
 
                             logger.info("Waiting 10 seconds for results...")
                             time.sleep(10)
@@ -237,7 +236,7 @@ class HLRService:
                             break  # Success, move to next number
 
                         except Exception as e:
-                            logger.error(f"Error processing HLR response for {phone}: {str(e)}")
+                            logger.error('Error processing HLR response for %s: %s', phone, str(e))
                             results.append({
                                 'phone': phone,
                                 'status': 'Error',
@@ -247,12 +246,12 @@ class HLRService:
                             break  # Move to next number even if processing failed
                     else:
                         error_msg = response.text
-                        logger.warning(f"HLR request failed for {phone} with response: {error_msg}")
+                        logger.warning('HLR request failed for %s with response: %s', phone, error_msg)
 
                         # Only retry on balance-related errors (error codes 2 and 3)
                         if ("ERROR = 2" in error_msg or "ERROR = 3" in error_msg) and self.switch_credentials(region):
                             retry_count_for_phone -= 1
-                            logger.info(f"Balance too low, retrying with new credentials. {retry_count_for_phone} attempts remaining")
+                            logger.info('Balance too low, retrying with new credentials. %s attempts remaining', retry_count_for_phone)
                             continue
 
                         # For other errors, add to results and move to next number
@@ -265,7 +264,7 @@ class HLRService:
                         break
 
                 except Exception as e:
-                    logger.error(f"Error during HLR lookup for {phone}: {str(e)}")
+                    logger.error('Error during HLR lookup for %s: %s', phone, str(e))
                     if self.switch_credentials(region):
                         retry_count_for_phone -= 1
                         continue

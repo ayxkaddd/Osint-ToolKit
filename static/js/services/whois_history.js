@@ -10,10 +10,22 @@ const whoisEls = {
     data: document.getElementById('whoisData'),
 };
 const ROLE_LABELS = { registrant: 'Registrant', admin: 'Admin', tech: 'Tech', billing: 'Billing', zone: 'Zone' };
-const FIELD_LABELS = { registrar: 'Registrar', nameservers: 'Name servers', registrant: 'Registrant', admin: 'Admin contact', tech: 'Tech contact', status: 'Status' };
+const FIELD_LABELS = {
+    registrar: 'Registrar',
+    nameservers: 'Name servers',
+    registrant: 'Registrant',
+    admin: 'Admin contact',
+    tech: 'Tech contact',
+    status: 'Status',
+};
 
 function cleanDomain(value) {
-    return value.trim().toLowerCase().replace(/^https?:\/\//, '').split('/')[0].replace(/^www\./, '');
+    return value
+        .trim()
+        .toLowerCase()
+        .replace(/^https?:\/\//, '')
+        .split('/')[0]
+        .replace(/^www\./, '');
 }
 
 function setLoading(text) {
@@ -80,9 +92,12 @@ function contactCard(c) {
                     ${c.name && c.organization ? `<div class="text-sm text-gray-400 break-words">${escapeHtml(c.organization)}</div>` : ''}
                 </div>
                 <div class="flex items-center gap-1.5 flex-wrap">
-                    ${c.privacy ? '<span class="text-[11px] px-1.5 py-0.5 rounded bg-gray-800 text-gray-400">privacy service</span>'
-                        : '<span class="text-[11px] px-1.5 py-0.5 rounded bg-emerald-900/50 text-emerald-300">real contact</span>'}
-                    ${(c.roles || []).map(r => `<span class="text-[11px] px-1.5 py-0.5 rounded bg-gray-800 text-gray-300">${escapeHtml(ROLE_LABELS[r] || r)}</span>`).join('')}
+                    ${
+                        c.privacy
+                            ? '<span class="text-[11px] px-1.5 py-0.5 rounded bg-gray-800 text-gray-400">privacy service</span>'
+                            : '<span class="text-[11px] px-1.5 py-0.5 rounded bg-emerald-900/50 text-emerald-300">real contact</span>'
+                    }
+                    ${(c.roles || []).map((r) => `<span class="text-[11px] px-1.5 py-0.5 rounded bg-gray-800 text-gray-300">${escapeHtml(ROLE_LABELS[r] || r)}</span>`).join('')}
                 </div>
             </div>
             <div class="flex flex-wrap gap-1.5 mb-2">
@@ -95,11 +110,15 @@ function contactCard(c) {
 }
 
 function periods(rows, pivotType) {
-    return `<div class="space-y-1">${rows.map(r => `
+    return `<div class="space-y-1">${rows
+        .map(
+            (r) => `
         <div class="flex items-center gap-3 text-sm">
             <span class="text-xs text-gray-500 font-mono w-48 shrink-0">${escapeHtml(r.first_seen || '?')} → ${escapeHtml(r.last_seen || '?')}</span>
             ${pivotType ? pivotChip(pivotType, r.name) : `<span class="text-gray-200">${escapeHtml(r.name)}</span>`}
-        </div>`).join('')}</div>`;
+        </div>`
+        )
+        .join('')}</div>`;
 }
 
 function timelineEntry(entry) {
@@ -108,17 +127,22 @@ function timelineEntry(entry) {
             <div class="text-xs text-gray-400 font-mono w-24 shrink-0 pt-0.5">${escapeHtml(entry.date || '?')}</div>
             <div class="flex-1 min-w-0 text-sm">
                 ${entry.first ? `<div class="text-gray-300">First archived record${entry.registrant ? ` - registrant <span class="text-white">${escapeHtml(entry.registrant)}</span>` : ''}${entry.registrar ? `, registrar ${escapeHtml(entry.registrar)}` : ''}</div>` : ''}
-                ${(entry.changes || []).map(c => `
+                ${(entry.changes || [])
+                    .map(
+                        (c) => `
                     <div class="mb-1 break-words"><span class="text-gray-400">${escapeHtml(FIELD_LABELS[c.field] || c.field)}:</span>
                         <span class="text-red-300/80 line-through decoration-red-400/40">${pivotField(c.field, c.from)}</span>
                         <i class="fas fa-arrow-right text-gray-600 text-xs mx-1"></i>
-                        <span class="text-emerald-200">${pivotField(c.field, c.to)}</span></div>`).join('')}
+                        <span class="text-emerald-200">${pivotField(c.field, c.to)}</span></div>`
+                    )
+                    .join('')}
             </div>
         </div>`;
 }
 
 function rawRecord(record) {
-    const date = (record.audit && record.audit.updatedDate) || record.updatedDateISO8601 || record.createdDateISO8601 || '';
+    const date =
+        (record.audit && record.audit.updatedDate) || record.updatedDateISO8601 || record.createdDateISO8601 || '';
     return `<details class="bg-gray-900 rounded-lg border border-gray-800">
         <summary class="cursor-pointer px-3 py-2 text-sm text-gray-300">${escapeHtml(String(date).slice(0, 10) || 'undated')} · ${escapeHtml(record.registrarName || 'unknown registrar')}</summary>
         <pre class="px-3 pb-3 text-xs text-gray-400 whitespace-pre-wrap break-words max-h-96 overflow-y-auto">${escapeHtml(record.cleanText || JSON.stringify(record, null, 2))}</pre>
@@ -127,8 +151,10 @@ function rawRecord(record) {
 
 // One entry per distinct name server set across the archived records
 function whoisNsSets(records) {
-    return records.map(r => {
-        const date = String((r.audit && r.audit.updatedDate) || r.updatedDateISO8601 || r.createdDateISO8601 || '').slice(0, 10);
+    return records.map((r) => {
+        const date = String(
+            (r.audit && r.audit.updatedDate) || r.updatedDateISO8601 || r.createdDateISO8601 || ''
+        ).slice(0, 10);
         return { servers: r.nameServers || [], first_seen: date, last_seen: date };
     });
 }
@@ -141,7 +167,8 @@ function displayResults(data) {
     if (domain) whoisEls.input.value = domain;
     const contacts = (a && a.contacts) || [];
     const nsHtml = nsLookupSuggestion(whoisNsSets(records));
-    const stat = (label, value) => `<div class="bg-gray-900 rounded-lg p-3 border border-gray-800"><div class="text-xs text-gray-500">${escapeHtml(label)}</div><div class="text-lg font-bold text-white">${escapeHtml(value ?? '—')}</div></div>`;
+    const stat = (label, value) =>
+        `<div class="bg-gray-900 rounded-lg p-3 border border-gray-800"><div class="text-xs text-gray-500">${escapeHtml(label)}</div><div class="text-lg font-bold text-white">${escapeHtml(value ?? '—')}</div></div>`;
 
     whoisEls.data.innerHTML = `
         <section class="bg-[#14151f] border border-[#24283b] rounded-xl p-5">
@@ -153,20 +180,31 @@ function displayResults(data) {
                 ${stat('Real contacts', a ? a.real_contacts : null)}
             </div>
         </section>
-        ${a ? `
+        ${
+            a
+                ? `
         <details open class="recon-section"><summary><i class="fas fa-users"></i>Everyone ever listed <span class="count">${contacts.length}</span></summary>
-            <div class="recon-body">${contacts.length ? `<div class="grid grid-cols-1 md:grid-cols-2 gap-3">${contacts.map(contactCard).join('')}</div>`
-                : '<p class="text-sm text-gray-500">No contact details in any record.</p>'}</div></details>
+            <div class="recon-body">${
+                contacts.length
+                    ? `<div class="grid grid-cols-1 md:grid-cols-2 gap-3">${contacts.map(contactCard).join('')}</div>`
+                    : '<p class="text-sm text-gray-500">No contact details in any record.</p>'
+            }</div></details>
         <details open class="recon-section"><summary><i class="fas fa-stream"></i>What changed <span class="count">${a.timeline.length}</span></summary>
             <div class="recon-body"><div class="bg-gray-900 rounded-lg px-3 border border-gray-800">${a.timeline.map(timelineEntry).join('')}</div></div></details>
         <details class="recon-section"><summary><i class="fas fa-server"></i>Registrars and name servers</summary>
             <div class="recon-body grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div><div class="text-xs text-gray-500 mb-2">Registrars</div>${periods(a.registrars)}</div>
                 <div><div class="text-xs text-gray-500 mb-2">Name servers</div>${periods(a.nameservers, 'domain')}</div>
-            </div></details>` : ''}
-        ${nsHtml ? `
+            </div></details>`
+                : ''
+        }
+        ${
+            nsHtml
+                ? `
         <details open class="recon-section"><summary><i class="fas fa-server"></i>Same name servers</summary>
-            <div class="recon-body">${nsHtml}</div></details>` : ''}
+            <div class="recon-body">${nsHtml}</div></details>`
+                : ''
+        }
         <details class="recon-section"><summary><i class="fas fa-file-alt"></i>Full records <span class="count">${records.length}</span></summary>
             <div class="recon-body space-y-2">${records.map(rawRecord).join('') || '<p class="text-sm text-gray-500">No records.</p>'}</div></details>`;
     whoisEls.data.classList.remove('hidden');

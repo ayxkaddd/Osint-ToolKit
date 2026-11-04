@@ -1,5 +1,4 @@
 aiohappyeyeballs
-aiohttp
 aiosignal
 annotated-types
 anyio
@@ -18,7 +17,6 @@ idna
 Jinja2
 MarkupSafe
 multidict
-passlib==1.7.4
 propcache
 pyasn1
 pycparser
@@ -29,9 +27,7 @@ pyyaml
 PyJWT
 PyNaCl
 python-dotenv
-python-jose
 python-multipart
-requests
 rsa
 six
 sniffio

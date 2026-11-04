@@ -4,10 +4,10 @@ Production-ready service for performing OSINT searches via SerpAPI
 """
 
 from dataclasses import dataclass
-from typing import List, Dict, Any, Optional
+from typing import Any, Optional
 from enum import Enum
 import asyncio
-import aiohttp
+import httpx
 from abc import ABC, abstractmethod
 import re
 import logging
@@ -39,14 +39,14 @@ class SearchResult:
     url: str
     snippet: str
     position: int
-    raw_data: Optional[Dict[str, Any]] = None
+    raw_data: Optional[dict[str, Any]] = None
 
 
 class DorkGenerator(ABC):
     """Base class for dork generators"""
 
     @abstractmethod
-    def generate(self, value: str, engine: SearchEngine) -> List[str]:
+    def generate(self, value: str, engine: SearchEngine) -> list[str]:
         """Generate search dorks for given value and engine"""
         pass
 
@@ -54,7 +54,7 @@ class DorkGenerator(ABC):
 class UsernameDorkGenerator(DorkGenerator):
     """Generate dorks for username searches"""
 
-    def generate(self, value: str, engine: SearchEngine) -> List[str]:
+    def generate(self, value: str, engine: SearchEngine) -> list[str]:
         username = value.strip()
 
         if engine == SearchEngine.GOOGLE:
@@ -91,7 +91,7 @@ class UsernameDorkGenerator(DorkGenerator):
 class FullNameDorkGenerator(DorkGenerator):
     """Generate dorks for full name searches"""
 
-    def generate(self, value: str, engine: SearchEngine) -> List[str]:
+    def generate(self, value: str, engine: SearchEngine) -> list[str]:
         full_name = value.strip()
 
         if engine == SearchEngine.GOOGLE:
@@ -125,7 +125,7 @@ class FullNameDorkGenerator(DorkGenerator):
 class PhoneDorkGenerator(DorkGenerator):
     """Generate dorks for phone number searches"""
 
-    def _normalize_phone(self, phone: str) -> List[str]:
+    def _normalize_phone(self, phone: str) -> list[str]:
         """Generate different phone number formats"""
         try:
             from services.phone_service import search_formats
@@ -148,7 +148,7 @@ class PhoneDorkGenerator(DorkGenerator):
 
         return list(set(variants))
 
-    def generate(self, value: str, engine: SearchEngine) -> List[str]:
+    def generate(self, value: str, engine: SearchEngine) -> list[str]:
         phone_variants = self._normalize_phone(value)
         dorks = []
 
@@ -181,7 +181,7 @@ class PhoneDorkGenerator(DorkGenerator):
 class EmailDorkGenerator(DorkGenerator):
     """Generate dorks for email address searches"""
 
-    def generate(self, value: str, engine: SearchEngine) -> List[str]:
+    def generate(self, value: str, engine: SearchEngine) -> list[str]:
         email = value.strip()
         username = email.split('@')[0] if '@' in email else email
         domain = email.split('@')[1] if '@' in email else ""
@@ -225,7 +225,7 @@ class EmailDorkGenerator(DorkGenerator):
 class CustomDorkGenerator(DorkGenerator):
     """Generator for custom user-provided dorks"""
 
-    def generate(self, value: str, engine: SearchEngine) -> List[str]:
+    def generate(self, value: str, engine: SearchEngine) -> list[str]:
         """
         For custom dorks, value is already a dork string.
         Just return it as-is.
@@ -262,8 +262,8 @@ class SearchExecutor:
         dork: str,
         engine: SearchEngine,
         max_results: int = 10,
-        session: Optional[aiohttp.ClientSession] = None
-    ) -> Dict[str, Any]:
+        client: Optional[httpx.AsyncClient] = None
+    ) -> dict[str, Any]:
         """Execute a single search query"""
 
         params = {
@@ -277,42 +277,37 @@ class SearchExecutor:
         else:
             params["engine"] = "yandex"
 
-        close_session = False
-        if session is None:
-            session = aiohttp.ClientSession()
-            close_session = True
-
+        own_client = client is None
+        client = client or httpx.AsyncClient(timeout=60)
         try:
-            async with session.get(self.base_url, params=params) as response:
-                if response.status == 200:
-                    return await response.json()
-                else:
-                    error_text = await response.text()
-                    logger.error(f"SerpAPI error {response.status}: {error_text}")
-                    raise Exception(f"SerpAPI error {response.status}: {error_text}")
+            response = await client.get(self.base_url, params=params)
+            if response.status_code == 200:
+                return response.json()
+            logger.error("SerpAPI error %s: %s", response.status_code, response.text)
+            raise Exception(f"SerpAPI error {response.status_code}: {response.text}")
         finally:
-            if close_session:
-                await session.close()
+            if own_client:
+                await client.aclose()
 
     async def search_multiple(
         self,
-        dorks: List[str],
+        dorks: list[str],
         engine: SearchEngine,
         max_results: int = 10,
         delay: float = 1.0
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Execute multiple searches with rate limiting"""
 
         results = []
-        async with aiohttp.ClientSession() as session:
+        async with httpx.AsyncClient(timeout=60) as client:
             for dork in dorks:
                 try:
-                    result = await self.search(dork, engine, max_results, session)
+                    result = await self.search(dork, engine, max_results, client)
                     results.append({"dork": dork, "engine": engine.value, "data": result})
-                    logger.info(f"Search completed for dork: {dork[:50]}...")
+                    logger.info('Search completed for dork: %s...', dork[:50])
                     await asyncio.sleep(delay)  # Rate limiting
                 except Exception as e:
-                    logger.error(f"Search failed for dork '{dork}': {str(e)}")
+                    logger.error("Search failed for dork '%s': %s", dork, str(e))
                     results.append({"dork": dork, "engine": engine.value, "error": str(e)})
 
         return results
@@ -322,7 +317,7 @@ class ResultNormalizer:
     """Normalizes search results to unified format"""
 
     @staticmethod
-    def normalize(raw_results: List[Dict[str, Any]]) -> List[SearchResult]:
+    def normalize(raw_results: list[dict[str, Any]]) -> list[SearchResult]:
         """Normalize raw SerpAPI results to SearchResult objects"""
 
         normalized = []
@@ -363,10 +358,10 @@ class OSINTSearchService:
         self,
         value: str,
         input_type: InputType,
-        engines: List[SearchEngine],
+        engines: list[SearchEngine],
         max_results_per_dork: int = 10,
         rate_limit_delay: float = 1.0
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Perform OSINT search
 
@@ -386,7 +381,7 @@ class OSINTSearchService:
 
         for engine in engines:
             dorks = generator.generate(value, engine)
-            logger.info(f"Generated {len(dorks)} dorks for {input_type.value} on {engine.value}")
+            logger.info('Generated %s dorks for %s on %s', len(dorks), input_type.value, engine.value)
 
             raw_results = await self.executor.search_multiple(
                 dorks=dorks,
@@ -433,11 +428,11 @@ class OSINTSearchService:
 
     async def search_custom_dorks(
         self,
-        dorks: List[str],
-        engines: List[SearchEngine],
+        dorks: list[str],
+        engines: list[SearchEngine],
         max_results_per_dork: int = 10,
         rate_limit_delay: float = 1.0
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Perform search with user-provided custom dorks
 
@@ -454,7 +449,7 @@ class OSINTSearchService:
         all_results = []
 
         for engine in engines:
-            logger.info(f"Searching {len(dorks)} custom dorks on {engine.value}")
+            logger.info('Searching %s custom dorks on %s', len(dorks), engine.value)
 
             raw_results = await self.executor.search_multiple(
                 dorks=dorks,
@@ -503,8 +498,8 @@ class OSINTSearchService:
         self,
         value: str,
         input_type: InputType,
-        engines: List[SearchEngine]
-    ) -> Dict[str, List[str]]:
+        engines: list[SearchEngine]
+    ) -> dict[str, list[str]]:
         """
         Get available dorks without executing searches
 
