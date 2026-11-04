@@ -140,6 +140,20 @@ class OsintFramework:
             return JSONResponse({"detail": "Not authenticated"}, status_code=401)
         return RedirectResponse(url="/")
 
+    @staticmethod
+    def _login_key(request: Request) -> str:
+        """Who a login attempt counts against.
+
+        uvicorn replaces the client address with X-Forwarded-For when the connection
+        comes from a trusted proxy, which by default is any local connection (a local
+        process, an SSH tunnel). The header is then whatever the caller sent, so unless
+        TRUST_PROXY_HEADERS is set, all requests carrying it share one counter.
+        """
+        if "x-forwarded-for" in request.headers and \
+                (get_setting('TRUST_PROXY_HEADERS', 'false') or '').lower() != 'true':
+            return "forwarded"
+        return request.client.host if request.client else "unknown"
+
     def _login_blocked(self, ip: str) -> bool:
         attempts = self.failed_logins[ip]
         cutoff = time.monotonic() - LOGIN_WINDOW_SECONDS
@@ -150,7 +164,7 @@ class OsintFramework:
     def setup_auth(self):
         @self.app.post("/login")
         async def login(data: AuthDetails, request: Request, response: Response):
-            ip = request.client.host if request.client else "unknown"
+            ip = self._login_key(request)
             if self._login_blocked(ip):
                 raise HTTPException(status_code=429, detail='Too many failed attempts, try again later')
 
@@ -227,4 +241,5 @@ class OsintFramework:
         plugin_loader.refresh(force=True)
 
 
-app = OsintFramework().app
+framework = OsintFramework()
+app = framework.app

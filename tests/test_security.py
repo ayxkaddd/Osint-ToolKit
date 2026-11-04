@@ -74,3 +74,30 @@ def test_reports_stay_inside_reports_folder(client):
 
 def test_telegram_status_without_keys(client):
     assert client.get("/auth/tg/status").json() == {"authorized": False, "configured": False}
+
+
+@pytest.fixture
+def behind_local_proxy(app):
+    """The app as uvicorn serves it from a local connection: X-Forwarded-For is applied."""
+    import main
+    from fastapi.testclient import TestClient
+    from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
+    main.framework.failed_logins.clear()
+    yield TestClient(ProxyHeadersMiddleware(app, trusted_hosts="*"))
+    main.framework.failed_logins.clear()
+
+
+def _failed_login(client, forwarded_for):
+    return client.post("/login", json={"email": "x@x.com", "password": "x"},
+                       headers={"X-Forwarded-For": forwarded_for}).status_code
+
+
+def test_login_limit_ignores_forwarded_for(behind_local_proxy):
+    codes = [_failed_login(behind_local_proxy, f"192.0.2.{i}") for i in range(7)]
+    assert codes == [401] * 5 + [429] * 2
+
+
+def test_login_limit_uses_forwarded_for_when_trusted(behind_local_proxy, monkeypatch):
+    monkeypatch.setenv("TRUST_PROXY_HEADERS", "true")
+    assert [_failed_login(behind_local_proxy, "192.0.2.50") for _ in range(6)] == [401] * 5 + [429]
+    assert _failed_login(behind_local_proxy, "192.0.2.77") == 401
