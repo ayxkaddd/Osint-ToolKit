@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, Query, Form, File, UploadFile, Req
 from fastapi.responses import FileResponse, JSONResponse, HTMLResponse
 from fastapi.concurrency import run_in_threadpool
 from fastapi.templating import Jinja2Templates
+from starlette.background import BackgroundTask
 from pydantic import BaseModel, Field
 from starlette.datastructures import UploadFile as FormUpload
 from utils.investigation_decorator import live_result
@@ -271,9 +272,21 @@ def view_investigation_results(request: Request, investigation_id: UUID):
     )
 
 
+@router.get("/{investigation_id}/results/{result_id}/changes")
+def get_result_changes(investigation_id: UUID, result_id: str) -> JSONResponse:
+    """What changed since the previous run of the same lookup (null when it's the first)."""
+    _require_investigation(investigation_id)
+    if investigation_service.get_result(investigation_id, result_id) is None:
+        raise HTTPException(status_code=404, detail="Result not found")
+    return JSONResponse(content={"status": "success",
+                                 "changes": investigation_service.result_changes(investigation_id, result_id)})
+
+
 @router.get("/{investigation_id}/export")
-def export_investigation(investigation_id: UUID) -> JSONResponse:
-    """Export complete investigation data and results as JSON"""
+def export_investigation(investigation_id: UUID, format: Literal["json", "zip"] = "json"):
+    """Export the investigation: its data and results as JSON, or (``format=zip``) a .zip
+    with that JSON as investigation.json plus the files added manually, note images and
+    the picture."""
     info = _require_investigation(investigation_id)
     results = investigation_service.get_full_results(investigation_id)
     notes = investigation_service.get_investigation_notes(investigation_id)
@@ -286,6 +299,11 @@ def export_investigation(investigation_id: UUID) -> JSONResponse:
         "note_snapshots": investigation_service.get_snapshots(investigation_id),
     }
     clean_name = "".join(c for c in info.get("name", "investigation") if c.isalnum() or c in (" ", "-", "_")).strip().replace(" ", "_")
+    if format == "zip":
+        archive = investigation_service.export_archive(investigation_id, export_data)
+        return FileResponse(archive, media_type="application/zip",
+                            filename=f"{clean_name or 'investigation'}_{investigation_id}.zip",
+                            background=BackgroundTask(archive.unlink, missing_ok=True))
     filename = f"{clean_name or 'investigation'}_{investigation_id}.json"
     return JSONResponse(
         content=export_data,

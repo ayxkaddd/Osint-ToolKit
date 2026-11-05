@@ -373,6 +373,7 @@ function renderCard(r) {
                             <span class="font-bold text-white">${escapeHtml(info.name)}</span>
                             <span class="text-xs text-gray-500">${escapeHtml(methodLabel(r.method_name))}</span>
                             ${r.partial ? '<span class="text-[10px] uppercase px-1.5 py-0.5 rounded bg-yellow-900/60 text-yellow-300" title="The search was stopped before it finished">partial</span>' : ''}
+                            ${rerunBadge(r)}
                             ${triageBadge((r.triage || {}).status)}
                         </div>
                         ${(r.triage || {}).note ? `<div class="text-xs text-amber-200/80 mt-0.5 truncate"><i class="fas fa-sticky-note mr-1"></i>${escapeHtml(r.triage.note)}</div>` : ''}
@@ -399,6 +400,29 @@ function renderCard(r) {
             <div class="result-body hidden border-t border-gray-800/80 bg-gray-950/40"></div>
         </div>
     `;
+}
+
+// The same lookup (module, method, query) ran before in this investigation: open it to see what changed
+function previousRunOf(r) {
+    const same = JSON.stringify(r.parameters || {});
+    return allResults
+        .filter(
+            (o) =>
+                o.result_id !== r.result_id &&
+                o.service_name === r.service_name &&
+                o.method_name === r.method_name &&
+                (o.timestamp || '') < (r.timestamp || '') &&
+                JSON.stringify(o.parameters || {}) === same
+        )
+        .sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''))[0];
+}
+
+function rerunBadge(r) {
+    const previous = previousRunOf(r);
+    return previous
+        ? `<span class="text-[10px] uppercase px-1.5 py-0.5 rounded bg-blue-950/80 text-blue-300 border border-blue-800/60"
+              title="${escapeAttr(`Ran before ${timeAgo(previous.timestamp)} - open it to see what changed`)}">re-run</span>`
+        : '';
 }
 
 function onResultsClick(event) {
@@ -574,6 +598,7 @@ async function expandCard(id, silent = false) {
     refreshIcons();
     loadResultEntities(id);
     loadResultReferences(id);
+    loadResultChanges(id);
     if (!silent) card.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 }
 
@@ -623,6 +648,7 @@ function renderDetail(record) {
             </div>
             ${triageControls(record)}
             <div class="hidden mb-4 text-xs text-gray-400 flex flex-wrap items-center gap-1.5" data-references-for="${escapeAttr(record.result_id)}"></div>
+            <div class="hidden mb-5" data-changes-for="${escapeAttr(record.result_id)}"></div>
             ${safeRender(record.service_name, record.method_name, record.result, record)}
             ${rawJsonBlock('record')}
             ${children}
@@ -705,6 +731,71 @@ async function loadResultReferences(resultId) {
     } catch (e) {
         box.classList.add('hidden');
     }
+}
+
+// "Changes since the run of <date>": what a re-run of the same lookup found that the last one didn't
+async function loadResultChanges(resultId) {
+    const box = document.querySelector(`[data-changes-for="${CSS.escape(resultId)}"]`);
+    const summary = allResults.find((r) => r.result_id === resultId);
+    if (!box || !summary || !previousRunOf(summary)) return;
+    try {
+        const response = await fetch(
+            `/api/investigations/${investigationId}/results/${encodeURIComponent(resultId)}/changes`
+        );
+        const { changes } = await response.json();
+        if (!response.ok || !changes) return;
+        box.innerHTML = changesHtml(changes);
+        box.classList.remove('hidden');
+        refreshIcons();
+    } catch (e) {
+        // the comparison is extra; the result itself is shown anyway
+    }
+}
+
+function changesHtml(c) {
+    const when = c.previous.timestamp
+        ? `${timeAgo(c.previous.timestamp)} (${new Date(c.previous.timestamp).toLocaleString()})`
+        : 'earlier';
+    const lastKey = (path) =>
+        String(path)
+            .split(/\.|\[\]/)
+            .filter(Boolean)
+            .pop();
+    const head = `<div class="flex items-center gap-2 text-sm text-gray-200 mb-2">
+        <i class="fas fa-code-compare text-blue-300"></i>Changes since the same lookup
+        <a href="#result-${encodeURIComponent(c.previous.result_id)}" class="text-blue-300 hover:text-white underline">${escapeHtml(when)}</a></div>`;
+    if (c.same)
+        return `<div class="bg-gray-900/60 border border-blue-800/40 rounded-lg p-3">${head}<p class="text-sm text-gray-400">Nothing changed.</p></div>`;
+    const identifiers =
+        c.identifiers_added.length || c.identifiers_removed.length
+            ? `<div class="mb-2"><div class="text-xs text-gray-500 mb-1">Identifiers</div><div class="flex flex-wrap items-center gap-1.5">
+            ${c.identifiers_added.map((e) => `<span class="text-emerald-300 text-xs">+</span>${pivotChip(e.type, e.value, e.display)}`).join('')}
+            ${c.identifiers_removed.map((e) => `<span class="text-xs text-red-300 line-through" title="No longer found">${escapeHtml(e.display || e.value)}</span>`).join('')}
+            </div></div>`
+            : '';
+    const changed = c.changed.length
+        ? `<div class="mb-2"><div class="text-xs text-gray-500 mb-1">Changed</div><div class="space-y-0.5 text-sm">${c.changed
+              .map(
+                  (f) => `<div class="break-words"><span class="text-gray-400">${escapeHtml(f.label)}:</span>
+                <span class="text-red-300 line-through">${escapeHtml(f.before)}</span> → <span class="text-emerald-300">${pivotField(lastKey(f.path), f.after)}</span></div>`
+              )
+              .join('')}</div></div>`
+        : '';
+    const lists = c.lists
+        .map(
+            (l) => `
+        <details class="text-sm">
+            <summary class="cursor-pointer text-gray-300">${escapeHtml(l.label)}
+                ${l.added.length ? `<span class="text-emerald-300 text-xs">+${l.added.length}</span>` : ''}
+                ${l.removed.length ? `<span class="text-red-300 text-xs">−${l.removed.length}</span>` : ''}${l.more ? ` <span class="text-gray-500 text-xs">(+${l.more} more)</span>` : ''}</summary>
+            <div class="mt-1 ml-4 space-y-0.5">
+                ${l.added.map((v) => `<div class="text-emerald-300 break-words">+ ${pivotField(lastKey(l.path), v)}</div>`).join('')}
+                ${l.removed.map((v) => `<div class="text-red-300 line-through break-words">${escapeHtml(v)}</div>`).join('')}
+            </div>
+        </details>`
+        )
+        .join('');
+    return `<div class="bg-gray-900/60 border border-blue-800/40 rounded-lg p-3">${head}${identifiers}${changed}${lists ? `<div class="space-y-1">${lists}</div>` : ''}</div>`;
 }
 
 async function loadResultEntities(resultId) {
@@ -926,8 +1017,9 @@ async function setThisInvestigationAsActive() {
     if (ok && currentInvestigation) renderHeader(currentInvestigation);
 }
 
+// A .zip: the data as investigation.json plus the files added manually and note images
 function exportResults() {
-    window.location.href = `/api/investigations/${investigationId}/export`;
+    window.location.href = `/api/investigations/${investigationId}/export?format=zip`;
 }
 
 async function deleteInvestigation() {
@@ -986,6 +1078,7 @@ async function submitEditModal(e) {
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(data.detail || `HTTP ${response.status}`);
         currentInvestigation = data.investigation;
+        await window.offerToStopRecording(investigationId, currentInvestigation.status, currentInvestigation.name);
         renderHeader(currentInvestigation);
         closeEditModal();
         showTemporaryNotification('Investigation updated', 'success');
@@ -1157,11 +1250,25 @@ function entityRow(e) {
                     <i class="fas fa-caret-right mr-1"></i>${sourcesSummary(e)}
                 </button>
                 <div class="hidden mt-1.5 space-y-0.5" data-entity-source-list>${sourceLinks(e)}</div>
+                ${notesLine(e.notes)}
             </div>
             <input type="text" data-entity-note value="${escapeAttr(e.note || '')}" placeholder="Note"
                 class="hidden md:block w-56 bg-gray-900 border border-gray-800 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-purple-500">
             <div class="flex gap-1 shrink-0">${button('confirmed')}${button('important')}${button('false_positive')}</div>
         </div>`;
+}
+
+// "In notes: <title> <title>" - the notes that reference or mention an identifier
+function notesLine(notes) {
+    if (!(notes || []).length) return '';
+    const notesPage = `/api/investigations/${investigationId}/notes/view`;
+    return `<div class="flex flex-wrap items-center gap-1.5 mt-1 text-[11px] text-gray-400">
+        <i class="fas fa-sticky-note text-purple-400"></i><span>In notes:</span>${notes
+            .map(
+                (n) =>
+                    `<a href="${escapeAttr(`${notesPage}#note-${n.note_id}`)}" class="px-1.5 py-0.5 rounded bg-purple-900/30 border border-purple-800/50 text-purple-200 hover:border-purple-500 truncate max-w-[14rem]">${escapeHtml(n.title)}</a>`
+            )
+            .join('')}</div>`;
 }
 
 // "in 2 results · ghunt, oi" (the line that opens the list of those results)

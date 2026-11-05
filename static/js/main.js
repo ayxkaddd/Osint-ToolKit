@@ -304,6 +304,16 @@ document.addEventListener('contextmenu', (event) => {
     openContextMenu(event, investigationMenuItems(inv), inv.name, row);
 });
 
+// After an investigation is marked completed or archived: if it is the one recording, ask
+// whether to stop - lookups would keep going into a case that is done
+async function offerToStopRecording(investigationId, status, name = '') {
+    if (status === 'active' || investigationId !== currentInvestigationId) return;
+    const label = name ? `"${name}"` : 'This investigation';
+    if (confirm(`${label} is ${status}, but lookups are still being recorded into it.\n\nStop recording into it?`))
+        await clearCurrentInvestigation();
+}
+window.offerToStopRecording = offerToStopRecording;
+
 // What can be done with an investigation from anywhere (header menu, investigations page)
 function investigationMenuItems(inv) {
     const id = inv.investigation_id;
@@ -317,6 +327,7 @@ function investigationMenuItems(inv) {
         });
         if (!response.ok) return showTemporaryNotification('Could not change the status', 'error');
         showTemporaryNotification(`"${inv.name}" is now ${value}`, 'success');
+        await offerToStopRecording(id, value, inv.name);
         await loadInvestigations();
         document.dispatchEvent(new CustomEvent('investigation:updated', { detail: { investigationId: id } }));
     };

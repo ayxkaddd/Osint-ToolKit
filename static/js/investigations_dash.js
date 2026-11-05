@@ -444,6 +444,7 @@ async function submitEditInvestigation(e) {
         const data = await response.json();
         if (response.ok && data.status === 'success') {
             showDashboardNotification('Investigation updated successfully!', 'success');
+            await window.offerToStopRecording(dashboardSelectedInvestigationId, status, name);
             closeEditDashboardInvestigationModal();
             await loadDashboardInvestigations();
             openDashboardInvestigationDetails(dashboardSelectedInvestigationId);

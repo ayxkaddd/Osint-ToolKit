@@ -35,8 +35,8 @@ from pathlib import Path
 from typing import Any, Optional
 from uuid import UUID, uuid4
 
-from services.entities import Entity, detect, entities_from_parameters, extract_entities
-from services.events import extract_events, parse_date
+from services.entities import SKIP_KEY_RE, Entity, detect, entities_from_parameters, extract_entities, make_entity
+from services.events import extract_events, humanize, parse_date
 from utils.legacy_repr import parse_model_repr
 from utils.stream_reducers import legacy_username_result
 
@@ -70,6 +70,21 @@ MANUAL_FILE_TEXT_MAX = 2 * 1024 * 1024
 MANUAL_TEXT_EXTS = {"txt", "csv", "tsv", "json", "log", "md", "xml", "html", "htm"}
 MANUAL_FILE_NAME = re.compile(r"[0-9a-f]{32}\.[a-z0-9]{1,10}")
 
+# An identifier referenced in a note: [[email:a@b.c]] or [[email:a@b.c|label]]
+NOTE_ENTITY_REF = re.compile(r"\[\[([a-z_]+):([^\]|\n]+)(?:\|[^\]\n]*)?\]\]")
+
+# Comparing two runs of a lookup: values that differ every run (when, how long, request ids)
+CHANGES_VOLATILE_KEYS = {"checked_at", "fetched_at", "retrieved_at", "scanned_at", "generated_at", "timestamp",
+                         "response_time", "duration", "search_time_seconds", "took", "elapsed", "progress",
+                         "search_id", "request_id", "completed"}
+CHANGES_MAX_LEAVES = 20_000
+CHANGES_MAX_PATHS = 40
+CHANGES_MAX_VALUES = 30
+# Google tags BuiltWith lists the websites of (as in main.js builtwithTagUrl)
+BUILTWITH_TAG = re.compile(r"UA-\d{4,10}|G-[A-Z0-9]{8,12}|GTM-[A-Z0-9]{5,8}|pub-\d{14,20}")
+# Already compressed: stored as they are in the export
+STORED_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".pdf", ".zip", ".gz", ".mp4", ".mp3"}
+
 PICTURE_MAX_SIDE = 512
 PICTURE_MAX_UPLOAD = 10 * 1024 * 1024
 NOTE_IMAGE_MAX_UPLOAD = 20 * 1024 * 1024
@@ -93,6 +108,36 @@ TARGET_KEYS = (
     "gaia_id", "bssid", "drive_url", "url", "link", "links", "term", "input",
     "target", "group_id", "id", "domains", "filename", "image", "title",
 )
+
+
+def _leaf_values(result: Any) -> set:
+    """{(path without list positions, value)} of a result's plain values, for comparing runs."""
+    out: set = set()
+
+    def visit(value: Any, path: str):
+        if len(out) >= CHANGES_MAX_LEAVES:
+            return
+        if isinstance(value, dict):
+            for k, v in value.items():
+                k = str(k)
+                if k not in CHANGES_VOLATILE_KEYS and not SKIP_KEY_RE.search(k):
+                    visit(v, f"{path}.{k}" if path else k)
+        elif isinstance(value, list):
+            for item in value[:5000]:
+                visit(item, f"{path}[]")
+        elif value not in (None, "") and not isinstance(value, bool):
+            out.add((path, str(value)[:500]))
+        elif isinstance(value, bool):
+            out.add((path, "yes" if value else "no"))
+
+    visit(result, "")
+    return out
+
+
+def _path_label(path: str) -> str:
+    """"results[].profile_data.email" -> "Profile data · Email"."""
+    parts = [p for p in re.split(r"\[\]|\.", path) if p]
+    return " · ".join(humanize(p) for p in parts[-2:]) if parts else "Value"
 
 
 def _read_json(path: Path, default):
@@ -869,6 +914,158 @@ class InvestigationService:
         return {key for key, places in self._shared_index().items()
                 if any(p["investigation_id"] == here for p in places)
                 and any(p["investigation_id"] != here for p in places)}
+
+    # ==================== NOTES THAT MENTION IDENTIFIERS ====================
+
+    def notes_mentioning(self, investigation_id: UUID, entities: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+        """{entity key: [notes]} for the notes that reference an identifier ([[email:a@b.c]])
+        or write it in their text. Only keys with at least one note."""
+        notes = [n for n in self.get_investigation_notes(investigation_id) if n.get("content")]
+        if not notes or not entities:
+            return {}
+        referenced: list[tuple[dict[str, Any], set]] = []
+        for note in notes:
+            keys = set()
+            for entity_type, value in NOTE_ENTITY_REF.findall(note["content"]):
+                entity = make_entity(entity_type, value.strip())
+                if entity:
+                    keys.add(entity.key)
+            referenced.append((note, keys))
+        found: dict[str, list[dict[str, Any]]] = {}
+        for entity in entities:
+            needles = {str(v).lower() for v in (entity.get("value"), entity.get("display")) if v and len(str(v)) >= 4}
+            for note, keys in referenced:
+                text = note["content"].lower()
+                if entity["key"] in keys or any(needle in text for needle in needles):
+                    found.setdefault(entity["key"], []).append(
+                        {"note_id": note["note_id"], "title": note.get("title") or "Untitled note"})
+        return found
+
+    # ==================== WHAT CHANGED SINCE THE LAST RUN ====================
+
+    def previous_run(self, investigation_id: UUID, result_id: str) -> Optional[dict[str, Any]]:
+        """The latest earlier result of the same lookup (module, method and query)."""
+        index = self._load_index(investigation_id)
+        current = index.get(result_id)
+        if not current:
+            return None
+        earlier = [r for r in index.values()
+                   if r["result_id"] != result_id and r.get("service_name") == current.get("service_name")
+                   and r.get("method_name") == current.get("method_name")
+                   and r.get("parameters") == current.get("parameters")
+                   and r.get("timestamp", "") < current.get("timestamp", "")]
+        return max(earlier, key=lambda r: r.get("timestamp", "")) if earlier else None
+
+    def result_changes(self, investigation_id: UUID, result_id: str) -> Optional[dict[str, Any]]:
+        """What a re-run found that the previous run of the same lookup didn't, and what
+        is gone: identifiers, fields whose single value changed, and other values.
+        None when there is no earlier run."""
+        previous = self.previous_run(investigation_id, result_id)
+        record = self.get_result(investigation_id, result_id)
+        before = self.get_result(investigation_id, previous["result_id"]) if previous else None
+        if not record or not before:
+            return None
+        service = record.get("service_name", "")
+        new_values, old_values = _leaf_values(record.get("result")), _leaf_values(before.get("result"))
+        added, removed = new_values - old_values, old_values - new_values
+
+        by_path: dict[str, dict[str, list[str]]] = {}
+        for path, value in added:
+            by_path.setdefault(path, {"added": [], "removed": []})["added"].append(value)
+        for path, value in removed:
+            by_path.setdefault(path, {"added": [], "removed": []})["removed"].append(value)
+        changed, lists = [], []
+        for path in sorted(by_path):
+            entry = {"path": path, "label": _path_label(path)}
+            values = by_path[path]
+            if len(values["added"]) == 1 and len(values["removed"]) == 1:
+                changed.append({**entry, "before": values["removed"][0], "after": values["added"][0]})
+            else:
+                lists.append({**entry, "added": sorted(values["added"])[:CHANGES_MAX_VALUES],
+                              "removed": sorted(values["removed"])[:CHANGES_MAX_VALUES],
+                              "more": max(0, len(values["added"]) + len(values["removed"]) - 2 * CHANGES_MAX_VALUES)})
+
+        def found(rec):
+            return {entity.key: {"type": entity.type, "value": entity.value, "display": entity.display or entity.value}
+                    for entity, _ in extract_entities(rec.get("result"), service)}
+        now, then = found(record), found(before)
+        return {
+            "previous": {"result_id": before["result_id"], "timestamp": before.get("timestamp")},
+            "identifiers_added": [now[k] for k in sorted(now.keys() - then.keys())][:200],
+            "identifiers_removed": [then[k] for k in sorted(then.keys() - now.keys())][:200],
+            "changed": changed[:CHANGES_MAX_PATHS],
+            "lists": lists[:CHANGES_MAX_PATHS],
+            "same": not (added or removed),
+        }
+
+    # ==================== REPORT EXTRAS ====================
+
+    def manual_items(self, investigation_id: UUID) -> list[dict[str, Any]]:
+        """Everything added by hand (results and follow-ups), oldest first, for the report."""
+        items = []
+        for summary in self.get_investigation_results(investigation_id):
+            services = [summary.get("service_name")] + [c.get("service_name") for c in summary.get("children", [])]
+            if MANUAL_SERVICE not in services:
+                continue
+            record = self.get_result(investigation_id, summary["result_id"]) or {}
+            parts = [record] + list(record.get("children", []))
+            for part in parts:
+                result = part.get("result")
+                if part.get("service_name") == MANUAL_SERVICE and isinstance(result, dict):
+                    images = [f for f in result.get("files") or []
+                              if str(f.get("stored", "")).rsplit(".", 1)[-1] in ("png", "jpg", "jpeg", "gif", "webp", "bmp")]
+                    items.append({**result, "images": images, "result_id": record["result_id"],
+                                  "timestamp": part.get("timestamp"),
+                                  "under": summary.get("target") if part is not record else None})
+        return sorted(items, key=lambda i: i.get("timestamp") or "")
+
+    def tracking_ids(self, investigation_id: UUID) -> list[dict[str, Any]]:
+        """Analytics / ads IDs found by DNS recon and the NS fingerprint, with the domains."""
+        from services.fingerprint_service import ACCOUNT_TRACKERS, TRACKERS
+        found: dict[tuple[str, str], set] = {}
+        for summary in self.get_investigation_results(investigation_id):
+            methods = {summary.get("method_name")} | {c.get("method_name") for c in summary.get("children", [])}
+            if summary.get("service_name") not in ("dns_recon", "ns") or not methods & {"lookup_dns_recon", "fingerprint"}:
+                continue
+            record = self.get_result(investigation_id, summary["result_id"]) or {}
+            for part in [record] + list(record.get("children", [])):
+                result = part.get("result") if isinstance(part.get("result"), dict) else {}
+                for item in (result.get("intel") or {}).get("tracking_ids") or []:
+                    found.setdefault((item.get("kind"), item.get("id")), set()).update(item.get("names") or [])
+                if part.get("method_name") == "fingerprint":
+                    for domain, fingerprint in (result.get("domains") or {}).items():
+                        for kind, ids in ((fingerprint or {}).get("trackers") or {}).items():
+                            if kind in ACCOUNT_TRACKERS:
+                                for tracker_id in ids:
+                                    found.setdefault((kind, tracker_id), set()).add(domain)
+        return sorted(({"kind": kind, "label": TRACKERS.get(kind, (kind,))[0], "id": tracker_id,
+                        "domains": sorted(domains), "builtwith": BUILTWITH_TAG.fullmatch(tracker_id or "") is not None}
+                       for (kind, tracker_id), domains in found.items()),
+                      key=lambda t: (-len(t["domains"]), t["label"], t["id"]))
+
+    # ==================== EXPORT ====================
+
+    def export_archive(self, investigation_id: UUID, export_data: dict[str, Any]) -> Path:
+        """A .zip of the whole case: investigation.json plus the files added by hand,
+        note images and the picture. Written to a temporary file; the caller removes it."""
+        import tempfile
+        import zipfile
+        inv_dir = self._inv_dir(investigation_id)
+        tmp = tempfile.NamedTemporaryFile(prefix="investigation-", suffix=".zip", delete=False)
+        tmp.close()
+        with zipfile.ZipFile(tmp.name, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("investigation.json", json.dumps(export_data, indent=2, default=str, ensure_ascii=False))
+            for folder, arc_folder in ((self._files_dir(investigation_id), "files"),
+                                       (self._note_images_dir(investigation_id), "notes/images")):
+                for path in sorted(folder.glob("*")) if folder.is_dir() else []:
+                    if path.is_file() and not path.name.endswith(".tmp"):
+                        # images and PDFs are compressed already
+                        kind = zipfile.ZIP_STORED if path.suffix.lower() in STORED_SUFFIXES else zipfile.ZIP_DEFLATED
+                        archive.write(path, f"{arc_folder}/{path.name}", compress_type=kind)
+            picture = inv_dir / "picture.webp"
+            if picture.is_file():
+                archive.write(picture, "picture.webp", compress_type=zipfile.ZIP_STORED)
+        return Path(tmp.name)
 
     # ==================== EVENTS (DATES INSIDE RESULTS) ====================
 
