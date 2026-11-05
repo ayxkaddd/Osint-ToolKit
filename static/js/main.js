@@ -279,7 +279,8 @@ document.addEventListener('click', (event) => {
     const menu = event.target.closest('[data-investigation-menu]');
     if (menu && menu.closest('#investigationsList')) {
         const inv = investigations.find((i) => i.investigation_id === menu.dataset.investigationMenu);
-        if (inv) openContextMenu(menu, investigationMenuItems(inv), inv.name);
+        // the row owns it too: a right-click on the row closes it like a second click on ⋯
+        if (inv) openContextMenu(menu, investigationMenuItems(inv), inv.name, menu.closest('[data-investigation-row]'));
         return;
     }
     const item = event.target.closest('[data-investigation-id]');
@@ -300,7 +301,7 @@ document.addEventListener('contextmenu', (event) => {
     const inv = investigations.find((i) => i.investigation_id === row.dataset.investigationRow);
     if (!inv) return;
     event.preventDefault();
-    openContextMenu(event, investigationMenuItems(inv), inv.name);
+    openContextMenu(event, investigationMenuItems(inv), inv.name, row);
 });
 
 // What can be done with an investigation from anywhere (header menu, investigations page)
@@ -340,15 +341,28 @@ window.investigationMenuItems = investigationMenuItems;
 
 // ---------------------------------------------------------------------------
 // Context menu: right-click (or a "⋯" button) on something gives its actions.
-// openContextMenu(eventOrElement, [{label, icon, href, newTab, onClick, danger, checked} | {divider: true}], title)
+// openContextMenu(eventOrElement, [{label, icon, href, newTab, onClick, danger, checked} | {divider: true}], title, owner)
+// owner: what the menu belongs to (a row, a card); a second click on it closes the menu
+// instead of opening it again. A button passed as eventOrElement is its own owner.
 // ---------------------------------------------------------------------------
+let contextMenuOwner = null;
+let contextMenuDismissed = { owner: null, at: 0 }; // what a press outside just closed the menu of
+
 function closeContextMenu() {
     document.getElementById('contextMenu')?.remove();
+    contextMenuOwner = null;
 }
 window.closeContextMenu = closeContextMenu;
 
-function openContextMenu(at, items, title = '') {
+function openContextMenu(at, items, title = '', owner = null) {
+    owner = owner || (at instanceof Element ? at : null);
+    // the press that started this click or right-click closed this same menu: leave it closed
+    if (owner && contextMenuDismissed.owner === owner && Date.now() - contextMenuDismissed.at < 800) {
+        contextMenuDismissed = { owner: null, at: 0 };
+        return;
+    }
     closeContextMenu();
+    contextMenuOwner = owner;
     const menu = document.createElement('div');
     menu.id = 'contextMenu';
     menu.setAttribute('role', 'menu');
@@ -400,7 +414,9 @@ window.openContextMenu = openContextMenu;
 document.addEventListener(
     'mousedown',
     (event) => {
-        if (!event.target.closest('#contextMenu')) closeContextMenu();
+        if (event.target.closest('#contextMenu') || !document.getElementById('contextMenu')) return;
+        contextMenuDismissed = { owner: contextMenuOwner, at: Date.now() };
+        closeContextMenu();
     },
     true
 );

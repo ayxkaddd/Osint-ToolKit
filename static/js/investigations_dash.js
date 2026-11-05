@@ -51,7 +51,8 @@ document.addEventListener('contextmenu', (event) => {
             { label: 'Edit', icon: 'fa-pen', onClick: pick(openEditDashboardInvestigationModal) },
             { label: 'Delete', icon: 'fa-trash', danger: true, onClick: pick(deleteDashboardInvestigation) },
         ],
-        inv.name
+        inv.name,
+        card
     );
 });
 

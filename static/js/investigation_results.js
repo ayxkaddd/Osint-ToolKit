@@ -499,7 +499,7 @@ function onResultContextMenu(event) {
         { label: 'Move', icon: 'fa-folder-open', onClick: () => openMoveModal([id]) },
         { label: 'Delete', icon: 'fa-trash', danger: true, onClick: () => deleteResult(id) },
     ].filter(Boolean);
-    openContextMenu(event, items, `${info.name}${summary.target ? ` · ${summary.target}` : ''}`);
+    openContextMenu(event, items, `${info.name}${summary.target ? ` · ${summary.target}` : ''}`, header);
 }
 
 // Assessment from the menu: keeps the result's note (the card may be closed)
