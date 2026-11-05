@@ -47,7 +47,7 @@ logger = logging.getLogger(__name__)
 load_env()
 
 # Paths reachable without a session
-PUBLIC_PATHS = {"/", "/login", "/logout"}
+PUBLIC_PATHS = {"/", "/login", "/logout", "/favicon.ico"}
 # Setup endpoints that stay public after setup is complete (read-only)
 PUBLIC_AFTER_SETUP = {"/setup/status"}
 # Prefixes whose callers expect JSON rather than an HTML redirect
