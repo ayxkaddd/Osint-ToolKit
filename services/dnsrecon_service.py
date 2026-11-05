@@ -20,6 +20,7 @@ import httpx
 import dns.resolver
 import whois
 
+from services.fingerprint_service import ACCOUNT_TRACKERS, TRACKERS, tracker_args, trackers_from_extracts
 from services.dns_intel import (analyze_records, cymru_query_name, parse_crtsh,
                                 parse_cymru_asname, parse_cymru_origin)
 from utils.subprocess_runner import run_command
@@ -86,6 +87,8 @@ class DNSReconService:
                 '-title', '-tech-detect', '-status-code', '-content-length', '-response-time',
                 '-server', '-http2', '-favicon', '-jarm', '-asn', '-cdn', '-ip',
                 '-follow-redirects', '-random-agent',
+                # analytics / ads IDs on each page: a shared one points to a shared owner
+                *tracker_args(ACCOUNT_TRACKERS),
             ]
             result = await run_command(cmd, timeout=600)
         finally:
@@ -470,6 +473,7 @@ class DNSReconService:
         intel['cert_emails'] = cert_emails
         dated = [c['first_seen'] for c in crt_names.values() if c.get('first_seen')]
         intel['first_certificate'] = min(dated) if dated else None
+        intel['tracking_ids'] = self._tracking_ids(subdomains_data)
 
         dns_history = {
             'securitytrails': securitytrails.get('history') or {},
@@ -550,8 +554,21 @@ class DNSReconService:
                 'title': probe.get('title'),
                 'server': probe.get('webserver'),
                 'content_length': probe.get('content_length'),
+                'trackers': trackers_from_extracts(probe.get('extracts') or {}, ACCOUNT_TRACKERS),
             })
         return rows
+
+    @staticmethod
+    def _tracking_ids(subdomains_data: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Each analytics / ads ID with the names whose pages carry it, most used first."""
+        found: dict[tuple[str, str], list[str]] = {}
+        for row in subdomains_data:
+            for kind, ids in (row.get('trackers') or {}).items():
+                for tracker_id in ids:
+                    found.setdefault((kind, tracker_id), []).append(row['name'])
+        return sorted(({'kind': kind, 'label': TRACKERS[kind][0], 'id': tracker_id, 'names': names}
+                       for (kind, tracker_id), names in found.items()),
+                      key=lambda t: (-len(t['names']), t['kind'], t['id']))
 
     @staticmethod
     def _external_summary(securitytrails: dict[str, Any], virustotal: dict[str, Any]) -> dict[str, Any]:

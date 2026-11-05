@@ -1469,6 +1469,25 @@ function pivotInText(text) {
 }
 window.pivotInText = pivotInText;
 
+// Analytics / ads IDs BuiltWith lists the other websites of (Google Analytics, Tag Manager, AdSense)
+const BUILTWITH_TAG_RE = /^(UA-\d{4,10}|G-[A-Z0-9]{8,12}|GTM-[A-Z0-9]{5,8}|pub-\d{14,20})$/;
+function builtwithTagUrl(id) {
+    const tag = String(id ?? '').trim();
+    return BUILTWITH_TAG_RE.test(tag) ? `https://builtwith.com/relationships/tag/${encodeURIComponent(tag)}` : null;
+}
+window.builtwithTagUrl = builtwithTagUrl;
+
+// A tracking ID in a result, with a link to the other websites that carry it when BuiltWith knows the kind
+function trackerTag(id) {
+    const url = builtwithTagUrl(id);
+    return `<span class="inline-flex items-center gap-1"><code class="text-purple-200">${escapeHtml(id)}</code>${
+        url
+            ? `<a href="${escapeAttr(url)}" target="_blank" rel="noopener noreferrer" class="text-gray-400 hover:text-white" title="Other websites with this tag (BuiltWith)"><i class="fas fa-external-link-alt text-[10px]"></i></a>`
+            : ''
+    }</span>`;
+}
+window.trackerTag = trackerTag;
+
 // Identifiers grouped by type, as pivot chips (investigation results and module pages)
 function identifierGroupsHtml(entities, limit = 150) {
     const byType = {};

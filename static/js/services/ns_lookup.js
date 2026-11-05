@@ -164,7 +164,7 @@ function webCard(domain) {
                         ? pivotChip('email', id)
                         : kind === 'telegram'
                           ? pivotChip('telegram_username', id.split('/')[1], id)
-                          : `<code class="text-purple-200">${escapeHtml(id)}</code>`
+                          : trackerTag(id)
                 )
                 .join(' ')}</div>`
         )
@@ -187,6 +187,11 @@ function webCard(domain) {
 
 // ---------------- attribution ----------------
 
+// A signal's value; analytics / ads IDs get their BuiltWith link
+function signalValue(s) {
+    return s.kind.startsWith('tracker_') && builtwithTagUrl(s.value) ? trackerTag(s.value) : escapeHtml(s.value);
+}
+
 function renderAttribution() {
     const signals = NsAttribution.buildSignals(ns.whois, ns.web);
     const groups = NsAttribution.clusters(signals);
@@ -205,7 +210,7 @@ function renderAttribution() {
         possible: 'bg-gray-800 text-gray-300',
     };
     const reason = (s) => `<div class="text-xs"><span class="${strengthCls[s.strength]}">${escapeHtml(s.label)}</span>
-        <span class="text-gray-300 break-all">${escapeHtml(s.value)}</span> <span class="text-gray-600">(${s.domains.length})</span></div>`;
+        <span class="text-gray-300 break-all">${signalValue(s)}</span> <span class="text-gray-600">(${s.domains.length})</span></div>`;
 
     document.getElementById('clustersSection').classList.toggle('hidden', !hasData);
     document.getElementById('clustersCount').textContent = groups.length ? String(groups.length) : '';
@@ -237,7 +242,7 @@ function renderAttribution() {
             <details class="bg-gray-900 rounded-lg px-3 py-2 border border-gray-800">
                 <summary class="cursor-pointer flex items-center gap-2 text-sm">
                     <span class="${strengthCls[s.strength]} shrink-0">${escapeHtml(s.label)}</span>
-                    <span class="text-gray-300 truncate">${escapeHtml(s.value)}</span>
+                    <span class="text-gray-300 truncate">${signalValue(s)}</span>
                     ${s.common ? '<span class="text-[11px] text-gray-500 shrink-0">common - not used</span>' : ''}
                     <span class="ml-auto text-xs text-gray-500 shrink-0">${s.domains.length} domains</span>
                 </summary>

@@ -451,6 +451,9 @@ function renderFingerprints(data) {
         Object.values(f.trackers || {})
             .flat()
             .join(', ');
+    const tags = [
+        ...new Set(sites.flatMap((f) => Object.values(f.trackers || {}).flat()).filter((id) => builtwithTagUrl(id))),
+    ];
     return `<div class="space-y-2">
         <span class="text-sm font-semibold text-gray-300">${sites.length} website${sites.length === 1 ? '' : 's'} answered${(data.no_response || []).length ? ` · ${data.no_response.length} didn't` : ''}</span>
         ${renderTable(
@@ -464,6 +467,7 @@ function renderFingerprints(data) {
             })),
             ['domain', 'status', 'title', 'ips', 'tech', 'ids']
         )}
+        ${tags.length ? `<div class="text-xs text-gray-400 flex flex-wrap items-center gap-x-3 gap-y-1">Tags: ${tags.map(trackerTag).join('')}</div>` : ''}
     </div>`;
 }
 
@@ -559,6 +563,16 @@ function renderDnsRecon(data) {
                 ${field('DNS provider', (intel.dns_providers || []).join(', '))}
                 ${field('Sends email through', ((intel.spf || {}).services || []).join(', '))}
                 ${field('First certificate', intel.first_certificate)}
+                ${
+                    (intel.tracking_ids || []).length
+                        ? `<div class="col-span-2 md:col-span-4"><div class="text-xs text-gray-500">Tracking IDs</div><div class="text-sm flex flex-wrap gap-x-3 gap-y-1">${intel.tracking_ids
+                              .map(
+                                  (t) =>
+                                      `<span title="${escapeAttr(`${t.label} · ${t.names.join(', ')}`)}">${trackerTag(t.id)}</span>`
+                              )
+                              .join('')}</div></div>`
+                        : ''
+                }
                 ${field('Registrar', whois.registrar)}
                 ${field('Registered', (whois.creation_date || '').slice(0, 10))}
                 ${field('Registrant', [whois.registrant, whois.org, whois.country].filter(Boolean).join(' · '))}
