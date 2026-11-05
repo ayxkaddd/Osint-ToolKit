@@ -139,6 +139,7 @@ class OSINTSearch {
         }
         this.lastUsername = username;
         this.erroredSites = [];
+        this.errorReasons = {}; // site -> why it couldn't be checked
         this.showProgress();
         this.searchActive = true;
         this.elements.searchBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Searching...';
@@ -182,7 +183,10 @@ class OSINTSearch {
                 } else if (event.data.status === 'error' || event.data.status === 'rate_limited') {
                     // The site couldn't be checked: "not found" would be wrong
                     this.stats.unchecked++;
-                    if (event.data.site_name) this.erroredSites.push(event.data.site_name);
+                    if (event.data.site_name) {
+                        this.erroredSites.push(event.data.site_name);
+                        this.errorReasons[event.data.site_name] = event.data.error_message || event.data.status;
+                    }
                     this.updateStats();
                 }
                 if (event.data.progress && !this.retrying) {
@@ -1477,7 +1481,14 @@ class OSINTSearch {
         box.innerHTML = `
             <span>${errored.length} site${errored.length === 1 ? '' : 's'} couldn't be checked (errors, blocks or rate limits) - no result there isn't proof the account doesn't exist.
                 <details class="inline"><summary class="inline cursor-pointer text-yellow-300/80 underline">which</summary>
-                <span class="block text-xs text-yellow-200/70 mt-1">${errored.map(escapeHtml).join(', ')}</span></details></span>
+                <span class="block text-xs text-yellow-200/70 mt-1 space-y-0.5">${errored
+                    .map(
+                        (name) =>
+                            `<span class="block"><b class="text-yellow-100">${escapeHtml(name)}</b>${
+                                this.errorReasons[name] ? ` - ${escapeHtml(this.errorReasons[name])}` : ''
+                            }</span>`
+                    )
+                    .join('')}</span></details></span>
             <button type="button" class="px-3 py-1.5 rounded-lg bg-yellow-700/60 hover:bg-yellow-600/70 text-white shrink-0">Retry ${errored.length} site${errored.length === 1 ? '' : 's'}</button>`;
         box.querySelector('button').addEventListener('click', () => this.startSearch(errored));
         this.elements.stopBtn.parentElement.insertAdjacentElement('afterend', box);
