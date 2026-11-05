@@ -55,18 +55,24 @@
                     <i data-lucide="search" class="w-4 h-4 text-gray-500"></i>
                 </div>
             </div>
-            <select id="dashboardStatusFilter"
-                class="field field-sm w-auto">
-                <option value="all">All Status</option>
-                <option value="active">Active</option>
-                <option value="completed">Completed</option>
-                <option value="archived">Archived</option>
-            </select>
         </div>
         <button onclick="openCreateInvestigationModal()"
             class="btn-primary !py-2">
             <i data-lucide="plus" class="w-4 h-4"></i>
             Create Investigation
+        </button>
+    </div>
+
+    <!-- Status tabs: active cases, and the ones that are done -->
+    <div class="flex gap-1 border-b border-gray-800 mb-5" role="tablist" id="dashboardStatusTabs">
+        <button type="button" data-status-tab="active" class="inv-tab active">
+            <i class="fas fa-circle-play mr-2"></i>Active <span data-status-count="active" class="ml-1 text-xs text-gray-400"></span>
+        </button>
+        <button type="button" data-status-tab="completed" class="inv-tab">
+            <i class="fas fa-check-circle mr-2"></i>Completed <span data-status-count="completed" class="ml-1 text-xs text-gray-400"></span>
+        </button>
+        <button type="button" data-status-tab="archived" class="inv-tab">
+            <i class="fas fa-box-archive mr-2"></i>Archived <span data-status-count="archived" class="ml-1 text-xs text-gray-400"></span>
         </button>
     </div>
 
@@ -80,8 +86,8 @@
             <div class="bg-gray-900/50 p-8 rounded-full mb-4">
                 <i data-lucide="folder-open" class="w-16 h-16 text-gray-600"></i>
             </div>
-            <h3 class="text-xl font-semibold mb-2">No Investigations Found</h3>
-            <p class="page-lead">Get started by creating your first investigation</p>
+            <h3 id="dashboardEmptyTitle" class="text-xl font-semibold mb-2">No Investigations Found</h3>
+            <p id="dashboardEmptyText" class="page-lead">Get started by creating your first investigation</p>
             <button onclick="openCreateInvestigationModal()"
                 class="btn-primary">
                 <i data-lucide="plus" class="w-5 h-5"></i>
@@ -157,8 +163,8 @@
                 <button onclick="setDashboardInvestigationAsActive()"
                     id="dashboardModalSetActiveBtn"
                     class="flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-3 rounded-lg transition-colors font-medium">
-                    <i data-lucide="check-circle" class="w-5 h-5"></i>
-                    Set as Active
+                    <i data-lucide="radio" class="w-5 h-5"></i>
+                    Record here
                 </button>
                 <button onclick="viewDashboardInvestigationResults()"
                     class="flex-1 flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-500 text-white px-4 py-3 rounded-lg transition-colors font-medium">

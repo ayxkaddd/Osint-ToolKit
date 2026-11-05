@@ -207,12 +207,22 @@ function updateInvestigationsList() {
     const listContainer = document.getElementById('investigationsList');
     if (!listContainer) return;
 
-    if (investigations.length === 0) {
+    // Completed and archived cases are done: only the active ones (and the one recording) are listed
+    const shown = investigations.filter(
+        (i) => (i.status || 'active') === 'active' || i.investigation_id === currentInvestigationId
+    );
+    const closed = investigations.length - shown.length;
+    const closedLink = closed
+        ? `<a href="/investigations#completed" class="block px-3 py-2 text-xs text-gray-500 hover:text-white hover:bg-gray-800 border-t border-gray-800">
+              ${closed} completed or archived · see all investigations →</a>`
+        : '';
+
+    if (shown.length === 0) {
         listContainer.innerHTML = `
             <div class="p-4 text-center text-gray-500 text-sm">
                 <i class="fas fa-folder-open"></i>
-                <span class="ml-2">No investigations yet</span>
-            </div>
+                <span class="ml-2">${investigations.length ? 'No active investigations' : 'No investigations yet'}</span>
+            </div>${closedLink}
         `;
         return;
     }
@@ -226,9 +236,10 @@ function updateInvestigationsList() {
 
     listContainer.innerHTML =
         stopItem +
-        investigations
+        shown
             .map((investigation) => {
                 const active = currentInvestigationId === investigation.investigation_id;
+                const status = investigation.status || 'active';
                 return `
         <button type="button" data-investigation-id="${escapeAttr(investigation.investigation_id)}"
                 class="investigation-item w-full text-left px-3 py-2 hover:bg-gray-800 ${active ? 'bg-gray-800/80' : ''}">
@@ -242,6 +253,7 @@ function updateInvestigationsList() {
                     <div class="flex items-center gap-2">
                         <span class="font-medium text-white truncate text-sm">${escapeHtml(investigation.name)}</span>
                         ${active ? '<span class="rec-dot" title="Recording"></span>' : ''}
+                        ${status !== 'active' ? `<span class="text-[10px] uppercase px-1.5 py-0.5 rounded bg-gray-800 text-gray-400 border border-gray-700">${escapeHtml(status)}</span>` : ''}
                     </div>
                     <div class="text-xs text-gray-500 truncate">
                         ${escapeHtml(investigation.results_count || 0)} results · ${escapeHtml(new Date(investigation.created_at).toLocaleDateString())}
@@ -250,7 +262,8 @@ function updateInvestigationsList() {
             </div>
         </button>`;
             })
-            .join('');
+            .join('') +
+        closedLink;
 }
 
 document.addEventListener('click', (event) => {
