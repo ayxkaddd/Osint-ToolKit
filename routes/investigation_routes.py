@@ -9,7 +9,8 @@ from pydantic import BaseModel, Field
 from starlette.datastructures import UploadFile as FormUpload
 from utils.investigation_decorator import live_result
 from services.investigation_service import (
-    MANUAL_FILE_MAX_UPLOAD, MANUAL_FILES_MAX, MANUAL_TEXT_MAX, NOTE_IMAGE_MAX_UPLOAD, investigation_service,
+    MANUAL_FILE_MAX_UPLOAD, MANUAL_FILES_MAX, MANUAL_TEXT_MAX, NOTE_IMAGE_MAX_UPLOAD, find_target,
+    investigation_service,
 )
 
 router = APIRouter(prefix="/api/investigations")
@@ -217,6 +218,8 @@ def get_investigation_result_detail(investigation_id: UUID, result_id: str) -> J
     record = investigation_service.get_result(investigation_id, result_id) or live_result(investigation_id, result_id)
     if record is None:
         raise HTTPException(status_code=404, detail="Result not found")
+    # what was looked up, as listings show it (module pages show it with a loaded result)
+    record["target"] = find_target(record.get("parameters") or {})
     return JSONResponse(content={"status": "success", "result": record})
 
 

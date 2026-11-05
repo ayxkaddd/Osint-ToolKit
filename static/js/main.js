@@ -672,11 +672,48 @@ function showLiveResultBanner() {
         <span class="block w-2.5 h-2.5 rounded-full bg-purple-400 animate-pulse shrink-0"></span>
         <span class="flex-1 text-gray-200">This lookup is still running in the background - the page updates as results arrive.</span>
         <button type="button" data-live-stop class="shrink-0 whitespace-nowrap text-xs text-gray-400 hover:text-white border border-gray-700 rounded-lg px-2 py-1">Stop following</button>`;
-    // in the page, under its title (where a saved result that doesn't fit is shown too)
+    placeUnderPageTitle(banner, document.getElementById('savedResultBar'));
+}
+
+// In the page, under its title (where a saved result that doesn't fit is shown too), after `after` if given
+function placeUnderPageTitle(element, after = null) {
     const page = document.querySelector('.page') || document.querySelector('main') || document.body;
-    const lead = page.querySelector(':scope > .page-lead');
-    if (lead) lead.after(banner);
-    else page.prepend(banner);
+    const lead = after || page.querySelector(':scope > .page-lead');
+    if (lead) lead.after(element);
+    else page.prepend(element);
+}
+
+// Which saved result the page shows: what was looked up, with which module and when
+function showSavedResultBar(record, investigationId) {
+    document.getElementById('savedResultBar')?.remove();
+    const bar = document.createElement('div');
+    bar.id = 'savedResultBar';
+    bar.className =
+        'mb-5 bg-[#1a1b26] border border-gray-700 rounded-xl px-4 py-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm';
+    const method = typeof methodLabel === 'function' ? methodLabel(record.method_name) : record.method_name;
+    const when = record.timestamp
+        ? `${timeAgo(record.timestamp)} · ${new Date(record.timestamp).toLocaleString()}`
+        : '';
+    const link = `/api/investigations/${encodeURIComponent(investigationId)}/view#result-${encodeURIComponent(record.result_id)}`;
+    bar.innerHTML = `
+        <i class="fas fa-history text-purple-400 shrink-0"></i>
+        <span class="text-gray-400 shrink-0">Saved result</span>
+        ${record.target ? `<span class="font-mono text-purple-200 break-all">${escapeHtml(record.target)}</span>` : ''}
+        <span class="text-gray-500">${escapeHtml([method, when].filter(Boolean).join(' · '))}</span>
+        ${record.partial && !record.running ? '<span class="text-[10px] uppercase px-1.5 py-0.5 rounded bg-yellow-900/60 text-yellow-300" title="The lookup was stopped before it finished">partial</span>' : ''}
+        <a href="${escapeAttr(link)}" class="ml-auto text-xs text-purple-300 hover:text-white shrink-0">Open in investigation →</a>`;
+    placeUnderPageTitle(bar);
+}
+
+// The page's search box shows what the loaded result looked up (when it's one value and the box is empty)
+async function prefillSavedQuery(record) {
+    const target = String(record.target || '').trim();
+    if (!target || / \+ |, |…/.test(target)) return;
+    const module = (await getModules()).find(
+        (m) => m.page === window.location.pathname && m.prefill && m.service === record.service_name
+    );
+    const input = module && document.querySelector(module.prefill.input);
+    if (input && !input.value.trim()) input.value = target;
 }
 
 async function loadResult(resultId, investigationId = currentInvestigationId, following = false) {
@@ -705,6 +742,8 @@ async function loadResult(resultId, investigationId = currentInvestigationId, fo
                 console.error("This page can't draw the saved result:", renderError);
                 showSavedResultFallback(record);
             }
+            showSavedResultBar(record, investigationId);
+            if (!following) prefillSavedQuery(record);
         }
         document.getElementById('resultLoadNotification')?.remove();
         document.getElementById('historyModal')?.remove();
@@ -729,25 +768,29 @@ async function loadResult(resultId, investigationId = currentInvestigationId, fo
 }
 
 // Starting a search of your own on the page stops following the background one
+// (and the "Saved result" bar goes: the page no longer shows that result)
+function ownSearchStarted() {
+    if (live.resultId) stopFollowingResult();
+    document.getElementById('savedResultBar')?.remove();
+}
 document.addEventListener(
     'click',
     (event) => {
-        if (!live.resultId) return;
-        if (event.target.closest('[data-live-stop]')) return stopFollowingResult();
-        if (event.target.closest('#liveResultBanner')) return;
+        if (live.resultId && event.target.closest('[data-live-stop]')) return stopFollowingResult();
+        if (event.target.closest('#liveResultBanner, #savedResultBar, #historyModal, #resultLoadNotification')) return;
         if (
             event.target.closest(
                 'button.btn-primary, button[id*="search" i], button[onclick*="search" i], button[type="submit"]'
             )
         )
-            stopFollowingResult();
+            ownSearchStarted();
     },
     true
 );
 document.addEventListener(
     'keydown',
     (event) => {
-        if (live.resultId && event.key === 'Enter' && event.target.matches('input, textarea')) stopFollowingResult();
+        if (event.key === 'Enter' && event.target.matches('.page input, .page textarea')) ownSearchStarted();
     },
     true
 );
@@ -1030,8 +1073,26 @@ function closePivotMenu() {
 async function openPivotMenu(type, value, anchor, options = {}) {
     closePivotMenu();
     pivotMenuAnchor = anchor;
-    const modules = (await getModules()).filter((m) => (m.accepts || []).includes(type));
+    // earlier lookups of this identifier in the investigation results are saved to
+    const investigationId = sharedExclude();
+    const [allModules, lookups] = await Promise.all([getModules(), earlierLookups(investigationId, type, value)]);
+    const modules = allModules.filter((m) => (m.accepts || []).includes(type));
     if (pivotMenuAnchor !== anchor) return; // closed or another chip clicked while loading
+    const earlierLine = (m) => {
+        const earlier = lookups.filter((p) => p.service === m.service);
+        if (!earlier.length) return '';
+        const last = earlier[0];
+        // a follow-up is shown inside its parent on the investigation page
+        const href =
+            m.page && !last.child_id
+                ? `${m.page}?load_result=${encodeURIComponent(last.result_id)}&investigation=${encodeURIComponent(investigationId)}`
+                : `/api/investigations/${encodeURIComponent(investigationId)}/view#result-${encodeURIComponent(last.result_id)}`;
+        // which lookup it was: modules can share where they save (WHOIS and WHOIS history)
+        const what = typeof methodLabel === 'function' ? methodLabel(last.method) : last.method;
+        return `<div class="text-[11px] text-emerald-300/90 mt-0.5 truncate" title="Already in this investigation">
+            <i class="fas fa-check mr-1"></i>${escapeHtml(what)} · ${escapeHtml(timeAgo(last.timestamp))}${earlier.length > 1 ? ` (${earlier.length} times)` : ''}
+            · <a href="${escapeAttr(href)}" data-earlier-open class="underline hover:text-white">open</a></div>`;
+    };
     const menu = document.createElement('div');
     menu.id = 'pivotMenu';
     menu.className = 'fixed z-[70] w-80 bg-gray-900 border border-gray-700 rounded-xl shadow-2xl text-sm slide-in';
@@ -1043,6 +1104,7 @@ async function openPivotMenu(type, value, anchor, options = {}) {
             <div class="min-w-0">
                 <div class="text-white truncate">${escapeHtml(m.name)}</div>
                 <div class="flex items-center gap-1.5 mt-0.5">${moduleBadges(m)}${m.ready ? '' : `<span class="text-[10px] text-red-300 truncate" title="${escapeAttr((m.problems || []).join('; '))}">not ready</span>`}</div>
+                ${earlierLine(m)}
             </div>
             <div class="flex gap-1.5 shrink-0">
                 <button type="button" data-pivot-run="${escapeAttr(m.id)}" ${m.ready ? '' : 'disabled'}
@@ -1101,6 +1163,20 @@ async function openPivotMenu(type, value, anchor, options = {}) {
     });
 }
 window.openPivotMenu = openPivotMenu;
+
+// Lookups of an identifier already saved in an investigation, newest first ([] if none or unknown)
+async function earlierLookups(investigationId, type, value) {
+    if (!investigationId) return [];
+    try {
+        const params = new URLSearchParams({ type, value });
+        const response = await fetch(
+            `/api/investigations/${encodeURIComponent(investigationId)}/entities/lookups?${params}`
+        );
+        return response.ok ? (await response.json()).lookups || [] : [];
+    } catch (e) {
+        return [];
+    }
+}
 
 document.addEventListener('click', (event) => {
     const trigger = event.target.closest('[data-pivot-type]');

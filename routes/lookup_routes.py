@@ -161,9 +161,11 @@ def list_entities(investigation_id: UUID, type: Optional[str] = None, q: Optiona
     page = entities[offset:offset + limit]
     elsewhere = investigation_service.investigations_with([e["key"] for e in page if e["key"] in shared_keys],
                                                           exclude=investigation_id)
+    # what each source result looked up, so the list can say which result an identifier is in
+    targets = {r["result_id"]: r.get("target") for r in investigation_service.get_investigation_results(investigation_id)}
     for entity in page:
         entity["label"] = type_label(entity["type"])
-        entity["sources"] = entity.get("sources", [])[:20]
+        entity["sources"] = [{**src, "target": targets.get(src.get("result_id"))} for src in entity.get("sources", [])[:20]]
         entity["elsewhere"] = elsewhere.get(entity["key"], [])
     return {"total": total, "types": [{"type": t, "label": type_label(t), "count": c} for t, c in type_counts.most_common()],
             "shared_count": len(shared_keys), "entities": page}
@@ -186,6 +188,18 @@ def list_events(investigation_id: UUID):
     """Dates found inside the results (account created, domain registered, messages...)."""
     _require_investigation(investigation_id)
     return {"events": investigation_service.get_events(investigation_id)}
+
+
+@router.get("/api/investigations/{investigation_id}/entities/lookups")
+def entity_lookups(investigation_id: UUID, type: str, value: str):
+    """Earlier lookups of one identifier in this investigation (the pivot menu shows
+    them next to each module, so a paid lookup isn't run twice by accident)."""
+    _require_investigation(investigation_id)
+    entity = make_entity(type, value)
+    if entity is None:
+        return {"lookups": []}
+    lookups = investigation_service.previous_lookups(investigation_id, entity.key)
+    return {"lookups": sorted(lookups, key=lambda p: p.get("timestamp", ""), reverse=True)}
 
 
 @router.patch("/api/investigations/{investigation_id}/entities")

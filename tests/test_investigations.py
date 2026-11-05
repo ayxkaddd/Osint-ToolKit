@@ -71,3 +71,28 @@ def test_identifier_lists_follow_new_results(client, service, investigation):
     assert "later.person@gmail.com" in {e["value"] for e in one}
     assert "later.person@gmail.com" not in {
         e["value"] for e in client.get(f"/api/investigations/{investigation}/results/{first}/entities").json()["entities"]}
+
+
+def test_a_result_says_what_was_looked_up(client, service, investigation):
+    result_id = service.save_investigation_result(UUID(investigation), "whois", "lookup", {"kwargs": {"domain": "asked.test"}},
+                                                  {"email": "found.person@gmail.com"})
+    record = client.get(f"/api/investigations/{investigation}/results/{result_id}").json()["result"]
+    assert record["target"] == "asked.test"
+
+
+def test_identifiers_say_which_results_they_are_in(client, service, investigation):
+    result_id = service.save_investigation_result(UUID(investigation), "whois", "lookup", {"kwargs": {"domain": "src.test"}},
+                                                  {"email": "source.person@gmail.com"})
+    entities = client.get(f"/api/investigations/{investigation}/entities", params={"q": "source.person"}).json()["entities"]
+    assert [(s["result_id"], s["role"], s["target"]) for s in entities[0]["sources"]] == [(result_id, "found", "src.test")]
+
+
+def test_earlier_lookups_of_an_identifier(client, service, investigation):
+    result_id = service.save_investigation_result(UUID(investigation), "whois", "lookup", {"kwargs": {"domain": "Looked.test"}}, {})
+    lookups = client.get(f"/api/investigations/{investigation}/entities/lookups",
+                         params={"type": "domain", "value": "looked.test"}).json()["lookups"]
+    assert [(p["result_id"], p["service"]) for p in lookups] == [(result_id, "whois")]
+    assert client.get(f"/api/investigations/{investigation}/entities/lookups",
+                      params={"type": "domain", "value": "never.test"}).json()["lookups"] == []
+    assert client.get(f"/api/investigations/{investigation}/entities/lookups",
+                      params={"type": "email", "value": "not an email"}).json()["lookups"] == []

@@ -151,9 +151,37 @@ function openLinkedResult() {
     }
     const card = document.querySelector(`[data-result-id="${CSS.escape(id)}"]`);
     if (!card) return;
-    expandCard(id, true).then(() => card.scrollIntoView({ block: 'start', behavior: 'smooth' }));
     card.classList.add('ring-2', 'ring-purple-500/60');
     setTimeout(() => card.classList.remove('ring-2', 'ring-purple-500/60'), 2500);
+    return expandCard(id, true).then(() => card.scrollIntoView({ block: 'start', behavior: 'smooth' }));
+}
+
+// Open a result and point at an identifier in it (from the Identifiers tab)
+async function openResultAt(resultId, type, value) {
+    history.replaceState(null, '', `#result-${encodeURIComponent(resultId)}`);
+    await openLinkedResult();
+    const card = document.querySelector(`[data-result-id="${CSS.escape(resultId)}"]`);
+    if (!card) return;
+    const comparable = (v) =>
+        type === 'phone' ? String(v).replace(/\D/g, '') : String(v).trim().replace(/^@/, '').toLowerCase();
+    const wanted = comparable(value);
+    const find = (inEntities) =>
+        [...card.querySelectorAll('[data-pivot-value]')].find(
+            (chip) =>
+                Boolean(chip.closest('.result-entities')) === inEntities &&
+                comparable(chip.dataset.pivotValue) === wanted
+        );
+    // where the result itself shows it, else its "Identifiers in this result" list (loaded a moment later)
+    let chip = find(false);
+    for (let i = 0; !chip && i < 20; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        chip = find(false) || find(true);
+    }
+    if (!chip) return;
+    chip.closest('details')?.setAttribute('open', '');
+    chip.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    chip.classList.add('ring-2', 'ring-amber-400');
+    setTimeout(() => chip.classList.remove('ring-2', 'ring-amber-400'), 3000);
 }
 
 // ----------------- HEADER -----------------
@@ -1030,9 +1058,11 @@ function entityRow(e) {
             <span class="text-[11px] text-gray-500 w-28 shrink-0 truncate">${escapeHtml(e.label || e.type)}</span>
             <div class="min-w-0 flex-1">
                 <div class="flex items-center gap-2 flex-wrap">${pivotChip(e.type, e.value, e.display || e.value)} ${searched}</div>
-                <div class="text-[11px] text-gray-500 mt-0.5 truncate">
-                    ${e.found_count ? `in ${e.found_count} result${e.found_count === 1 ? '' : 's'} · ` : ''}${escapeHtml((e.services || []).join(', '))}
-                </div>
+                <button type="button" data-entity-sources class="text-[11px] text-gray-500 hover:text-purple-300 mt-0.5 text-left truncate max-w-full"
+                    title="Show the results it was looked up or found in">
+                    <i class="fas fa-caret-right mr-1"></i>${sourcesSummary(e)}
+                </button>
+                <div class="hidden mt-1.5 space-y-0.5" data-entity-source-list>${sourceLinks(e)}</div>
             </div>
             <input type="text" data-entity-note value="${escapeAttr(e.note || '')}" placeholder="Note"
                 class="hidden md:block w-56 bg-gray-900 border border-gray-800 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-purple-500">
@@ -1040,7 +1070,55 @@ function entityRow(e) {
         </div>`;
 }
 
+// "in 2 results · ghunt, oi" (the line that opens the list of those results)
+function sourcesSummary(e) {
+    const results = new Set((e.sources || []).map((src) => src.result_id)).size;
+    return escapeHtml(
+        [
+            `in ${results} result${results === 1 ? '' : 's'}`,
+            (e.services || []).map((sv) => moduleInfo(sv).name).join(', '),
+        ]
+            .filter(Boolean)
+            .join(' · ')
+    );
+}
+
+// The results an identifier was looked up or found in, each opening the result at it
+function sourceLinks(e) {
+    const seen = new Set();
+    return (e.sources || [])
+        .filter((src) => {
+            const key = `${src.result_id}|${src.child_id || ''}|${src.role}`;
+            if (!src.result_id || seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        })
+        .map(
+            (src) => `
+        <button type="button" data-source-result="${escapeAttr(src.result_id)}"
+            class="block w-full text-left text-xs text-gray-400 hover:text-white truncate" title="${escapeAttr(src.path ? `Where: ${src.path}` : '')}">
+            <i class="fas ${src.role === 'searched' ? 'fa-search text-purple-400' : 'fa-arrow-right text-gray-600'} w-3 mr-1"></i>${escapeHtml(src.role === 'searched' ? 'Looked up with' : 'Found in')}
+            <span class="text-gray-200">${escapeHtml(moduleInfo(src.service).name)}</span> · ${escapeHtml(methodLabel(src.method))}${src.target ? ` · <span class="font-mono text-purple-200">${escapeHtml(src.target)}</span>` : ''}${src.timestamp ? ` · ${escapeHtml(timeAgo(src.timestamp))}` : ''}
+        </button>`
+        )
+        .join('');
+}
+
 function onEntityClick(event) {
+    const toggle = event.target.closest('[data-entity-sources]');
+    if (toggle) {
+        const list = toggle.parentElement.querySelector('[data-entity-source-list]');
+        list.classList.toggle('hidden');
+        toggle.querySelector('i').className =
+            `fas ${list.classList.contains('hidden') ? 'fa-caret-right' : 'fa-caret-down'} mr-1`;
+        return;
+    }
+    const source = event.target.closest('[data-source-result]');
+    if (source) {
+        const entity = entityCache.get(source.closest('[data-entity-key]').dataset.entityKey) || {};
+        openResultAt(source.dataset.sourceResult, entity.type, entity.value);
+        return;
+    }
     const button = event.target.closest('[data-entity-status]');
     if (!button) return;
     const key = button.closest('[data-entity-key]').dataset.entityKey;
