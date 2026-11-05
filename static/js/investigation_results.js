@@ -843,7 +843,12 @@ async function deleteResult(resultId) {
               snapshots ? '\nSnapshots attached to notes are kept.' : '',
           ].join('')
         : '';
-    if (!confirm(`Delete this result (and any follow-ups grouped under it)? This cannot be undone.${warning}`)) return;
+    const sure = await appConfirm(`Any follow-ups grouped under it are deleted too. This cannot be undone.${warning}`, {
+        title: 'Delete this result?',
+        confirmLabel: 'Delete',
+        danger: true,
+    });
+    if (!sure) return;
     try {
         const response = await fetch(`/api/investigations/${investigationId}/results/${encodeURIComponent(resultId)}`, {
             method: 'DELETE',
@@ -905,12 +910,11 @@ async function referencesWarning(ids, gerund) {
 async function bulkDelete() {
     const ids = [...selectedResults];
     const warning = await referencesWarning(ids, 'deleting');
-    if (
-        !confirm(
-            `Delete ${resultsWord(ids.length)} (and any follow-ups grouped under them)? This cannot be undone.${warning ? `\n\n${warning}` : ''}`
-        )
-    )
-        return;
+    const sure = await appConfirm(
+        `Any follow-ups grouped under them are deleted too. This cannot be undone.${warning ? `\n\n${warning}` : ''}`,
+        { title: `Delete ${resultsWord(ids.length)}?`, confirmLabel: 'Delete', danger: true }
+    );
+    if (!sure) return;
     try {
         const { done } = await bulkRequest({ action: 'delete', result_ids: ids });
         removeResultsFromView(done);
@@ -1024,8 +1028,15 @@ function exportResults() {
 
 async function deleteInvestigation() {
     const name = currentInvestigation ? currentInvestigation.name : 'this investigation';
-    if (!confirm(`Delete "${name}" with all ${allResults.length} results and its notes? This cannot be undone.`))
-        return;
+    const sure = await appConfirm(
+        `All ${resultsWord(allResults.length)} and its notes are deleted. This cannot be undone.`,
+        {
+            title: `Delete "${name}"?`,
+            confirmLabel: 'Delete investigation',
+            danger: true,
+        }
+    );
+    if (!sure) return;
     try {
         const response = await fetch(`/api/investigations/${investigationId}`, { method: 'DELETE' });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -1078,10 +1089,11 @@ async function submitEditModal(e) {
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(data.detail || `HTTP ${response.status}`);
         currentInvestigation = data.investigation;
-        await window.offerToStopRecording(investigationId, currentInvestigation.status, currentInvestigation.name);
         renderHeader(currentInvestigation);
         closeEditModal();
         showTemporaryNotification('Investigation updated', 'success');
+        // asked once the edit window is gone, so the two don't overlap
+        await window.offerToStopRecording(investigationId, currentInvestigation.status, currentInvestigation.name);
         if (window.loadInvestigationsDropdown) window.loadInvestigationsDropdown();
     } catch (err) {
         showTemporaryNotification(`Failed to update: ${err.message}`, 'error');

@@ -444,8 +444,9 @@ async function submitEditInvestigation(e) {
         const data = await response.json();
         if (response.ok && data.status === 'success') {
             showDashboardNotification('Investigation updated successfully!', 'success');
-            await window.offerToStopRecording(dashboardSelectedInvestigationId, status, name);
             closeEditDashboardInvestigationModal();
+            // asked once the edit window is gone, before the details window opens again
+            await window.offerToStopRecording(dashboardSelectedInvestigationId, status, name);
             await loadDashboardInvestigations();
             openDashboardInvestigationDetails(dashboardSelectedInvestigationId);
 
@@ -464,13 +465,13 @@ async function submitEditInvestigation(e) {
 async function deleteDashboardInvestigation() {
     if (!dashboardSelectedInvestigationId) return;
 
-    if (
-        !confirm(
-            'Are you sure you want to delete this investigation? All saved results and notes will be permanently removed.'
-        )
-    ) {
-        return;
-    }
+    const inv = dashboardInvestigations.find((i) => i.investigation_id === dashboardSelectedInvestigationId);
+    const sure = await appConfirm('All its saved results and notes are removed. This cannot be undone.', {
+        title: `Delete ${inv ? `"${inv.name}"` : 'this investigation'}?`,
+        confirmLabel: 'Delete investigation',
+        danger: true,
+    });
+    if (!sure) return;
 
     try {
         const response = await fetch(`/api/investigations/${dashboardSelectedInvestigationId}`, {

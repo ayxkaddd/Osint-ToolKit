@@ -154,6 +154,78 @@ function showTemporaryNotification(message, type = 'success') {
 window.showTemporaryNotification = showTemporaryNotification;
 
 // ---------------------------------------------------------------------------
+// Confirmation window in the app's style, instead of the browser's confirm().
+//   if (!(await appConfirm('Delete this result?', { danger: true, confirmLabel: 'Delete' }))) return;
+// options: title, confirmLabel, cancelLabel, danger (red button; Cancel has the focus, so
+// Enter can't delete by accident). Resolves true/false; Escape or a click outside is Cancel.
+// ---------------------------------------------------------------------------
+function appConfirm(message, options = {}) {
+    const { title = 'Are you sure?', confirmLabel = 'OK', cancelLabel = 'Cancel', danger = false } = options;
+    document.getElementById('appConfirm')?.dispatchEvent(new Event('app-confirm-cancel'));
+    const before = document.activeElement;
+    const overlay = document.createElement('div');
+    overlay.id = 'appConfirm';
+    overlay.className = 'modal fixed inset-0 bg-black/70 flex items-center justify-center z-[90] p-4';
+    overlay.setAttribute('role', 'alertdialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.innerHTML = `
+        <div class="modal-panel bg-gray-900 rounded-xl p-6 max-w-md w-full border border-gray-800 shadow-2xl">
+            <div class="flex items-start gap-4">
+                <div class="w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${danger ? 'bg-red-950/70 text-red-300' : 'bg-purple-950/70 text-purple-300'}">
+                    <i class="fas ${danger ? 'fa-trash' : 'fa-question'}"></i>
+                </div>
+                <div class="min-w-0 flex-1">
+                    <h2 id="appConfirmTitle" class="text-lg font-semibold text-white">${escapeHtml(title)}</h2>
+                    <p class="mt-2 text-sm text-gray-300 whitespace-pre-line break-words">${escapeHtml(message)}</p>
+                </div>
+            </div>
+            <div class="flex justify-end gap-3 mt-6">
+                <button type="button" data-confirm-answer="no" class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500">${escapeHtml(cancelLabel)}</button>
+                <button type="button" data-confirm-answer="yes"
+                    class="px-5 py-2 ${danger ? 'bg-red-600 hover:bg-red-500 focus:ring-red-400' : 'bg-purple-600 hover:bg-purple-500 focus:ring-purple-400'} text-white font-medium rounded-lg focus:outline-none focus:ring-2">${escapeHtml(confirmLabel)}</button>
+            </div>
+        </div>`;
+    overlay.setAttribute('aria-labelledby', 'appConfirmTitle');
+    document.body.appendChild(overlay);
+    requestAnimationFrame(() => overlay.classList.add('modal-open'));
+    const buttons = [...overlay.querySelectorAll('[data-confirm-answer]')];
+    (danger ? buttons[0] : buttons[1]).focus();
+
+    return new Promise((resolve) => {
+        let answered = false;
+        const finish = (answer) => {
+            if (answered) return;
+            answered = true;
+            document.removeEventListener('keydown', onKey, true);
+            overlay.classList.remove('modal-open');
+            setTimeout(() => overlay.remove(), 150);
+            if (before && typeof before.focus === 'function' && document.contains(before)) before.focus();
+            resolve(answer);
+        };
+        // Escape and Tab stay in this window: other windows under it keep their own keys
+        const onKey = (event) => {
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                event.stopImmediatePropagation();
+                finish(false);
+            } else if (event.key === 'Tab') {
+                event.preventDefault();
+                const next = buttons[(buttons.indexOf(document.activeElement) + 1) % buttons.length];
+                next.focus();
+            }
+        };
+        document.addEventListener('keydown', onKey, true);
+        overlay.addEventListener('app-confirm-cancel', () => finish(false), { once: true });
+        overlay.addEventListener('click', (event) => {
+            const answer = event.target.closest('[data-confirm-answer]');
+            if (answer) finish(answer.dataset.confirmAnswer === 'yes');
+            else if (event.target === overlay) finish(false);
+        });
+    });
+}
+window.appConfirm = appConfirm;
+
+// ---------------------------------------------------------------------------
 // Active investigation. The server's "current investigation" decides where
 // module results are saved, so it is the source of truth; localStorage only
 // mirrors it for scripts that read it synchronously.
@@ -309,8 +381,11 @@ document.addEventListener('contextmenu', (event) => {
 async function offerToStopRecording(investigationId, status, name = '') {
     if (status === 'active' || investigationId !== currentInvestigationId) return;
     const label = name ? `"${name}"` : 'This investigation';
-    if (confirm(`${label} is ${status}, but lookups are still being recorded into it.\n\nStop recording into it?`))
-        await clearCurrentInvestigation();
+    const stop = await appConfirm(
+        `${label} is ${status}, but lookups are still being recorded into it. Stop recording into it?`,
+        { title: 'Stop recording?', confirmLabel: 'Stop recording', cancelLabel: 'Keep recording' }
+    );
+    if (stop) await clearCurrentInvestigation();
 }
 window.offerToStopRecording = offerToStopRecording;
 
