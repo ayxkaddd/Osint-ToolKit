@@ -40,6 +40,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('sortSelect')?.addEventListener('change', renderResults);
     document.getElementById('triageFilterSelect')?.addEventListener('change', renderResults);
     document.getElementById('resultsContainer').addEventListener('click', onResultsClick);
+    document.getElementById('resultsContainer').addEventListener('contextmenu', onResultContextMenu);
     document.getElementById('bulkSelectAll').addEventListener('change', (e) => {
         selectedResults.clear();
         if (e.target.checked) filteredResults().forEach((r) => selectedResults.add(r.result_id));
@@ -359,7 +360,7 @@ function renderCard(r) {
 
     return `
         <div class="result-card inv-result-card bg-[#14151f] border border-[#24283b] rounded-xl overflow-hidden hover:border-purple-500/40 ${(r.triage || {}).status === 'false_positive' ? 'opacity-60' : ''}" data-result-id="${id}">
-            <div class="p-4 flex items-center justify-between gap-3 cursor-pointer select-none" data-action="toggle">
+            <div class="p-4 flex items-center justify-between gap-3 cursor-pointer select-none" data-action="toggle" title="Click to open, right-click for actions">
                 <div class="flex items-center gap-3 min-w-0">
                     <label data-action="none" title="Select this result" class="self-stretch shrink-0 flex items-center -my-4 -ml-4 pl-4 pr-3 cursor-pointer hover:bg-purple-500/10">
                         <input type="checkbox" data-action="select" ${selectedResults.has(r.result_id) ? 'checked' : ''} aria-label="Select this result" class="pick-box">
@@ -444,6 +445,99 @@ function onResultsClick(event) {
             pre.dataset.filled = '1';
         }
     }
+}
+
+// Right-click on a result's header row: its actions without opening it.
+// Inside an open result the browser's own menu stays (links, selected text).
+function onResultContextMenu(event) {
+    const header = event.target.closest('[data-action="toggle"]');
+    if (!header || event.target.closest('a, [data-pivot-type]')) return;
+    const id = header.closest('[data-result-id]').dataset.resultId;
+    const summary = allResults.find((r) => r.result_id === id);
+    if (!summary) return;
+    event.preventDefault();
+    const info = moduleInfo(summary.service_name);
+    const status = (summary.triage || {}).status || null;
+    const triage = (value) => ({
+        label: TRIAGE[value].label,
+        icon: TRIAGE[value].icon,
+        checked: status === value,
+        onClick: () => setResultStatus(id, status === value ? null : value),
+    });
+    const items = [
+        {
+            label: openCards.has(id) ? 'Close' : 'Open',
+            icon: openCards.has(id) ? 'fa-chevron-up' : 'fa-chevron-down',
+            onClick: () => (openCards.has(id) ? collapseCard(id) : expandCard(id)),
+        },
+        info.page && summary.service_name !== 'sharetrace'
+            ? {
+                  label: `Open in ${info.name}`,
+                  icon: 'fa-external-link-alt',
+                  href: `${info.page}?load_result=${encodeURIComponent(id)}&investigation=${encodeURIComponent(investigationId)}`,
+              }
+            : null,
+        { divider: true },
+        triage('confirmed'),
+        triage('important'),
+        triage('false_positive'),
+        { divider: true },
+        { label: 'Link in note', icon: 'fa-link', onClick: () => window.addResultToNote(id, { snapshot: false }) },
+        {
+            label: 'Attach to note',
+            icon: 'fa-paperclip',
+            onClick: () => window.addResultToNote(id, { snapshot: true }),
+        },
+        { label: 'Add to this (file, text)', icon: 'fa-upload', onClick: () => openManualModal(id) },
+        { label: 'Copy JSON', icon: 'fa-copy', onClick: () => copyResultJson(id) },
+        {
+            label: selectedResults.has(id) ? 'Unselect' : 'Select',
+            icon: 'fa-check-square',
+            onClick: () => toggleSelected(id),
+        },
+        { divider: true },
+        { label: 'Move', icon: 'fa-folder-open', onClick: () => openMoveModal([id]) },
+        { label: 'Delete', icon: 'fa-trash', danger: true, onClick: () => deleteResult(id) },
+    ].filter(Boolean);
+    openContextMenu(event, items, `${info.name}${summary.target ? ` · ${summary.target}` : ''}`);
+}
+
+// Assessment from the menu: keeps the result's note (the card may be closed)
+async function setResultStatus(id, status) {
+    try {
+        const { done, triage } = await bulkRequest({ action: 'triage', result_ids: [id], status });
+        done.forEach((rid) => {
+            if (detailCache[rid]) detailCache[rid].triage = triage[rid];
+            const summary = allResults.find((r) => r.result_id === rid);
+            if (summary) summary.triage = triage[rid];
+        });
+        renderResults();
+        showTemporaryNotification('Assessment saved', 'success');
+    } catch (e) {
+        showTemporaryNotification(`Failed to save assessment: ${e.message}`, 'error');
+    }
+}
+
+async function copyResultJson(id) {
+    try {
+        if (!detailCache[id]) {
+            const response = await fetch(`/api/investigations/${investigationId}/results/${encodeURIComponent(id)}`);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            detailCache[id] = (await response.json()).result;
+        }
+        const ok = await copyTextToClipboard(JSON.stringify(detailCache[id], null, 2));
+        showTemporaryNotification(ok ? 'Result JSON copied' : 'Copy failed', ok ? 'success' : 'error');
+    } catch (e) {
+        showTemporaryNotification(`Copy failed: ${e.message}`, 'error');
+    }
+}
+
+function toggleSelected(id) {
+    if (selectedResults.has(id)) selectedResults.delete(id);
+    else selectedResults.add(id);
+    const box = document.querySelector(`[data-result-id="${CSS.escape(id)}"] [data-action="select"]`);
+    if (box) box.checked = selectedResults.has(id);
+    updateBulkBar();
 }
 
 function collapseCard(id) {

@@ -240,33 +240,48 @@ function updateInvestigationsList() {
             .map((investigation) => {
                 const active = currentInvestigationId === investigation.investigation_id;
                 const status = investigation.status || 'active';
+                const id = escapeAttr(investigation.investigation_id);
                 return `
-        <button type="button" data-investigation-id="${escapeAttr(investigation.investigation_id)}"
-                class="investigation-item w-full text-left px-3 py-2 hover:bg-gray-800 ${active ? 'bg-gray-800/80' : ''}">
-            <div class="flex items-center gap-3">
-                ${
-                    investigation.picture_url
-                        ? `<img src="${escapeAttr(investigation.picture_url)}" alt="" loading="lazy" class="w-8 h-8 rounded-md object-cover shrink-0">`
-                        : `<div class="w-8 h-8 rounded-md bg-gray-800 flex items-center justify-center shrink-0 text-gray-500"><i class="fas fa-folder"></i></div>`
-                }
-                <div class="flex-1 min-w-0">
-                    <div class="flex items-center gap-2">
-                        <span class="font-medium text-white truncate text-sm">${escapeHtml(investigation.name)}</span>
-                        ${active ? '<span class="rec-dot" title="Recording"></span>' : ''}
-                        ${status !== 'active' ? `<span class="text-[10px] uppercase px-1.5 py-0.5 rounded bg-gray-800 text-gray-400 border border-gray-700">${escapeHtml(status)}</span>` : ''}
-                    </div>
-                    <div class="text-xs text-gray-500 truncate">
-                        ${escapeHtml(investigation.results_count || 0)} results · ${escapeHtml(new Date(investigation.created_at).toLocaleDateString())}
+        <div class="group flex items-stretch hover:bg-gray-800 ${active ? 'bg-gray-800/80' : ''}" data-investigation-row="${id}">
+            <button type="button" data-investigation-id="${id}" title="Record lookups here (right-click for more)"
+                    class="investigation-item flex-1 min-w-0 text-left px-3 py-2">
+                <div class="flex items-center gap-3">
+                    ${
+                        investigation.picture_url
+                            ? `<img src="${escapeAttr(investigation.picture_url)}" alt="" loading="lazy" class="w-8 h-8 rounded-md object-cover shrink-0">`
+                            : `<div class="w-8 h-8 rounded-md bg-gray-800 flex items-center justify-center shrink-0 text-gray-500"><i class="fas fa-folder"></i></div>`
+                    }
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-2">
+                            <span class="font-medium text-white truncate text-sm">${escapeHtml(investigation.name)}</span>
+                            ${active ? '<span class="rec-dot" title="Recording"></span>' : ''}
+                            ${status !== 'active' ? `<span class="text-[10px] uppercase px-1.5 py-0.5 rounded bg-gray-800 text-gray-400 border border-gray-700">${escapeHtml(status)}</span>` : ''}
+                        </div>
+                        <div class="text-xs text-gray-500 truncate">
+                            ${escapeHtml(investigation.results_count || 0)} results · ${escapeHtml(new Date(investigation.created_at).toLocaleDateString())}
+                        </div>
                     </div>
                 </div>
+            </button>
+            <div class="flex items-center gap-0.5 pr-2 opacity-60 group-hover:opacity-100 focus-within:opacity-100">
+                <a href="/api/investigations/${encodeURIComponent(investigation.investigation_id)}/view" title="Open its results"
+                   class="w-7 h-7 rounded flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-700"><i class="fas fa-layer-group text-xs"></i></a>
+                <button type="button" data-investigation-menu="${id}" title="More"
+                   class="w-7 h-7 rounded flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-700"><i class="fas fa-ellipsis-h text-xs"></i></button>
             </div>
-        </button>`;
+        </div>`;
             })
             .join('') +
         closedLink;
 }
 
 document.addEventListener('click', (event) => {
+    const menu = event.target.closest('[data-investigation-menu]');
+    if (menu && menu.closest('#investigationsList')) {
+        const inv = investigations.find((i) => i.investigation_id === menu.dataset.investigationMenu);
+        if (inv) openContextMenu(menu, investigationMenuItems(inv), inv.name);
+        return;
+    }
     const item = event.target.closest('[data-investigation-id]');
     if (item && item.closest('#investigationsList')) {
         const inv = investigations.find((i) => i.investigation_id === item.dataset.investigationId);
@@ -277,6 +292,131 @@ document.addEventListener('click', (event) => {
         clearCurrentInvestigation();
     }
 });
+
+// Right-click on an investigation in the header menu
+document.addEventListener('contextmenu', (event) => {
+    const row = event.target.closest('#investigationsList [data-investigation-row]');
+    if (!row) return;
+    const inv = investigations.find((i) => i.investigation_id === row.dataset.investigationRow);
+    if (!inv) return;
+    event.preventDefault();
+    openContextMenu(event, investigationMenuItems(inv), inv.name);
+});
+
+// What can be done with an investigation from anywhere (header menu, investigations page)
+function investigationMenuItems(inv) {
+    const id = inv.investigation_id;
+    const page = `/api/investigations/${encodeURIComponent(id)}`;
+    const status = inv.status || 'active';
+    const setStatus = (value) => async () => {
+        const response = await fetch(page, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: value }),
+        });
+        if (!response.ok) return showTemporaryNotification('Could not change the status', 'error');
+        showTemporaryNotification(`"${inv.name}" is now ${value}`, 'success');
+        await loadInvestigations();
+        document.dispatchEvent(new CustomEvent('investigation:updated', { detail: { investigationId: id } }));
+    };
+    return [
+        currentInvestigationId === id
+            ? { label: 'Stop recording here', icon: 'fa-stop-circle', onClick: clearCurrentInvestigation }
+            : { label: 'Record lookups here', icon: 'fa-dot-circle', onClick: () => selectInvestigation(id, inv.name) },
+        { divider: true },
+        { label: 'Open results', icon: 'fa-layer-group', href: `${page}/view` },
+        { label: 'Timeline', icon: 'fa-stream', href: `${page}/view#events` },
+        { label: 'Identifiers', icon: 'fa-fingerprint', href: `${page}/view#identifiers` },
+        { label: 'Notes', icon: 'fa-sticky-note', href: `${page}/notes/view` },
+        { label: 'Report', icon: 'fa-file-alt', href: `${page}/report`, newTab: true },
+        { divider: true },
+        status === 'active'
+            ? { label: 'Mark as completed', icon: 'fa-check-circle', onClick: setStatus('completed') }
+            : { label: 'Reopen (active)', icon: 'fa-undo', onClick: setStatus('active') },
+        status !== 'archived' ? { label: 'Archive', icon: 'fa-box-archive', onClick: setStatus('archived') } : null,
+    ].filter(Boolean);
+}
+window.investigationMenuItems = investigationMenuItems;
+
+// ---------------------------------------------------------------------------
+// Context menu: right-click (or a "⋯" button) on something gives its actions.
+// openContextMenu(eventOrElement, [{label, icon, href, newTab, onClick, danger, checked} | {divider: true}], title)
+// ---------------------------------------------------------------------------
+function closeContextMenu() {
+    document.getElementById('contextMenu')?.remove();
+}
+window.closeContextMenu = closeContextMenu;
+
+function openContextMenu(at, items, title = '') {
+    closeContextMenu();
+    const menu = document.createElement('div');
+    menu.id = 'contextMenu';
+    menu.setAttribute('role', 'menu');
+    menu.className =
+        'fixed z-[80] min-w-[13rem] max-w-xs bg-gray-900 border border-gray-700 rounded-lg shadow-2xl py-1 text-sm';
+    const actions = [];
+    menu.innerHTML =
+        (title
+            ? `<div class="px-3 py-1.5 text-[11px] uppercase tracking-wider text-gray-500 truncate">${escapeHtml(title)}</div>`
+            : '') +
+        items
+            .map((item) => {
+                if (item.divider) return '<div class="my-1 border-t border-gray-800"></div>';
+                const cls = `w-full flex items-center gap-2.5 px-3 py-1.5 text-left ${item.danger ? 'text-red-300 hover:bg-red-950/60' : 'text-gray-200 hover:bg-gray-800'} focus:bg-gray-800 focus:outline-none`;
+                const inner = `<i class="fas ${escapeAttr(item.icon || 'fa-circle')} w-4 text-center text-gray-500"></i><span class="flex-1 truncate">${escapeHtml(item.label)}</span>${item.checked ? '<i class="fas fa-check text-xs text-emerald-400"></i>' : ''}`;
+                if (item.href)
+                    return `<a role="menuitem" href="${escapeAttr(item.href)}" ${item.newTab ? 'target="_blank" rel="noopener"' : ''} class="${cls}">${inner}</a>`;
+                actions.push(item.onClick);
+                return `<button type="button" role="menuitem" data-context-action="${actions.length - 1}" class="${cls}">${inner}</button>`;
+            })
+            .join('');
+    document.body.appendChild(menu);
+
+    // at the pointer, or under the button that opened it; kept on screen
+    const rect = at instanceof Element ? at.getBoundingClientRect() : null;
+    const x = rect ? rect.right - menu.offsetWidth : at.clientX;
+    const y = rect ? rect.bottom + 4 : at.clientY;
+    menu.style.left = `${Math.max(8, Math.min(x, window.innerWidth - menu.offsetWidth - 8))}px`;
+    menu.style.top = `${Math.max(8, Math.min(y, window.innerHeight - menu.offsetHeight - 8))}px`;
+
+    menu.addEventListener('click', (event) => {
+        const action = event.target.closest('[data-context-action]');
+        if (event.target.closest('a, [data-context-action]')) closeContextMenu();
+        if (action) actions[Number(action.dataset.contextAction)]?.();
+    });
+    menu.addEventListener('keydown', (event) => {
+        const entries = [...menu.querySelectorAll('[role="menuitem"]')];
+        const index = entries.indexOf(document.activeElement);
+        if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+            event.preventDefault();
+            const next = (index + (event.key === 'ArrowDown' ? 1 : -1) + entries.length) % entries.length;
+            entries[next]?.focus();
+        }
+    });
+    menu.querySelector('[role="menuitem"]')?.focus({ preventScroll: true });
+}
+window.openContextMenu = openContextMenu;
+
+document.addEventListener(
+    'mousedown',
+    (event) => {
+        if (!event.target.closest('#contextMenu')) closeContextMenu();
+    },
+    true
+);
+// Escape closes the menu only, not the dropdown or window it was opened from
+document.addEventListener(
+    'keydown',
+    (event) => {
+        if (event.key !== 'Escape' || !document.getElementById('contextMenu')) return;
+        event.stopImmediatePropagation();
+        closeContextMenu();
+    },
+    true
+);
+window.addEventListener('scroll', closeContextMenu, { passive: true });
+window.addEventListener('resize', closeContextMenu);
+window.addEventListener('blur', closeContextMenu);
 
 function closeInvestigationsDropdown() {
     const dropdown = document.getElementById('investigationsDropdownMenu');

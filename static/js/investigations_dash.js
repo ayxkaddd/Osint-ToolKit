@@ -27,6 +27,41 @@ document.addEventListener('DOMContentLoaded', async function () {
     });
 });
 
+// Right-click on a card: the same actions as in the header menu, plus edit and delete
+document.addEventListener('contextmenu', (event) => {
+    const card = event.target.closest('[data-investigation-card]');
+    if (!card) return;
+    const inv = dashboardInvestigations.find((i) => i.investigation_id === card.dataset.investigationCard);
+    if (!inv) return;
+    event.preventDefault();
+    const pick = (then) => () => {
+        dashboardSelectedInvestigationId = inv.investigation_id;
+        then();
+    };
+    openContextMenu(
+        event,
+        [
+            ...investigationMenuItems(inv),
+            { divider: true },
+            {
+                label: 'Details',
+                icon: 'fa-info-circle',
+                onClick: () => openDashboardInvestigationDetails(inv.investigation_id),
+            },
+            { label: 'Edit', icon: 'fa-pen', onClick: pick(openEditDashboardInvestigationModal) },
+            { label: 'Delete', icon: 'fa-trash', danger: true, onClick: pick(deleteDashboardInvestigation) },
+        ],
+        inv.name
+    );
+});
+
+// Changed from a menu (status, recording): show it here too
+document.addEventListener('investigation:updated', () => loadDashboardInvestigations());
+document.addEventListener('investigation:changed', async () => {
+    await fetchActiveInvestigationId();
+    filterDashboardInvestigations();
+});
+
 function switchStatusTab(status) {
     dashboardStatusTab = status;
     history.replaceState(null, '', status === 'active' ? location.pathname : `#${status}`);
@@ -134,6 +169,7 @@ function displayDashboardInvestigations(investigations) {
 
             return `
             <div class="bg-[#14151f] border ${isCurrent ? 'border-emerald-500 shadow-lg shadow-emerald-950/30 ring-1 ring-emerald-500/50' : 'border-[#24283b]'} rounded-xl overflow-hidden hover:border-purple-500/50 transition-all duration-300 cursor-pointer group flex flex-col justify-between relative"
+                 data-investigation-card="${escapeAttr(inv.investigation_id)}" title="Right-click for more"
                  onclick="openDashboardInvestigationDetails(${jsArg(inv.investigation_id)})">
                 
                 ${
