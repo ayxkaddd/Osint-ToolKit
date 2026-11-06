@@ -747,7 +747,11 @@ async function confirmDeleteNote(investigationId, noteId) {
     const warning = linking.length
         ? `\n\nIt is linked from ${linking.length} other note${linking.length === 1 ? '' : 's'}:\n${linking.map((t) => `  • ${t}`).join('\n')}\nThose links will show as a deleted note.`
         : '';
-    return confirm(`Delete this note?${warning}`);
+    return appConfirm(`This cannot be undone.${warning}`, {
+        title: 'Delete this note?',
+        confirmLabel: 'Delete',
+        danger: true,
+    });
 }
 
 async function deleteNote(noteId, event) {

@@ -252,9 +252,14 @@
         $('fLookupName').select();
     }
 
-    function removeLookup() {
-        if (state.lookups.length < 2 || !confirm(`Remove the search "${val('fLookupName') || state.active + 1}"?`))
-            return;
+    async function removeLookup() {
+        if (state.lookups.length < 2) return;
+        const sure = await appConfirm('Its settings are removed from this plugin.', {
+            title: `Remove the search "${val('fLookupName') || state.active + 1}"?`,
+            confirmLabel: 'Remove',
+            danger: true,
+        });
+        if (!sure) return;
         state.lookups.splice(state.active, 1);
         state.active = 0;
         writeLookup(state.lookups[0]);

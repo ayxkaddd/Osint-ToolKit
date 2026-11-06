@@ -49,6 +49,7 @@ function renderOwnerIntel(data) {
     const spf = intel.spf;
     const dmarc = intel.dmarc;
     const verifications = intel.verifications || [];
+    const trackingIds = intel.tracking_ids || [];
 
     const whoisHtml = whois.error
         ? `<p class="text-xs text-gray-500">WHOIS: ${escapeHtml(whois.error)}</p>`
@@ -91,6 +92,36 @@ function renderOwnerIntel(data) {
                             class="text-xs px-2 py-1 rounded bg-gray-800 hover:bg-gray-700" title="Search the web for this token"><i class="fas fa-search mr-1"></i>Find other domains</a>
                     </div>`
                     )
+                    .join('')}</div>
+            </div>`
+                    : ''
+            }
+            ${
+                trackingIds.length
+                    ? `<div>
+                <div class="text-xs text-gray-500 mb-1">Tracking IDs <span class="text-gray-600">- analytics and ads accounts on the pages: other websites with the same ID have the same owner</span></div>
+                <div class="space-y-1.5">${trackingIds
+                    .map((t) => {
+                        const url = builtwithTagUrl(t.id);
+                        return `
+                    <div class="flex items-center gap-2 flex-wrap bg-gray-900 rounded-lg px-3 py-2 border border-gray-800">
+                        <span class="text-sm text-gray-300 w-56 shrink-0">${escapeHtml(t.label)}</span>
+                        <code class="text-xs text-purple-200 break-all">${escapeHtml(t.id)}</code>
+                        <span class="flex flex-wrap gap-1 flex-1 min-w-0">${t.names
+                            .slice(0, 8)
+                            .map((n) => pivotChip('domain', n))
+                            .join(
+                                ''
+                            )}${t.names.length > 8 ? `<span class="text-xs text-gray-500">+${t.names.length - 8}</span>` : ''}</span>
+                        <button type="button" data-copy="${escapeAttr(t.id)}" class="text-xs px-2 py-1 rounded bg-gray-800 hover:bg-gray-700" title="Copy"><i class="fas fa-copy"></i></button>
+                        ${
+                            url
+                                ? `<a href="${escapeAttr(url)}" target="_blank" rel="noopener noreferrer"
+                            class="text-xs px-2 py-1 rounded bg-gray-800 hover:bg-gray-700" title="BuiltWith lists the websites that use this tag"><i class="fas fa-external-link-alt mr-1"></i>Sites with this tag</a>`
+                                : ''
+                        }
+                    </div>`;
+                    })
                     .join('')}</div>
             </div>`
                     : ''

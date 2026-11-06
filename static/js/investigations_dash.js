@@ -4,23 +4,70 @@ lucide.createIcons();
 let dashboardInvestigations = [];
 let dashboardSelectedInvestigationId = null;
 let currentActiveInvestigationId = null;
+// The status tab shown: active, completed or archived (#completed in the address opens that tab)
+const STATUS_TABS = ['active', 'completed', 'archived'];
+let dashboardStatusTab = STATUS_TABS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'active';
 
 // Load investigations on page load
 document.addEventListener('DOMContentLoaded', async function () {
     await fetchActiveInvestigationId();
     await loadDashboardInvestigations();
 
-    // Setup search and filter
+    // Setup search and status tabs
     const searchInput = document.getElementById('dashboardSearchInput');
-    const statusFilter = document.getElementById('dashboardStatusFilter');
-
     if (searchInput) {
         searchInput.addEventListener('input', filterDashboardInvestigations);
     }
-    if (statusFilter) {
-        statusFilter.addEventListener('change', filterDashboardInvestigations);
-    }
+    document
+        .querySelectorAll('[data-status-tab]')
+        .forEach((tab) => tab.addEventListener('click', () => switchStatusTab(tab.dataset.statusTab)));
+    window.addEventListener('hashchange', () => {
+        const tab = location.hash.slice(1);
+        if (STATUS_TABS.includes(tab)) switchStatusTab(tab);
+    });
 });
+
+// Right-click on a card: the same actions as in the header menu, plus edit and delete
+document.addEventListener('contextmenu', (event) => {
+    const card = event.target.closest('[data-investigation-card]');
+    if (!card) return;
+    const inv = dashboardInvestigations.find((i) => i.investigation_id === card.dataset.investigationCard);
+    if (!inv) return;
+    event.preventDefault();
+    const pick = (then) => () => {
+        dashboardSelectedInvestigationId = inv.investigation_id;
+        then();
+    };
+    openContextMenu(
+        event,
+        [
+            ...investigationMenuItems(inv),
+            { divider: true },
+            {
+                label: 'Details',
+                icon: 'fa-info-circle',
+                onClick: () => openDashboardInvestigationDetails(inv.investigation_id),
+            },
+            { label: 'Edit', icon: 'fa-pen', onClick: pick(openEditDashboardInvestigationModal) },
+            { label: 'Delete', icon: 'fa-trash', danger: true, onClick: pick(deleteDashboardInvestigation) },
+        ],
+        inv.name,
+        card
+    );
+});
+
+// Changed from a menu (status, recording): show it here too
+document.addEventListener('investigation:updated', () => loadDashboardInvestigations());
+document.addEventListener('investigation:changed', async () => {
+    await fetchActiveInvestigationId();
+    filterDashboardInvestigations();
+});
+
+function switchStatusTab(status) {
+    dashboardStatusTab = status;
+    history.replaceState(null, '', status === 'active' ? location.pathname : `#${status}`);
+    filterDashboardInvestigations();
+}
 
 async function fetchActiveInvestigationId() {
     try {
@@ -45,7 +92,7 @@ async function loadDashboardInvestigations() {
         if (data.status === 'success') {
             dashboardInvestigations = data.investigations;
             updateDashboardStatistics();
-            displayDashboardInvestigations(dashboardInvestigations);
+            filterDashboardInvestigations();
         }
     } catch (error) {
         console.error('Error loading investigations:', error);
@@ -81,6 +128,20 @@ function displayDashboardInvestigations(investigations) {
 
     if (investigations.length === 0) {
         listContainer.innerHTML = '';
+        const searching = Boolean(document.getElementById('dashboardSearchInput')?.value.trim());
+        const firstCase = !dashboardInvestigations.length;
+        document.getElementById('dashboardEmptyTitle').textContent = firstCase
+            ? 'No Investigations Found'
+            : searching
+              ? 'Nothing matches the search'
+              : `No ${dashboardStatusTab} investigations`;
+        document.getElementById('dashboardEmptyText').textContent = firstCase
+            ? 'Get started by creating your first investigation'
+            : dashboardStatusTab === 'active'
+              ? 'Create one, or reopen a completed one by setting its status back to active.'
+              : `Investigations you mark as ${dashboardStatusTab} (Edit → Status) are kept here.`;
+        // the create button belongs to the first-run state and the Active tab
+        emptyState.querySelector('button')?.classList.toggle('hidden', !firstCase && dashboardStatusTab !== 'active');
         emptyState.classList.remove('hidden');
         emptyState.classList.add('flex');
         return;
@@ -109,6 +170,7 @@ function displayDashboardInvestigations(investigations) {
 
             return `
             <div class="bg-[#14151f] border ${isCurrent ? 'border-emerald-500 shadow-lg shadow-emerald-950/30 ring-1 ring-emerald-500/50' : 'border-[#24283b]'} rounded-xl overflow-hidden hover:border-purple-500/50 transition-all duration-300 cursor-pointer group flex flex-col justify-between relative"
+                 data-investigation-card="${escapeAttr(inv.investigation_id)}" title="Right-click for more"
                  onclick="openDashboardInvestigationDetails(${jsArg(inv.investigation_id)})">
                 
                 ${
@@ -116,7 +178,7 @@ function displayDashboardInvestigations(investigations) {
                         ? `
                     <div class="absolute top-3 left-3 z-10">
                         <span class="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-950/90 border border-emerald-500 text-emerald-300 flex items-center gap-1.5 shadow-md">
-                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Active Case
+                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Recording
                         </span>
                     </div>
                 `
@@ -175,7 +237,7 @@ function displayDashboardInvestigations(investigations) {
                                     ? `
                                 <button onclick="event.stopPropagation(); setActiveInvestigationDirectly(${jsArg(inv.investigation_id)})"
                                     class="bg-gray-800 hover:bg-emerald-600 hover:text-white text-gray-300 py-2 rounded-lg transition-colors text-xs font-medium flex items-center justify-center gap-1.5 border border-gray-700">
-                                    <i data-lucide="check-circle" class="w-3.5 h-3.5"></i> Set Active
+                                    <i data-lucide="radio" class="w-3.5 h-3.5"></i> Record here
                                 </button>
                             `
                                     : `
@@ -198,20 +260,23 @@ function displayDashboardInvestigations(investigations) {
 
 function filterDashboardInvestigations() {
     const searchInput = document.getElementById('dashboardSearchInput');
-    const statusFilter = document.getElementById('dashboardStatusFilter');
-
-    if (!searchInput || !statusFilter) return;
-
+    if (!searchInput) return;
     const searchTerm = searchInput.value.toLowerCase();
-    const statusValue = statusFilter.value;
+    const statusOf = (inv) => (STATUS_TABS.includes(inv.status) ? inv.status : 'active');
+
+    document.querySelectorAll('[data-status-tab]').forEach((tab) => {
+        tab.classList.toggle('active', tab.dataset.statusTab === dashboardStatusTab);
+    });
+    document.querySelectorAll('[data-status-count]').forEach((badge) => {
+        const count = dashboardInvestigations.filter((inv) => statusOf(inv) === badge.dataset.statusCount).length;
+        badge.textContent = count || '';
+    });
 
     const filtered = dashboardInvestigations.filter((inv) => {
         const matchesSearch =
             inv.name.toLowerCase().includes(searchTerm) ||
             (inv.description && inv.description.toLowerCase().includes(searchTerm));
-        const matchesStatus = statusValue === 'all' || inv.status === statusValue;
-
-        return matchesSearch && matchesStatus;
+        return matchesSearch && statusOf(inv) === dashboardStatusTab;
     });
 
     displayDashboardInvestigations(filtered);
@@ -274,18 +339,18 @@ function openDashboardInvestigationDetails(investigationId) {
         }
     }
 
-    // Toggle Set Active button appearance
+    // "Record here" button: lookups are saved to the investigation that is recording
     const setActiveBtn = document.getElementById('dashboardModalSetActiveBtn');
     if (setActiveBtn) {
         const isCurrent =
             currentActiveInvestigationId && investigation.investigation_id === currentActiveInvestigationId;
         if (isCurrent) {
-            setActiveBtn.innerHTML = '<i data-lucide="check" class="w-5 h-5"></i> Currently Active';
+            setActiveBtn.innerHTML = '<i data-lucide="check" class="w-5 h-5"></i> Recording here';
             setActiveBtn.className =
                 'flex items-center justify-center gap-2 bg-emerald-950 border border-emerald-600 text-emerald-300 px-4 py-3 rounded-lg cursor-default font-medium';
             setActiveBtn.disabled = true;
         } else {
-            setActiveBtn.innerHTML = '<i data-lucide="check-circle" class="w-5 h-5"></i> Set as Active';
+            setActiveBtn.innerHTML = '<i data-lucide="radio" class="w-5 h-5"></i> Record here';
             setActiveBtn.className =
                 'flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-3 rounded-lg transition-colors font-medium';
             setActiveBtn.disabled = false;
@@ -380,6 +445,8 @@ async function submitEditInvestigation(e) {
         if (response.ok && data.status === 'success') {
             showDashboardNotification('Investigation updated successfully!', 'success');
             closeEditDashboardInvestigationModal();
+            // asked once the edit window is gone, before the details window opens again
+            await window.offerToStopRecording(dashboardSelectedInvestigationId, status, name);
             await loadDashboardInvestigations();
             openDashboardInvestigationDetails(dashboardSelectedInvestigationId);
 
@@ -398,13 +465,13 @@ async function submitEditInvestigation(e) {
 async function deleteDashboardInvestigation() {
     if (!dashboardSelectedInvestigationId) return;
 
-    if (
-        !confirm(
-            'Are you sure you want to delete this investigation? All saved results and notes will be permanently removed.'
-        )
-    ) {
-        return;
-    }
+    const inv = dashboardInvestigations.find((i) => i.investigation_id === dashboardSelectedInvestigationId);
+    const sure = await appConfirm('All its saved results and notes are removed. This cannot be undone.', {
+        title: `Delete ${inv ? `"${inv.name}"` : 'this investigation'}?`,
+        confirmLabel: 'Delete investigation',
+        danger: true,
+    });
+    if (!sure) return;
 
     try {
         const response = await fetch(`/api/investigations/${dashboardSelectedInvestigationId}`, {

@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Case report - {{ investigation.name }}</title>
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+    <link rel="icon" href="/static/favicon.ico" sizes="any">
+    <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
     <style>
         :root { --ink: #1f2937; --muted: #6b7280; --line: #e5e7eb; --accent: #6d28d9; --soft: #f5f3ff; }
         * { box-sizing: border-box; }
@@ -34,6 +37,10 @@
         .toolbar { position: sticky; top: 0; background: #111827; color: #fff; padding: 10px 16px; display: flex; gap: 12px; align-items: center; justify-content: center; }
         .toolbar a, .toolbar button { color: #fff; background: #374151; border: 0; border-radius: 6px; padding: 6px 12px; font: inherit; cursor: pointer; text-decoration: none; }
         .toolbar .primary { background: var(--accent); }
+        .thumbs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+        .thumbs img { max-width: 220px; max-height: 160px; border: 1px solid var(--line); border-radius: 6px; }
+        .hash { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11px; color: var(--muted); word-break: break-all; }
+        .series { color: var(--muted); }
         footer { margin-top: 36px; font-size: 12px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 10px; }
         @media print {
             body { background: #fff; }
@@ -105,6 +112,21 @@
         </table>
         {% endif %}
 
+        {% if shared %}
+        <h2>Shared with other investigations</h2>
+        <p class="muted">Identifiers that other cases have too - a link between them worth checking.</p>
+        <table>
+            <tr><th>Type</th><th>Value</th><th>Also in</th></tr>
+            {% for e in shared %}
+            <tr>
+                <td>{{ type_label(e.type) }}</td>
+                <td class="v">{{ e.display or e.value }}</td>
+                <td>{% for place in e.elsewhere %}<a href="/api/investigations/{{ place.investigation_id }}/view">{{ place.name }}</a>{% if place.investigation_status and place.investigation_status != 'active' %} <span class="muted">({{ place.investigation_status }})</span>{% endif %}{% if not loop.last %}, {% endif %}{% endfor %}</td>
+            </tr>
+            {% endfor %}
+        </table>
+        {% endif %}
+
         <h2>{% if showing_all %}Results{% else %}Findings{% endif %}</h2>
         {% if not findings %}<p class="muted">No lookups recorded yet.</p>{% endif %}
         {% if not showing_all %}<p class="muted">Results marked confirmed or important. <a href="?include=all">Show every result</a>.</p>{% endif %}
@@ -128,6 +150,55 @@
             {% if r.triage and r.triage.note %}<div class="note">{{ r.triage.note }}</div>{% endif %}
         </div>
         {% endfor %}
+
+        {% if manual_items %}
+        <h2>Added manually</h2>
+        <p class="muted">Found outside the toolkit and added by hand. Files are listed with their SHA-256 hash, taken when they were added.</p>
+        {% for m in manual_items %}
+        <div class="finding">
+            <div class="head">
+                <div>
+                    <b>{{ m.title }}</b>{% if m.source %} <span class="muted">· {{ m.source }}</span>{% endif %}
+                    {% if m.under %}<div class="muted" style="font-size:12px">Added to the result for {{ m.under }}</div>{% endif %}
+                </div>
+                <div class="muted" style="font-size:12px;text-align:right">
+                    {% if m.date %}Happened {{ m.date }}<br>{% endif %}Added {{ (m.timestamp or '')[:16] | replace('T', ' ') }}
+                </div>
+            </div>
+            {% if m.url %}<div style="margin-top:4px"><a href="{{ m.url }}" rel="noopener noreferrer">{{ m.url }}</a></div>{% endif %}
+            {% if m.text %}<div class="desc">{{ m.text[:3000] }}{% if m.text | length > 3000 %}…{% endif %}</div>{% endif %}
+            {% if m.entities %}
+            <div style="margin-top:6px;font-size:13px">{% for kind, values in m.entities.items() %}<span class="muted">{{ type_label(kind) }}:</span> <span class="v">{{ values | join(', ') }}</span>{% if not loop.last %} · {% endif %}{% endfor %}</div>
+            {% endif %}
+            {% if m.images %}
+            <div class="thumbs">{% for f in m.images %}<img src="/api/investigations/{{ investigation.investigation_id }}/files/{{ f.stored }}" alt="{{ f.name }}" title="{{ f.name }}">{% endfor %}</div>
+            {% endif %}
+            {% if m.files %}
+            <table style="margin-top:8px">
+                <tr><th>File</th><th>Size</th><th>SHA-256</th></tr>
+                {% for f in m.files %}
+                <tr><td><a href="/api/investigations/{{ investigation.investigation_id }}/files/{{ f.stored }}?download=1&filename={{ f.name | urlencode }}">{{ f.name }}</a></td><td style="white-space:nowrap">{{ f.size | filesizeformat }}</td><td class="hash">{{ f.sha256 }}</td></tr>
+                {% endfor %}
+            </table>
+            {% endif %}
+        </div>
+        {% endfor %}
+        {% endif %}
+
+        {% if tracking_ids %}
+        <h2>Tracking IDs</h2>
+        <p class="muted">Analytics and ads accounts found on the websites (DNS recon, NS fingerprint). One account on several sites points to one owner.</p>
+        <table>
+            <tr><th>Kind</th><th>ID</th><th>Websites</th></tr>
+            {% for t in tracking_ids %}
+            <tr>
+                <td>{{ t.label }}</td>
+                <td class="v">{{ t.id }}{% if t.builtwith %} <a href="https://builtwith.com/relationships/tag/{{ t.id | urlencode }}" rel="noopener noreferrer" style="font-family:inherit;font-size:12px">other sites</a>{% endif %}</td>
+                <td class="v">{{ t.domains | join(', ') }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+        {% endif %}
 
         {% if entities_by_type %}
         <h2>Other identifiers</h2>
@@ -156,7 +227,22 @@
         {% endfor %}
         {% endif %}
 
+        {% if events %}
         <h2>Timeline</h2>
+        <p class="muted">When things happened, from the dates inside the results. Many dates from one list are one row.{% if events_total > events | length %} The first {{ events | length }} of {{ events_total }} are shown.{% endif %}</p>
+        <table>
+            <tr><th>When</th><th>What</th><th>From</th></tr>
+            {% for e in events %}
+            <tr>
+                <td style="white-space:nowrap">{{ e.when }}</td>
+                <td>{% if e.count %}<span class="series">{{ e.count }} dates ·</span> {% endif %}{% if e.context %}<b>{{ e.context.value }}</b> · {% endif %}{{ e.label }}{% if e.section and not e.manual %} <span class="muted">in {{ e.section }}</span>{% endif %}</td>
+                <td>{{ module_names.get(e.service, e.service | replace('_', ' ')) }}{% if e.target and e.target != e.label %} <span class="muted">· {{ e.target }}</span>{% endif %}</td>
+            </tr>
+            {% endfor %}
+        </table>
+        {% endif %}
+
+        <h2>Lookup log</h2>
         <table>
             <tr><th>Time</th><th>Module</th><th>Query</th><th>Outcome</th></tr>
             {% for r in results %}
@@ -171,7 +257,7 @@
 
         <footer>
             Every result lists the exact query, module and time it was run. Raw data for each result is kept in the
-            investigation and can be exported as JSON.
+            investigation; Export downloads all of it as a .zip, with the files that were added.
         </footer>
     </div>
 </body>

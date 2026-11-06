@@ -22,3 +22,16 @@ def test_module_pages_exist(client):
     pages = {m["page"] for m in client.get("/api/modules").json()["modules"] if m.get("page")}
     for page in pages:
         assert client.get(page).status_code == 200, page
+
+
+def test_favicon_needs_no_login(anon):
+    response = anon.get("/favicon.ico")
+    assert response.status_code == 200 and response.headers["content-type"] == "image/x-icon"
+    assert response.content[:4] == b"\x00\x00\x01\x00"   # an ICO file
+    assert anon.get("/static/favicon.svg").headers["content-type"].startswith("image/svg+xml")
+
+
+@pytest.mark.parametrize("path", ["/", "/dashboard"])
+def test_pages_link_the_favicon(anon, client, path):
+    page = (anon if path == "/" else client).get(path).text
+    assert 'href="/static/favicon.svg"' in page and 'href="/static/favicon.ico"' in page

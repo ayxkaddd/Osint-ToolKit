@@ -28,6 +28,8 @@ TRACKERS = {
     "email": ("Email on page", r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,12}", None),
     "telegram": ("Telegram link", r"(?:t\.me|telegram\.me)/[A-Za-z0-9_+]{4,40}", None),
 }
+# The IDs that belong to an account (not the emails and Telegram links on a page)
+ACCOUNT_TRACKERS = tuple(k for k in TRACKERS if k not in ("email", "telegram"))
 NOISE_EMAIL = re.compile(r"\.(png|jpe?g|gif|svg|webp|css|js)$|example\.|sentry|wixpress|@2x|@3x|u00", re.I)
 
 MAX_DOMAINS = 1000
@@ -57,14 +59,24 @@ def _ids(kind: str, matches: list[str]) -> list[str]:
     return out[:20]
 
 
-def normalize(line: dict[str, Any]) -> dict[str, Any]:
-    """httpx JSON line -> compact fingerprint."""
-    extracts = line.get("extracts") or {}
+def tracker_args(kinds=tuple(TRACKERS)) -> list[str]:
+    """httpx options that make it extract these IDs from each page (-er per pattern)."""
+    return [arg for kind in kinds for arg in ("-er", TRACKERS[kind][1])]
+
+
+def trackers_from_extracts(extracts: dict[str, Any], kinds=tuple(TRACKERS)) -> dict[str, list[str]]:
+    """httpx's "extracts" (matches per pattern) -> {kind: [IDs]}."""
     trackers: dict[str, list[str]] = {}
-    for kind, (_, go_pattern, _) in TRACKERS.items():
-        ids = _ids(kind, extracts.get(go_pattern) or [])
+    for kind in kinds:
+        ids = _ids(kind, (extracts or {}).get(TRACKERS[kind][1]) or [])
         if ids:
             trackers[kind] = ids
+    return trackers
+
+
+def normalize(line: dict[str, Any]) -> dict[str, Any]:
+    """httpx JSON line -> compact fingerprint."""
+    trackers = trackers_from_extracts(line.get("extracts") or {})
     tls = line.get("tls") or {}
     hashes = line.get("hash") or {}
     return {
@@ -105,9 +117,7 @@ async def fingerprint_domains(domains: list[str]) -> AsyncGenerator[dict[str, An
            "-title", "-status-code", "-content-length", "-web-server", "-ip", "-cname", "-asn",
            "-tech-detect", "-hash", "sha256", "-favicon", "-jarm", "-tls-grab",
            "-follow-redirects", "-random-agent", "-timeout", "12", "-retries", "1", "-threads", "40",
-           "-rstr", "2000000"]
-    for _, go_pattern, _ in TRACKERS.values():
-        cmd += ["-er", go_pattern]
+           "-rstr", "2000000", *tracker_args()]
 
     try:
         proc = await asyncio.create_subprocess_exec(

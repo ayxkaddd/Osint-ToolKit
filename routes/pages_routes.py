@@ -16,6 +16,12 @@ def index(request: Request):
 def index_post(request: Request):
     return templates.TemplateResponse(request=request, name="index.html")
 
+# Browsers and other tools ask for /favicon.ico; the pages link /static/favicon.svg
+@router.get('/favicon.ico', include_in_schema=False)
+def favicon():
+    return FileResponse("static/favicon.ico", media_type="image/x-icon",
+                        headers={"Cache-Control": "public, max-age=86400"})
+
 @router.get('/dashboard')
 def dashboard(request: Request):
     return templates.TemplateResponse(request=request, name="dashboard.html")

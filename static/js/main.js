@@ -154,6 +154,78 @@ function showTemporaryNotification(message, type = 'success') {
 window.showTemporaryNotification = showTemporaryNotification;
 
 // ---------------------------------------------------------------------------
+// Confirmation window in the app's style, instead of the browser's confirm().
+//   if (!(await appConfirm('Delete this result?', { danger: true, confirmLabel: 'Delete' }))) return;
+// options: title, confirmLabel, cancelLabel, danger (red button; Cancel has the focus, so
+// Enter can't delete by accident). Resolves true/false; Escape or a click outside is Cancel.
+// ---------------------------------------------------------------------------
+function appConfirm(message, options = {}) {
+    const { title = 'Are you sure?', confirmLabel = 'OK', cancelLabel = 'Cancel', danger = false } = options;
+    document.getElementById('appConfirm')?.dispatchEvent(new Event('app-confirm-cancel'));
+    const before = document.activeElement;
+    const overlay = document.createElement('div');
+    overlay.id = 'appConfirm';
+    overlay.className = 'modal fixed inset-0 bg-black/70 flex items-center justify-center z-[90] p-4';
+    overlay.setAttribute('role', 'alertdialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.innerHTML = `
+        <div class="modal-panel bg-gray-900 rounded-xl p-6 max-w-md w-full border border-gray-800 shadow-2xl">
+            <div class="flex items-start gap-4">
+                <div class="w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${danger ? 'bg-red-950/70 text-red-300' : 'bg-purple-950/70 text-purple-300'}">
+                    <i class="fas ${danger ? 'fa-trash' : 'fa-question'}"></i>
+                </div>
+                <div class="min-w-0 flex-1">
+                    <h2 id="appConfirmTitle" class="text-lg font-semibold text-white">${escapeHtml(title)}</h2>
+                    <p class="mt-2 text-sm text-gray-300 whitespace-pre-line break-words">${escapeHtml(message)}</p>
+                </div>
+            </div>
+            <div class="flex justify-end gap-3 mt-6">
+                <button type="button" data-confirm-answer="no" class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500">${escapeHtml(cancelLabel)}</button>
+                <button type="button" data-confirm-answer="yes"
+                    class="px-5 py-2 ${danger ? 'bg-red-600 hover:bg-red-500 focus:ring-red-400' : 'bg-purple-600 hover:bg-purple-500 focus:ring-purple-400'} text-white font-medium rounded-lg focus:outline-none focus:ring-2">${escapeHtml(confirmLabel)}</button>
+            </div>
+        </div>`;
+    overlay.setAttribute('aria-labelledby', 'appConfirmTitle');
+    document.body.appendChild(overlay);
+    requestAnimationFrame(() => overlay.classList.add('modal-open'));
+    const buttons = [...overlay.querySelectorAll('[data-confirm-answer]')];
+    (danger ? buttons[0] : buttons[1]).focus();
+
+    return new Promise((resolve) => {
+        let answered = false;
+        const finish = (answer) => {
+            if (answered) return;
+            answered = true;
+            document.removeEventListener('keydown', onKey, true);
+            overlay.classList.remove('modal-open');
+            setTimeout(() => overlay.remove(), 150);
+            if (before && typeof before.focus === 'function' && document.contains(before)) before.focus();
+            resolve(answer);
+        };
+        // Escape and Tab stay in this window: other windows under it keep their own keys
+        const onKey = (event) => {
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                event.stopImmediatePropagation();
+                finish(false);
+            } else if (event.key === 'Tab') {
+                event.preventDefault();
+                const next = buttons[(buttons.indexOf(document.activeElement) + 1) % buttons.length];
+                next.focus();
+            }
+        };
+        document.addEventListener('keydown', onKey, true);
+        overlay.addEventListener('app-confirm-cancel', () => finish(false), { once: true });
+        overlay.addEventListener('click', (event) => {
+            const answer = event.target.closest('[data-confirm-answer]');
+            if (answer) finish(answer.dataset.confirmAnswer === 'yes');
+            else if (event.target === overlay) finish(false);
+        });
+    });
+}
+window.appConfirm = appConfirm;
+
+// ---------------------------------------------------------------------------
 // Active investigation. The server's "current investigation" decides where
 // module results are saved, so it is the source of truth; localStorage only
 // mirrors it for scripts that read it synchronously.
@@ -207,12 +279,22 @@ function updateInvestigationsList() {
     const listContainer = document.getElementById('investigationsList');
     if (!listContainer) return;
 
-    if (investigations.length === 0) {
+    // Completed and archived cases are done: only the active ones (and the one recording) are listed
+    const shown = investigations.filter(
+        (i) => (i.status || 'active') === 'active' || i.investigation_id === currentInvestigationId
+    );
+    const closed = investigations.length - shown.length;
+    const closedLink = closed
+        ? `<a href="/investigations#completed" class="block px-3 py-2 text-xs text-gray-500 hover:text-white hover:bg-gray-800 border-t border-gray-800">
+              ${closed} completed or archived · see all investigations →</a>`
+        : '';
+
+    if (shown.length === 0) {
         listContainer.innerHTML = `
             <div class="p-4 text-center text-gray-500 text-sm">
                 <i class="fas fa-folder-open"></i>
-                <span class="ml-2">No investigations yet</span>
-            </div>
+                <span class="ml-2">${investigations.length ? 'No active investigations' : 'No investigations yet'}</span>
+            </div>${closedLink}
         `;
         return;
     }
@@ -226,34 +308,53 @@ function updateInvestigationsList() {
 
     listContainer.innerHTML =
         stopItem +
-        investigations
+        shown
             .map((investigation) => {
                 const active = currentInvestigationId === investigation.investigation_id;
+                const status = investigation.status || 'active';
+                const id = escapeAttr(investigation.investigation_id);
                 return `
-        <button type="button" data-investigation-id="${escapeAttr(investigation.investigation_id)}"
-                class="investigation-item w-full text-left px-3 py-2 hover:bg-gray-800 ${active ? 'bg-gray-800/80' : ''}">
-            <div class="flex items-center gap-3">
-                ${
-                    investigation.picture_url
-                        ? `<img src="${escapeAttr(investigation.picture_url)}" alt="" loading="lazy" class="w-8 h-8 rounded-md object-cover shrink-0">`
-                        : `<div class="w-8 h-8 rounded-md bg-gray-800 flex items-center justify-center shrink-0 text-gray-500"><i class="fas fa-folder"></i></div>`
-                }
-                <div class="flex-1 min-w-0">
-                    <div class="flex items-center gap-2">
-                        <span class="font-medium text-white truncate text-sm">${escapeHtml(investigation.name)}</span>
-                        ${active ? '<span class="rec-dot" title="Recording"></span>' : ''}
-                    </div>
-                    <div class="text-xs text-gray-500 truncate">
-                        ${escapeHtml(investigation.results_count || 0)} results · ${escapeHtml(new Date(investigation.created_at).toLocaleDateString())}
+        <div class="group flex items-stretch hover:bg-gray-800 ${active ? 'bg-gray-800/80' : ''}" data-investigation-row="${id}">
+            <button type="button" data-investigation-id="${id}" title="Record lookups here (right-click for more)"
+                    class="investigation-item flex-1 min-w-0 text-left px-3 py-2">
+                <div class="flex items-center gap-3">
+                    ${
+                        investigation.picture_url
+                            ? `<img src="${escapeAttr(investigation.picture_url)}" alt="" loading="lazy" class="w-8 h-8 rounded-md object-cover shrink-0">`
+                            : `<div class="w-8 h-8 rounded-md bg-gray-800 flex items-center justify-center shrink-0 text-gray-500"><i class="fas fa-folder"></i></div>`
+                    }
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-2">
+                            <span class="font-medium text-white truncate text-sm">${escapeHtml(investigation.name)}</span>
+                            ${active ? '<span class="rec-dot" title="Recording"></span>' : ''}
+                            ${status !== 'active' ? `<span class="text-[10px] uppercase px-1.5 py-0.5 rounded bg-gray-800 text-gray-400 border border-gray-700">${escapeHtml(status)}</span>` : ''}
+                        </div>
+                        <div class="text-xs text-gray-500 truncate">
+                            ${escapeHtml(investigation.results_count || 0)} results · ${escapeHtml(new Date(investigation.created_at).toLocaleDateString())}
+                        </div>
                     </div>
                 </div>
+            </button>
+            <div class="flex items-center gap-0.5 pr-2 opacity-60 group-hover:opacity-100 focus-within:opacity-100">
+                <a href="/api/investigations/${encodeURIComponent(investigation.investigation_id)}/view" title="Open its results"
+                   class="w-7 h-7 rounded flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-700"><i class="fas fa-layer-group text-xs"></i></a>
+                <button type="button" data-investigation-menu="${id}" title="More"
+                   class="w-7 h-7 rounded flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-700"><i class="fas fa-ellipsis-h text-xs"></i></button>
             </div>
-        </button>`;
+        </div>`;
             })
-            .join('');
+            .join('') +
+        closedLink;
 }
 
 document.addEventListener('click', (event) => {
+    const menu = event.target.closest('[data-investigation-menu]');
+    if (menu && menu.closest('#investigationsList')) {
+        const inv = investigations.find((i) => i.investigation_id === menu.dataset.investigationMenu);
+        // the row owns it too: a right-click on the row closes it like a second click on ⋯
+        if (inv) openContextMenu(menu, investigationMenuItems(inv), inv.name, menu.closest('[data-investigation-row]'));
+        return;
+    }
     const item = event.target.closest('[data-investigation-id]');
     if (item && item.closest('#investigationsList')) {
         const inv = investigations.find((i) => i.investigation_id === item.dataset.investigationId);
@@ -264,6 +365,160 @@ document.addEventListener('click', (event) => {
         clearCurrentInvestigation();
     }
 });
+
+// Right-click on an investigation in the header menu
+document.addEventListener('contextmenu', (event) => {
+    const row = event.target.closest('#investigationsList [data-investigation-row]');
+    if (!row) return;
+    const inv = investigations.find((i) => i.investigation_id === row.dataset.investigationRow);
+    if (!inv) return;
+    event.preventDefault();
+    openContextMenu(event, investigationMenuItems(inv), inv.name, row);
+});
+
+// After an investigation is marked completed or archived: if it is the one recording, ask
+// whether to stop - lookups would keep going into a case that is done
+async function offerToStopRecording(investigationId, status, name = '') {
+    if (status === 'active' || investigationId !== currentInvestigationId) return;
+    const label = name ? `"${name}"` : 'This investigation';
+    const stop = await appConfirm(
+        `${label} is ${status}, but lookups are still being recorded into it. Stop recording into it?`,
+        { title: 'Stop recording?', confirmLabel: 'Stop recording', cancelLabel: 'Keep recording' }
+    );
+    if (stop) await clearCurrentInvestigation();
+}
+window.offerToStopRecording = offerToStopRecording;
+
+// What can be done with an investigation from anywhere (header menu, investigations page)
+function investigationMenuItems(inv) {
+    const id = inv.investigation_id;
+    const page = `/api/investigations/${encodeURIComponent(id)}`;
+    const status = inv.status || 'active';
+    const setStatus = (value) => async () => {
+        const response = await fetch(page, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: value }),
+        });
+        if (!response.ok) return showTemporaryNotification('Could not change the status', 'error');
+        showTemporaryNotification(`"${inv.name}" is now ${value}`, 'success');
+        await offerToStopRecording(id, value, inv.name);
+        await loadInvestigations();
+        document.dispatchEvent(new CustomEvent('investigation:updated', { detail: { investigationId: id } }));
+    };
+    return [
+        currentInvestigationId === id
+            ? { label: 'Stop recording here', icon: 'fa-stop-circle', onClick: clearCurrentInvestigation }
+            : { label: 'Record lookups here', icon: 'fa-dot-circle', onClick: () => selectInvestigation(id, inv.name) },
+        { divider: true },
+        { label: 'Open results', icon: 'fa-layer-group', href: `${page}/view` },
+        { label: 'Timeline', icon: 'fa-stream', href: `${page}/view#events` },
+        { label: 'Identifiers', icon: 'fa-fingerprint', href: `${page}/view#identifiers` },
+        { label: 'Notes', icon: 'fa-sticky-note', href: `${page}/notes/view` },
+        { label: 'Report', icon: 'fa-file-alt', href: `${page}/report`, newTab: true },
+        { divider: true },
+        status === 'active'
+            ? { label: 'Mark as completed', icon: 'fa-check-circle', onClick: setStatus('completed') }
+            : { label: 'Reopen (active)', icon: 'fa-undo', onClick: setStatus('active') },
+        status !== 'archived' ? { label: 'Archive', icon: 'fa-box-archive', onClick: setStatus('archived') } : null,
+    ].filter(Boolean);
+}
+window.investigationMenuItems = investigationMenuItems;
+
+// ---------------------------------------------------------------------------
+// Context menu: right-click (or a "⋯" button) on something gives its actions.
+// openContextMenu(eventOrElement, [{label, icon, href, newTab, onClick, danger, checked} | {divider: true}], title, owner)
+// owner: what the menu belongs to (a row, a card); a second click on it closes the menu
+// instead of opening it again. A button passed as eventOrElement is its own owner.
+// ---------------------------------------------------------------------------
+let contextMenuOwner = null;
+let contextMenuDismissed = { owner: null, at: 0 }; // what a press outside just closed the menu of
+
+function closeContextMenu() {
+    document.getElementById('contextMenu')?.remove();
+    contextMenuOwner = null;
+}
+window.closeContextMenu = closeContextMenu;
+
+function openContextMenu(at, items, title = '', owner = null) {
+    owner = owner || (at instanceof Element ? at : null);
+    // the press that started this click or right-click closed this same menu: leave it closed
+    if (owner && contextMenuDismissed.owner === owner && Date.now() - contextMenuDismissed.at < 800) {
+        contextMenuDismissed = { owner: null, at: 0 };
+        return;
+    }
+    closeContextMenu();
+    contextMenuOwner = owner;
+    const menu = document.createElement('div');
+    menu.id = 'contextMenu';
+    menu.setAttribute('role', 'menu');
+    menu.className =
+        'fixed z-[80] min-w-[13rem] max-w-xs bg-gray-900 border border-gray-700 rounded-lg shadow-2xl py-1 text-sm';
+    const actions = [];
+    menu.innerHTML =
+        (title
+            ? `<div class="px-3 py-1.5 text-[11px] uppercase tracking-wider text-gray-500 truncate">${escapeHtml(title)}</div>`
+            : '') +
+        items
+            .map((item) => {
+                if (item.divider) return '<div class="my-1 border-t border-gray-800"></div>';
+                const cls = `w-full flex items-center gap-2.5 px-3 py-1.5 text-left ${item.danger ? 'text-red-300 hover:bg-red-950/60' : 'text-gray-200 hover:bg-gray-800'} focus:bg-gray-800 focus:outline-none`;
+                const inner = `<i class="fas ${escapeAttr(item.icon || 'fa-circle')} w-4 text-center text-gray-500"></i><span class="flex-1 truncate">${escapeHtml(item.label)}</span>${item.checked ? '<i class="fas fa-check text-xs text-emerald-400"></i>' : ''}`;
+                if (item.href)
+                    return `<a role="menuitem" href="${escapeAttr(item.href)}" ${item.newTab ? 'target="_blank" rel="noopener"' : ''} class="${cls}">${inner}</a>`;
+                actions.push(item.onClick);
+                return `<button type="button" role="menuitem" data-context-action="${actions.length - 1}" class="${cls}">${inner}</button>`;
+            })
+            .join('');
+    document.body.appendChild(menu);
+
+    // at the pointer, or under the button that opened it; kept on screen
+    const rect = at instanceof Element ? at.getBoundingClientRect() : null;
+    const x = rect ? rect.right - menu.offsetWidth : at.clientX;
+    const y = rect ? rect.bottom + 4 : at.clientY;
+    menu.style.left = `${Math.max(8, Math.min(x, window.innerWidth - menu.offsetWidth - 8))}px`;
+    menu.style.top = `${Math.max(8, Math.min(y, window.innerHeight - menu.offsetHeight - 8))}px`;
+
+    menu.addEventListener('click', (event) => {
+        const action = event.target.closest('[data-context-action]');
+        if (event.target.closest('a, [data-context-action]')) closeContextMenu();
+        if (action) actions[Number(action.dataset.contextAction)]?.();
+    });
+    menu.addEventListener('keydown', (event) => {
+        const entries = [...menu.querySelectorAll('[role="menuitem"]')];
+        const index = entries.indexOf(document.activeElement);
+        if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+            event.preventDefault();
+            const next = (index + (event.key === 'ArrowDown' ? 1 : -1) + entries.length) % entries.length;
+            entries[next]?.focus();
+        }
+    });
+    menu.querySelector('[role="menuitem"]')?.focus({ preventScroll: true });
+}
+window.openContextMenu = openContextMenu;
+
+document.addEventListener(
+    'mousedown',
+    (event) => {
+        if (event.target.closest('#contextMenu') || !document.getElementById('contextMenu')) return;
+        contextMenuDismissed = { owner: contextMenuOwner, at: Date.now() };
+        closeContextMenu();
+    },
+    true
+);
+// Escape closes the menu only, not the dropdown or window it was opened from
+document.addEventListener(
+    'keydown',
+    (event) => {
+        if (event.key !== 'Escape' || !document.getElementById('contextMenu')) return;
+        event.stopImmediatePropagation();
+        closeContextMenu();
+    },
+    true
+);
+window.addEventListener('scroll', closeContextMenu, { passive: true });
+window.addEventListener('resize', closeContextMenu);
+window.addEventListener('blur', closeContextMenu);
 
 function closeInvestigationsDropdown() {
     const dropdown = document.getElementById('investigationsDropdownMenu');
@@ -659,11 +914,48 @@ function showLiveResultBanner() {
         <span class="block w-2.5 h-2.5 rounded-full bg-purple-400 animate-pulse shrink-0"></span>
         <span class="flex-1 text-gray-200">This lookup is still running in the background - the page updates as results arrive.</span>
         <button type="button" data-live-stop class="shrink-0 whitespace-nowrap text-xs text-gray-400 hover:text-white border border-gray-700 rounded-lg px-2 py-1">Stop following</button>`;
-    // in the page, under its title (where a saved result that doesn't fit is shown too)
+    placeUnderPageTitle(banner, document.getElementById('savedResultBar'));
+}
+
+// In the page, under its title (where a saved result that doesn't fit is shown too), after `after` if given
+function placeUnderPageTitle(element, after = null) {
     const page = document.querySelector('.page') || document.querySelector('main') || document.body;
-    const lead = page.querySelector(':scope > .page-lead');
-    if (lead) lead.after(banner);
-    else page.prepend(banner);
+    const lead = after || page.querySelector(':scope > .page-lead');
+    if (lead) lead.after(element);
+    else page.prepend(element);
+}
+
+// Which saved result the page shows: what was looked up, with which module and when
+function showSavedResultBar(record, investigationId) {
+    document.getElementById('savedResultBar')?.remove();
+    const bar = document.createElement('div');
+    bar.id = 'savedResultBar';
+    bar.className =
+        'mb-5 bg-[#1a1b26] border border-gray-700 rounded-xl px-4 py-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm';
+    const method = typeof methodLabel === 'function' ? methodLabel(record.method_name) : record.method_name;
+    const when = record.timestamp
+        ? `${timeAgo(record.timestamp)} · ${new Date(record.timestamp).toLocaleString()}`
+        : '';
+    const link = `/api/investigations/${encodeURIComponent(investigationId)}/view#result-${encodeURIComponent(record.result_id)}`;
+    bar.innerHTML = `
+        <i class="fas fa-history text-purple-400 shrink-0"></i>
+        <span class="text-gray-400 shrink-0">Saved result</span>
+        ${record.target ? `<span class="font-mono text-purple-200 break-all">${escapeHtml(record.target)}</span>` : ''}
+        <span class="text-gray-500">${escapeHtml([method, when].filter(Boolean).join(' · '))}</span>
+        ${record.partial && !record.running ? '<span class="text-[10px] uppercase px-1.5 py-0.5 rounded bg-yellow-900/60 text-yellow-300" title="The lookup was stopped before it finished">partial</span>' : ''}
+        <a href="${escapeAttr(link)}" class="ml-auto text-xs text-purple-300 hover:text-white shrink-0">Open in investigation →</a>`;
+    placeUnderPageTitle(bar);
+}
+
+// The page's search box shows what the loaded result looked up (when it's one value and the box is empty)
+async function prefillSavedQuery(record) {
+    const target = String(record.target || '').trim();
+    if (!target || / \+ |, |…/.test(target)) return;
+    const module = (await getModules()).find(
+        (m) => m.page === window.location.pathname && m.prefill && m.service === record.service_name
+    );
+    const input = module && document.querySelector(module.prefill.input);
+    if (input && !input.value.trim()) input.value = target;
 }
 
 async function loadResult(resultId, investigationId = currentInvestigationId, following = false) {
@@ -692,6 +984,8 @@ async function loadResult(resultId, investigationId = currentInvestigationId, fo
                 console.error("This page can't draw the saved result:", renderError);
                 showSavedResultFallback(record);
             }
+            showSavedResultBar(record, investigationId);
+            if (!following) prefillSavedQuery(record);
         }
         document.getElementById('resultLoadNotification')?.remove();
         document.getElementById('historyModal')?.remove();
@@ -716,25 +1010,29 @@ async function loadResult(resultId, investigationId = currentInvestigationId, fo
 }
 
 // Starting a search of your own on the page stops following the background one
+// (and the "Saved result" bar goes: the page no longer shows that result)
+function ownSearchStarted() {
+    if (live.resultId) stopFollowingResult();
+    document.getElementById('savedResultBar')?.remove();
+}
 document.addEventListener(
     'click',
     (event) => {
-        if (!live.resultId) return;
-        if (event.target.closest('[data-live-stop]')) return stopFollowingResult();
-        if (event.target.closest('#liveResultBanner')) return;
+        if (live.resultId && event.target.closest('[data-live-stop]')) return stopFollowingResult();
+        if (event.target.closest('#liveResultBanner, #savedResultBar, #historyModal, #resultLoadNotification')) return;
         if (
             event.target.closest(
                 'button.btn-primary, button[id*="search" i], button[onclick*="search" i], button[type="submit"]'
             )
         )
-            stopFollowingResult();
+            ownSearchStarted();
     },
     true
 );
 document.addEventListener(
     'keydown',
     (event) => {
-        if (live.resultId && event.key === 'Enter' && event.target.matches('input, textarea')) stopFollowingResult();
+        if (event.key === 'Enter' && event.target.matches('.page input, .page textarea')) ownSearchStarted();
     },
     true
 );
@@ -1017,8 +1315,26 @@ function closePivotMenu() {
 async function openPivotMenu(type, value, anchor, options = {}) {
     closePivotMenu();
     pivotMenuAnchor = anchor;
-    const modules = (await getModules()).filter((m) => (m.accepts || []).includes(type));
+    // earlier lookups of this identifier in the investigation results are saved to
+    const investigationId = sharedExclude();
+    const [allModules, lookups] = await Promise.all([getModules(), earlierLookups(investigationId, type, value)]);
+    const modules = allModules.filter((m) => (m.accepts || []).includes(type));
     if (pivotMenuAnchor !== anchor) return; // closed or another chip clicked while loading
+    const earlierLine = (m) => {
+        const earlier = lookups.filter((p) => p.service === m.service);
+        if (!earlier.length) return '';
+        const last = earlier[0];
+        // a follow-up is shown inside its parent on the investigation page
+        const href =
+            m.page && !last.child_id
+                ? `${m.page}?load_result=${encodeURIComponent(last.result_id)}&investigation=${encodeURIComponent(investigationId)}`
+                : `/api/investigations/${encodeURIComponent(investigationId)}/view#result-${encodeURIComponent(last.result_id)}`;
+        // which lookup it was: modules can share where they save (WHOIS and WHOIS history)
+        const what = typeof methodLabel === 'function' ? methodLabel(last.method) : last.method;
+        return `<div class="text-[11px] text-emerald-300/90 mt-0.5 truncate" title="Already in this investigation">
+            <i class="fas fa-check mr-1"></i>${escapeHtml(what)} · ${escapeHtml(timeAgo(last.timestamp))}${earlier.length > 1 ? ` (${earlier.length} times)` : ''}
+            · <a href="${escapeAttr(href)}" data-earlier-open class="underline hover:text-white">open</a></div>`;
+    };
     const menu = document.createElement('div');
     menu.id = 'pivotMenu';
     menu.className = 'fixed z-[70] w-80 bg-gray-900 border border-gray-700 rounded-xl shadow-2xl text-sm slide-in';
@@ -1030,6 +1346,7 @@ async function openPivotMenu(type, value, anchor, options = {}) {
             <div class="min-w-0">
                 <div class="text-white truncate">${escapeHtml(m.name)}</div>
                 <div class="flex items-center gap-1.5 mt-0.5">${moduleBadges(m)}${m.ready ? '' : `<span class="text-[10px] text-red-300 truncate" title="${escapeAttr((m.problems || []).join('; '))}">not ready</span>`}</div>
+                ${earlierLine(m)}
             </div>
             <div class="flex gap-1.5 shrink-0">
                 <button type="button" data-pivot-run="${escapeAttr(m.id)}" ${m.ready ? '' : 'disabled'}
@@ -1088,6 +1405,20 @@ async function openPivotMenu(type, value, anchor, options = {}) {
     });
 }
 window.openPivotMenu = openPivotMenu;
+
+// Lookups of an identifier already saved in an investigation, newest first ([] if none or unknown)
+async function earlierLookups(investigationId, type, value) {
+    if (!investigationId) return [];
+    try {
+        const params = new URLSearchParams({ type, value });
+        const response = await fetch(
+            `/api/investigations/${encodeURIComponent(investigationId)}/entities/lookups?${params}`
+        );
+        return response.ok ? (await response.json()).lookups || [] : [];
+    } catch (e) {
+        return [];
+    }
+}
 
 document.addEventListener('click', (event) => {
     const trigger = event.target.closest('[data-pivot-type]');
@@ -1468,6 +1799,25 @@ function pivotInText(text) {
     return out + escapeHtml(source.slice(last));
 }
 window.pivotInText = pivotInText;
+
+// Analytics / ads IDs BuiltWith lists the other websites of (Google Analytics, Tag Manager, AdSense)
+const BUILTWITH_TAG_RE = /^(UA-\d{4,10}|G-[A-Z0-9]{8,12}|GTM-[A-Z0-9]{5,8}|pub-\d{14,20})$/;
+function builtwithTagUrl(id) {
+    const tag = String(id ?? '').trim();
+    return BUILTWITH_TAG_RE.test(tag) ? `https://builtwith.com/relationships/tag/${encodeURIComponent(tag)}` : null;
+}
+window.builtwithTagUrl = builtwithTagUrl;
+
+// A tracking ID in a result, with a link to the other websites that carry it when BuiltWith knows the kind
+function trackerTag(id) {
+    const url = builtwithTagUrl(id);
+    return `<span class="inline-flex items-center gap-1"><code class="text-purple-200">${escapeHtml(id)}</code>${
+        url
+            ? `<a href="${escapeAttr(url)}" target="_blank" rel="noopener noreferrer" class="text-gray-400 hover:text-white" title="Other websites with this tag (BuiltWith)"><i class="fas fa-external-link-alt text-[10px]"></i></a>`
+            : ''
+    }</span>`;
+}
+window.trackerTag = trackerTag;
 
 // Identifiers grouped by type, as pivot chips (investigation results and module pages)
 function identifierGroupsHtml(entities, limit = 150) {

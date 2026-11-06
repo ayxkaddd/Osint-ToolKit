@@ -1,4 +1,5 @@
 """Search box, background jobs, entities/triage, phone & IP lookups, case report."""
+import re
 from collections import Counter, defaultdict
 from datetime import datetime
 from typing import Optional
@@ -161,10 +162,15 @@ def list_entities(investigation_id: UUID, type: Optional[str] = None, q: Optiona
     page = entities[offset:offset + limit]
     elsewhere = investigation_service.investigations_with([e["key"] for e in page if e["key"] in shared_keys],
                                                           exclude=investigation_id)
+    # what each source result looked up, so the list can say which result an identifier is in
+    targets = {r["result_id"]: r.get("target") for r in investigation_service.get_investigation_results(investigation_id)}
     for entity in page:
         entity["label"] = type_label(entity["type"])
-        entity["sources"] = entity.get("sources", [])[:20]
+        entity["sources"] = [{**src, "target": targets.get(src.get("result_id"))} for src in entity.get("sources", [])[:20]]
         entity["elsewhere"] = elsewhere.get(entity["key"], [])
+    in_notes = investigation_service.notes_mentioning(investigation_id, page)
+    for entity in page:
+        entity["notes"] = in_notes.get(entity["key"], [])
     return {"total": total, "types": [{"type": t, "label": type_label(t), "count": c} for t, c in type_counts.most_common()],
             "shared_count": len(shared_keys), "entities": page}
 
@@ -186,6 +192,18 @@ def list_events(investigation_id: UUID):
     """Dates found inside the results (account created, domain registered, messages...)."""
     _require_investigation(investigation_id)
     return {"events": investigation_service.get_events(investigation_id)}
+
+
+@router.get("/api/investigations/{investigation_id}/entities/lookups")
+def entity_lookups(investigation_id: UUID, type: str, value: str):
+    """Earlier lookups of one identifier in this investigation (the pivot menu shows
+    them next to each module, so a paid lookup isn't run twice by accident)."""
+    _require_investigation(investigation_id)
+    entity = make_entity(type, value)
+    if entity is None:
+        return {"lookups": []}
+    lookups = investigation_service.previous_lookups(investigation_id, entity.key)
+    return {"lookups": sorted(lookups, key=lambda p: p.get("timestamp", ""), reverse=True)}
 
 
 @router.patch("/api/investigations/{investigation_id}/entities")
@@ -248,6 +266,25 @@ async def ip_lookup(ip: str = Query(..., min_length=3, max_length=60)) -> dict:
 # ==================== REPORT ====================
 
 STATUS_LABELS = {"confirmed": "Confirmed", "important": "Important", "false_positive": "False positive"}
+REPORT_MAX_EVENTS = 500
+NOTE_REFERENCE = re.compile(r"!?\[\[([a-z_]+):([^\]|\n]+)(?:\|([^\]\n]*))?\]\]")
+
+
+def _event_when(date: Optional[str], precision: Optional[str]) -> str:
+    """An event date as precise as it is known: "2019", "Mar 2019", "5 Mar 2019", "2019-03-05 10:00 UTC"."""
+    if not date:
+        return ""
+    try:
+        if precision == "year":
+            return date[:4]
+        if precision == "month":
+            return datetime.strptime(date[:7], "%Y-%m").strftime("%b %Y")
+        if precision == "time":
+            return datetime.fromisoformat(date).strftime("%Y-%m-%d %H:%M UTC")
+        day = datetime.strptime(date[:10], "%Y-%m-%d")
+        return f"{day.day} {day:%b %Y}"
+    except ValueError:
+        return date
 
 
 @router.get("/api/investigations/{investigation_id}/report", response_class=HTMLResponse)
@@ -271,6 +308,22 @@ def case_report(request: Request, investigation_id: UUID, include: str = Query("
             by_type[type_label(entity["type"])].append(entity)
 
     module_names = {m.service: m.name for m in MODULES_BY_ID.values()}
+    # services several lookups save under (a plain WHOIS lookup isn't "WHOIS history")
+    module_names.update({"whois": "WHOIS", "manual": "Added manually"})
+    # references in notes ([[email:a@b.c|label]], [[result:<id>|label]]) read as their label or value
+    for note in notes:
+        note["content"] = NOTE_REFERENCE.sub(lambda m: m.group(3) or m.group(2), note.get("content") or "")
+
+    # dates inside the results, oldest first; a series (all messages of a chat) is one row
+    events = sorted(investigation_service.get_events(investigation_id), key=lambda e: e["date"])
+    for event in events:
+        event["when"] = _event_when(event["date"], event.get("precision"))
+        if event.get("count"):
+            event["when"] += f" – {_event_when(event.get('end'), event.get('end_precision'))}"
+    shared_keys = investigation_service.shared_entity_keys(investigation_id)
+    elsewhere = investigation_service.investigations_with([e["key"] for e in entities if e["key"] in shared_keys],
+                                                          exclude=investigation_id)
+    shared = [{**e, "elsewhere": elsewhere[e["key"]]} for e in entities if e["key"] in elsewhere]
     return templates.TemplateResponse(request, "report.html", {
         "investigation": info,
         "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
@@ -284,6 +337,11 @@ def case_report(request: Request, investigation_id: UUID, include: str = Query("
         "module_names": module_names,
         "status_labels": STATUS_LABELS,
         "type_label": type_label,
+        "events": events[:REPORT_MAX_EVENTS],
+        "events_total": len(events),
+        "manual_items": investigation_service.manual_items(investigation_id),
+        "tracking_ids": investigation_service.tracking_ids(investigation_id),
+        "shared": shared,
         "counts": {"results": len(results), "entities": len(entities), "notes": len(notes),
                    "modules": len({r["service_name"] for r in results})},
     })

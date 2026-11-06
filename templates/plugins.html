@@ -174,7 +174,10 @@
 
     async function deletePlugin(id) {
         const plugin = plugins.find(p => p.id === id);
-        if (!confirm(`Delete ${plugin ? plugin.name : id}? Its folder (plugins/${id}) is removed. Results it saved stay in your investigations.`)) return;
+        const sure = await appConfirm(`Its folder (plugins/${id}) is removed. Results it saved stay in your investigations.`, {
+            title: `Delete ${plugin ? plugin.name : id}?`, confirmLabel: 'Delete', danger: true,
+        });
+        if (!sure) return;
         const response = await fetch(`/api/plugins/${encodeURIComponent(id)}`, { method: 'DELETE' });
         const data = await response.json().catch(() => ({}));
         if (!response.ok) {
@@ -194,7 +197,9 @@
         const del = event.target.closest('[data-delete]');
         if (del) return deletePlugin(del.dataset.delete);
         const untrust = event.target.closest('[data-untrust]');
-        if (untrust && confirm('Revoke? A plugin from another source with code stays off until you review it again.')) setTrust(untrust.dataset.untrust, null);
+        if (untrust) appConfirm('A plugin from another source with code stays off until you review it again.', {
+            title: 'Revoke the approval?', confirmLabel: 'Revoke', danger: true,
+        }).then((sure) => sure && setTrust(untrust.dataset.untrust, null));
     });
     modal.addEventListener('click', (event) => {
         if (event.target === modal || event.target.closest('[data-review-close]')) modal.classList.add('hidden');

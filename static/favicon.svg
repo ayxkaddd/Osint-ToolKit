@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- OSINT Toolkit: the header's purple shield with a magnifying glass -->
+  <defs>
+    <linearGradient id="shield" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#c084fc"/>
+      <stop offset="1" stop-color="#7c3aed"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="#14151f"/>
+  <path d="M32 7 L53 14.5 V30 C53 43.5 44 53 32 58 C20 53 11 43.5 11 30 V14.5 Z" fill="url(#shield)"/>
+  <circle cx="29.5" cy="29" r="9" fill="none" stroke="#f5f3ff" stroke-width="5"/>
+  <path d="M36 35.5 L42.5 42" stroke="#f5f3ff" stroke-width="5.5" stroke-linecap="round"/>
+</svg>

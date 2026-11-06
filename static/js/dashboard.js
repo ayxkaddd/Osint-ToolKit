@@ -373,7 +373,7 @@ async function saveSettings() {
             closeSettings();
         } catch (error) {
             console.error('Error saving settings:', error);
-            alert('Failed to save settings. Please try again.');
+            showTemporaryNotification('Failed to save settings. Please try again.', 'error');
         }
     } else {
         closeSettings();
