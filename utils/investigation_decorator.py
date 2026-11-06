@@ -35,7 +35,7 @@ import logging
 import time
 from datetime import datetime
 from functools import wraps
-from typing import Any, Optional, Union
+from typing import Any, Optional, Union, get_origin
 from collections.abc import Callable
 from uuid import UUID
 
@@ -236,8 +236,11 @@ def save_investigation(
         # when the route itself doesn't declare them. FastAPI fills only one
         # Response parameter per endpoint, so reuse the route's own if it has one.
         def own_param(cls):
+            # get_origin: on Python 3.10 list[str] passes isinstance(.., type), but
+            # issubclass() refuses it - that stopped the app from starting
             return next((name for name, p in signature.parameters.items()
-                         if isinstance(p.annotation, type) and issubclass(p.annotation, cls)), None)
+                         if isinstance(p.annotation, type) and get_origin(p.annotation) is None
+                         and issubclass(p.annotation, cls)), None)
 
         own_request = own_param(Request)
         own_response = own_param(Response)
