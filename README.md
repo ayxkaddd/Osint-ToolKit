@@ -18,7 +18,7 @@ A self-hosted web workspace for OSINT investigations. Built with FastAPI and Tai
 - **Add manually**: save what you found outside the toolkit (a site without an API, a Telegram bot, a leak) as a result - text, identifiers, a link, a date and files or pasted screenshots
 - **Background lookups**: run a lookup from any identifier's menu and keep working; open it while it runs to watch the results arrive
 - **Universal lookup**: paste an email, phone, @user, domain or IP in the top bar and run a module right from the dropdown, on any page, or open the full list of lookups
-- **Triage, notes and reports**: mark results as confirmed or important, keep Markdown notes with images (drag and drop or paste), print a case report (findings, timeline, files added, tracking IDs, links to other cases) and export the whole case as a .zip with its files
+- **Triage, notes and reports**: mark results as confirmed or important, keep Markdown notes with images (drag and drop or paste), print a case report (findings, timeline, files added, tracking IDs - nothing from other cases, so it can be shared) and export the whole case as a .zip with its files
 - **Dashboard and settings**: each module shows whether it is ready and what it costs; API keys and tool paths are set in the browser
 - **Plugins**: connect any service with an API without writing code - see [Plugins](#plugins)
 
