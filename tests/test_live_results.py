@@ -69,3 +69,14 @@ def test_stream_with_nothing_to_keep_disappears(client, investigation):
             assert _get(client, investigation, result_id).json()["result"]["running"] is True
         return result_id
     assert _get(client, investigation, asyncio.run(run())).status_code == 404
+
+
+def test_routes_with_generic_parameters_can_be_recorded():
+    """list[str] passes isinstance(.., type) on Python 3.10; the decorator must not call issubclass on it."""
+    from starlette.requests import Request
+
+    @save_investigation(service_name="t", method_name="m")
+    async def route(links: list[str], options: dict[str, int], request: Request):
+        return {}
+
+    assert "request" in route.__signature__.parameters and "_investigation_request" not in route.__signature__.parameters

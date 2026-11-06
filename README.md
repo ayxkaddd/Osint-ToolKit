@@ -1,5 +1,7 @@
 # OSINT Toolkit
 
+[![Tests](https://github.com/ayxkaddd/Osint-ToolKit/actions/workflows/tests.yml/badge.svg)](https://github.com/ayxkaddd/Osint-ToolKit/actions/workflows/tests.yml)
+
 A self-hosted web workspace for OSINT investigations. Built with FastAPI and TailwindCSS: every lookup is saved into an investigation, identifiers found in results become one-click pivots into the other modules, and findings, notes and reports live in one place.
 
 ## Preview
