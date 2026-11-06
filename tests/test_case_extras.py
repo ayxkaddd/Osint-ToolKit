@@ -97,7 +97,8 @@ def test_report_has_the_new_sections(client, investigation):
                 files=[("files", ("shot.png", png(), "image/png"))])
 
     page = client.get(f"/api/investigations/{investigation}/report").text
-    assert "Shared with other investigations" in page and "Another case" in page
+    # a report may be shared: nothing from other investigations is in it
+    assert "Shared with other investigations" not in page and "Another case" not in page
     assert "Added manually" in page and "Bot answer" in page and "shot.png" in page
     sha = next(r for r in client.get(f"/api/investigations/{investigation}/export").json()["results"]
                if r["service_name"] == "manual")["result"]["files"][0]["sha256"]

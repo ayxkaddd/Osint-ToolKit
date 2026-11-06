@@ -112,20 +112,6 @@
         </table>
         {% endif %}
 
-        {% if shared %}
-        <h2>Shared with other investigations</h2>
-        <p class="muted">Identifiers that other cases have too - a link between them worth checking.</p>
-        <table>
-            <tr><th>Type</th><th>Value</th><th>Also in</th></tr>
-            {% for e in shared %}
-            <tr>
-                <td>{{ type_label(e.type) }}</td>
-                <td class="v">{{ e.display or e.value }}</td>
-                <td>{% for place in e.elsewhere %}<a href="/api/investigations/{{ place.investigation_id }}/view">{{ place.name }}</a>{% if place.investigation_status and place.investigation_status != 'active' %} <span class="muted">({{ place.investigation_status }})</span>{% endif %}{% if not loop.last %}, {% endif %}{% endfor %}</td>
-            </tr>
-            {% endfor %}
-        </table>
-        {% endif %}
 
         <h2>{% if showing_all %}Results{% else %}Findings{% endif %}</h2>
         {% if not findings %}<p class="muted">No lookups recorded yet.</p>{% endif %}
