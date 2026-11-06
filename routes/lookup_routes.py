@@ -320,10 +320,7 @@ def case_report(request: Request, investigation_id: UUID, include: str = Query("
         event["when"] = _event_when(event["date"], event.get("precision"))
         if event.get("count"):
             event["when"] += f" – {_event_when(event.get('end'), event.get('end_precision'))}"
-    shared_keys = investigation_service.shared_entity_keys(investigation_id)
-    elsewhere = investigation_service.investigations_with([e["key"] for e in entities if e["key"] in shared_keys],
-                                                          exclude=investigation_id)
-    shared = [{**e, "elsewhere": elsewhere[e["key"]]} for e in entities if e["key"] in elsewhere]
+    # Nothing from other investigations goes in: a report is shared with people outside
     return templates.TemplateResponse(request, "report.html", {
         "investigation": info,
         "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
@@ -341,7 +338,6 @@ def case_report(request: Request, investigation_id: UUID, include: str = Query("
         "events_total": len(events),
         "manual_items": investigation_service.manual_items(investigation_id),
         "tracking_ids": investigation_service.tracking_ids(investigation_id),
-        "shared": shared,
         "counts": {"results": len(results), "entities": len(entities), "notes": len(notes),
                    "modules": len({r["service_name"] for r in results})},
     })
