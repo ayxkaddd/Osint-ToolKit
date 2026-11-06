@@ -17,7 +17,9 @@ concurrency:
 
 jobs:
   tests:
-    runs-on: ubuntu-latest
+    # Pinned, not ubuntu-latest: that moves to Ubuntu 26 (from Oct 2026), where prebuilt
+    # older Pythons (3.10) may not exist yet. Move it up on purpose, after a test run.
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     strategy:
       fail-fast: false
