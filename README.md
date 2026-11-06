@@ -10,19 +10,20 @@ A self-hosted web workspace for OSINT investigations. Built with FastAPI and Tai
 ## Features
 
 ### Investigations
-- **Investigations**: every lookup is saved to the active investigation, follow-up lookups are grouped under the result they came from. Select several results to delete them, set their assessment, or move them to another investigation
+- **Investigations**: every lookup is saved to the active investigation, follow-up lookups are grouped under the result they came from. Select several results to delete them, set their assessment, or move them to another investigation. Active, completed and archived cases have their own tabs; right-click an investigation or a result for its actions
+- **Re-runs**: running the same lookup again shows what changed since last time - identifiers new and gone, changed fields, values added and removed
 - **Pivots**: emails, phones, usernames, domains, IPs and Telegram IDs found in any result can be sent to the matching modules in one click
 - **Shared with other investigations**: identifiers that another investigation has too are marked with the number of investigations, and their menu links to them
 - **Timeline**: when things happened, from the dates inside the results - accounts created, domains registered or expiring, leaks, name changes, messages
 - **Add manually**: save what you found outside the toolkit (a site without an API, a Telegram bot, a leak) as a result - text, identifiers, a link, a date and files or pasted screenshots
 - **Background lookups**: run a lookup from any identifier's menu and keep working; open it while it runs to watch the results arrive
 - **Universal lookup**: paste an email, phone, @user, domain or IP in the top bar and run a module right from the dropdown, on any page, or open the full list of lookups
-- **Triage, notes and reports**: mark results as confirmed or important, keep Markdown notes with images (drag and drop or paste), export a report of the findings
+- **Triage, notes and reports**: mark results as confirmed or important, keep Markdown notes with images (drag and drop or paste), print a case report (findings, timeline, files added, tracking IDs, links to other cases) and export the whole case as a .zip with its files
 - **Dashboard and settings**: each module shows whether it is ready and what it costs; API keys and tool paths are set in the browser
 - **Plugins**: connect any service with an API without writing code - see [Plugins](#plugins)
 
 ### Modules
-- **Username Search**: checks ~700 sites (WhatsMyName list) for an account, streams results live, re-checks the sites that errored
+- **Username Search**: checks ~700 sites (WhatsMyName list) for an account, streams results live, says why a site couldn't be checked (blocked, rate limited) and re-checks those
 - **OSINT Industries**: accounts registered to an email, phone or username
 - **GHunt**: the Google account behind an email or Gaia ID
 - **GitHub Analysis (GitFive)**: real emails and names from commits, linked accounts and SSH keys
@@ -32,7 +33,7 @@ A self-hosted web workspace for OSINT investigations. Built with FastAPI and Tai
 - **Cavalier (Hudson Rock)**: infostealer infections that leaked logins for an email or username
 - **Phone Lookup**: offline number analysis plus a paid HLR network lookup
 - **Web Search**: search-engine dorks for a username, name, email or phone (optionally run through SerpAPI)
-- **DNS Recon**: subdomains (crt.sh, subfinder, SecurityTrails, VirusTotal), mail/DNS/hosting providers, SPF/DMARC, verification tokens, ASN hosting and DNS history
+- **DNS Recon**: subdomains (crt.sh, subfinder, SecurityTrails, VirusTotal), mail/DNS/hosting providers, SPF/DMARC, verification tokens, analytics and ads IDs on the pages (with the other websites that use them, via BuiltWith), ASN hosting and DNS history
 - **WHOIS History**: every archived WHOIS record of a domain - free preview of how many exist, then contacts, registrar/name server periods and a change log
 - **Shared NS Lookup**: domains on the same name server pair, then parsed WHOIS and an httpx web fingerprint of each to group the domains most likely run by the same owner
 - **IP Lookup**: location, network owner, reverse DNS, abuse reports and exposed services
