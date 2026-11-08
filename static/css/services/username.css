@@ -962,11 +962,16 @@ which made
     gap: 0.9rem;
     margin-bottom: 0.9rem;
 }
+/* A real picture is clearly bigger than the site icon that stands in when there is none */
 .username-profile-pic {
+    --pic-size: 5rem;
     position: relative;
-    flex: 0 0 3.5rem;
-    width: 3.5rem;
-    height: 3.5rem;
+    flex: 0 0 var(--pic-size);
+    width: var(--pic-size);
+    height: var(--pic-size);
+}
+.username-profile-pic.no-avatar {
+    --pic-size: 3.5rem;
 }
 .has-banner .username-profile-head {
     margin-top: 0.75rem;
@@ -1136,5 +1141,11 @@ which made
 @media (max-width: 560px) {
     .username-profile-card {
         --card-pad: 1rem;
+    }
+    .username-profile-pic {
+        --pic-size: 4.25rem;
+    }
+    .username-profile-pic.no-avatar {
+        --pic-size: 3.25rem;
     }
 }
