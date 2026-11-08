@@ -8,7 +8,7 @@ from utils.config import get_setting
 class WhoisService:
     def __init__(self):
         self.domain = "78.46.239.70:8000"
-        self.uri = "/api/whois"
+        self.uri = "/api/whois/"
         self.whois_history_domain = "whois-history.whoisxmlapi.com"
 
     @property
