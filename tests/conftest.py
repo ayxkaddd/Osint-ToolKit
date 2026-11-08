@@ -30,6 +30,8 @@ shutil.copy(REPO / "resources.json", _workdir / "resources.json")
     "GHUNT_VENV_PATH=/bin/true\nGHUNT_SCRIPT_PATH=/bin/true\n"
     # The proxy pool would otherwise fetch public proxy lists over the network at startup
     "PROXY_ENABLED=false\n"
+    # Never the operator's real Google session (~/.malfrats/ghunt/creds.m) in tests
+    f"GHUNT_CREDS_PATH={_workdir / 'no-ghunt-session'}\n"
 )
 os.chdir(_workdir)
 sys.path.insert(0, str(REPO))

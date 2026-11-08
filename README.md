@@ -25,7 +25,7 @@ A self-hosted web workspace for OSINT investigations. Built with FastAPI and Tai
 - **Plugins**: connect any service with an API without writing code - see [Plugins](#plugins)
 
 ### Modules
-- **Username Search**: checks ~700 sites (WhatsMyName list) for an account, streams results live, says why a site couldn't be checked (blocked, rate limited) and re-checks those. Requests carry a real browser's fingerprint, so fewer sites block them. An overview sums up the photos, names, usernames and places the accounts show and when they were first and last active; each account's card leads with its picture, name and @handle, then the bio, follower counts and dates
+- **Username Search**: checks ~700 sites (WhatsMyName list) for an account, streams results live, says why a site couldn't be checked (blocked, rate limited) and re-checks those. Requests carry a real browser's fingerprint, so fewer sites block them. An overview sums up the photos, names, usernames and places the accounts show and when they were first and last active; each account's card leads with its picture, name and @handle, then the bio, follower counts and dates. Optionally also checks whether the username is a mailbox at ~20 email providers (Microsoft, Yahoo, AOL, Mail.ru, Zoho, Rambler, Posteo, Gmail and more) - see [Email providers](#email-providers)
 - **OSINT Industries**: accounts registered to an email, phone or username
 - **GHunt**: the Google account behind an email or Gaia ID
 - **GitHub Analysis (GitFive)**: real emails and names from commits, linked accounts and SSH keys
@@ -108,6 +108,17 @@ GHUNT_SCRIPT_PATH=/path/to/GHunt/main.py
 ```
 
 With neither set, the `ghunt` command on the PATH is used.
+
+## Email providers
+
+Tick **Also check email providers** under the username search box to see whether the username is also a mailbox: for `someuser`, whether `someuser@outlook.com`, `@yahoo.com`, `@mail.ru` and so on exist. Found addresses become email chips you can look up in other modules.
+
+- Each provider is asked the way its own signup or sign-in page asks ("is this name taken?"). There are no password-reset or recovery requests, so nothing reaches the owner of the address. A provider that doesn't answer clearly is shown as "couldn't check", with the reason, never as "not registered".
+- **Gmail** is checked the way GHunt does it, with your GHunt session (run `ghunt login` first), and only after you allow it in the dialog on the page. The lookup goes straight to Google, never through proxies. To use a session file somewhere other than `~/.malfrats/ghunt/creds.m`, set `GHUNT_CREDS_PATH`.
+- **Yandex and mail.de** are asked through their mail servers, which needs outbound port 25 (blocked by many home and cloud networks).
+- **Proton and iCloud** no longer reveal whether an address exists; an address there still counts as found when it has a Gravatar profile.
+
+Most provider checks are adapted from [mailcat](https://github.com/sharsil/mailcat) (Apache License 2.0).
 
 ## Telegram (Funstat media, VK history)
 

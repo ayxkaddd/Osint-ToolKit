@@ -14,6 +14,7 @@ Requests go through the proxy pool exactly like the httpx clients
 (utils.proxy_transport.send_rotating): a fast proxy, another one, then direct.
 """
 import re
+import time
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any, Optional
@@ -24,6 +25,7 @@ from curl_cffi.requests import AsyncSession
 from curl_cffi.requests.exceptions import RequestException
 from curl_cffi.requests.exceptions import Timeout as CurlTimeout
 
+from services.proxy_pool import pool
 from utils.proxy_transport import (PROXY_CONNECT_TIMEOUT, PROXY_RETRIES, REPLAYABLE_METHODS,
                                    send_rotating)
 
@@ -99,12 +101,18 @@ class BrowserClient:
     def __init__(self, *, timeout: float = 10.0, connect_timeout: float = 5.0, max_clients: int = 30,
                  verify: bool = True, follow_redirects: bool = True, max_body: Optional[int] = None,
                  retries: int = PROXY_RETRIES, attempt_timeout: Optional[float] = None,
-                 impersonate: str = BROWSER):
+                 impersonate: str = BROWSER, sticky: bool = False):
+        """``sticky``: every request of this client goes through the same proxy (or
+        direct), for checks in several steps - a token, then the question - that a
+        site ties to one address."""
         self._timeout = timeout
         self._connect_timeout = connect_timeout
         self._max_body = max_body
         self._retries = retries
         self._attempt_timeout = attempt_timeout
+        self._sticky = sticky
+        self._sticky_proxy: Optional[str] = None
+        self._sticky_chosen = False
         # max_clients is curl's own concurrency cap (default 10): keep it at the caller's width
         self._session = AsyncSession(impersonate=impersonate, max_clients=max_clients, verify=verify,
                                      allow_redirects=follow_redirects, max_redirects=MAX_REDIRECTS)
@@ -130,6 +138,8 @@ class BrowserClient:
             return await self._send(method, url, headers, json, data if data is not None else content, proxy)
 
         try:
+            if self._sticky:
+                return await self._send_sticky(send, method)
             return await send_rotating(send, replayable=method in REPLAYABLE_METHODS,
                                        connect_error=_connect_error, retries=self._retries,
                                        attempt_timeout=self._attempt_timeout)
@@ -137,6 +147,28 @@ class BrowserClient:
             raise RequestTimeout("Timeout") from e
         except RequestException as e:
             raise RequestError(_readable(e)) from e
+
+    async def _send_sticky(self, send, method: str) -> BrowserResponse:
+        if not self._sticky_chosen:
+            self._sticky_chosen = True
+            self._sticky_proxy = pool.pick() if pool.enabled() else None
+        url = self._sticky_proxy
+        if not url:
+            return await send(None)
+        proxy = pool.acquire(url)
+        start = time.monotonic()
+        try:
+            response = await send(url)
+        except Exception as e:  # noqa: BLE001
+            pool.report(url, ok=False)
+            if not (method in REPLAYABLE_METHODS or _connect_error(e)):
+                raise  # the body may have been sent: don't send it twice
+            self._sticky_proxy = None  # the proxy failed: the rest of the check goes direct
+            return await send(None)
+        finally:
+            pool.release(proxy)
+        pool.report(url, ok=True, latency=time.monotonic() - start)
+        return response
 
     async def _send(self, method, url, headers, json, data, proxy) -> BrowserResponse:
         body = bytearray()

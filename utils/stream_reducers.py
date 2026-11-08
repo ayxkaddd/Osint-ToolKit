@@ -66,6 +66,8 @@ def reduce_username_search(events: list[Any]) -> dict[str, Any]:
     found: dict[str, dict[str, Any]] = {}
     profiles: dict[str, Any] = {}
     web_mentions: list[dict[str, Any]] = []
+    mailboxes: list[dict[str, Any]] = []
+    mailbox_checks: dict[str, Any] = {}
     checked = 0
 
     for event in events:
@@ -85,6 +87,17 @@ def reduce_username_search(events: list[Any]) -> dict[str, Any]:
             profiles[data.get("url")] = data.get("profile_data")
         elif kind == "duckduckgo_result":
             web_mentions.append(data)
+        elif kind == "mailbox_result":
+            # Found addresses keep their "email" key (they become investigation entities);
+            # the rest are kept by domain only, so an address that doesn't exist isn't one
+            if data.get("status") == "found":
+                mailboxes.append(data)
+            else:
+                domain = str(data.get("email", "")).rpartition("@")[2]
+                entry = {"provider": data.get("provider"), "domain": domain}
+                if data.get("reason"):
+                    entry["reason"] = data["reason"]
+                mailbox_checks.setdefault(data.get("status") or "error", []).append(entry)
         elif kind == "search_completed":
             completed = data
             username = data.get("username", username)
@@ -106,6 +119,7 @@ def reduce_username_search(events: list[Any]) -> dict[str, Any]:
         },
         "results": results,
         "web_mentions": web_mentions,
+        **({"mailboxes": mailboxes, "mailbox_checks": mailbox_checks} if mailboxes or mailbox_checks else {}),
     }
 
 

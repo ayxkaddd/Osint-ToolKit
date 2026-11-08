@@ -17,6 +17,8 @@ import httpx
 from datetime import datetime
 import uuid
 
+from services.mailbox_service import FOUND as MAILBOX_FOUND, PROVIDERS as MAILBOX_PROVIDERS
+from services.mailbox_service import check_mailboxes as run_mailbox_checks
 from services.proxy_pool import pool as proxy_pool
 from utils.browser_client import BrowserClient, BrowserResponse, RequestError, RequestTimeout
 from utils.proxy_transport import proxied_get
@@ -200,6 +202,9 @@ class EventType(Enum):
     DUCKDUCKGO_STARTED = "duckduckgo_started"
     DUCKDUCKGO_RESULT = "duckduckgo_result"
     PROFILE_EXTRACTED = "profile_extracted"
+    MAILBOX_STARTED = "mailbox_started"
+    MAILBOX_RESULT = "mailbox_result"
+    MAILBOX_COMPLETED = "mailbox_completed"
 
 
 def serialize_enum_dict(data: dict) -> dict:
@@ -730,6 +735,10 @@ class StreamingUsernameSearchService:
             return 0
         if event.event_type == EventType.SITE_RESULT:
             return 1 if event.data.get("status") == CheckStatus.FOUND.value else 2
+        if event.event_type == EventType.MAILBOX_RESULT:
+            return 1 if event.data.get("status") == MAILBOX_FOUND else 3
+        if event.event_type in (EventType.MAILBOX_STARTED, EventType.MAILBOX_COMPLETED):
+            return 3
         if event.event_type in [EventType.DUCKDUCKGO_RESULT, EventType.DUCKDUCKGO_STARTED]:
             return 3
         return 4
@@ -737,6 +746,8 @@ class StreamingUsernameSearchService:
     @staticmethod
     def _count_result(event: StreamEvent, stats: dict, total: int) -> None:
         """Add a site result to the totals and attach the progress to the event."""
+        if event.event_type == EventType.MAILBOX_RESULT and event.data.get("status") == MAILBOX_FOUND:
+            stats["mailboxes_found"] = stats.get("mailboxes_found", 0) + 1
         if event.event_type != EventType.SITE_RESULT:
             return
         stats["checked"] += 1
@@ -771,14 +782,30 @@ class StreamingUsernameSearchService:
                     data={"site_name": result.site_name, "category": result.category, "url": result.url,
                           "profile_data": profile_data, "checked_at": result.checked_at}))
 
+    async def stream_mailboxes(self, username: str, queue_event) -> None:
+        """Whether the username is a mailbox at the email providers, as each one answers."""
+        await queue_event(StreamEvent(event_type=EventType.MAILBOX_STARTED,
+                                      data={"providers": [p.name for p in MAILBOX_PROVIDERS]}))
+        found = 0
+        try:
+            async for result in run_mailbox_checks(username):
+                found += result.status == MAILBOX_FOUND
+                await queue_event(StreamEvent(event_type=EventType.MAILBOX_RESULT, data=result.to_dict()))
+        except Exception as e:  # noqa: BLE001 - the site checks go on regardless
+            logger.error("mailbox checks failed: %s", e)
+        # The providers answer in seconds, long before the sites: the page can settle the panel
+        await queue_event(StreamEvent(event_type=EventType.MAILBOX_COMPLETED, data={"found": found}))
+
     async def stream_search(self,
                            username: str,
                            include_duckduckgo: bool = False,
                            extract_profile: bool = False,
                            categories: Optional[list[str]] = None,
                            priority_sites: Optional[list[str]] = None,
-                           only_sites: Optional[list[str]] = None) -> AsyncGenerator[StreamEvent, None]:
-        """Stream search results as they become available."""
+                           only_sites: Optional[list[str]] = None,
+                           check_mailboxes: bool = False) -> AsyncGenerator[StreamEvent, None]:
+        """Stream search results as they become available. ``check_mailboxes``: also ask the
+        email providers whether the username is a mailbox there (services/mailbox_service.py)."""
         search_id = str(uuid.uuid4())
         start_time = time.time()
         metadata = await asyncio.to_thread(self.get_metadata)
@@ -810,6 +837,8 @@ class StreamingUsernameSearchService:
                      for site in sites]
             if include_duckduckgo:
                 tasks.append(asyncio.create_task(self.stream_duckduckgo_search(client, username, queue_event)))
+            if check_mailboxes:
+                tasks.append(asyncio.create_task(self.stream_mailboxes(username, queue_event)))
 
             while any(not task.done() for task in tasks) or not result_queue.empty():
                 try:
@@ -835,4 +864,5 @@ class StreamingUsernameSearchService:
                   "total_found": stats["found"], "total_not_found": stats["not_found"],
                   "total_errors": stats["errors"], "total_checked": stats["checked"],
                   "search_time_seconds": round(time.time() - start_time, 2),
+                  **({"mailboxes_found": stats.get("mailboxes_found", 0)} if check_mailboxes else {}),
                   "success_rate": round((stats["found"] / stats["checked"]) * 100, 2) if stats["checked"] > 0 else 0})
