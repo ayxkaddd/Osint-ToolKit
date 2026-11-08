@@ -267,7 +267,12 @@ class OSINTSearch {
                 last_seen: info.lastActiveDate ? info.lastActiveDate.toISOString() : null,
             };
         });
-        container.innerHTML = oiSummaryHtml(accounts);
+        const html = oiSummaryHtml(accounts);
+        // Most results add nothing to the summary: leave it alone then
+        if (html === this.overviewHtml) return;
+        this.overviewHtml = html;
+        // The photos already shown stay as they are (rebuilding them made them blink)
+        replaceKeepingImages(container, html);
         if (window.lucide) lucide.createIcons();
     }
 
@@ -307,6 +312,8 @@ class OSINTSearch {
 
         if (existingCard) {
             newCard.dataset.order = existingCard.dataset.order;
+            // The site icon and anything else already loaded carry over without reloading
+            keepLoadedImages(existingCard, newCard);
             existingCard.replaceWith(newCard);
             return;
         }
@@ -681,6 +688,18 @@ class OSINTSearch {
     renderResults() {
         if (!this.elements.resultsMasonry || !this.elements.groupedResults) return;
 
+        // Cards are rebuilt for the other layout: their loaded pictures move with them
+        const previous = new Map();
+        this.elements.resultsContainer.querySelectorAll('.username-result-card').forEach((card) => {
+            previous.set(`${card.dataset.siteName}\n${card.dataset.resultUrl}`, card);
+        });
+        const createCard = (result) => {
+            const card = this.createResultCard(result);
+            const old = previous.get(`${result.siteName}\n${result.url}`);
+            if (old) keepLoadedImages(old, card);
+            return card;
+        };
+
         masonryLayout(this.elements.resultsMasonry);
         this.elements.groupedResults.innerHTML = '';
 
@@ -691,14 +710,14 @@ class OSINTSearch {
                     const section = this.createGroupedCategory(category);
                     const grid = section.querySelector('.username-category-results');
                     this.resultsByCategory[category].forEach((result) => {
-                        masonryAppend(grid, this.createResultCard(result));
+                        masonryAppend(grid, createCard(result));
                     });
                     this.elements.groupedResults.appendChild(section);
                 });
             this.filterByCategory(this.activeCategory);
         } else {
             this.results.forEach((result) => {
-                masonryAppend(this.elements.resultsMasonry, this.createResultCard(result));
+                masonryAppend(this.elements.resultsMasonry, createCard(result));
             });
         }
     }
@@ -1580,6 +1599,8 @@ class OSINTSearch {
         this.elements.filterSection.classList.add('hidden');
         this.elements.categoryFilter.classList.add('hidden');
         if (this.elements.overview) this.elements.overview.innerHTML = '';
+        this.overviewHtml = '';
+        document.getElementById('usernameRetryBox')?.remove(); // belongs to the previous search
         this.updateStats();
 
         this.elements.progressBar.style.width = '0%';

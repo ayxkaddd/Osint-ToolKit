@@ -44,6 +44,33 @@ function jsArg(value) {
 }
 window.jsArg = jsArg;
 
+// Pictures already on screen are carried over when a part of the page is rebuilt: an
+// <img> in `fresh` with the same src as one in `old` is swapped for the old element,
+// which keeps its loaded (or loading) image instead of blinking while it loads again.
+function keepLoadedImages(old, fresh) {
+    // src -> the old <img>s showing it (a card can show the same site icon twice)
+    const shown = new Map();
+    old.querySelectorAll('img[src]').forEach((img) => {
+        const src = img.getAttribute('src');
+        const failed = img.complete && img.naturalWidth === 0;
+        if (!failed) shown.set(src, [...(shown.get(src) || []), img]);
+    });
+    fresh.querySelectorAll('img[src]').forEach((img) => {
+        const kept = (shown.get(img.getAttribute('src')) || []).shift();
+        if (kept) img.replaceWith(kept);
+    });
+}
+window.keepLoadedImages = keepLoadedImages;
+
+// container.innerHTML = html, without reloading the pictures it already shows
+function replaceKeepingImages(container, html) {
+    const template = document.createElement('template');
+    template.innerHTML = html;
+    keepLoadedImages(container, template.content);
+    container.replaceChildren(template.content);
+}
+window.replaceKeepingImages = replaceKeepingImages;
+
 // lucide.createIcons() re-renders *every* icon on the page on each call (rendered
 // SVGs keep their data-lucide attribute). Scripts call it after every render, so
 // patch it to only convert icons that have not been rendered yet.
