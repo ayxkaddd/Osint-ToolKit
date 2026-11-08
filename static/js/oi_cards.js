@@ -316,20 +316,95 @@ function oiTally(cards, pick) {
     return [...tally.values()].sort((a, b) => b.sources.length - a.sources.length);
 }
 
+// Summary rows opened with "+N more" (by label): they stay open while the summary is
+// rebuilt as results come in
+const OI_SUMMARY_OPEN = new Set();
+// Pictures that didn't load are left out of later rebuilds instead of failing again
+const OI_BROKEN_PICTURES = new Set();
+
+function oiPictureFailed(img) {
+    OI_BROKEN_PICTURES.add(img.getAttribute('src'));
+    img.closest('button').remove();
+}
+
+// The first `limit` items, the rest behind a "+N more" button that opens them in place
+function oiExpandable(key, items, render, limit) {
+    const more = items.length - limit;
+    if (more <= 0) return items.map(render).join('');
+    const open = OI_SUMMARY_OPEN.has(key);
+    return `${items.slice(0, limit).map(render).join('')}<span data-oi-extra style="display:${open ? 'contents' : 'none'}">${items
+        .slice(limit)
+        .map(render)
+        .join('')}</span>
+        <button type="button" data-oi-summary-more="${escapeAttr(key)}" data-count="${more}" aria-expanded="${open}"
+            class="text-xs text-purple-300 hover:text-purple-200 self-center px-1">${open ? 'Show less' : `+${more} more`}</button>`;
+}
+
 function oiSummaryRow(icon, label, items, render, limit = 8) {
     if (!items.length) return '';
-    const more = items.length - limit;
     return `
         <div class="flex gap-3 py-2 border-t border-[#24283b] first:border-t-0">
             <div class="w-28 shrink-0 flex items-center gap-2 text-xs text-gray-400 pt-1 self-start"><i data-lucide="${icon}" class="w-3.5 h-3.5"></i>${label}</div>
-            <div class="flex flex-wrap gap-1.5 min-w-0">${items.slice(0, limit).map(render).join('')}
-                ${more > 0 ? `<span class="text-xs text-gray-500 self-center">+${more} more</span>` : ''}</div>
+            <div class="flex flex-wrap gap-1.5 min-w-0">${oiExpandable(label, items, render, limit)}</div>
         </div>`;
 }
+
+document.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-oi-summary-more]');
+    if (!button) return;
+    const key = button.dataset.oiSummaryMore;
+    const open = !OI_SUMMARY_OPEN.has(key);
+    if (open) OI_SUMMARY_OPEN.add(key);
+    else OI_SUMMARY_OPEN.delete(key);
+    button.parentElement.querySelector('[data-oi-extra]').style.display = open ? 'contents' : 'none';
+    button.setAttribute('aria-expanded', String(open));
+    button.textContent = open ? 'Show less' : `+${button.dataset.count} more`;
+});
 
 function oiTag(entry) {
     const n = entry.sources.length;
     return `<span class="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-gray-800/40 text-sm text-gray-200" title="${escapeAttr(entry.sources.join(', '))}">${escapeHtml(entry.value)}${n > 1 ? `<span class="text-[11px] text-gray-500">×${n}</span>` : ''}</span>`;
+}
+
+// A date as precise as the source gives it ("2019", "Mar 2019" or "Mar 5, 2019"), with
+// its time for sorting; null when it doesn't parse
+function oiDate(value) {
+    const text = String(value ?? '').trim();
+    if (!text) return null;
+    const year = text.match(/^(\d{4})$/);
+    if (year) return { t: Date.UTC(+year[1], 0, 1), text: year[1] };
+    const month = text.match(/^(\d{4})-(\d{2})$/);
+    const t = month ? Date.UTC(+month[1], +month[2] - 1, 1) : Date.parse(text);
+    if (!Number.isFinite(t)) return null;
+    const y = new Date(t).getUTCFullYear();
+    if (y < 1990 || y > new Date().getUTCFullYear() + 1) return null; // 0 / placeholder dates
+    const options = month
+        ? { year: 'numeric', month: 'short', timeZone: 'UTC' }
+        : { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' };
+    return { t, text: new Date(t).toLocaleDateString(undefined, options) };
+}
+
+// The oldest and newest date any account gives (made, last active): how long the
+// identity has been around and whether it is still in use
+function oiSeenRow(accounts) {
+    const dated = [];
+    for (const card of accounts) {
+        for (const field of ['created', 'last_seen']) {
+            const date = oiDate(card[field]);
+            if (date) dated.push({ ...date, site: card.module });
+        }
+    }
+    if (!dated.length) return '';
+    const first = dated.reduce((a, b) => (b.t < a.t ? b : a));
+    const last = dated.reduce((a, b) => (b.t > a.t ? b : a));
+    const part = (label, d) =>
+        `<span class="text-sm text-gray-400">${label} <strong class="font-semibold text-gray-100">${escapeHtml(d.text)}</strong>
+            <span class="text-xs text-gray-500">${escapeHtml(d.site || '')}</span></span>`;
+    return `
+        <div class="flex gap-3 py-2 border-t border-[#24283b] first:border-t-0">
+            <div class="w-28 shrink-0 flex items-center gap-2 text-xs text-gray-400 pt-1 self-start"><i data-lucide="calendar-range" class="w-3.5 h-3.5"></i>Active</div>
+            <div class="flex flex-wrap items-center gap-x-5 gap-y-1 min-w-0">${part('First seen', first)}${last.t > first.t ? part('Last seen', last) : ''}</div>
+        </div>`;
 }
 
 function oiTimeline(cards) {
@@ -376,9 +451,14 @@ function oiTimeline(cards) {
         </div>`;
 }
 
-function oiSummaryHtml(cards) {
+// timeline: the accounts-and-breaches chart by year; the username search leaves it out
+// (no breaches there, and the Active row already says when the accounts were used)
+function oiSummaryHtml(cards, { timeline: withTimeline = true } = {}) {
     const accounts = cards.filter((c) => !c.breach && c.registered !== false);
-    const photos = oiTally(accounts, (c) => (safeUrl(c.picture) ? c.picture : null)).slice(0, 10);
+    const photos = oiTally(accounts, (c) => {
+        const url = safeUrl(c.picture);
+        return url && !OI_BROKEN_PICTURES.has(url) ? c.picture : null;
+    });
     const rows = [
         oiSummaryRow(
             'user-round',
@@ -411,21 +491,23 @@ function oiSummaryHtml(cards) {
             oiTag,
             6
         ),
+        oiSeenRow(accounts),
     ].join('');
-    const timeline = oiTimeline(cards);
+    const timeline = withTimeline ? oiTimeline(cards) : '';
     if (!photos.length && !rows && !timeline) return '';
     return `
         <section class="username-category-section p-4 mb-4">
             ${
                 photos.length
-                    ? `<div class="flex items-center gap-2 mb-3 overflow-x-auto pb-1">${photos
-                          .map(
-                              (p) => `
+                    ? `<div class="flex flex-wrap items-center gap-2 mb-3">${oiExpandable(
+                          'Photos',
+                          photos,
+                          (p) => `
                 <button type="button" data-image-view="${escapeAttr(safeUrl(p.value))}" data-image-title="${escapeAttr(p.sources.join(', ') || 'Photo')}" title="${escapeAttr(p.sources.join(', '))}" class="shrink-0">
-                    <img src="${escapeAttr(safeUrl(p.value))}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.closest('button').remove()"
-                        class="w-14 h-14 rounded-lg object-cover border border-[#293142] hover:border-purple-400/70"></button>`
-                          )
-                          .join('')}
+                    <img src="${escapeAttr(safeUrl(p.value))}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="oiPictureFailed(this)"
+                        class="w-14 h-14 rounded-lg object-cover border border-[#293142] hover:border-purple-400/70"></button>`,
+                          10
+                      )}
             </div>`
                     : ''
             }
@@ -554,7 +636,7 @@ class OiResultsView {
         this.summaryQueued = true;
         requestAnimationFrame(() => {
             this.summaryQueued = false;
-            this.root.querySelector('[data-oi-summary]').innerHTML = oiSummaryHtml(this.cards);
+            replaceKeepingImages(this.root.querySelector('[data-oi-summary]'), oiSummaryHtml(this.cards));
             if (window.lucide) lucide.createIcons();
         });
     }

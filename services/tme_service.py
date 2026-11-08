@@ -14,6 +14,8 @@ from urllib.parse import urlparse
 
 import httpx
 
+from utils.proxy_transport import make_async_client
+
 logger = logging.getLogger(__name__)
 
 AVATAR_DIR = os.path.join("media", "avatars")
@@ -89,7 +91,7 @@ async def _save_avatar(client: httpx.AsyncClient, username: str, url: str) -> Op
 
 async def fetch_profile(username: str) -> dict:
     username = normalize_username(username)
-    async with httpx.AsyncClient(timeout=15, headers=HEADERS, follow_redirects=False) as client:
+    async with make_async_client(timeout=15, headers=HEADERS, follow_redirects=False) as client:
         try:
             response = await client.get(f"https://t.me/{username}")
             response.raise_for_status()

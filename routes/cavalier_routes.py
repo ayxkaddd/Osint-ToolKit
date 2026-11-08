@@ -5,6 +5,7 @@ import httpx
 from fastapi import APIRouter, HTTPException, Query
 
 from utils.investigation_decorator import save_investigation
+from utils.proxy_transport import make_async_client
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/cavalier")
@@ -29,7 +30,7 @@ async def search_cavalier(query: str = Query(..., min_length=1, max_length=256))
         url, params = f"{CAVALIER_BASE}/osint-tools/search-by-username", {"username": query}
 
     try:
-        async with httpx.AsyncClient(timeout=30, headers={"Accept": "application/json"}) as client:
+        async with make_async_client(timeout=30, headers={"Accept": "application/json"}) as client:
             response = await client.get(url, params=params)
     except httpx.HTTPError as e:
         logger.warning("Cavalier request failed: %s", e)

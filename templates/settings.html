@@ -10,6 +10,7 @@
 
     <div id="settingsTelegram" class="mb-6"></div>
     <div id="settingsBalances" class="mb-6"></div>
+    <div id="settingsProxies" class="mb-6"></div>
     <div id="settingsModules" class="space-y-4">
         <p class="text-gray-400"><i class="fas fa-spinner fa-spin mr-2"></i>Loading…</p>
     </div>
@@ -116,9 +117,66 @@
         } catch (e) { /* balances are optional */ }
     }
 
+    async function proxies() {
+        const box = document.getElementById('settingsProxies');
+        let data;
+        try {
+            data = await fetch('/api/proxies').then(r => r.json());
+        } catch (e) { box.innerHTML = ''; return; }
+        const when = (t) => t ? new Date(t * 1000).toLocaleString() : 'never';
+        const status = data.healthy
+            ? `${data.healthy} healthy (${data.user_count} yours, ${data.public} public) · refreshed ${when(data.last_refresh)}`
+            : (data.enabled ? 'no healthy proxies yet — checking in the background' : 'disabled');
+        box.innerHTML = `
+          <form class="card" id="proxyForm">
+            <div class="flex items-center justify-between gap-3 flex-wrap mb-3">
+                <span class="text-lg font-semibold"><i class="fas fa-network-wired mr-2 text-purple-300"></i>Proxies</span>
+                <span class="text-xs ${data.healthy ? 'text-emerald-300' : 'text-gray-400'}">${escapeHtml(status)}</span>
+            </div>
+            <p class="text-sm text-gray-400 mb-3">Route the scraping modules (username, DNS recon, t.me, face search, Cavalier, WHOIS history) through proxies, so the sites don't see this server's address. One per line, <span class="font-mono">host:port</span> or <span class="font-mono">scheme://host:port</span> (http, https, socks4, socks5). Leave empty to use free public proxies, fetched and checked automatically. Dead proxies are skipped and the request goes direct.</p>
+            <p class="text-sm text-amber-300/80 mb-3"><i class="fas fa-triangle-exclamation mr-1"></i>Lookups take longer through proxies, and many sites block free proxies, so a username search can find fewer accounts than without them. Off by default; your own paid proxies work much better than public ones.</p>
+            <textarea id="proxyList" rows="6" spellcheck="false" ${NO_AUTOFILL('text')}
+                placeholder="203.0.113.5:8080&#10;socks5://198.51.100.9:1080"
+                class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm font-mono focus:outline-none focus:border-purple-500"></textarea>
+            <div class="flex flex-wrap items-center gap-4 mt-3">
+                <label class="flex items-center gap-2 text-sm text-gray-300"><input type="checkbox" id="proxyEnabled" class="accent-purple-500"> Use proxies</label>
+                <label class="flex items-center gap-2 text-sm text-gray-300"><input type="checkbox" id="proxyFetchPublic" class="accent-purple-500"> Fetch public proxies when my list is empty or short</label>
+            </div>
+            <div class="flex justify-end gap-2 mt-4">
+                <button type="button" id="proxyRefresh" class="bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded-lg text-sm font-medium"><i class="fas fa-rotate mr-1"></i>Refresh now</button>
+                <button type="submit" class="bg-purple-600 hover:bg-purple-500 px-4 py-2 rounded-lg text-sm font-medium">Save</button>
+            </div>
+          </form>`;
+        document.getElementById('proxyList').value = data.proxies || '';
+        document.getElementById('proxyEnabled').checked = !!data.enabled;
+        document.getElementById('proxyFetchPublic').checked = !!data.fetch_public;
+
+        document.getElementById('proxyForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const body = {
+                proxies: document.getElementById('proxyList').value,
+                enabled: document.getElementById('proxyEnabled').checked,
+                fetch_public: document.getElementById('proxyFetchPublic').checked,
+            };
+            const response = await fetch('/api/proxies', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+            });
+            const d = await response.json().catch(() => ({}));
+            if (!response.ok) { showTemporaryNotification(d.detail || 'Failed to save', 'error'); return; }
+            showTemporaryNotification(`Saved ${d.saved} prox${d.saved === 1 ? 'y' : 'ies'} — validating in the background`, 'success');
+            setTimeout(proxies, 1500);
+        });
+        document.getElementById('proxyRefresh').addEventListener('click', async () => {
+            await fetch('/api/proxies/refresh', { method: 'POST' });
+            showTemporaryNotification('Refreshing the proxy pool in the background', 'info');
+            setTimeout(proxies, 2000);
+        });
+    }
+
     load();
     telegram();
     balances();
+    proxies();
 })();
 </script>
 {% endblock %}

@@ -25,6 +25,7 @@ from services.dns_intel import (analyze_records, cymru_query_name, parse_crtsh,
                                 parse_cymru_asname, parse_cymru_origin)
 from utils.subprocess_runner import run_command
 from utils.config import get_setting
+from utils.proxy_transport import make_async_client, cli_proxy_env
 
 logger = logging.getLogger(__name__)
 
@@ -55,15 +56,16 @@ class DNSReconService:
 
     @staticmethod
     def _client() -> httpx.AsyncClient:
-        # One client per recon run: the service object is shared by all requests
-        return httpx.AsyncClient(timeout=30.0, follow_redirects=True)
+        # One client per recon run: the service object is shared by all requests.
+        # Routed through the proxy pool (crt.sh scrape; the keyed APIs tolerate it).
+        return make_async_client(timeout=30.0, follow_redirects=True)
 
     async def run_subfinder(self, domain: str, deep_scan: bool, warnings: list[str]) -> list[str]:
         """Enumerate subdomains with subfinder (the domain itself is always included)."""
         cmd = [self.SUBFINDER_PATH, '-d', domain, '-silent']
         if deep_scan:
             cmd.extend(['-all', '-recursive'])
-        result = await run_command(cmd, timeout=900 if deep_scan else 300)
+        result = await run_command(cmd, timeout=900 if deep_scan else 300, env=cli_proxy_env())
         if result.returncode == 127:
             warnings.append(f"subfinder is not installed ({self.SUBFINDER_PATH}) - subdomains come from "
                             "certificate transparency and the configured APIs only")
@@ -90,7 +92,7 @@ class DNSReconService:
                 # analytics / ads IDs on each page: a shared one points to a shared owner
                 *tracker_args(ACCOUNT_TRACKERS),
             ]
-            result = await run_command(cmd, timeout=600)
+            result = await run_command(cmd, timeout=600, env=cli_proxy_env())
         finally:
             os.unlink(subdomain_file)
 

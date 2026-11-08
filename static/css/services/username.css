@@ -929,3 +929,196 @@ which made
         flex-basis: 1.9rem;
     }
 }
+
+/* Username search cards, led by the person: picture, name, @handle, then the profile */
+.username-profile-card {
+    --card-pad: 1.5rem;
+    padding: var(--card-pad);
+}
+.username-card-banner {
+    display: block;
+    width: calc(100% + 2 * var(--card-pad));
+    height: 5.5rem;
+    margin: calc(-1 * var(--card-pad)) calc(-1 * var(--card-pad)) 0;
+    padding: 0;
+    border: 0;
+    background: #151a24;
+    cursor: zoom-in;
+    overflow: hidden;
+}
+.username-card-banner img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    opacity: 0.9;
+    transition: opacity 0.2s ease;
+}
+.username-card-banner:hover img {
+    opacity: 1;
+}
+.username-profile-head {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.9rem;
+    margin-bottom: 0.9rem;
+}
+/* A real picture is clearly bigger than the site icon that stands in when there is none */
+.username-profile-pic {
+    --pic-size: 5rem;
+    position: relative;
+    flex: 0 0 var(--pic-size);
+    width: var(--pic-size);
+    height: var(--pic-size);
+}
+.username-profile-pic.no-avatar {
+    --pic-size: 3.5rem;
+}
+.has-banner .username-profile-head {
+    margin-top: 0.75rem;
+}
+.has-banner .username-profile-pic {
+    margin-top: -2rem;
+}
+.username-profile-avatar {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border-radius: 10px;
+    object-fit: cover;
+    border: 1px solid #293142;
+    background: #151a24;
+}
+.has-banner .username-profile-avatar {
+    border: 3px solid #161722;
+}
+.username-avatar-preview-btn:hover .username-profile-avatar {
+    border-color: rgba(192, 132, 252, 0.7);
+}
+/* The site's icon stands in when there is no picture (or it doesn't load) */
+.username-profile-pic .username-site-mark {
+    display: none;
+}
+.username-profile-pic.no-avatar .username-site-mark,
+.username-profile-pic.no-avatar .username-site-mark .platform-icon {
+    display: inline-flex;
+    width: 100%;
+    height: 100%;
+    flex-basis: 100%;
+    border-radius: 10px;
+}
+.username-profile-pic.no-avatar .username-site-mark .username-site-mark-fallback {
+    display: none;
+}
+.username-profile-pic.no-avatar .username-site-mark img {
+    padding: 0.45rem;
+    border-radius: 10px;
+}
+.username-profile-pic.no-avatar .username-avatar-preview-btn,
+.username-profile-pic.no-avatar .username-reverse-search {
+    display: none;
+}
+.username-profile-ident {
+    min-width: 0;
+    flex: 1;
+    padding-top: 0.1rem;
+}
+.username-profile-site {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-width: 0;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #c084fc;
+}
+.username-profile-site > span:not(.username-profile-cat) {
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+.username-profile-favicon {
+    width: 0.95rem;
+    height: 0.95rem;
+    flex: 0 0 auto;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.96);
+    padding: 1px;
+}
+/* The big site icon already says which site it is */
+.username-profile-pic.no-avatar + .username-profile-ident .username-profile-favicon {
+    display: none;
+}
+.username-profile-cat {
+    flex: 0 0 auto;
+    color: #6b7280;
+    font-weight: 400;
+    letter-spacing: 0;
+    text-transform: lowercase;
+}
+.username-profile-cat::before {
+    content: '·';
+    margin-right: 0.4rem;
+}
+.username-profile-name {
+    margin-top: 0.3rem;
+    color: #fff;
+    font-size: 1rem;
+    font-weight: 600;
+    line-height: 1.3;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.username-profile-verified {
+    margin-left: 0.35rem;
+    color: #38bdf8;
+    font-size: 0.8rem;
+}
+.username-profile-handle {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin-top: 0.3rem;
+    font-size: 0.85rem;
+    color: #c084fc;
+}
+.username-profile-handle .copy-username-btn {
+    color: #6b7280;
+    font-size: 0.75rem;
+}
+.username-profile-handle .copy-username-btn:hover {
+    color: #c084fc;
+}
+.username-profile-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem 1rem;
+    margin-bottom: 0.75rem;
+    color: #9ca3af;
+    font-size: 0.8rem;
+}
+.username-profile-stats strong {
+    margin-right: 0.3rem;
+    color: #fff;
+    font-weight: 600;
+}
+.username-profile-card .username-card-content {
+    flex: 0 0 auto;
+}
+.username-profile-card .username-data-row {
+    padding: 0.25rem 0;
+}
+@media (max-width: 560px) {
+    .username-profile-card {
+        --card-pad: 1rem;
+    }
+    .username-profile-pic {
+        --pic-size: 4.25rem;
+    }
+    .username-profile-pic.no-avatar {
+        --pic-size: 3.25rem;
+    }
+}

@@ -289,20 +289,6 @@
             ]
         },
         {
-            "name": "Breach VIP",
-            "url": "https://breach.vip",
-            "favicon": "https://www.google.com/s2/favicons?domain=breach.vip",
-            "description": "Search leaked databases by email, username, IP, domain and more; free and sometimes returns more than OsintLeak",
-            "category": "breaches",
-            "cost": "free",
-            "types": [
-                "email",
-                "username",
-                "ip",
-                "domain"
-            ]
-        },
-        {
             "name": "OsintLeak",
             "url": "https://osintleak.com",
             "favicon": "https://www.google.com/s2/favicons?domain=osintleak.com",
@@ -587,14 +573,6 @@
             "cost": "freemium"
         },
         {
-            "name": "osint.sh/buckets",
-            "url": "https://osint.sh/buckets",
-            "favicon": "https://www.google.com/s2/favicons?domain=osint.sh",
-            "description": "Search public Azure storage buckets",
-            "category": "infrastructure",
-            "cost": "free"
-        },
-        {
             "name": "Google Lens",
             "url": "https://lens.google.com",
             "favicon": "https://www.google.com/s2/favicons?domain=lens.google.com",
@@ -701,18 +679,6 @@
             "url": "https://opendatabot.ua",
             "favicon": "https://www.google.com/s2/favicons?domain=opendatabot.ua",
             "description": "Ukrainian people and companies (website)",
-            "category": "companies",
-            "cost": "freemium",
-            "types": [
-                "text",
-                "phone"
-            ]
-        },
-        {
-            "name": "OpenDataBot (Telegram)",
-            "url": "https://t.me/OpenDataUABot",
-            "favicon": "https://www.google.com/s2/favicons?domain=t.me",
-            "description": "Telegram bot: Ukrainian people and companies",
             "category": "companies",
             "cost": "freemium",
             "types": [

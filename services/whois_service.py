@@ -4,6 +4,7 @@ from typing import Any, Optional
 import httpx
 from fastapi import HTTPException
 from utils.config import get_setting
+from utils.proxy_transport import make_async_client
 
 class WhoisService:
     def __init__(self):
@@ -19,7 +20,7 @@ class WhoisService:
         if not self.wx_api_key:
             raise HTTPException(status_code=400, detail="WHOIS_XML_API_KEY is not configured - add it in Settings")
         params = {'apiKey': self.wx_api_key, 'domainName': domain, 'mode': mode, 'outputFormat': 'JSON'}
-        async with httpx.AsyncClient(timeout=60) as client:
+        async with make_async_client(timeout=60) as client:
             resp = await client.get(f'https://{self.whois_history_domain}/api/v1', params=params)
         data = resp.json()
         if resp.status_code != 200 or (isinstance(data, dict) and data.get('messages')):

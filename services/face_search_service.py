@@ -1,6 +1,8 @@
 from fastapi import UploadFile
 import httpx
 from fastapi import HTTPException
+
+from utils.proxy_transport import make_async_client
 import io
 from pydantic import BaseModel
 import time
@@ -84,7 +86,7 @@ class FaceSearch:
                 'image': (image.filename or 'image.jpg', io.BytesIO(image_data), image.content_type or 'image/jpeg')
             }
 
-            async with httpx.AsyncClient(timeout=20) as client:
+            async with make_async_client(timeout=20) as client:
                 response = await client.post(
                     f'{self.API_ENDPOINT}/bff/detect-faces',
                     files=files,
@@ -109,7 +111,7 @@ class FaceSearch:
                 'image': (image.filename or 'face.jpg', io.BytesIO(image_data), image.content_type or 'image/jpeg')
             }
 
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            async with make_async_client(timeout=30.0) as client:
                 response = await client.post(
                     f'{self.API_ENDPOINT}/bff/search-faces',
                     files=files,

@@ -39,7 +39,8 @@ uvicorn
 watchfiles
 yarl
 Telethon
-httpx
+httpx[socks]
+curl_cffi
 dnspython
 python-whois
 beautifulsoup4

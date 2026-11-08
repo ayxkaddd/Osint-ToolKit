@@ -14,6 +14,7 @@ from typing import Any
 from collections.abc import AsyncGenerator
 
 from utils.config import get_setting
+from utils.proxy_transport import cli_proxy_env
 
 # Page IDs that are set per account: a shared one is close to proof of a shared owner.
 # httpx (Go RE2) returns the full match; the Python pattern pulls out the ID.
@@ -119,11 +120,13 @@ async def fingerprint_domains(domains: list[str]) -> AsyncGenerator[dict[str, An
            "-follow-redirects", "-random-agent", "-timeout", "12", "-retries", "1", "-threads", "40",
            "-rstr", "2000000", *tracker_args()]
 
+    proxy_env = cli_proxy_env()
     try:
         proc = await asyncio.create_subprocess_exec(
             # httpx reads targets from stdin when it isn't a terminal: give it nothing
             *cmd, stdin=asyncio.subprocess.DEVNULL, stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.DEVNULL, limit=32 * 1024 * 1024)
+            stderr=asyncio.subprocess.DEVNULL, limit=32 * 1024 * 1024,
+            env={**os.environ, **proxy_env} if proxy_env else None)
     except FileNotFoundError as e:
         os.unlink(list_file)
         raise FingerprintError(f"httpx-toolkit is not installed ({binary}) - set HTTPX_PATH in Settings") from e
