@@ -278,76 +278,514 @@
     ],
     "ext_res": [
         {
-            "name": "Nomerogram",
-            "url": "https://nomerogram.ru",
-            "favicon": "https://www.google.com/s2/favicons?domain=nomerogram.ru",
-            "description": "Check russian car plates"
-        },
-        {
-            "name": "Website Informer",
-            "url": "https://website.informer.com",
-            "favicon": "https://www.google.com/s2/favicons?domain=website.informer.com",
-            "description": "Get general information about a website"
-        },
-        {
-            "name": "OsintLeak",
-            "url": "https://osintleak.com",
-            "favicon": "https://www.google.com/s2/favicons?domain=osintleak.com",
-            "description": "Search by email, username, hwid, ip, domain name, etc in compromised databases"
+            "name": "Have I Been Pwned",
+            "url": "https://haveibeenpwned.com",
+            "favicon": "https://www.google.com/s2/favicons?domain=haveibeenpwned.com",
+            "description": "Which known data breaches an email address appears in",
+            "category": "breaches",
+            "cost": "free",
+            "types": [
+                "email"
+            ]
         },
         {
             "name": "Breach VIP",
             "url": "https://breach.vip",
             "favicon": "https://www.google.com/s2/favicons?domain=breach.vip",
-            "description": "Same as OsintLeak but free and sometimes returns more results"
+            "description": "Search leaked databases by email, username, IP, domain and more; free and sometimes returns more than OsintLeak",
+            "category": "breaches",
+            "cost": "free",
+            "types": [
+                "email",
+                "username",
+                "ip",
+                "domain"
+            ]
         },
         {
-            "name": "FOFA",
-            "url": "https://en.fofa.info",
-            "favicon": "https://www.google.com/s2/favicons?domain=en.fofa.info",
-            "description": "FOFA search engine. Sometimes can be used to find real ip behind the cloudflare proxy"
+            "name": "OsintLeak",
+            "url": "https://osintleak.com",
+            "favicon": "https://www.google.com/s2/favicons?domain=osintleak.com",
+            "description": "Search by email, username, HWID, IP, domain and more in compromised databases",
+            "category": "breaches",
+            "cost": "paid",
+            "types": [
+                "email",
+                "username",
+                "ip",
+                "domain"
+            ]
+        },
+        {
+            "name": "Intelligence X",
+            "url": "https://intelx.io",
+            "favicon": "https://www.google.com/s2/favicons?domain=intelx.io",
+            "description": "Search engine and archive of leaks, pastes and the darknet by email, domain, IP, URL or crypto address",
+            "category": "breaches",
+            "cost": "freemium",
+            "types": [
+                "email",
+                "domain",
+                "ip",
+                "url",
+                "crypto_btc",
+                "crypto_eth"
+            ],
+            "search": {
+                "email": "https://intelx.io/?s={value}",
+                "domain": "https://intelx.io/?s={value}",
+                "ip": "https://intelx.io/?s={value}",
+                "url": "https://intelx.io/?s={value}",
+                "crypto_btc": "https://intelx.io/?s={value}",
+                "crypto_eth": "https://intelx.io/?s={value}"
+            }
+        },
+        {
+            "name": "LeakCheck",
+            "url": "https://leakcheck.io",
+            "favicon": "https://www.google.com/s2/favicons?domain=leakcheck.io",
+            "description": "Leaked logins and passwords by email, username or phone",
+            "category": "breaches",
+            "cost": "freemium",
+            "types": [
+                "email",
+                "username",
+                "phone"
+            ]
+        },
+        {
+            "name": "DeHashed",
+            "url": "https://dehashed.com",
+            "favicon": "https://www.google.com/s2/favicons?domain=dehashed.com",
+            "description": "Search breach data by email, username, phone, name, IP or domain",
+            "category": "breaches",
+            "cost": "paid",
+            "types": [
+                "email",
+                "username",
+                "phone",
+                "ip",
+                "domain"
+            ]
+        },
+        {
+            "name": "WhatsMyName",
+            "url": "https://whatsmyname.app",
+            "favicon": "https://www.google.com/s2/favicons?domain=whatsmyname.app",
+            "description": "Where a username has an account, in the browser (the same site list as the Username Search module)",
+            "category": "accounts",
+            "cost": "free",
+            "types": [
+                "username"
+            ]
+        },
+        {
+            "name": "Epieos",
+            "url": "https://epieos.com",
+            "favicon": "https://www.google.com/s2/favicons?domain=epieos.com",
+            "description": "Accounts and Google details behind an email or phone number",
+            "category": "accounts",
+            "cost": "freemium",
+            "types": [
+                "email",
+                "phone"
+            ]
         },
         {
             "name": "SecurityTrails",
             "url": "https://securitytrails.com",
             "favicon": "https://www.google.com/s2/favicons?domain=securitytrails.com",
-            "description": "Check current and historical DNS records of a domain"
+            "description": "Current and historical DNS records of a domain",
+            "category": "domains",
+            "cost": "freemium",
+            "types": [
+                "domain"
+            ],
+            "search": {
+                "domain": "https://securitytrails.com/domain/{value}/dns"
+            }
         },
         {
-            "name": "Buckets Grayhatwarfare",
+            "name": "crt.sh",
+            "url": "https://crt.sh",
+            "favicon": "https://www.google.com/s2/favicons?domain=crt.sh",
+            "description": "Every TLS certificate issued for a domain: subdomains and dates",
+            "category": "domains",
+            "cost": "free",
+            "types": [
+                "domain"
+            ],
+            "search": {
+                "domain": "https://crt.sh/?q={value}"
+            }
+        },
+        {
+            "name": "DNSDumpster",
+            "url": "https://dnsdumpster.com",
+            "favicon": "https://www.google.com/s2/favicons?domain=dnsdumpster.com",
+            "description": "Subdomains, mail and name servers of a domain, with a map",
+            "category": "domains",
+            "cost": "free",
+            "types": [
+                "domain"
+            ]
+        },
+        {
+            "name": "ViewDNS.info",
+            "url": "https://viewdns.info",
+            "favicon": "https://www.google.com/s2/favicons?domain=viewdns.info",
+            "description": "Reverse WHOIS (domains registered with an email or name), IP history and more",
+            "category": "domains",
+            "cost": "free",
+            "types": [
+                "email",
+                "domain",
+                "text"
+            ],
+            "search": {
+                "email": "https://viewdns.info/reversewhois/?q={value}",
+                "text": "https://viewdns.info/reversewhois/?q={value}"
+            }
+        },
+        {
+            "name": "BuiltWith",
+            "url": "https://builtwith.com",
+            "favicon": "https://www.google.com/s2/favicons?domain=builtwith.com",
+            "description": "The technologies a website uses, and other sites sharing its analytics or ad IDs",
+            "category": "domains",
+            "cost": "freemium",
+            "types": [
+                "domain"
+            ],
+            "search": {
+                "domain": "https://builtwith.com/{value}"
+            }
+        },
+        {
+            "name": "Website Informer",
+            "url": "https://website.informer.com",
+            "favicon": "https://www.google.com/s2/favicons?domain=website.informer.com",
+            "description": "General information about a website",
+            "category": "domains",
+            "cost": "free",
+            "types": [
+                "domain"
+            ]
+        },
+        {
+            "name": "urlscan.io",
+            "url": "https://urlscan.io",
+            "favicon": "https://www.google.com/s2/favicons?domain=urlscan.io",
+            "description": "Screenshots, requests and links of a page as a browser loads it (searching needs an account)",
+            "category": "domains",
+            "cost": "freemium",
+            "types": [
+                "domain",
+                "url",
+                "ip"
+            ]
+        },
+        {
+            "name": "VirusTotal",
+            "url": "https://www.virustotal.com",
+            "favicon": "https://www.google.com/s2/favicons?domain=www.virustotal.com",
+            "description": "What security vendors say about a domain or IP, with passive DNS and related files",
+            "category": "domains",
+            "cost": "free",
+            "types": [
+                "domain",
+                "ip"
+            ],
+            "search": {
+                "domain": "https://www.virustotal.com/gui/domain/{value}",
+                "ip": "https://www.virustotal.com/gui/ip-address/{value}"
+            }
+        },
+        {
+            "name": "Shodan",
+            "url": "https://www.shodan.io",
+            "favicon": "https://www.google.com/s2/favicons?domain=www.shodan.io",
+            "description": "Open ports, services and banners of an IP address",
+            "category": "infrastructure",
+            "cost": "freemium",
+            "types": [
+                "ip"
+            ],
+            "search": {
+                "ip": "https://www.shodan.io/host/{value}"
+            }
+        },
+        {
+            "name": "Censys",
+            "url": "https://censys.com",
+            "favicon": "https://www.google.com/s2/favicons?domain=censys.com",
+            "description": "Hosts, services and certificates seen on the internet",
+            "category": "infrastructure",
+            "cost": "freemium",
+            "types": [
+                "ip",
+                "domain"
+            ]
+        },
+        {
+            "name": "FOFA",
+            "url": "https://en.fofa.info",
+            "favicon": "https://www.google.com/s2/favicons?domain=en.fofa.info",
+            "description": "Internet search engine for hosts and services; sometimes finds the real IP behind a Cloudflare proxy",
+            "category": "infrastructure",
+            "cost": "freemium",
+            "types": [
+                "ip",
+                "domain"
+            ]
+        },
+        {
+            "name": "AbuseIPDB",
+            "url": "https://www.abuseipdb.com",
+            "favicon": "https://www.google.com/s2/favicons?domain=www.abuseipdb.com",
+            "description": "Abuse reports about an IP address",
+            "category": "infrastructure",
+            "cost": "free",
+            "types": [
+                "ip"
+            ],
+            "search": {
+                "ip": "https://www.abuseipdb.com/check/{value}"
+            }
+        },
+        {
+            "name": "ipinfo",
+            "url": "https://ipinfo.io",
+            "favicon": "https://www.google.com/s2/favicons?domain=ipinfo.io",
+            "description": "Location, network owner and hosting type of an IP address",
+            "category": "infrastructure",
+            "cost": "free",
+            "types": [
+                "ip"
+            ],
+            "search": {
+                "ip": "https://ipinfo.io/{value}"
+            }
+        },
+        {
+            "name": "GreyNoise",
+            "url": "https://viz.greynoise.io",
+            "favicon": "https://www.google.com/s2/favicons?domain=viz.greynoise.io",
+            "description": "Whether an IP is a scanner or bot seen across the internet",
+            "category": "infrastructure",
+            "cost": "freemium",
+            "types": [
+                "ip"
+            ]
+        },
+        {
+            "name": "GrayhatWarfare buckets",
             "url": "https://buckets.grayhatwarfare.com",
             "favicon": "https://www.google.com/s2/favicons?domain=buckets.grayhatwarfare.com",
-            "description": "Amazon Public Buckets Search"
+            "description": "Search files in public Amazon S3, Azure and Google Cloud buckets",
+            "category": "infrastructure",
+            "cost": "freemium"
         },
         {
             "name": "osint.sh/buckets",
             "url": "https://osint.sh/buckets",
             "favicon": "https://www.google.com/s2/favicons?domain=osint.sh",
-            "description": "Azure Public Buckets Search"
+            "description": "Search public Azure storage buckets",
+            "category": "infrastructure",
+            "cost": "free"
+        },
+        {
+            "name": "Google Lens",
+            "url": "https://lens.google.com",
+            "favicon": "https://www.google.com/s2/favicons?domain=lens.google.com",
+            "description": "Reverse image search: where a picture or similar ones appear",
+            "category": "images",
+            "cost": "free"
+        },
+        {
+            "name": "Yandex Images",
+            "url": "https://yandex.com/images",
+            "favicon": "https://www.google.com/s2/favicons?domain=yandex.com",
+            "description": "Reverse image search, strong on faces and places in Russia and the CIS",
+            "category": "images",
+            "cost": "free"
+        },
+        {
+            "name": "TinEye",
+            "url": "https://tineye.com",
+            "favicon": "https://www.google.com/s2/favicons?domain=tineye.com",
+            "description": "Reverse image search for copies of an exact picture, with first-seen dates",
+            "category": "images",
+            "cost": "free"
+        },
+        {
+            "name": "PimEyes",
+            "url": "https://pimeyes.com",
+            "favicon": "https://www.google.com/s2/favicons?domain=pimeyes.com",
+            "description": "Face search across the open web",
+            "category": "images",
+            "cost": "paid"
+        },
+        {
+            "name": "FaceCheck.ID",
+            "url": "https://facecheck.id",
+            "favicon": "https://www.google.com/s2/favicons?domain=facecheck.id",
+            "description": "Face search across social media and news sites",
+            "category": "images",
+            "cost": "freemium"
         },
         {
             "name": "TeleSINT",
             "url": "https://t.me/telesint_2025_bot",
-            "favicon": "https://www.google.com/s2/favicons?domain=telesint.org",
-            "description": "TeleSINT is a professional tool for searching users in Telegram groups"
+            "favicon": "https://www.google.com/s2/favicons?domain=t.me",
+            "description": "Telegram bot: find users in Telegram groups",
+            "category": "telegram",
+            "types": [
+                "telegram_username",
+                "telegram_id"
+            ]
         },
         {
-            "name": "funstat",
+            "name": "Funstat bot",
             "url": "https://t.me/coolstats_0s1nt_bot",
-            "favicon": "https://www.google.com/s2/favicons?domain=funstat.online",
-            "description": "Search for groups and messages of telegram user"
+            "favicon": "https://www.google.com/s2/favicons?domain=t.me",
+            "description": "Telegram bot: groups and messages of a Telegram user (the Funstat module uses its API)",
+            "category": "telegram",
+            "cost": "paid",
+            "types": [
+                "telegram_username",
+                "telegram_id"
+            ]
+        },
+        {
+            "name": "TGStat",
+            "url": "https://tgstat.com",
+            "favicon": "https://www.google.com/s2/favicons?domain=tgstat.com",
+            "description": "Find Telegram channels and chats, with their statistics",
+            "category": "telegram",
+            "cost": "freemium",
+            "types": [
+                "text"
+            ]
+        },
+        {
+            "name": "Telegram profile",
+            "url": "https://t.me",
+            "favicon": "https://www.google.com/s2/favicons?domain=t.me",
+            "description": "The public t.me page of a username, channel or group",
+            "category": "telegram",
+            "cost": "free",
+            "types": [
+                "telegram_username"
+            ],
+            "search": {
+                "telegram_username": "https://t.me/{value}"
+            }
+        },
+        {
+            "name": "OpenCorporates",
+            "url": "https://opencorporates.com",
+            "favicon": "https://www.google.com/s2/favicons?domain=opencorporates.com",
+            "description": "Companies, officers and registrations from company registers worldwide",
+            "category": "companies",
+            "cost": "freemium",
+            "types": [
+                "text"
+            ],
+            "search": {
+                "text": "https://opencorporates.com/companies?q={value}"
+            }
         },
         {
             "name": "OpenDataBot",
-            "url": "https://t.me/OpenDataUABot",
-            "favicon": "https://www.google.com/s2/favicons?domain=opendatabot.ua",
-            "description": "Search for ukrainian people and companies"
-        },
-        {
-            "name": "OpenDataBot WebSite",
             "url": "https://opendatabot.ua",
             "favicon": "https://www.google.com/s2/favicons?domain=opendatabot.ua",
-            "description": "Search for ukrainian people and companies"
+            "description": "Ukrainian people and companies (website)",
+            "category": "companies",
+            "cost": "freemium",
+            "types": [
+                "text",
+                "phone"
+            ]
+        },
+        {
+            "name": "OpenDataBot (Telegram)",
+            "url": "https://t.me/OpenDataUABot",
+            "favicon": "https://www.google.com/s2/favicons?domain=t.me",
+            "description": "Telegram bot: Ukrainian people and companies",
+            "category": "companies",
+            "cost": "freemium",
+            "types": [
+                "text",
+                "phone"
+            ]
+        },
+        {
+            "name": "Nomerogram",
+            "url": "https://nomerogram.ru",
+            "favicon": "https://www.google.com/s2/favicons?domain=nomerogram.ru",
+            "description": "Russian car plates: photos, history and ads of a vehicle",
+            "category": "companies",
+            "cost": "freemium",
+            "types": [
+                "text"
+            ]
+        },
+        {
+            "name": "Blockchain.com Explorer",
+            "url": "https://www.blockchain.com/explorer",
+            "favicon": "https://www.google.com/s2/favicons?domain=www.blockchain.com",
+            "description": "Balance and transactions of a Bitcoin address",
+            "category": "crypto",
+            "cost": "free",
+            "types": [
+                "crypto_btc"
+            ],
+            "search": {
+                "crypto_btc": "https://www.blockchain.com/explorer/addresses/btc/{value}"
+            }
+        },
+        {
+            "name": "Etherscan",
+            "url": "https://etherscan.io",
+            "favicon": "https://www.google.com/s2/favicons?domain=etherscan.io",
+            "description": "Balance, transactions and tokens of an Ethereum address",
+            "category": "crypto",
+            "cost": "free",
+            "types": [
+                "crypto_eth"
+            ],
+            "search": {
+                "crypto_eth": "https://etherscan.io/address/{value}"
+            }
+        },
+        {
+            "name": "Wayback Machine",
+            "url": "https://web.archive.org",
+            "favicon": "https://www.google.com/s2/favicons?domain=web.archive.org",
+            "description": "Earlier copies of a website or page",
+            "category": "archives",
+            "cost": "free",
+            "types": [
+                "domain",
+                "url"
+            ],
+            "search": {
+                "domain": "https://web.archive.org/web/*/{value}/*",
+                "url": "https://web.archive.org/web/*/{value}"
+            }
+        },
+        {
+            "name": "archive.today",
+            "url": "https://archive.ph",
+            "favicon": "https://www.google.com/s2/favicons?domain=archive.ph",
+            "description": "Snapshots of pages saved by users, often of deleted posts",
+            "category": "archives",
+            "cost": "free",
+            "types": [
+                "url",
+                "domain"
+            ]
         }
     ]
 }

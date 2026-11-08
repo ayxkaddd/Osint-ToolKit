@@ -39,7 +39,7 @@ A self-hosted web workspace for OSINT investigations. Built with FastAPI and Tai
 - **WHOIS History**: every archived WHOIS record of a domain - free preview of how many exist, then contacts, registrar/name server periods and a change log
 - **Shared NS Lookup**: domains on the same name server pair, then parsed WHOIS and an httpx web fingerprint of each to group the domains most likely run by the same owner
 - **IP Lookup**: location, network owner, reverse DNS, abuse reports and exposed services
-- **External Resources**: curated list of useful OSINT tools and websites
+- **External Resources**: a curated directory of OSINT sites, grouped by category and searchable, each tagged with its cost and the identifier types it takes; many open straight on an identifier from its pivot menu
 
 ## Installation
 

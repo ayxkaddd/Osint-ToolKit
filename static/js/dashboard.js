@@ -43,6 +43,105 @@ function resourceIcon(resource) {
     }
 }
 
+// External resources, grouped by what they're for
+const RESOURCE_CATEGORIES = [
+    ['breaches', 'Breaches and leaks'],
+    ['accounts', 'Accounts and usernames'],
+    ['domains', 'Domains, DNS and websites'],
+    ['infrastructure', 'IPs and infrastructure'],
+    ['images', 'Images and faces'],
+    ['telegram', 'Telegram'],
+    ['companies', 'Companies, people and vehicles'],
+    ['crypto', 'Crypto'],
+    ['archives', 'Archives'],
+    ['other', 'Other'],
+];
+const RESOURCE_COST = {
+    free: ['free', 'bg-emerald-900/50 text-emerald-300'],
+    freemium: ['free tier', 'bg-sky-900/50 text-sky-300'],
+    paid: ['paid', 'bg-yellow-900/60 text-yellow-300'],
+};
+let externalResources = [];
+const resourceFilter = { category: '', q: '' };
+
+function resourceMatches(resource) {
+    if (resourceFilter.category && (resource.category || 'other') !== resourceFilter.category) return false;
+    const q = resourceFilter.q.toLowerCase();
+    if (!q) return true;
+    const types = (resource.types || []).map((t) => window.ENTITY_LABELS[t] || t);
+    return [resource.name, resource.description, resource.url, ...types].join(' ').toLowerCase().includes(q);
+}
+
+function resourceCard(resource) {
+    const cost = RESOURCE_COST[resource.cost];
+    const opens = Object.keys(resource.search || {});
+    return `
+        <a href="${escapeAttr(safeUrl(resource.url))}" target="_blank" rel="noopener noreferrer"
+           class="bg-[#14151f] border border-[#24283b] hover:border-gray-600 rounded-xl p-4 flex items-start gap-4 group transition-colors">
+            <img src="${escapeAttr(resourceIcon(resource))}" alt="" loading="lazy" class="w-8 h-8 rounded shrink-0" onerror="faviconFallback(this)">
+            <div class="min-w-0 flex-grow">
+                <div class="flex items-center gap-2">
+                    <h3 class="font-semibold text-white truncate">${escapeHtml(resource.name)}</h3>
+                    ${cost ? `<span class="text-[10px] px-1.5 py-0.5 rounded ${cost[1]}">${cost[0]}</span>` : ''}
+                    <i data-lucide="external-link" class="w-4 h-4 text-gray-500 group-hover:text-white ml-auto shrink-0"></i>
+                </div>
+                <p class="text-sm text-gray-400 mt-1">${escapeHtml(resource.description)}</p>
+                ${
+                    (resource.types || []).length
+                        ? `<div class="flex flex-wrap gap-1 mt-2">${resource.types
+                              .map(
+                                  (t) =>
+                                      `<span class="text-[10px] px-1.5 py-0.5 rounded border ${opens.includes(t) ? 'border-purple-700/60 text-purple-300' : 'border-gray-700 text-gray-400'}"
+                                  title="${opens.includes(t) ? 'Offered in the menu of this kind of identifier' : ''}">${escapeHtml(window.ENTITY_LABELS[t] || t)}</span>`
+                              )
+                              .join('')}</div>`
+                        : ''
+                }
+            </div>
+        </a>`;
+}
+
+function renderExternalResources() {
+    const counts = {};
+    externalResources.forEach((r) => (counts[r.category || 'other'] = (counts[r.category || 'other'] || 0) + 1));
+    document.getElementById('resourcesFacets').innerHTML = [
+        `<button type="button" data-resource-category="" class="facet ${resourceFilter.category ? '' : 'active'}">All <span>${externalResources.length}</span></button>`,
+        ...RESOURCE_CATEGORIES.filter(([id]) => counts[id]).map(
+            ([id, label]) =>
+                `<button type="button" data-resource-category="${id}" class="facet ${resourceFilter.category === id ? 'active' : ''}">${escapeHtml(label)} <span>${counts[id]}</span></button>`
+        ),
+    ].join('');
+
+    const shown = externalResources.filter(resourceMatches);
+    document.getElementById('resourcesCount').textContent =
+        shown.length === externalResources.length
+            ? `(${shown.length})`
+            : `(${shown.length} of ${externalResources.length})`;
+    const sections = RESOURCE_CATEGORIES.map(([id, label]) => {
+        const items = shown.filter((r) => (r.category || 'other') === id);
+        if (!items.length) return '';
+        return `
+            <section>
+                <h3 class="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">${escapeHtml(label)}</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">${items.map(resourceCard).join('')}</div>
+            </section>`;
+    }).join('');
+    document.getElementById('resourcesList').innerHTML =
+        sections || '<p class="text-sm text-gray-500">Nothing matches the filter.</p>';
+    lucide.createIcons();
+}
+
+document.getElementById('resourcesFacets')?.addEventListener('click', (event) => {
+    const facet = event.target.closest('[data-resource-category]');
+    if (!facet) return;
+    resourceFilter.category = facet.dataset.resourceCategory;
+    renderExternalResources();
+});
+document.getElementById('resourcesSearch')?.addEventListener('input', (event) => {
+    resourceFilter.q = event.target.value.trim();
+    renderExternalResources();
+});
+
 function renderResources(resources) {
     modules = resources.modules;
     const { ext_res } = resources;
@@ -94,32 +193,8 @@ function renderResources(resources) {
                     <p class="text-gray-400">Connect another website or service and search it from here - no coding needed.</p>
                 </a>`;
 
-    const resourcesList = document.getElementById('resourcesList');
-    resourcesList.innerHTML = ext_res
-        .map(
-            (resource) => `
-                <div class="bg-[#14151f] border border-[#24283b] hover:border-gray-600 rounded-xl p-4 flex items-start gap-4 group transition-colors">
-                    <div class="flex-shrink-0">
-                        <img src="${escapeAttr(resourceIcon(resource))}" alt="" loading="lazy"
-                            class="w-8 h-8 rounded"
-                            onerror="faviconFallback(this)">
-                    </div>
-                    <div class="flex-grow">
-                        <div class="flex items-center justify-between">
-                            <h3 class="font-semibold">${escapeHtml(resource.name)}</h3>
-                            <a href="${escapeAttr(safeUrl(resource.url))}" rel="noopener noreferrer"
-                               target="_blank"
-                               class="text-gray-400 hover:text-white transition-colors"
-                               title="Open in new tab">
-                                <i data-lucide="external-link" class="w-4 h-4"></i>
-                            </a>
-                        </div>
-                        <p class="text-sm text-gray-400 mt-1">${escapeHtml(resource.description)}</p>
-                    </div>
-                </div>
-            `
-        )
-        .join('');
+    externalResources = ext_res || [];
+    renderExternalResources();
 
     document.getElementById('loadingState').style.display = 'none';
     document.getElementById('contentContainer').style.display = 'block';

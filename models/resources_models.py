@@ -20,6 +20,13 @@ class ExternalResource(BaseModel):
     url: str
     favicon: str
     description: str
+    # dashboard grouping: breaches, accounts, domains, infrastructure, images, telegram,
+    # companies, crypto, archives
+    category: str = "other"
+    cost: Optional[str] = None          # free / freemium / paid
+    types: list[str] = []               # identifier types it takes (services/entities.py)
+    # {identifier type: address with {value}} - opens the site on that identifier (pivot menu)
+    search: dict[str, str] = {}
 
 class Resources(BaseModel):
     modules: list[Module]

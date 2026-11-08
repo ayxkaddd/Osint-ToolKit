@@ -1317,7 +1317,11 @@ async function openPivotMenu(type, value, anchor, options = {}) {
     pivotMenuAnchor = anchor;
     // earlier lookups of this identifier in the investigation results are saved to
     const investigationId = sharedExclude();
-    const [allModules, lookups] = await Promise.all([getModules(), earlierLookups(investigationId, type, value)]);
+    const [allModules, lookups, sites] = await Promise.all([
+        getModules(),
+        earlierLookups(investigationId, type, value),
+        externalSearchesFor(type),
+    ]);
     const modules = allModules.filter((m) => (m.accepts || []).includes(type));
     if (pivotMenuAnchor !== anchor) return; // closed or another chip clicked while loading
     const earlierLine = (m) => {
@@ -1383,6 +1387,7 @@ async function openPivotMenu(type, value, anchor, options = {}) {
     </div>
     ${sharedRows}
     <div class="max-h-80 overflow-y-auto custom-scrollbar py-1">${rows}</div>
+    ${externalSitesHtml(sites, type, value)}
     <div class="px-3 py-2 border-t border-gray-700 flex justify-between text-xs">
         <button type="button" data-copy="${escapeAttr(value)}" class="text-gray-400 hover:text-white"><i class="fas fa-copy mr-1"></i>Copy</button>
         <a href="/lookup?q=${encodeURIComponent(value)}" class="text-purple-300 hover:text-white">All lookups for this →</a>
@@ -1405,6 +1410,46 @@ async function openPivotMenu(type, value, anchor, options = {}) {
     });
 }
 window.openPivotMenu = openPivotMenu;
+
+// External resources (resources.json) that open on a kind of identifier: {name, url, template}
+let externalSearchesPromise = null;
+function externalSearchesFor(type) {
+    externalSearchesPromise =
+        externalSearchesPromise ||
+        fetch('/api/resources/')
+            .then((r) => (r.ok ? r.json() : { ext_res: [] }))
+            .then((d) => d.ext_res || [])
+            .catch(() => []);
+    return externalSearchesPromise.then((resources) =>
+        resources
+            .filter((r) => r.search && r.search[type])
+            .map((r) => ({ name: r.name, url: r.url, template: r.search[type] }))
+    );
+}
+
+// "Check on another site": links that open those sites on this value (new tab)
+function externalSitesHtml(sites, type, value) {
+    if (!sites.length) return '';
+    const plain = type === 'telegram_username' ? String(value).replace(/^@/, '') : String(value);
+    const links = sites
+        .map((site) => {
+            const href = safeUrl(site.template.replace('{value}', encodeURIComponent(plain)));
+            if (!href) return '';
+            let host = '';
+            try {
+                host = new URL(site.url).hostname;
+            } catch (e) {
+                // no icon then
+            }
+            return `<a href="${escapeAttr(href)}" target="_blank" rel="noopener noreferrer" title="${escapeAttr(`Open ${site.name} on this ${ENTITY_LABELS[type] || type}`)}"
+                class="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 text-xs text-gray-200">
+                ${host ? `<img src="/api/oi/icon/${encodeURIComponent(host)}" alt="" class="w-3.5 h-3.5 rounded-sm" loading="lazy" onerror="this.remove()">` : ''}${escapeHtml(site.name)}</a>`;
+        })
+        .join('');
+    return `<div class="px-3 py-2 border-t border-gray-700">
+        <div class="text-[11px] uppercase tracking-wider text-gray-500 mb-1.5">Check on another site</div>
+        <div class="flex flex-wrap gap-1.5">${links}</div></div>`;
+}
 
 // Lookups of an identifier already saved in an investigation, newest first ([] if none or unknown)
 async function earlierLookups(investigationId, type, value) {

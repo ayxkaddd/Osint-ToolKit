@@ -52,9 +52,13 @@
         </div>
 
         <div class="mt-12">
-            <h2 class="text-xl font-semibold mb-4">External resources</h2>
-            <div id="resourcesList" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="flex flex-wrap items-center justify-between gap-3 mb-2">
+                <h2 class="text-xl font-semibold">External resources <span id="resourcesCount" class="text-sm font-normal text-gray-500"></span></h2>
+                <input type="search" id="resourcesSearch" placeholder="Filter: a site, what it finds, email, domain…" class="field field-sm w-72">
             </div>
+            <p class="text-sm text-gray-500 mb-4">Other sites worth checking. The ones that can open on an identifier are also offered in its menu (click any identifier).</p>
+            <div id="resourcesFacets" class="flex flex-wrap gap-2 mb-6"></div>
+            <div id="resourcesList" class="space-y-8"></div>
         </div>
     </div>
 </div>
