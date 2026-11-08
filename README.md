@@ -25,7 +25,7 @@ A self-hosted web workspace for OSINT investigations. Built with FastAPI and Tai
 - **Plugins**: connect any service with an API without writing code - see [Plugins](#plugins)
 
 ### Modules
-- **Username Search**: checks ~700 sites (WhatsMyName list) for an account, streams results live, says why a site couldn't be checked (blocked, rate limited) and re-checks those
+- **Username Search**: checks ~700 sites (WhatsMyName list) for an account, streams results live, says why a site couldn't be checked (blocked, rate limited) and re-checks those. Requests carry a real browser's fingerprint, so fewer sites block them. An overview sums up the photos, names, usernames and places the accounts show and when they were first and last active; each account's card leads with its picture, name and @handle, then the bio, follower counts and dates
 - **OSINT Industries**: accounts registered to an email, phone or username
 - **GHunt**: the Google account behind an email or Gaia ID
 - **GitHub Analysis (GitFive)**: real emails and names from commits, linked accounts and SSH keys
@@ -131,6 +131,14 @@ SECURITYTRAILS_API_KEY=your_key   # more subdomains + DNS history
 VIRUSTOTAL_API_KEY=your_key
 HACKER_TARGET_API_KEY=your_key    # shared NS lookups beyond the free daily limit
 ```
+
+## Proxies
+
+Settings → **Proxies** sends the modules that query websites directly through proxies: Username Search, DNS Recon (crt.sh, subfinder, httpx), Shared NS Lookup, Face Search, Cavalier, WHOIS History and the t.me profile. OSINT Industries, Funstat, HLR, SerpAPI, GHunt, the Telegram connection and port scans stay direct.
+
+- Off by default. Paste your own proxies, one per line: `ip:port`, `http://user:pass@host:port` or `socks5://host:port` (HTTP, HTTPS, SOCKS4 and SOCKS5).
+- Without enough of your own, free public proxies are fetched from [monosans/proxy-list](https://github.com/monosans/proxy-list) and only the fast, working ones are used. Many sites block free proxies, so a username search can find fewer accounts through them; paid residential proxies work much better.
+- Proxies are tested in the background, never during a search, and a request whose proxies fail goes out directly, so searches take about as long as without them.
 
 ## Paid API modules
 
