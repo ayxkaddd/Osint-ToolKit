@@ -40,6 +40,7 @@ watchfiles
 yarl
 Telethon
 httpx[socks]
+curl_cffi
 dnspython
 python-whois
 beautifulsoup4

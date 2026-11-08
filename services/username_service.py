@@ -1,6 +1,5 @@
 import asyncio
 from pathlib import Path
-import random
 import json
 import time
 import os
@@ -19,7 +18,8 @@ from datetime import datetime
 import uuid
 
 from services.proxy_pool import pool as proxy_pool
-from utils.proxy_transport import make_async_client, proxied_get
+from utils.browser_client import BrowserClient, BrowserResponse, RequestError, RequestTimeout
+from utils.proxy_transport import proxied_get
 
 # Through proxies each check takes several times longer, but the requests come from
 # many addresses (one or two per site), so far more can run at once without
@@ -321,7 +321,7 @@ class StreamingUsernameSearchService:
         # Blocked/dead hosts never complete the TCP connect: give up on those
         # early instead of holding a slot for the whole timeout
         self.timeout_seconds = timeout_seconds
-        self.timeout = httpx.Timeout(timeout_seconds, connect=connect_timeout_seconds)
+        self.connect_timeout_seconds = connect_timeout_seconds
         self.max_retries = max_retries
         self.stream_delay = stream_delay
         self._metadata_cache = None
@@ -332,26 +332,8 @@ class StreamingUsernameSearchService:
         self.per_host_limit = 5
         self._host_slots: dict = defaultdict(lambda: asyncio.Semaphore(self.per_host_limit))
 
-        # Modern user agents
-        self.user_agents = [
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
-        ]
-
-        self.base_headers = {
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.5",
-            "Accept-Encoding": "gzip, deflate",
-            "DNT": "1",
-            "Connection": "keep-alive",
-            "Upgrade-Insecure-Requests": "1",
-            "Sec-Fetch-Dest": "document",
-            "Sec-Fetch-Mode": "navigate",
-            "Sec-Fetch-Site": "none",
-        }
+        # No User-Agent or browser headers of our own: BrowserClient sends Chrome's,
+        # matching its TLS fingerprint (a mismatch gets blocked more often)
 
         self._url_pattern = re.compile(r'\{account\}')
         self._account_confirmation_sites = {
@@ -419,10 +401,6 @@ class StreamingUsernameSearchService:
                 os.utime(self.WMN_LOCAL)
             except OSError:
                 pass
-
-    def get_random_user_agent(self) -> str:
-        """Get random user agent"""
-        return random.choice(self.user_agents)
 
     def _text_matches_pattern(self, text: str, pattern: Optional[str]) -> bool:
         """
@@ -552,9 +530,8 @@ class StreamingUsernameSearchService:
     def _build_request(self, site: dict, username: str) -> tuple:
         """(url, method, request kwargs) for one site: GET, JSON POST or form POST."""
         url = self._url_pattern.sub(quote(username), site["uri_check"]).replace(ACCOUNT, quote(username))
-        headers = self.base_headers.copy()
-        headers["User-Agent"] = self.get_random_user_agent()
-        headers.update(site.get("headers") or {})
+        # Only what the site's entry asks for; the browser's own headers do the rest
+        headers = dict(site.get("headers") or {})
         kwargs = {"headers": headers}
         if not site.get("post_body"):
             return url, "GET", kwargs
@@ -576,7 +553,7 @@ class StreamingUsernameSearchService:
             kwargs["content"] = post_body
         return url, "POST", kwargs
 
-    def _outcome(self, site: dict, username: str, url: str, response: httpx.Response,
+    def _outcome(self, site: dict, username: str, url: str, response: BrowserResponse,
                  response_time: float, extract_profile: bool, body: Optional[bytes] = None) -> SiteCheckOutcome:
         """Found / not found / no match, from a site's response (``body``: what was read of it)."""
         content_type = response.headers.get("content-type", "")
@@ -604,7 +581,7 @@ class StreamingUsernameSearchService:
             status=CheckStatus.ERROR, error_message=message, response_time=time.time() - start_time))
 
     async def check_single_site(self,
-                                client: httpx.AsyncClient,
+                                client: BrowserClient,
                                 site: dict,
                                 username: str,
                                 extract_profile: bool = False,
@@ -623,28 +600,20 @@ class StreamingUsernameSearchService:
             wait_time = await self.rate_limiter.wait_if_needed(domain)
             if wait_time > 0:
                 logger.debug("Rate limited for %s, waited %.2fs", domain, wait_time)
-            async def fetch():
-                # at most MAX_BODY_BYTES of the body: enough for the markers and a profile
-                async with client.stream(method, url, **kwargs) as response:
-                    body = bytearray()
-                    async for chunk in response.aiter_bytes():
-                        body.extend(chunk)
-                        if len(body) >= MAX_BODY_BYTES:
-                            break
-                    return response, bytes(body[:MAX_BODY_BYTES])
             try:
-                # The whole request, redirects included, within timeout_seconds
-                response, body = await asyncio.wait_for(fetch(), self.timeout_seconds)
-            except (asyncio.TimeoutError, httpx.TimeoutException):
+                # The whole request, redirects included, within timeout_seconds. The
+                # client reads at most MAX_BODY_BYTES: enough for the markers and a profile
+                response = await asyncio.wait_for(client.request(method, url, **kwargs), self.timeout_seconds)
+            except (asyncio.TimeoutError, RequestTimeout):
                 return self._error(site, url, "Timeout", start_time)
-            except httpx.HTTPError as e:
+            except RequestError as e:
                 return self._error(site, url, f"Client error: {e}", start_time)
             except Exception as e:
-                return self._error(site, url, str(e), start_time)
-            return self._outcome(site, username, url, response, time.time() - start_time, extract_profile, body)
+                return self._error(site, url, str(e) or type(e).__name__, start_time)
+            return self._outcome(site, username, url, response, time.time() - start_time, extract_profile)
 
     async def check_site_with_retry(self,
-                                   client: httpx.AsyncClient,
+                                   client: BrowserClient,
                                    site: dict,
                                    username: str,
                                    extract_profile: bool = False,
@@ -691,7 +660,7 @@ class StreamingUsernameSearchService:
     DDG_URL = "https://duckduckgo.com/html/?q={query}"
 
     async def stream_duckduckgo_search(self,
-                                      client: httpx.AsyncClient,
+                                      client: BrowserClient,
                                       username: str,
                                       queue_event):
         """Stream DuckDuckGo results"""
@@ -703,13 +672,9 @@ class StreamingUsernameSearchService:
 
         query = quote(f'"{username}"')
         url = self.DDG_URL.format(query=query)
-        headers = {
-            "User-Agent": self.get_random_user_agent(),
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
-        }
 
         try:
-            response = await client.get(url, headers=headers)
+            response = await client.get(url)
             if response.status_code == 200:
                 soup = BeautifulSoup(response.text, "html.parser")
                 seen_domains = set()
@@ -784,7 +749,7 @@ class StreamingUsernameSearchService:
             "percentage": round((stats["checked"] / total) * 100, 2),
         }
 
-    async def _process_site(self, client: httpx.AsyncClient, site: dict, username: str,
+    async def _process_site(self, client: BrowserClient, site: dict, username: str,
                             extract_profile: bool, queue_event,
                             semaphore: Optional[asyncio.Semaphore] = None) -> None:
         """Check one site and queue its events (checking, result, extracted profile)."""
@@ -837,10 +802,9 @@ class StreamingUsernameSearchService:
         proxied = proxy_pool.enabled()
         semaphore = self.proxy_semaphore if proxied else self.semaphore
         width = PROXIED_MAX_CONCURRENT if proxied else self.max_concurrent_requests
-        limits = httpx.Limits(max_connections=width, max_keepalive_connections=width)
-        async with make_async_client(timeout=self.timeout, limits=limits, verify=False,
-                                     follow_redirects=True, trust_env=True,
-                                     attempt_timeout=PROXY_ATTEMPT_TIMEOUT) as client:
+        async with BrowserClient(timeout=self.timeout_seconds, connect_timeout=self.connect_timeout_seconds,
+                                 max_clients=width, verify=False, max_body=MAX_BODY_BYTES,
+                                 attempt_timeout=PROXY_ATTEMPT_TIMEOUT) as client:
             tasks = [asyncio.create_task(self._process_site(client, site, username, extract_profile,
                                                             queue_event, semaphore))
                      for site in sites]

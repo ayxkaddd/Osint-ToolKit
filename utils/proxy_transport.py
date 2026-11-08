@@ -13,13 +13,15 @@ See :mod:`services.proxy_pool` for how the healthy set is built and refreshed.
 import asyncio
 import logging
 import time
-from typing import Optional
+from collections.abc import Awaitable, Callable
+from typing import Optional, TypeVar
 
 import httpx
 
 from services.proxy_pool import pool
 
 logger = logging.getLogger(__name__)
+T = TypeVar("T")
 
 try:  # the SOCKS handshake fails with socksio's own error, which httpx doesn't wrap
     from socksio.exceptions import ProtocolError as SocksProtocolError
@@ -38,6 +40,52 @@ REPLAYABLE_METHODS = ("GET", "HEAD", "OPTIONS")
 PROXY_CONNECT_TIMEOUT = 3.0
 # Alternative proxies to try after the first before giving up and going direct.
 PROXY_RETRIES = 1
+
+
+async def send_rotating(send: Callable[[Optional[str]], Awaitable[T]], *, replayable: bool,
+                        connect_error: Callable[[BaseException], bool],
+                        retries: int = PROXY_RETRIES, attempt_timeout: Optional[float] = None) -> T:
+    """Send one request through the pool: a fast, idle proxy, then another, then direct.
+
+    ``send(proxy_url)`` makes the request (``None`` = direct). Each proxy's result is
+    reported to the pool. A bodiless (``replayable``) request is retried after any
+    failure and is cut off after ``attempt_timeout``; one with a body only after
+    ``connect_error(e)``, i.e. when nothing was sent yet. Shared by the httpx
+    transport below and the browser-fingerprint client (utils.browser_client).
+    """
+    if not pool.enabled():
+        return await send(None)
+    tried: set[str] = set()
+    for _ in range(1 + retries):
+        url = pool.pick(exclude=tried)
+        if not url:
+            break
+        tried.add(url)
+        proxy = pool.acquire(url)
+        start = time.monotonic()
+        try:
+            if replayable and attempt_timeout:
+                response = await asyncio.wait_for(send(url), attempt_timeout)
+            else:
+                response = await send(url)
+        except asyncio.TimeoutError:
+            pool.report(url, ok=False)
+            continue
+        except asyncio.CancelledError:
+            # Cut off by the caller's own deadline: this proxy was too slow
+            pool.report(url, ok=False)
+            raise
+        except Exception as e:  # noqa: BLE001
+            pool.report(url, ok=False)
+            if replayable or connect_error(e):
+                continue
+            raise  # the body may have been sent: don't send it twice
+        finally:
+            pool.release(proxy)
+        pool.report(url, ok=True, latency=time.monotonic() - start)
+        return response
+    # No proxy answered in time (nothing was sent, or it is safe to resend)
+    return await send(None)
 
 
 class RotatingProxyTransport(httpx.AsyncBaseTransport):
@@ -79,45 +127,22 @@ class RotatingProxyTransport(httpx.AsyncBaseTransport):
         if not pool.enabled():
             return await self._direct.handle_async_request(request)
 
-        replayable = request.method in REPLAYABLE_METHODS
         original_timeout = request.extensions.get("timeout")
-        tried: set[str] = set()
+
+        async def send(url: Optional[str]) -> httpx.Response:
+            if url is None:
+                self._restore(request, original_timeout)
+                return await self._direct.handle_async_request(request)
+            self._set_connect(request, original_timeout, PROXY_CONNECT_TIMEOUT)
+            return await self._transport_for(url).handle_async_request(request)
+
         try:
-            for _ in range(1 + self._retries):
-                url = pool.pick(exclude=tried)
-                if not url:
-                    break
-                tried.add(url)
-                self._set_connect(request, original_timeout, PROXY_CONNECT_TIMEOUT)
-                proxy = pool.acquire(url)
-                start = time.monotonic()
-                try:
-                    attempt = self._transport_for(url).handle_async_request(request)
-                    if replayable and self._attempt_timeout:
-                        response = await asyncio.wait_for(attempt, self._attempt_timeout)
-                    else:
-                        response = await attempt
-                except (asyncio.TimeoutError, *CONNECT_ERRORS):
-                    pool.report(url, ok=False)
-                    continue
-                except asyncio.CancelledError:
-                    # Cut off by the caller's own deadline: this proxy was too slow
-                    pool.report(url, ok=False)
-                    raise
-                except Exception:  # noqa: BLE001
-                    # httpx.TransportError, or a SOCKS error httpx doesn't wrap
-                    # (socksio's ProtocolError "Malformed reply" from a broken proxy)
-                    pool.report(url, ok=False)
-                    if replayable:
-                        continue
-                    raise  # the body may have been sent: don't send it twice
-                finally:
-                    pool.release(proxy)
-                pool.report(url, ok=True, latency=time.monotonic() - start)
-                return response
-            # No proxy answered in time (nothing was sent, or it is safe to resend)
-            self._restore(request, original_timeout)
-            return await self._direct.handle_async_request(request)
+            # Besides httpx's own errors, a broken SOCKS proxy raises socksio's
+            # ProtocolError ("Malformed reply"), which httpx doesn't wrap
+            return await send_rotating(
+                send, replayable=request.method in REPLAYABLE_METHODS,
+                connect_error=lambda e: isinstance(e, CONNECT_ERRORS),
+                retries=self._retries, attempt_timeout=self._attempt_timeout)
         finally:
             self._restore(request, original_timeout)
 
