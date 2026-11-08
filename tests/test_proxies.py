@@ -68,6 +68,20 @@ def test_report_drops_after_max_fails():
     assert pool._by_url["http://b:2"].fails == 0
 
 
+def test_disabled_unless_turned_on():
+    # Public proxies slow lookups down and get blocked: off unless the operator opts in
+    _set_healthy(["http://a:1"])
+    update_env({"PROXY_ENABLED": None})
+    assert pool.enabled() is False
+    assert pool.status()["enabled"] is False
+
+
+def test_default_source_is_monosans_all_txt():
+    from services.proxy_pool import DEFAULT_SOURCES
+    assert [url for url, _ in DEFAULT_SOURCES] == [
+        "https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/all.txt"]
+
+
 def test_enabled_needs_flag_and_healthy():
     _set_healthy(["http://a:1"])
     update_env({"PROXY_ENABLED": "false"})

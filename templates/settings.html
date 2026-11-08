@@ -133,7 +133,8 @@
                 <span class="text-lg font-semibold"><i class="fas fa-network-wired mr-2 text-purple-300"></i>Proxies</span>
                 <span class="text-xs ${data.healthy ? 'text-emerald-300' : 'text-gray-400'}">${escapeHtml(status)}</span>
             </div>
-            <p class="text-sm text-gray-400 mb-3">Route the scraping modules (username, DNS recon, t.me, face search, Cavalier, WHOIS history) through proxies. One per line, <span class="font-mono">host:port</span> or <span class="font-mono">scheme://host:port</span> (http, https, socks4, socks5). Leave empty to use free public proxies, fetched and health-checked automatically. Slow or dead proxies are skipped and the request goes direct, so lookups never get slower.</p>
+            <p class="text-sm text-gray-400 mb-3">Route the scraping modules (username, DNS recon, t.me, face search, Cavalier, WHOIS history) through proxies, so the sites don't see this server's address. One per line, <span class="font-mono">host:port</span> or <span class="font-mono">scheme://host:port</span> (http, https, socks4, socks5). Leave empty to use free public proxies, fetched and checked automatically. Dead proxies are skipped and the request goes direct.</p>
+            <p class="text-sm text-amber-300/80 mb-3"><i class="fas fa-triangle-exclamation mr-1"></i>Lookups take longer through proxies, and many sites block free proxies, so a username search can find fewer accounts than without them. Off by default; your own paid proxies work much better than public ones.</p>
             <textarea id="proxyList" rows="6" spellcheck="false" ${NO_AUTOFILL('text')}
                 placeholder="203.0.113.5:8080&#10;socks5://198.51.100.9:1080"
                 class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm font-mono focus:outline-none focus:border-purple-500"></textarea>

@@ -19,7 +19,7 @@ router = APIRouter(prefix="/api/proxies")
 
 class ProxySettings(BaseModel):
     proxies: str = ""              # the textarea, one proxy per line
-    enabled: bool = True
+    enabled: bool = False
     fetch_public: bool = True
     sources: Optional[str] = None  # comma-separated source URLs; omitted = leave as-is
 

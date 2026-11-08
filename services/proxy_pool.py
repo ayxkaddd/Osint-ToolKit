@@ -32,14 +32,17 @@ PROXY_FILE = Path("assets/proxies.txt")
 VALID_SCHEMES = ("http", "https", "socks4", "socks5", "socks5h")
 CLI_SCHEMES = ("http", "https", "socks5", "socks5h")
 
-# (url, default scheme for bare ip:port lines). proxyscrape's protocolipport
-# output already carries a scheme, so the default only applies to lists that
-# don't. Overridable with the PROXY_SOURCES setting (comma-separated URLs).
+# (url, default scheme for bare ip:port lines). monosans/proxy-list is re-checked
+# and updated often; all.txt (~40 KB) has every proxy with its scheme
+# (http://, socks4://, socks5://) - the JSON version is ~25x bigger and only adds
+# geolocation. Overridable with the PROXY_SOURCES setting (comma-separated URLs).
 DEFAULT_SOURCES = [
-    ("https://api.proxyscrape.com/v4/free-proxy-list/get?request=display_proxies&protocol=http&proxy_format=protocolipport&format=text", "http"),
-    ("https://api.proxyscrape.com/v4/free-proxy-list/get?request=display_proxies&protocol=socks4&proxy_format=protocolipport&format=text", "socks4"),
-    ("https://api.proxyscrape.com/v4/free-proxy-list/get?request=display_proxies&protocol=socks5&proxy_format=protocolipport&format=text", "socks5"),
+    ("https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/all.txt", "http"),
 ]
+
+# Off unless the operator turns it on: free proxies make lookups slower and some
+# sites block them, so fewer accounts are found than with a direct connection.
+ENABLED_BY_DEFAULT = False
 
 
 def _flag(key: str, default: bool) -> bool:
@@ -95,7 +98,7 @@ class ProxyPool:
 
     def enabled(self) -> bool:
         """Whether a lookup should route through a proxy right now."""
-        return _flag("PROXY_ENABLED", True) and bool(self._healthy)
+        return _flag("PROXY_ENABLED", ENABLED_BY_DEFAULT) and bool(self._healthy)
 
     def pick(self) -> Optional[str]:
         """Next healthy proxy, round-robin (spreads load across the pool)."""
@@ -138,7 +141,7 @@ class ProxyPool:
 
     def status(self) -> dict:
         return {
-            "enabled": _flag("PROXY_ENABLED", True),
+            "enabled": _flag("PROXY_ENABLED", ENABLED_BY_DEFAULT),
             "fetch_public": _flag("PROXY_FETCH_PUBLIC", True),
             "user_count": len(self._user_urls),
             "healthy": len(self._healthy),
@@ -233,7 +236,7 @@ class ProxyPool:
         if self._refreshing.locked():
             return
         async with self._refreshing:
-            if not force and not _flag("PROXY_ENABLED", True):
+            if not force and not _flag("PROXY_ENABLED", ENABLED_BY_DEFAULT):
                 self._healthy = []
                 self._by_url = {}
                 self._counts = {"user": len(self._user_urls), "public": 0, "healthy": 0}
@@ -269,14 +272,14 @@ class ProxyPool:
 
     async def run_forever(self) -> None:
         """Prime once, then refresh on the timer or when the pool runs thin."""
-        if _flag("PROXY_ENABLED", True):
+        if _flag("PROXY_ENABLED", ENABLED_BY_DEFAULT):
             try:
                 await self.refresh()
             except Exception:  # noqa: BLE001
                 logger.exception("initial proxy refresh failed")
         while True:
             await asyncio.sleep(60)
-            if not _flag("PROXY_ENABLED", True):
+            if not _flag("PROXY_ENABLED", ENABLED_BY_DEFAULT):
                 continue
             due = time.time() - self._last_refresh >= self.REFRESH_INTERVAL
             thin = len(self._healthy) < self.HEALTHY_FLOOR
