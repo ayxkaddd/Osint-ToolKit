@@ -653,6 +653,21 @@ function renderUsernameSearch(data) {
                 ${stat('Sites checked', stats.checked ?? stats.total)}
                 ${stat('Duration', stats.duration != null ? `${stats.duration}s` : '—')}
             </div>
+            ${
+                (data.mailboxes || []).length
+                    ? `<div>
+                <h5 class="text-xs font-semibold text-gray-400 uppercase mb-2">Email addresses (${data.mailboxes.length})</h5>
+                <div class="flex flex-wrap gap-2">${data.mailboxes
+                    .map(
+                        (m) => `
+                    <span class="inline-flex items-center gap-2 max-w-full px-2.5 py-1.5 rounded-lg bg-gray-800/40 border border-[#293142]">
+                        <span class="text-[11px] uppercase tracking-wide text-gray-500">${escapeHtml(m.provider || '')}</span>${pivotText('email', m.email)}
+                    </span>`
+                    )
+                    .join('')}</div>
+            </div>`
+                    : ''
+            }
             ${Object.entries(byCategory)
                 .sort()
                 .map(

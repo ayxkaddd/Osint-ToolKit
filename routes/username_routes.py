@@ -1,11 +1,14 @@
 from collections import defaultdict
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse, StreamingResponse
+from pydantic import BaseModel
+from services import mailbox_service as mailboxes
 from services.username_service import StreamingUsernameSearchService
 import asyncio
 import logging
 from typing import Optional
 
+from utils.config import update_env
 from utils.investigation_decorator import save_investigation
 from utils.stream_reducers import reduce_username_search
 
@@ -27,6 +30,7 @@ async def stream_search_sse(
     categories: Optional[list[str]] = Query(None, description="Filter by categories"),
     priority_sites: Optional[list[str]] = Query(None, description="Priority sites to check first"),
     only_sites: Optional[list[str]] = Query(None, description="Check only these sites (retry errors)"),
+    check_mailboxes: bool = Query(False, description="Also check whether the username is a mailbox at email providers"),
 ):
     """
     Server-Sent Events endpoint for streaming search results.
@@ -43,6 +47,7 @@ async def stream_search_sse(
             categories=categories,
             priority_sites=priority_sites,
             only_sites=only_sites,
+            check_mailboxes=check_mailboxes,
         ):
             yield event.to_sse()
 
@@ -55,6 +60,39 @@ async def stream_search_sse(
             "X-Accel-Buffering": "no"
         }
     )
+
+
+class GooglePermission(BaseModel):
+    allow: bool
+
+
+@router.get("/mailboxes/status")
+async def mailbox_status():
+    """The email providers checked, and whether Gmail may use the GHunt session."""
+    return {
+        "providers": [{"id": p.id, "name": p.name, "domains": p.domains, "note": p.note}
+                      for p in mailboxes.PROVIDERS],
+        "gmail_permission": mailboxes.gmail_permission(),
+        "ghunt_session": mailboxes.ghunt_creds_path().is_file(),
+    }
+
+
+@router.post("/mailboxes/google-permission")
+async def set_google_permission(body: GooglePermission):
+    """The operator allows (or stops) the Gmail check with their Google session."""
+    update_env({mailboxes.GMAIL_PERMISSION_KEY: "true" if body.allow else None})
+    return {"gmail_permission": mailboxes.gmail_permission()}
+
+
+@router.get("/mailboxes/check")
+async def check_mailbox_provider(
+    username: str = Query(..., min_length=1, max_length=100),
+    provider: str = Query(..., description="Provider id, e.g. gmail"),
+):
+    """One provider again (e.g. Gmail right after it was allowed)."""
+    if provider not in mailboxes.PROVIDERS_BY_ID:
+        raise HTTPException(status_code=404, detail="Unknown email provider")
+    return {"results": [r.to_dict() async for r in mailboxes.check_mailboxes(username, [provider])]}
 
 
 @router.get("/api/metadata")

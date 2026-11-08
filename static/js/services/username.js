@@ -47,6 +47,8 @@ class OSINTSearch {
             flatViewBtn: document.getElementById('flatViewBtn'),
             groupedViewBtn: document.getElementById('groupedViewBtn'),
             overview: document.getElementById('usernameOverview'),
+            mailboxes: document.getElementById('usernameMailboxes'),
+            checkMailboxes: document.getElementById('checkMailboxes'),
         };
     }
 
@@ -80,6 +82,254 @@ class OSINTSearch {
             this.elements.groupedViewBtn.addEventListener('click', () => {
                 this.switchView('grouped');
             });
+        }
+        this.bindMailboxEvents();
+    }
+
+    // ---------------------------------------------------------------------------
+    // Email providers: is the username also a mailbox (someuser@gmail.com, @outlook.com...)?
+    // Opt-in with the checkbox under the search box; the results stream in with the sites.
+    // ---------------------------------------------------------------------------
+
+    bindMailboxEvents() {
+        const box = this.elements.checkMailboxes;
+        if (box) {
+            try {
+                box.checked = localStorage.getItem('username.checkMailboxes') === '1';
+            } catch (error) {
+                // no storage (private window): the box just starts unticked
+            }
+            box.addEventListener('change', () => {
+                try {
+                    localStorage.setItem('username.checkMailboxes', box.checked ? '1' : '0');
+                } catch (error) {
+                    // not remembered, still used for this search
+                }
+            });
+        }
+        this.elements.mailboxes?.addEventListener('click', (event) => {
+            if (event.target.closest('[data-mailbox-gmail-allow]')) this.openGmailPermission();
+            if (event.target.closest('[data-mailbox-gmail-off]')) this.setGmailPermission(false);
+        });
+    }
+
+    resetMailboxes(active = false) {
+        this.mailboxes = { active, running: active, results: [] };
+        this.mailboxHtml = '';
+        if (this.elements.mailboxes) this.elements.mailboxes.innerHTML = '';
+        if (active) this.queueMailboxes();
+    }
+
+    addMailboxResult(result) {
+        if (!this.mailboxes?.active) return;
+        // A re-check (Gmail once allowed) replaces the earlier answer for that address
+        this.mailboxes.results = this.mailboxes.results.filter((r) => r.email !== result.email);
+        this.mailboxes.results.push(result);
+        this.queueMailboxes();
+        if (result.status === 'found') this.queueOverview();
+    }
+
+    finishMailboxes() {
+        if (!this.mailboxes?.active || !this.mailboxes.running) return;
+        this.mailboxes.running = false;
+        this.queueMailboxes();
+    }
+
+    foundMailboxes() {
+        return (this.mailboxes?.results || []).filter((r) => r.status === 'found');
+    }
+
+    queueMailboxes() {
+        if (this.mailboxesQueued) return;
+        this.mailboxesQueued = true;
+        requestAnimationFrame(() => {
+            this.mailboxesQueued = false;
+            this.renderMailboxes();
+        });
+    }
+
+    async loadMailboxStatus() {
+        if (this.mailboxStatus) return this.mailboxStatus;
+        try {
+            const response = await fetch('/api/username/mailboxes/status');
+            if (response.ok) this.mailboxStatus = await response.json();
+        } catch (error) {
+            // the panel works without it; only the Gmail lines need it
+        }
+        return this.mailboxStatus || {};
+    }
+
+    renderMailboxes() {
+        const container = this.elements.mailboxes;
+        if (!container || !this.mailboxes?.active) return;
+        const results = this.mailboxes.results;
+        const by = (status) => results.filter((r) => r.status === status);
+        const found = by('found');
+        const missing = by('not_found');
+        const failed = by('error');
+        const gmailWaiting = results.find((r) => r.details && r.details.needs_permission);
+        const skipped = by('skipped').filter((r) => r !== gmailWaiting);
+        const running = this.mailboxes.running;
+        const status = running
+            ? `<span class="flex items-center gap-2"><i class="fas fa-spinner fa-spin"></i>Checking email providers…</span>`
+            : [
+                  `${found.length} found`,
+                  missing.length && `${missing.length} not registered`,
+                  failed.length && `${failed.length} couldn't check`,
+              ]
+                  .filter(Boolean)
+                  .join(' · ');
+        const list = (title, items, withReason) =>
+            items.length
+                ? `<details class="mt-2 text-xs text-gray-400">
+                    <summary class="cursor-pointer w-fit hover:text-gray-200">${escapeHtml(title)} (${items.length})</summary>
+                    <div class="mt-1.5 space-y-0.5">${items
+                        .map(
+                            (r) =>
+                                `<div><span class="text-gray-300">${escapeHtml(r.email)}</span>${
+                                    withReason && r.reason
+                                        ? ` <span class="text-gray-500">- ${escapeHtml(r.reason)}</span>`
+                                        : ''
+                                }</div>`
+                        )
+                        .join('')}</div>
+                </details>`
+                : '';
+        const permitted = this.mailboxStatus && this.mailboxStatus.gmail_permission;
+        const html = `
+            <section class="username-category-section p-4 mb-4">
+                <div class="flex items-center justify-between gap-3 flex-wrap">
+                    <h2 class="flex items-center gap-2 text-sm font-semibold text-white"><i data-lucide="mail" class="w-4 h-4 text-purple-300"></i>Email addresses</h2>
+                    <span class="text-xs text-gray-400">${status}</span>
+                </div>
+                ${
+                    found.length
+                        ? `<div class="flex flex-wrap gap-2 mt-3">${found.map((r) => this.mailboxChip(r)).join('')}</div>`
+                        : !running
+                          ? '<p class="mt-2 text-sm text-gray-500">No mailbox with this name at the providers that answered.</p>'
+                          : ''
+                }
+                ${
+                    gmailWaiting
+                        ? `<div class="mt-3 flex items-center justify-between gap-3 flex-wrap bg-yellow-900/20 border border-yellow-700/50 rounded-lg px-4 py-2 text-sm text-yellow-100">
+                    <span>Gmail wasn't checked: it needs your permission to use your Google session.</span>
+                    <button type="button" data-mailbox-gmail-allow class="px-3 py-1.5 rounded-lg bg-yellow-700/60 hover:bg-yellow-600/70 text-white shrink-0">Allow…</button>
+                </div>`
+                        : ''
+                }
+                ${list("Couldn't check", failed, true)}
+                ${list('Not registered', missing, false)}
+                ${list('Not checked', skipped, true)}
+                ${
+                    permitted
+                        ? `<button type="button" data-mailbox-gmail-off class="mt-3 text-xs text-gray-500 hover:text-gray-300 underline">Gmail is checked with your Google session · turn off</button>`
+                        : ''
+                }
+            </section>`;
+        if (html === this.mailboxHtml) return;
+        this.mailboxHtml = html;
+        replaceKeepingImages(container, html);
+        if (window.lucide) lucide.createIcons();
+    }
+
+    // A found address: provider, the address as a pivot chip, and what Gravatar or Google add
+    mailboxChip(result) {
+        const details = result.details || {};
+        const picture = safeUrl(details.picture);
+        const aliases = result.aliases || [];
+        return `
+            <div class="inline-flex items-center gap-2 max-w-full px-2.5 py-1.5 rounded-lg bg-gray-800/40 border border-[#293142]"${
+                details.note ? ` title="${escapeAttr(details.note)}"` : ''
+            }>
+                ${
+                    picture
+                        ? `<button type="button" data-image-view="${escapeAttr(picture)}" data-image-title="${escapeAttr(result.email)}" class="shrink-0">
+                    <img src="${escapeAttr(picture)}" alt="" loading="lazy" referrerpolicy="no-referrer" class="w-6 h-6 rounded-md object-cover"></button>`
+                        : ''
+                }
+                <span class="text-[11px] uppercase tracking-wide text-gray-500 shrink-0">${escapeHtml(result.provider)}</span>
+                ${pivotText('email', result.email)}
+                ${details.name ? `<span class="text-xs text-gray-300 truncate">${escapeHtml(details.name)}</span>` : ''}
+                ${details.gaia_id ? pivotText('gaia_id', details.gaia_id, 'Gaia ID') : ''}
+                ${
+                    aliases.length
+                        ? `<span class="text-xs text-gray-500 shrink-0" title="${escapeAttr(aliases.join(', '))}">+${aliases.length} alias${aliases.length === 1 ? '' : 'es'}</span>`
+                        : ''
+                }
+            </div>`;
+    }
+
+    async openGmailPermission() {
+        const status = await this.loadMailboxStatus();
+        const waiting = (this.mailboxes?.results || []).find((r) => r.details && r.details.needs_permission);
+        const email = waiting ? waiting.email : 'an address';
+        const modal = document.createElement('div');
+        modal.className = 'modal-overlay';
+        modal.innerHTML = `
+            <div class="modal-content max-w-lg">
+                <div class="modal-header">
+                    <h2 class="text-lg font-bold text-white">Check Gmail with your Google session?</h2>
+                    <button type="button" class="close-modal text-gray-400 hover:text-white" title="Close"><i class="fas fa-times"></i></button>
+                </div>
+                <div class="modal-body space-y-3 text-sm text-gray-300">
+                    <p>To see whether <b class="text-white">${escapeHtml(email)}</b> is a Google account, the toolkit asks Google the way GHunt does: signed in with the Google session GHunt saved on this computer.</p>
+                    <ul class="list-disc pl-5 space-y-1">
+                        <li>Google sees these lookups on your account. Many of them in a short time can get the session limited or signed out.</li>
+                        <li>Your cookies are only sent to Google, directly - never through proxies.</li>
+                        <li>Only "does this account exist" is asked; nothing is sent to the address.</li>
+                        <li>You can turn it off again below the email addresses.</li>
+                    </ul>
+                    ${
+                        status.ghunt_session === false
+                            ? '<p class="text-yellow-200">No GHunt session was found on this computer yet: log in with <code>ghunt login</code>, otherwise Gmail stays unchecked.</p>'
+                            : ''
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-secondary" data-cancel>Not now</button>
+                    <button type="button" class="btn-primary" data-allow>Allow</button>
+                </div>
+            </div>`;
+        const close = () => modal.remove();
+        modal.addEventListener('click', (event) => {
+            if (event.target === modal || event.target.closest('.close-modal, [data-cancel]')) close();
+        });
+        modal.querySelector('[data-allow]').addEventListener('click', async () => {
+            close();
+            await this.setGmailPermission(true);
+        });
+        document.body.appendChild(modal);
+    }
+
+    async setGmailPermission(allow) {
+        try {
+            const response = await fetch('/api/username/mailboxes/google-permission', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ allow }),
+            });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const data = await response.json();
+            this.mailboxStatus = { ...(this.mailboxStatus || {}), gmail_permission: data.gmail_permission };
+        } catch (error) {
+            showTemporaryNotification("Couldn't save the Gmail setting", 'error');
+            return;
+        }
+        if (!allow) {
+            showTemporaryNotification('Gmail is no longer checked with your Google session', 'info');
+            this.queueMailboxes();
+            return;
+        }
+        // Allowed: check Gmail now, without running the whole search again
+        if (!this.lastUsername || !this.mailboxes?.active) return this.queueMailboxes();
+        try {
+            const response = await fetch(
+                `/api/username/mailboxes/check?username=${encodeURIComponent(this.lastUsername)}&provider=gmail`
+            );
+            const data = await response.json();
+            (data.results || []).forEach((result) => this.addMailboxResult(result));
+        } catch (error) {
+            showTemporaryNotification("Couldn't check Gmail", 'error');
         }
     }
 
@@ -152,7 +402,11 @@ class OSINTSearch {
         this.elements.stopBtn.classList.remove('hidden');
 
         const only = (retrySites || []).map((name) => `&only_sites=${encodeURIComponent(name)}`).join('');
-        const url = `/api/username/search/stream?username=${encodeURIComponent(username)}&include_duckduckgo=false&extract_profile=true${only}`;
+        // Email providers: opt-in, and not on a re-check of the sites that errored
+        const mailboxes = !retrySites && this.elements.checkMailboxes && this.elements.checkMailboxes.checked;
+        if (!retrySites) this.resetMailboxes(mailboxes);
+        if (mailboxes) this.loadMailboxStatus().then(() => this.queueMailboxes());
+        const url = `/api/username/search/stream?username=${encodeURIComponent(username)}&include_duckduckgo=false&extract_profile=true${mailboxes ? '&check_mailboxes=true' : ''}${only}`;
 
         this.eventSource = new EventSource(url);
 
@@ -197,6 +451,14 @@ class OSINTSearch {
                 if (event.data.progress && !this.retrying) {
                     this.updateProgress(event.data.progress);
                 }
+                break;
+
+            case 'mailbox_result':
+                this.addMailboxResult(event.data);
+                break;
+
+            case 'mailbox_completed':
+                this.finishMailboxes();
                 break;
 
             case 'profile_extracted':
@@ -266,6 +528,17 @@ class OSINTSearch {
                 created: info.createdDate ? info.createdDate.toISOString() : null,
                 last_seen: info.lastActiveDate ? info.lastActiveDate.toISOString() : null,
             };
+        });
+        // Mailboxes found at email providers: their addresses, and Gravatar's name and picture
+        this.foundMailboxes().forEach((mailbox) => {
+            const details = mailbox.details || {};
+            accounts.push({
+                module: mailbox.provider,
+                email: mailbox.email,
+                name: details.name || null,
+                picture: details.picture || null,
+                location: details.location || null,
+            });
         });
         const html = oiSummaryHtml(accounts, { timeline: false });
         // Most results add nothing to the summary: leave it alone then
@@ -1597,6 +1870,7 @@ class OSINTSearch {
         if (this.elements.overview) this.elements.overview.innerHTML = '';
         this.overviewHtml = '';
         document.getElementById('usernameRetryBox')?.remove(); // belongs to the previous search
+        this.resetMailboxes(false);
         this.updateStats();
 
         this.elements.progressBar.style.width = '0%';
@@ -1646,6 +1920,7 @@ class OSINTSearch {
 
         this.searchActive = false;
         this.retrying = false;
+        this.finishMailboxes();
         this.elements.searchBtn.disabled = false;
         this.elements.searchBtn.innerHTML = '<i class="fas fa-search mr-2"></i>Search Username';
         this.elements.stopBtn.classList.add('hidden');
@@ -1662,6 +1937,24 @@ document.addEventListener('DOMContentLoaded', () => {
         const search = window.osintSearch;
         search.resetResults();
         search.lastUsername = data.username || '';
+        // Email providers checked with this search: found addresses, and the others by domain
+        if (data.mailboxes || data.mailbox_checks) {
+            search.resetMailboxes(true);
+            (data.mailboxes || []).forEach((mailbox) => search.addMailboxResult(mailbox));
+            Object.entries(data.mailbox_checks || {}).forEach(([status, entries]) =>
+                (entries || []).forEach((entry) =>
+                    search.addMailboxResult({
+                        provider: entry.provider,
+                        email: `${data.username}@${entry.domain}`,
+                        status,
+                        reason: entry.reason,
+                        details: /permission/i.test(entry.reason || '') ? { needs_permission: true } : {},
+                    })
+                )
+            );
+            search.finishMailboxes();
+            search.loadMailboxStatus().then(() => search.queueMailboxes());
+        }
 
         // Update stats
         if (data.stats) {
