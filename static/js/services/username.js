@@ -186,7 +186,7 @@ class OSINTSearch {
                     <div class="mt-1.5 space-y-0.5">${items
                         .map(
                             (r) =>
-                                `<div><span class="text-gray-300">${escapeHtml(r.email)}</span>${
+                                `<div class="flex items-center gap-1.5 flex-wrap">${mailboxIcon(r.provider, r.email, 'w-3.5 h-3.5')}<span class="text-gray-300">${escapeHtml(r.email)}</span>${
                                     withReason && r.reason
                                         ? ` <span class="text-gray-500">- ${escapeHtml(r.reason)}</span>`
                                         : ''
@@ -247,7 +247,7 @@ class OSINTSearch {
                     <img src="${escapeAttr(picture)}" alt="" loading="lazy" referrerpolicy="no-referrer" class="w-6 h-6 rounded-md object-cover"></button>`
                         : ''
                 }
-                <span class="text-[11px] uppercase tracking-wide text-gray-500 shrink-0">${escapeHtml(result.provider)}</span>
+                ${mailboxIcon(result.provider, result.email)}
                 ${pivotText('email', result.email)}
                 ${details.name ? `<span class="text-xs text-gray-300 truncate">${escapeHtml(details.name)}</span>` : ''}
                 ${details.gaia_id ? pivotText('gaia_id', details.gaia_id, 'Gaia ID') : ''}
@@ -1895,7 +1895,7 @@ class OSINTSearch {
         const box = document.createElement('div');
         box.id = 'usernameRetryBox';
         box.className =
-            'mt-3 flex items-center justify-between gap-3 flex-wrap bg-yellow-900/20 border border-yellow-700/50 rounded-lg px-4 py-2 text-sm text-yellow-100';
+            'mb-4 flex items-center justify-between gap-3 flex-wrap bg-yellow-900/20 border border-yellow-700/50 rounded-lg px-4 py-2 text-sm text-yellow-100';
         box.innerHTML = `
             <span>${errored.length} site${errored.length === 1 ? '' : 's'} couldn't be checked (errors, blocks or rate limits) - no result there isn't proof the account doesn't exist.
                 <details class="inline"><summary class="inline cursor-pointer text-yellow-300/80 underline">which</summary>
@@ -1909,7 +1909,9 @@ class OSINTSearch {
                     .join('')}</span></details></span>
             <button type="button" class="px-3 py-1.5 rounded-lg bg-yellow-700/60 hover:bg-yellow-600/70 text-white shrink-0">Retry ${errored.length} site${errored.length === 1 ? '' : 's'}</button>`;
         box.querySelector('button').addEventListener('click', () => this.startSearch(errored));
-        this.elements.stopBtn.parentElement.insertAdjacentElement('afterend', box);
+        // Below the search box and its options, above the counts
+        const anchor = document.getElementById('mailboxOption') || this.elements.stopBtn.parentElement;
+        anchor.insertAdjacentElement('afterend', box);
     }
 
     stopSearch() {

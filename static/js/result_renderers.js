@@ -637,6 +637,19 @@ function renderDnsRecon(data) {
         </div>`;
 }
 
+// An email provider's icon (the favicon of the address's domain), named in its tooltip;
+// the name shows as text instead when the icon doesn't load
+function mailboxIcon(provider, email, size = 'w-4 h-4') {
+    const domain = String(email || '').split('@')[1] || '';
+    const name = escapeHtml(provider || domain);
+    const fallback = `<span class="text-[11px] uppercase tracking-wide text-gray-500 shrink-0"${domain ? ' hidden' : ''}>${name}</span>`;
+    if (!domain) return fallback;
+    const src = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=64`;
+    return `<img src="${escapeAttr(src)}" alt="${name}" title="${name}" loading="lazy" referrerpolicy="no-referrer"
+        class="${size} shrink-0 rounded-sm bg-white/95 p-px" onerror="this.nextElementSibling.hidden=false;this.remove()">${fallback}`;
+}
+window.mailboxIcon = mailboxIcon;
+
 function renderUsernameSearch(data) {
     if (!data || typeof data !== 'object' || !Array.isArray(data.results)) return renderValue(data);
     const stats = data.stats || {};
@@ -661,7 +674,7 @@ function renderUsernameSearch(data) {
                     .map(
                         (m) => `
                     <span class="inline-flex items-center gap-2 max-w-full px-2.5 py-1.5 rounded-lg bg-gray-800/40 border border-[#293142]">
-                        <span class="text-[11px] uppercase tracking-wide text-gray-500">${escapeHtml(m.provider || '')}</span>${pivotText('email', m.email)}
+                        ${mailboxIcon(m.provider, m.email)}${pivotText('email', m.email)}
                     </span>`
                     )
                     .join('')}</div>
