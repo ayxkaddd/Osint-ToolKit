@@ -18,7 +18,16 @@ import httpx
 from datetime import datetime
 import uuid
 
+from services.proxy_pool import pool as proxy_pool
 from utils.proxy_transport import make_async_client, proxied_get
+
+# Through proxies each check takes several times longer, but the requests come from
+# many addresses (one or two per site), so far more can run at once without
+# hammering anything; direct checks keep the lower limit for this server's own IP.
+PROXIED_MAX_CONCURRENT = 150
+# A proxy gets this long to answer a check before another proxy, then a direct
+# connection, is tried - two attempts plus the direct one fit in timeout_seconds.
+PROXY_ATTEMPT_TIMEOUT = 3.5
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -318,6 +327,7 @@ class StreamingUsernameSearchService:
         self._metadata_cache = None
         self.rate_limiter = RateLimiter()
         self.semaphore = asyncio.Semaphore(max_concurrent_requests)
+        self.proxy_semaphore = asyncio.Semaphore(PROXIED_MAX_CONCURRENT)
         # At most this many requests to one host at a time (sites sharing a host)
         self.per_host_limit = 5
         self._host_slots: dict = defaultdict(lambda: asyncio.Semaphore(self.per_host_limit))
@@ -597,7 +607,8 @@ class StreamingUsernameSearchService:
                                 client: httpx.AsyncClient,
                                 site: dict,
                                 username: str,
-                                extract_profile: bool = False) -> SiteCheckOutcome:
+                                extract_profile: bool = False,
+                                semaphore: Optional[asyncio.Semaphore] = None) -> SiteCheckOutcome:
         """Check username on a single site (supports GET, JSON POST, and form POST)."""
         url, method, kwargs = self._build_request(site, username)
         domain = urlparse(url).netloc
@@ -607,7 +618,7 @@ class StreamingUsernameSearchService:
                 site_name=site["name"], category=site.get("cat", "unknown"), url=url,
                 status=CheckStatus.NOT_FOUND, error_message="Mixi check requires a numeric community id"))
 
-        async with self.semaphore, self._host_slots[domain]:
+        async with (semaphore or self.semaphore), self._host_slots[domain]:
             start_time = time.time()
             wait_time = await self.rate_limiter.wait_if_needed(domain)
             if wait_time > 0:
@@ -636,12 +647,13 @@ class StreamingUsernameSearchService:
                                    client: httpx.AsyncClient,
                                    site: dict,
                                    username: str,
-                                   extract_profile: bool = False) -> SiteCheckOutcome:
+                                   extract_profile: bool = False,
+                                   semaphore: Optional[asyncio.Semaphore] = None) -> SiteCheckOutcome:
         """Check site with retry logic and exponential backoff"""
         last_result = None
 
         for attempt in range(max(1, self.max_retries)):
-            outcome = await self.check_single_site(client, site, username, extract_profile)
+            outcome = await self.check_single_site(client, site, username, extract_profile, semaphore)
             result = outcome.result
             if result.status in [CheckStatus.FOUND, CheckStatus.NOT_FOUND]:
                 return outcome
@@ -773,13 +785,14 @@ class StreamingUsernameSearchService:
         }
 
     async def _process_site(self, client: httpx.AsyncClient, site: dict, username: str,
-                            extract_profile: bool, queue_event) -> None:
+                            extract_profile: bool, queue_event,
+                            semaphore: Optional[asyncio.Semaphore] = None) -> None:
         """Check one site and queue its events (checking, result, extracted profile)."""
         await queue_event(StreamEvent(
             event_type=EventType.SITE_CHECKING,
             data={"site_name": site["name"], "category": site.get("cat", "unknown"),
                   "url": site["uri_check"].replace(ACCOUNT, username)}))
-        outcome = await self.check_site_with_retry(client, site, username, extract_profile)
+        outcome = await self.check_site_with_retry(client, site, username, extract_profile, semaphore)
         result = outcome.result
         await queue_event(StreamEvent(event_type=EventType.SITE_RESULT, data=result.to_dict()))
 
@@ -821,11 +834,15 @@ class StreamingUsernameSearchService:
             sequence += 1
             await result_queue.put((self._event_priority(event), sequence, event))
 
-        limits = httpx.Limits(max_connections=self.max_concurrent_requests,
-                              max_keepalive_connections=self.max_concurrent_requests)
+        proxied = proxy_pool.enabled()
+        semaphore = self.proxy_semaphore if proxied else self.semaphore
+        width = PROXIED_MAX_CONCURRENT if proxied else self.max_concurrent_requests
+        limits = httpx.Limits(max_connections=width, max_keepalive_connections=width)
         async with make_async_client(timeout=self.timeout, limits=limits, verify=False,
-                                     follow_redirects=True, trust_env=True) as client:
-            tasks = [asyncio.create_task(self._process_site(client, site, username, extract_profile, queue_event))
+                                     follow_redirects=True, trust_env=True,
+                                     attempt_timeout=PROXY_ATTEMPT_TIMEOUT) as client:
+            tasks = [asyncio.create_task(self._process_site(client, site, username, extract_profile,
+                                                            queue_event, semaphore))
                      for site in sites]
             if include_duckduckgo:
                 tasks.append(asyncio.create_task(self.stream_duckduckgo_search(client, username, queue_event)))

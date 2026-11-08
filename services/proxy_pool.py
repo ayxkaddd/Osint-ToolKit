@@ -69,29 +69,39 @@ def parse_proxy(raw: str, default_scheme: str = "http") -> Optional[str]:
 @dataclass
 class Proxy:
     url: str
-    latency: float = 0.0
-    fails: int = 0
+    latency: float = 0.0   # running estimate from the probe and real requests
+    fails: int = 0         # consecutive failures
     last_ok: float = 0.0
+    inflight: int = 0      # requests going through it right now
 
 
 class ProxyPool:
     MAX_FAILS = 3               # drop a proxy after this many consecutive failures
     HEALTHY_FLOOR = 10          # fetch public proxies to top the pool up to here
-    MAX_PUBLIC_CANDIDATES = 800  # cap how many public proxies we health-check per refresh
-    VALIDATE_CONCURRENCY = 100
-    VALIDATE_URL = "http://www.gstatic.com/generate_204"
-    VALIDATE_TIMEOUT = httpx.Timeout(5.0, connect=3.0)
-    MAX_LATENCY = 2.5           # only keep proxies that answered the probe this fast
+    MAX_PUBLIC_CANDIDATES = 2000  # cap how many public proxies we health-check per refresh
+    VALIDATE_CONCURRENCY = 200
+    # https, like nearly every site the modules check: an HTTP proxy has to support
+    # CONNECT tunnels to pass, which many free ones don't
+    VALIDATE_URL = "https://www.gstatic.com/generate_204"
+    VALIDATE_TIMEOUT = httpx.Timeout(6.0, connect=3.0)
+    PROBE_DEADLINE = 6.0        # whole probe, all phases together
+    MAX_LATENCY = 3.0           # only keep proxies that answered the probe this fast
     REFRESH_INTERVAL = 15 * 60
+    CHECK_INTERVAL = 30         # how often the background loop looks at the pool
+    # Free proxies die fast under real use: refill once this share of the last
+    # refresh is gone, so the next search doesn't crowd onto a few survivors
+    REFILL_FRACTION = 0.4
+    PICK_CHOICES = 3            # pick the best of this many random healthy proxies
+    LATENCY_WEIGHT = 0.3        # how fast a new measurement moves the latency estimate
 
     def __init__(self):
         self._healthy: list[Proxy] = []
         self._by_url: dict[str, Proxy] = {}
-        self._cursor = 0
         self._user_urls: list[str] = []
         self._user_mtime: Optional[float] = None
         self._refreshing = asyncio.Lock()
         self._last_refresh = 0.0
+        self._last_size = 0     # healthy proxies right after the last refresh
         self._counts = {"user": 0, "public": 0, "healthy": 0}
 
     # -- read side (sync, called per request) -------------------------------
@@ -100,29 +110,39 @@ class ProxyPool:
         """Whether a lookup should route through a proxy right now."""
         return _flag("PROXY_ENABLED", ENABLED_BY_DEFAULT) and bool(self._healthy)
 
-    def pick(self) -> Optional[str]:
-        """Next healthy proxy, round-robin (spreads load across the pool)."""
-        healthy = self._healthy
-        if not healthy:
+    @staticmethod
+    def _score(proxy: Proxy) -> float:
+        # lower is better: a fast proxy that's already busy loses to an idle one
+        return (proxy.latency or 1.0) * (1 + proxy.inflight)
+
+    def pick(self, exclude=(), schemes=None) -> Optional[str]:
+        """A fast, lightly loaded healthy proxy: the best of a few random ones.
+
+        Free proxies vary a lot in speed and choke when given many requests at
+        once, so work goes to the ones that are answering quickly and are least
+        busy; picking from a random few still spreads it over the whole pool."""
+        candidates = [p for p in self._healthy if p.url not in exclude
+                      and (schemes is None or p.url.split("://", 1)[0] in schemes)]
+        if not candidates:
             return None
-        proxy = healthy[self._cursor % len(healthy)]
-        self._cursor += 1
-        return proxy.url
+        sample = random.sample(candidates, min(self.PICK_CHOICES, len(candidates)))
+        return min(sample, key=self._score).url
 
     def pick_for_cli(self) -> Optional[str]:
         """A healthy proxy an external tool can use (http/socks5 only)."""
-        healthy = self._healthy
-        for _ in range(len(healthy)):
-            url = self.pick()
-            if url and url.split("://", 1)[0] in CLI_SCHEMES:
-                return url
-        return None
+        return self.pick(schemes=CLI_SCHEMES)
 
-    def sample(self, n: int, exclude=()) -> list[str]:
-        """Up to n random healthy proxies, for failover alternatives."""
-        pool = [p.url for p in self._healthy if p.url not in exclude]
-        random.shuffle(pool)
-        return pool[:max(0, n)]
+    def acquire(self, url: str) -> Optional[Proxy]:
+        """Count a request going through this proxy (pair with release)."""
+        proxy = self._by_url.get(url)
+        if proxy:
+            proxy.inflight += 1
+        return proxy
+
+    @staticmethod
+    def release(proxy: Optional[Proxy]) -> None:
+        if proxy:
+            proxy.inflight = max(0, proxy.inflight - 1)
 
     def report(self, url: str, ok: bool, latency: float = 0.0) -> None:
         proxy = self._by_url.get(url)
@@ -132,9 +152,12 @@ class ProxyPool:
             proxy.fails = 0
             proxy.last_ok = time.monotonic()
             if latency:
-                proxy.latency = latency
+                proxy.latency = latency if not proxy.latency else (
+                    (1 - self.LATENCY_WEIGHT) * proxy.latency + self.LATENCY_WEIGHT * latency)
         else:
             proxy.fails += 1
+            # Looks slower right away, so it gets less work even before it's dropped
+            proxy.latency = (proxy.latency or 1.0) * 2
             if proxy.fails >= self.MAX_FAILS:
                 self._by_url.pop(url, None)
                 self._healthy = [p for p in self._healthy if p.url != url]
@@ -212,13 +235,17 @@ class ProxyPool:
         """Keep only proxies that answer the probe quickly (concurrent, background)."""
         semaphore = asyncio.Semaphore(self.VALIDATE_CONCURRENCY)
 
+        async def probe(url: str) -> httpx.Response:
+            async with httpx.AsyncClient(proxy=url, timeout=self.VALIDATE_TIMEOUT, verify=False) as client:
+                return await client.get(self.VALIDATE_URL)
+
         async def check(url: str) -> Optional[Proxy]:
             async with semaphore:
                 start = time.monotonic()
                 try:
-                    async with httpx.AsyncClient(proxy=url, timeout=self.VALIDATE_TIMEOUT,
-                                                 verify=False) as client:
-                        resp = await client.get(self.VALIDATE_URL)
+                    # One overall deadline: httpx's timeouts apply per phase, and a proxy
+                    # that stalls the TLS handshake through it could hold on for several
+                    resp = await asyncio.wait_for(probe(url), self.PROBE_DEADLINE)
                 except Exception:  # noqa: BLE001 - a dead/slow proxy just doesn't make the cut
                     return None
                 latency = time.monotonic() - start
@@ -256,11 +283,16 @@ class ProxyPool:
             healthy = user + public
             self._healthy = healthy
             self._by_url = {p.url: p for p in healthy}
-            self._cursor = 0
+            self._last_size = len(healthy)
             self._counts = {"user": len(self._user_urls), "public": len(public), "healthy": len(healthy)}
             self._last_refresh = time.time()
             logger.info("proxy pool: %d healthy (%d user, %d public)",
                         len(healthy), len(user), len(public))
+
+    def needs_refresh(self) -> bool:
+        due = time.time() - self._last_refresh >= self.REFRESH_INTERVAL
+        thin = len(self._healthy) < max(self.HEALTHY_FLOOR, self.REFILL_FRACTION * self._last_size)
+        return due or thin
 
     def trigger_refresh(self) -> None:
         """Schedule a refresh on the running loop (for the Settings 'refresh now')."""
@@ -278,12 +310,10 @@ class ProxyPool:
             except Exception:  # noqa: BLE001
                 logger.exception("initial proxy refresh failed")
         while True:
-            await asyncio.sleep(60)
+            await asyncio.sleep(self.CHECK_INTERVAL)
             if not _flag("PROXY_ENABLED", ENABLED_BY_DEFAULT):
                 continue
-            due = time.time() - self._last_refresh >= self.REFRESH_INTERVAL
-            thin = len(self._healthy) < self.HEALTHY_FLOOR
-            if due or thin:
+            if self.needs_refresh():
                 try:
                     await self.refresh()
                 except Exception:  # noqa: BLE001

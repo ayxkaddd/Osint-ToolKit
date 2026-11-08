@@ -11,10 +11,9 @@ from utils.config import update_env
 from utils.proxy_transport import RotatingProxyTransport
 
 
-def _set_healthy(urls):
-    pool._healthy = [Proxy(url=u) for u in urls]
+def _set_healthy(urls, latency=0.0):
+    pool._healthy = [Proxy(url=u, latency=latency) for u in urls]
     pool._by_url = {p.url: p for p in pool._healthy}
-    pool._cursor = 0
 
 
 @pytest.fixture(autouse=True)
@@ -44,10 +43,48 @@ def test_parse_proxy_default_scheme():
     assert parse_proxy("5.6.7.8:1080", "socks5") == "socks5://5.6.7.8:1080"
 
 
-def test_pick_rotates_round_robin():
-    _set_healthy(["http://a:1", "http://b:2", "http://c:3"])
-    assert [pool.pick() for _ in range(4)] == [
-        "http://a:1", "http://b:2", "http://c:3", "http://a:1"]
+def test_pick_prefers_fast_then_idle_proxy():
+    _set_healthy(["http://fast:1", "http://slow:2"])
+    pool._by_url["http://fast:1"].latency = 0.5
+    pool._by_url["http://slow:2"].latency = 3.0
+    assert pool.pick() == "http://fast:1"
+    # a fast proxy already carrying many requests loses to an idle slower one
+    pool._by_url["http://fast:1"].inflight = 10
+    assert pool.pick() == "http://slow:2"
+
+
+def test_pick_skips_excluded_and_runs_out():
+    _set_healthy(["http://a:1", "http://b:2"])
+    assert pool.pick(exclude={"http://a:1"}) == "http://b:2"
+    assert pool.pick(exclude={"http://a:1", "http://b:2"}) is None
+
+
+def test_acquire_release_counts_inflight():
+    _set_healthy(["http://a:1"])
+    proxy = pool.acquire("http://a:1")
+    assert proxy.inflight == 1
+    pool.release(proxy)
+    pool.release(proxy)          # never below zero
+    assert proxy.inflight == 0
+    assert pool.acquire("http://gone:9") is None
+
+
+def test_failure_makes_proxy_look_slower():
+    _set_healthy(["http://a:1"], latency=1.0)
+    pool.report("http://a:1", ok=False)
+    assert pool._by_url["http://a:1"].latency == 2.0
+    pool.report("http://a:1", ok=True, latency=1.0)   # moves the estimate back down
+    assert 1.0 < pool._by_url["http://a:1"].latency < 2.0
+
+
+def test_refills_when_most_of_the_pool_died():
+    import time
+    pool._last_refresh = time.time()
+    pool._last_size = 100
+    _set_healthy([f"http://p:{i}" for i in range(60)])
+    assert pool.needs_refresh() is False
+    _set_healthy([f"http://p:{i}" for i in range(30)])   # under 40% of the last refresh
+    assert pool.needs_refresh() is True
 
 
 def test_pick_for_cli_skips_socks4():
@@ -92,11 +129,21 @@ def test_enabled_needs_flag_and_healthy():
     assert pool.enabled() is False
 
 
-def _drive(transport):
+def _drive(transport, method="GET"):
     async def run():
         async with httpx.AsyncClient(transport=transport) as client:
-            return await client.get("http://example.test/")
+            return await client.request(method, "http://example.test/", content=b"x" if method == "POST" else None)
     return asyncio.run(run())
+
+
+def _transport(proxy_h, calls, **kwargs):
+    def direct_h(request):
+        calls["direct"] += 1
+        return httpx.Response(200, text="direct")
+    transport = RotatingProxyTransport(verify=False, **kwargs)
+    transport._direct = httpx.MockTransport(direct_h)
+    transport._by_proxy = {"http://p:1": httpx.MockTransport(proxy_h)}
+    return transport
 
 
 def test_transport_uses_proxy_when_healthy():
@@ -164,6 +211,85 @@ def test_transport_goes_direct_when_disabled():
     resp = _drive(transport)
     assert resp.text == "direct"
     assert calls == {"proxy": 0, "direct": 1}
+
+
+def test_slow_proxy_is_cut_off_and_the_check_goes_direct():
+    # A proxy that connects but doesn't answer used to hold the check for its whole 10s
+    _set_healthy(["http://p:1"])
+    update_env({"PROXY_ENABLED": "true"})
+    calls = {"direct": 0}
+
+    async def proxy_h(request):
+        await asyncio.sleep(2)
+        return httpx.Response(200, text="via-proxy")
+
+    resp = _drive(_transport(proxy_h, calls, attempt_timeout=0.05))
+    assert resp.text == "direct"
+    proxy = pool._by_url["http://p:1"]
+    assert (proxy.fails, proxy.inflight) == (1, 0)
+
+
+def test_without_attempt_timeout_a_slow_proxy_is_waited_for():
+    # Modules with slow endpoints (crt.sh, WHOIS history) don't set one
+    _set_healthy(["http://p:1"])
+    update_env({"PROXY_ENABLED": "true"})
+    calls = {"direct": 0}
+
+    async def proxy_h(request):
+        await asyncio.sleep(0.1)
+        return httpx.Response(200, text="via-proxy")
+
+    assert _drive(_transport(proxy_h, calls)).text == "via-proxy"
+    assert calls["direct"] == 0
+
+
+def _socks_error():
+    from socksio.exceptions import ProtocolError
+    return ProtocolError("Malformed reply")
+
+
+@pytest.mark.parametrize("method,make_error,retried", [
+    ("GET", lambda r: httpx.ReadError("reset", request=r), True),   # no body: safe to resend
+    ("POST", lambda r: _socks_error(), True),                       # SOCKS handshake: nothing sent yet
+    ("GET", lambda r: _socks_error(), True),
+    ("POST", lambda r: httpx.ReadError("reset", request=r), False),  # body may be sent: not resent
+])
+def test_which_proxy_errors_are_retried(method, make_error, retried):
+    _set_healthy(["http://p:1"])
+    update_env({"PROXY_ENABLED": "true"})
+    calls = {"direct": 0}
+
+    def proxy_h(request):
+        raise make_error(request)
+
+    transport = _transport(proxy_h, calls)
+    if retried:
+        assert _drive(transport, method).text == "direct"
+    else:
+        with pytest.raises(httpx.ReadError):
+            _drive(transport, method)
+        assert calls["direct"] == 0
+    assert pool._by_url["http://p:1"].fails == 1
+
+
+def test_caller_deadline_counts_as_a_proxy_failure():
+    # The username module cancels a check after 10s; the slow proxy must be marked
+    _set_healthy(["http://p:1"])
+    update_env({"PROXY_ENABLED": "true"})
+
+    async def proxy_h(request):
+        await asyncio.sleep(2)
+        return httpx.Response(200)
+
+    transport = _transport(proxy_h, {"direct": 0})
+
+    async def run():
+        async with httpx.AsyncClient(transport=transport) as client:
+            with pytest.raises(asyncio.TimeoutError):
+                await asyncio.wait_for(client.get("http://example.test/"), 0.05)
+    asyncio.run(run())
+    proxy = pool._by_url["http://p:1"]
+    assert (proxy.fails, proxy.inflight) == (1, 0)
 
 
 def test_proxy_settings_save_and_load(client, monkeypatch):

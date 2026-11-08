@@ -2,13 +2,15 @@
 
 The scraping services build their clients with :func:`make_async_client` instead
 of ``httpx.AsyncClient(...)``. It installs :class:`RotatingProxyTransport`, which
-picks a healthy proxy per request, retries a couple of others if one can't
-connect, and falls back to a direct connection - so a poor proxy pool never
-makes a lookup slower than it is today. When the pool is disabled or empty the
-transport is a plain direct transport, i.e. exactly the previous behaviour.
+gives each request a fast, lightly loaded proxy, tries another if that one fails
+(or, with ``attempt_timeout``, is too slow), and then falls back to a direct
+connection - so a poor proxy pool costs seconds per check, not the whole
+timeout. When the pool is disabled or empty the transport is a plain direct
+transport, i.e. exactly the previous behaviour.
 
 See :mod:`services.proxy_pool` for how the healthy set is built and refreshed.
 """
+import asyncio
 import logging
 import time
 from typing import Optional
@@ -19,8 +21,17 @@ from services.proxy_pool import pool
 
 logger = logging.getLogger(__name__)
 
+try:  # the SOCKS handshake fails with socksio's own error, which httpx doesn't wrap
+    from socksio.exceptions import ProtocolError as SocksProtocolError
+except ImportError:  # pragma: no cover - httpx[socks] not installed
+    SocksProtocolError = httpx.ProxyError
+
 # Errors raised before any request body is sent: safe to retry on another proxy.
-CONNECT_ERRORS = (httpx.ConnectError, httpx.ConnectTimeout, httpx.ProxyError, httpx.PoolTimeout)
+CONNECT_ERRORS = (httpx.ConnectError, httpx.ConnectTimeout, httpx.ProxyError, httpx.PoolTimeout,
+                  SocksProtocolError)
+# Requests without a body: any failure can be retried elsewhere, and a slow
+# attempt can be cut off, without sending anything twice.
+REPLAYABLE_METHODS = ("GET", "HEAD", "OPTIONS")
 
 # Per-proxy connect budget so a couple of attempts plus a direct fall-back still
 # fit inside a module's own per-request timeout (e.g. username's 10s wait_for).
@@ -31,10 +42,14 @@ PROXY_RETRIES = 1
 
 class RotatingProxyTransport(httpx.AsyncBaseTransport):
     def __init__(self, *, verify=True, limits: Optional[httpx.Limits] = None,
-                 retries: int = PROXY_RETRIES):
+                 retries: int = PROXY_RETRIES, attempt_timeout: Optional[float] = None):
+        """``attempt_timeout``: seconds a proxy gets to answer (headers) a GET before
+        the next proxy, then a direct connection, is tried. Leave None for slow
+        endpoints; set it where many quick requests share a deadline (username)."""
         self._verify = verify
         self._limits = limits if limits is not None else httpx.Limits()
         self._retries = retries
+        self._attempt_timeout = attempt_timeout
         self._direct = httpx.AsyncHTTPTransport(verify=verify, limits=self._limits, retries=0)
         self._by_proxy: dict[str, httpx.AsyncHTTPTransport] = {}
 
@@ -63,28 +78,44 @@ class RotatingProxyTransport(httpx.AsyncBaseTransport):
     async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
         if not pool.enabled():
             return await self._direct.handle_async_request(request)
-        first = pool.pick()
-        if not first:
-            return await self._direct.handle_async_request(request)
 
+        replayable = request.method in REPLAYABLE_METHODS
         original_timeout = request.extensions.get("timeout")
-        candidates = [first] + pool.sample(self._retries, exclude={first})
+        tried: set[str] = set()
         try:
-            for url in candidates:
+            for _ in range(1 + self._retries):
+                url = pool.pick(exclude=tried)
+                if not url:
+                    break
+                tried.add(url)
                 self._set_connect(request, original_timeout, PROXY_CONNECT_TIMEOUT)
+                proxy = pool.acquire(url)
                 start = time.monotonic()
                 try:
-                    response = await self._transport_for(url).handle_async_request(request)
-                except CONNECT_ERRORS:
+                    attempt = self._transport_for(url).handle_async_request(request)
+                    if replayable and self._attempt_timeout:
+                        response = await asyncio.wait_for(attempt, self._attempt_timeout)
+                    else:
+                        response = await attempt
+                except (asyncio.TimeoutError, *CONNECT_ERRORS):
                     pool.report(url, ok=False)
                     continue
-                except httpx.TransportError:
-                    # A failure after the request was sent: don't replay the body.
+                except asyncio.CancelledError:
+                    # Cut off by the caller's own deadline: this proxy was too slow
                     pool.report(url, ok=False)
                     raise
+                except Exception:  # noqa: BLE001
+                    # httpx.TransportError, or a SOCKS error httpx doesn't wrap
+                    # (socksio's ProtocolError "Malformed reply" from a broken proxy)
+                    pool.report(url, ok=False)
+                    if replayable:
+                        continue
+                    raise  # the body may have been sent: don't send it twice
+                finally:
+                    pool.release(proxy)
                 pool.report(url, ok=True, latency=time.monotonic() - start)
                 return response
-            # Every proxy failed to connect (body never sent) -> go direct.
+            # No proxy answered in time (nothing was sent, or it is safe to resend)
             self._restore(request, original_timeout)
             return await self._direct.handle_async_request(request)
         finally:
@@ -98,14 +129,17 @@ class RotatingProxyTransport(httpx.AsyncBaseTransport):
 
 
 def make_async_client(*, verify: bool = True, limits: Optional[httpx.Limits] = None,
-                      retries: int = PROXY_RETRIES, **kwargs) -> httpx.AsyncClient:
+                      retries: int = PROXY_RETRIES, attempt_timeout: Optional[float] = None,
+                      **kwargs) -> httpx.AsyncClient:
     """An AsyncClient that rotates through the proxy pool (direct when disabled).
 
     ``verify`` and ``limits`` configure the underlying transports (they are
     ignored by httpx once a ``transport=`` is given), so they are consumed here;
     everything else (timeout, follow_redirects, headers, ...) goes to the client.
+    See RotatingProxyTransport for ``attempt_timeout``.
     """
-    transport = RotatingProxyTransport(verify=verify, limits=limits, retries=retries)
+    transport = RotatingProxyTransport(verify=verify, limits=limits, retries=retries,
+                                       attempt_timeout=attempt_timeout)
     return httpx.AsyncClient(transport=transport, **kwargs)
 
 
