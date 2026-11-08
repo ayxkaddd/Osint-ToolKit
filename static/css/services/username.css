@@ -1017,22 +1017,6 @@ which made
 .username-profile-pic.no-avatar .username-reverse-search {
     display: none;
 }
-.username-profile-pic .username-reverse-search {
-    top: auto;
-    bottom: -0.45rem;
-    right: -0.55rem;
-    opacity: 0;
-    transition: opacity 0.15s ease;
-}
-.username-profile-card:hover .username-reverse-search,
-.username-profile-pic:focus-within .username-reverse-search {
-    opacity: 1;
-}
-@media (hover: none) {
-    .username-profile-pic .username-reverse-search {
-        opacity: 1;
-    }
-}
 .username-profile-ident {
     min-width: 0;
     flex: 1;
@@ -1049,22 +1033,11 @@ which made
     text-transform: uppercase;
     color: #c084fc;
 }
-.username-profile-site a,
 .username-profile-site > span:not(.username-profile-cat) {
     min-width: 0;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
-}
-.username-profile-site a:hover {
-    color: #e9d5ff;
-}
-.username-profile-site a i {
-    font-size: 0.6rem;
-    opacity: 0.7;
 }
 .username-profile-favicon {
     width: 0.95rem;

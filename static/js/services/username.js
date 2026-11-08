@@ -386,11 +386,7 @@ class OSINTSearch {
                 <div class="username-profile-ident">
                     <div class="username-profile-site">
                         ${faviconUrl ? `<img src="${escapeAttr(faviconUrl)}" alt="" loading="lazy" class="username-profile-favicon" onerror="this.remove()">` : ''}
-                        ${
-                            profileUrl
-                                ? `<a href="${escapeAttr(profileUrl)}" target="_blank" rel="noopener noreferrer" title="Open ${site}">${escapeHtml(result.siteName)}<i class="fas fa-external-link-alt"></i></a>`
-                                : `<span>${escapeHtml(result.siteName)}</span>`
-                        }
+                        <span>${escapeHtml(result.siteName)}</span>
                         ${result.category ? `<span class="username-profile-cat">${escapeHtml(result.category)}</span>` : ''}
                     </div>
                     ${
