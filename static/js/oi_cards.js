@@ -451,7 +451,9 @@ function oiTimeline(cards) {
         </div>`;
 }
 
-function oiSummaryHtml(cards) {
+// timeline: the accounts-and-breaches chart by year; the username search leaves it out
+// (no breaches there, and the Active row already says when the accounts were used)
+function oiSummaryHtml(cards, { timeline: withTimeline = true } = {}) {
     const accounts = cards.filter((c) => !c.breach && c.registered !== false);
     const photos = oiTally(accounts, (c) => {
         const url = safeUrl(c.picture);
@@ -491,7 +493,7 @@ function oiSummaryHtml(cards) {
         ),
         oiSeenRow(accounts),
     ].join('');
-    const timeline = oiTimeline(cards);
+    const timeline = withTimeline ? oiTimeline(cards) : '';
     if (!photos.length && !rows && !timeline) return '';
     return `
         <section class="username-category-section p-4 mb-4">

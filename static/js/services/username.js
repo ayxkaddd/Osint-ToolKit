@@ -267,7 +267,7 @@ class OSINTSearch {
                 last_seen: info.lastActiveDate ? info.lastActiveDate.toISOString() : null,
             };
         });
-        const html = oiSummaryHtml(accounts);
+        const html = oiSummaryHtml(accounts, { timeline: false });
         // Most results add nothing to the summary: leave it alone then
         if (html === this.overviewHtml) return;
         this.overviewHtml = html;
