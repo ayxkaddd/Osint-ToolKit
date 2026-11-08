@@ -23,7 +23,7 @@ def test_dns_recon_asks_httpx_for_the_ids_and_groups_them(monkeypatch):
              {"input": "blog.acme.test", "extracts": {UA: ["UA-1234567-3"]}},
              {"input": "www.acme.test"}]
 
-    async def fake_run(cmd, timeout):
+    async def fake_run(cmd, timeout, env=None):
         commands.append(cmd)
         return CommandResult(returncode=0, stdout="\n".join(json.dumps(line) for line in lines), stderr="")
     monkeypatch.setattr(dnsrecon_service, "run_command", fake_run)

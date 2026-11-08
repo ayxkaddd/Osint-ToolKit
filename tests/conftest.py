@@ -28,6 +28,8 @@ shutil.copy(REPO / "resources.json", _workdir / "resources.json")
     f"ROOT_PASSWORD='{bcrypt.hashpw(PASSWORD.encode(), bcrypt.gensalt()).decode()}'\n"
     "JWT_SECRET=throwaway-secret-for-tests-only-0000000000\n"
     "GHUNT_VENV_PATH=/bin/true\nGHUNT_SCRIPT_PATH=/bin/true\n"
+    # The proxy pool would otherwise fetch public proxy lists over the network at startup
+    "PROXY_ENABLED=false\n"
 )
 os.chdir(_workdir)
 sys.path.insert(0, str(REPO))

@@ -18,6 +18,8 @@ import httpx
 from datetime import datetime
 import uuid
 
+from utils.proxy_transport import make_async_client, proxied_get
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -387,7 +389,7 @@ class StreamingUsernameSearchService:
     def _refresh_metadata(self, raise_errors: bool = False):
         """Download the current WhatsMyName list and save it to assets/."""
         try:
-            response = httpx.get(self.WMN_URL, timeout=httpx.Timeout(20, connect=5), follow_redirects=True)
+            response = proxied_get(self.WMN_URL, timeout=httpx.Timeout(20, connect=5), follow_redirects=True)
             response.raise_for_status()
             data = response.json()
             if not data.get("sites"):
@@ -821,7 +823,7 @@ class StreamingUsernameSearchService:
 
         limits = httpx.Limits(max_connections=self.max_concurrent_requests,
                               max_keepalive_connections=self.max_concurrent_requests)
-        async with httpx.AsyncClient(timeout=self.timeout, limits=limits, verify=False,
+        async with make_async_client(timeout=self.timeout, limits=limits, verify=False,
                                      follow_redirects=True, trust_env=True) as client:
             tasks = [asyncio.create_task(self._process_site(client, site, username, extract_profile, queue_event))
                      for site in sites]

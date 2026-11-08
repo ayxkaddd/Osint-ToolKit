@@ -2,6 +2,7 @@ from fastapi import FastAPI, Request, Response
 from fastapi.exceptions import HTTPException
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+import asyncio
 import hmac
 from contextlib import asynccontextmanager
 import logging
@@ -27,6 +28,7 @@ from routes import (
     settings_routes,
     pages_routes,
     ns_routes,
+    proxy_routes,
     updates_routes,
     web_search_routes,
     whois_routes,
@@ -59,8 +61,13 @@ LOGIN_WINDOW_SECONDS = 15 * 60
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Telegram connects on first use (Funstat media, VK, status checks), not at startup
+    # Telegram connects on first use (Funstat media, VK, status checks), not at startup.
+    # The proxy pool primes and refreshes itself in the background so no lookup ever
+    # waits on fetching or health-checking proxies.
+    from services.proxy_pool import pool
+    proxy_task = asyncio.create_task(pool.run_forever())
     yield
+    proxy_task.cancel()
     from routes.funstat_routes import telethon_service
     await telethon_service.stop()
 
@@ -208,6 +215,7 @@ class OsintFramework:
             (setup_routes.router, "Setup"),
             (gitfive_routes.router, "GitFive"),
             (ns_routes.router, "DNS"),
+            (proxy_routes.router, "Proxies"),
             (whois_routes.router, "WHOIS"),
             (oi_routes.router, "OSINT"),
             (telegram_routes.auth_router, "Telegram Auth"),

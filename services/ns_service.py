@@ -1,5 +1,5 @@
-import httpx
 from utils.config import get_setting
+from utils.proxy_transport import proxied_get
 
 
 
@@ -20,7 +20,7 @@ class NsService:
         params = {"q": ns}
         if self.api_key:
             params["apikey"] = self.api_key
-        resp = httpx.get(f"https://{self.domain}{self.uri}", params=params, timeout=30, follow_redirects=True)
+        resp = proxied_get(f"https://{self.domain}{self.uri}", params=params, timeout=30, follow_redirects=True)
         resp.raise_for_status()
 
         lines = [line.strip() for line in resp.text.splitlines() if line.strip()]

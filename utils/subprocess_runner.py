@@ -7,9 +7,10 @@ kills it on timeout and returns its output for error reporting.
 import asyncio
 import errno
 import logging
+import os
 from dataclasses import dataclass
 from typing import Optional
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 
 logger = logging.getLogger(__name__)
 
@@ -29,8 +30,12 @@ class CommandResult:
         return summary[-limit:] if summary else f"exit code {self.returncode}"
 
 
-async def run_command(cmd: Sequence[str], timeout: float, cwd: Optional[str] = None) -> CommandResult:
+async def run_command(cmd: Sequence[str], timeout: float, cwd: Optional[str] = None,
+                      env: Optional[Mapping[str, str]] = None) -> CommandResult:
     logger.info("Running %s", cmd[0] if cmd else "?")
+    # env is merged over the server's environment (e.g. proxy vars for the tool);
+    # None keeps the inherited environment unchanged.
+    child_env = {**os.environ, **env} if env else None
     async def spawn(args):
         return await asyncio.create_subprocess_exec(
             *args,
@@ -40,6 +45,7 @@ async def run_command(cmd: Sequence[str], timeout: float, cwd: Optional[str] = N
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=cwd,
+            env=child_env,
         )
 
     try:

@@ -39,7 +39,7 @@ uvicorn
 watchfiles
 yarl
 Telethon
-httpx
+httpx[socks]
 dnspython
 python-whois
 beautifulsoup4
