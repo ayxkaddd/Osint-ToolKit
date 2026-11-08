@@ -332,6 +332,47 @@ function oiTag(entry) {
     return `<span class="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-gray-800/40 text-sm text-gray-200" title="${escapeAttr(entry.sources.join(', '))}">${escapeHtml(entry.value)}${n > 1 ? `<span class="text-[11px] text-gray-500">×${n}</span>` : ''}</span>`;
 }
 
+// A date as precise as the source gives it ("2019", "Mar 2019" or "Mar 5, 2019"), with
+// its time for sorting; null when it doesn't parse
+function oiDate(value) {
+    const text = String(value ?? '').trim();
+    if (!text) return null;
+    const year = text.match(/^(\d{4})$/);
+    if (year) return { t: Date.UTC(+year[1], 0, 1), text: year[1] };
+    const month = text.match(/^(\d{4})-(\d{2})$/);
+    const t = month ? Date.UTC(+month[1], +month[2] - 1, 1) : Date.parse(text);
+    if (!Number.isFinite(t)) return null;
+    const y = new Date(t).getUTCFullYear();
+    if (y < 1990 || y > new Date().getUTCFullYear() + 1) return null; // 0 / placeholder dates
+    const options = month
+        ? { year: 'numeric', month: 'short', timeZone: 'UTC' }
+        : { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' };
+    return { t, text: new Date(t).toLocaleDateString(undefined, options) };
+}
+
+// The oldest and newest date any account gives (made, last active): how long the
+// identity has been around and whether it is still in use
+function oiSeenRow(accounts) {
+    const dated = [];
+    for (const card of accounts) {
+        for (const field of ['created', 'last_seen']) {
+            const date = oiDate(card[field]);
+            if (date) dated.push({ ...date, site: card.module });
+        }
+    }
+    if (!dated.length) return '';
+    const first = dated.reduce((a, b) => (b.t < a.t ? b : a));
+    const last = dated.reduce((a, b) => (b.t > a.t ? b : a));
+    const part = (label, d) =>
+        `<span class="text-sm text-gray-400">${label} <strong class="font-semibold text-gray-100">${escapeHtml(d.text)}</strong>
+            <span class="text-xs text-gray-500">${escapeHtml(d.site || '')}</span></span>`;
+    return `
+        <div class="flex gap-3 py-2 border-t border-[#24283b] first:border-t-0">
+            <div class="w-28 shrink-0 flex items-center gap-2 text-xs text-gray-400 pt-1 self-start"><i data-lucide="calendar-range" class="w-3.5 h-3.5"></i>Active</div>
+            <div class="flex flex-wrap items-center gap-x-5 gap-y-1 min-w-0">${part('First seen', first)}${last.t > first.t ? part('Last seen', last) : ''}</div>
+        </div>`;
+}
+
 function oiTimeline(cards) {
     const years = new Map();
     for (const card of cards) {
@@ -411,6 +452,7 @@ function oiSummaryHtml(cards) {
             oiTag,
             6
         ),
+        oiSeenRow(accounts),
     ].join('');
     const timeline = oiTimeline(cards);
     if (!photos.length && !rows && !timeline) return '';

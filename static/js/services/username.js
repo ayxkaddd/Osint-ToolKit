@@ -1,5 +1,9 @@
 window.currentService = 'username';
 
+// Stand-in pictures sites show when there is none (SoundCloud's default_avatar_large.png...)
+const DEFAULT_PICTURE =
+    /default[_-]?(avatar|profile|user|photo|image|pic)|(avatar|profile|user)[_-]?default|\/defaults?\/|no[_-]?(avatar|photo|image)|placeholder|blank[_-]?(avatar|profile)/i;
+
 class OSINTSearch {
     constructor() {
         this.eventSource = null;
@@ -42,6 +46,7 @@ class OSINTSearch {
             categoryFilter: document.getElementById('categoryFilter'),
             flatViewBtn: document.getElementById('flatViewBtn'),
             groupedViewBtn: document.getElementById('groupedViewBtn'),
+            overview: document.getElementById('usernameOverview'),
         };
     }
 
@@ -218,6 +223,8 @@ class OSINTSearch {
             profileData: data.profile_data,
             responseTime: data.response_time,
             checkedAt: data.checked_at,
+            // The account is under this name, also when the profile doesn't repeat it
+            searched: this.lastUsername,
         };
 
         this.results.push(result);
@@ -231,6 +238,37 @@ class OSINTSearch {
         this.stats.found++;
         this.updateStats();
         this.updateCategoryStats();
+        this.queueOverview();
+    }
+
+    // Who the accounts point to (photos, names, handles, places, when it was active), in the
+    // same summary as the OSINT Industries results. Rebuilt at most once per frame.
+    queueOverview() {
+        if (this.overviewQueued) return;
+        this.overviewQueued = true;
+        requestAnimationFrame(() => {
+            this.overviewQueued = false;
+            this.renderOverview();
+        });
+    }
+
+    renderOverview() {
+        const container = this.elements.overview;
+        if (!container || typeof oiSummaryHtml !== 'function') return;
+        const accounts = this.results.map((result) => {
+            const info = this.extractKeyInfo(result.profileData);
+            return {
+                module: result.siteName,
+                name: info.fullName ? String(info.fullName) : null,
+                username: info.username,
+                picture: info.profileImage ? this.getAbsoluteUrl(info.profileImage) : null,
+                location: info.country,
+                created: info.createdDate ? info.createdDate.toISOString() : null,
+                last_seen: info.lastActiveDate ? info.lastActiveDate.toISOString() : null,
+            };
+        });
+        container.innerHTML = oiSummaryHtml(accounts);
+        if (window.lucide) lucide.createIcons();
     }
 
     getCategoryColor(category) {
@@ -283,158 +321,128 @@ class OSINTSearch {
         );
     }
 
+    // A found account, led by who it is: picture, name, @handle, then what the profile
+    // says (bio, counts, dates, place). The rest of the data is behind the footer button.
     createResultCard(result) {
-        const platformInfo = this.getPlatformIcon(result.siteName, result.category);
-        const responseTime = result.responseTime ? Math.round(result.responseTime * 1000) : 0;
-        const timeAgo = this.getTimeAgo(result.checkedAt);
-        const keyInfo = this.extractKeyInfo(result.profileData);
-        const hasProfileData = result.profileData && Object.keys(result.profileData).length > 0;
-        const metaRows = this.getCompactRows(keyInfo);
+        const info = this.extractKeyInfo(result.profileData);
+        const handle = info.username || result.searched || '';
         const domain = this.getDomainFromUrl(result.url);
         const faviconUrl = domain ? this.getFaviconUrl(domain) : '';
-        const profileImageUrl = keyInfo.profileImage ? this.getAbsoluteUrl(keyInfo.profileImage) : '';
-        const reverseSearchLinks = profileImageUrl ? this.getReverseImageSearchLinks(profileImageUrl) : [];
+        const avatar = info.profileImage ? safeUrl(this.getAbsoluteUrl(info.profileImage)) : '';
+        const banner = info.banner ? safeUrl(this.getAbsoluteUrl(info.banner)) : '';
+        const profileUrl = safeUrl(result.url);
+        const stats = this.getStatChips(info);
+        const shownStats = stats.slice(0, 5);
+        const facts = this.getFactRows(info);
+        const moreFields = stats.length - shownStats.length + facts.hidden;
+        const hasProfileData = result.profileData && Object.keys(result.profileData).length > 0;
+        const site = escapeAttr(result.siteName);
+        const verified = info.verified
+            ? '<i class="fas fa-check-circle username-profile-verified" title="Verified"></i>'
+            : '';
 
         const card = document.createElement('div');
-        card.className = `result-card username-result-card fade-in${profileImageUrl ? ' has-profile-image' : ''}`;
+        card.className = `result-card username-result-card username-profile-card fade-in${banner ? ' has-banner' : ''}`;
         card.dataset.resultUrl = result.url;
         card.dataset.siteName = result.siteName;
         card.dataset.category = result.category;
 
         card.innerHTML = `
-            <div class="username-card-header">
-                <div class="username-card-heading">
-                    <div class="username-site-mark">
-                        ${
-                            faviconUrl
-                                ? `
-                            <img src="${escapeHtml(faviconUrl)}" alt="" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-                            <div class="platform-icon ${platformInfo.class} username-site-mark-fallback">
-                                ${escapeHtml(platformInfo.icon)}
-                            </div>
-                        `
-                                : `
-                            <div class="platform-icon ${platformInfo.class}">
-                                ${escapeHtml(platformInfo.icon)}
-                            </div>
-                        `
-                        }
-                    </div>
-                    <div class="username-card-title">
-                        <h3 title="${escapeHtml(result.siteName)}">${escapeHtml(result.siteName)}</h3>
-                        <span>${escapeHtml(result.category || 'unknown')}</span>
-                    </div>
+            ${
+                banner
+                    ? `<button type="button" class="username-card-banner" data-image-view="${escapeAttr(banner)}" data-image-title="${site}" data-image-note="Profile banner" title="Preview banner">
+                <img src="${escapeAttr(banner)}" alt="" loading="lazy" referrerpolicy="no-referrer"
+                    onerror="this.closest('.username-profile-card').classList.remove('has-banner'); this.parentElement.remove();">
+            </button>`
+                    : ''
+            }
+            <div class="username-profile-head">
+                <div class="username-profile-pic${avatar ? '' : ' no-avatar'}">
+                    ${
+                        avatar
+                            ? `<button type="button" class="username-avatar-preview-btn" data-image-view="${escapeAttr(avatar)}" data-image-title="${site}" data-image-note="Profile picture" title="Preview profile picture">
+                        <img src="${escapeAttr(avatar)}" alt="" loading="lazy" referrerpolicy="no-referrer" class="username-profile-avatar"
+                            onerror="this.closest('.username-profile-pic').classList.add('no-avatar')">
+                    </button>
+                    <div class="username-reverse-search" aria-label="Reverse image search">
+                        ${this.getReverseImageSearchLinks(avatar)
+                            .map(
+                                (link) => `
+                            <a href="${escapeAttr(link.url)}" target="_blank" rel="noopener noreferrer" title="${escapeAttr(link.label)} reverse image search"><i class="${escapeAttr(link.icon)}"></i></a>`
+                            )
+                            .join('')}
+                    </div>`
+                            : ''
+                    }
+                    ${this.siteMarkHtml(result, faviconUrl)}
                 </div>
-                ${
-                    profileImageUrl
-                        ? `
-                    <div class="username-card-media">
-                        <button type="button" class="username-avatar-preview-btn" data-image-view="${escapeHtml(profileImageUrl)}" data-image-title="${escapeHtml(result.siteName)}" data-image-note="Profile picture preview" title="Preview profile picture">
-                            <img src="${escapeHtml(keyInfo.profileImage)}" alt="" class="username-card-avatar" onerror="this.closest('.username-result-card').classList.remove('has-profile-image'); this.closest('.username-card-media').style.display='none';">
-                        </button>
-                        <div class="username-reverse-search" aria-label="Reverse image search">
-                            ${reverseSearchLinks
-                                .map(
-                                    (link) => `
-                                <a href="${escapeHtml(link.url)}" target="_blank" rel="noopener noreferrer" title="${escapeHtml(link.label)} reverse image search">
-                                    <i class="${escapeHtml(link.icon)}"></i>
-                                </a>
-                            `
-                                )
-                                .join('')}
-                        </div>
+                <div class="username-profile-ident">
+                    <div class="username-profile-site">
+                        ${faviconUrl ? `<img src="${escapeAttr(faviconUrl)}" alt="" loading="lazy" class="username-profile-favicon" onerror="this.remove()">` : ''}
+                        ${
+                            profileUrl
+                                ? `<a href="${escapeAttr(profileUrl)}" target="_blank" rel="noopener noreferrer" title="Open ${site}">${escapeHtml(result.siteName)}<i class="fas fa-external-link-alt"></i></a>`
+                                : `<span>${escapeHtml(result.siteName)}</span>`
+                        }
+                        ${result.category ? `<span class="username-profile-cat">${escapeHtml(result.category)}</span>` : ''}
                     </div>
-                `
-                        : ''
-                }
+                    ${
+                        info.fullName
+                            ? `<h3 class="username-profile-name" title="${escapeAttr(String(info.fullName))}">${escapeHtml(String(info.fullName))}${verified}</h3>`
+                            : ''
+                    }
+                    ${
+                        handle
+                            ? `<div class="username-profile-handle">
+                        ${pivotText('username', handle, '@' + handle)}${info.fullName ? '' : verified}
+                        <button type="button" class="copy-username-btn" data-username="${escapeAttr(handle)}" title="Copy username"><i class="fas fa-copy"></i></button>
+                    </div>`
+                            : ''
+                    }
+                </div>
             </div>
 
+            ${info.bio ? `<p class="username-card-bio" title="${escapeAttr(String(info.bio))}">${pivotInText(String(info.bio))}</p>` : ''}
+
             ${
-                keyInfo.username
-                    ? `
-                <div class="username-handle-row">
-                    <span title="@${escapeHtml(String(keyInfo.username))}">${pivotText('username', String(keyInfo.username), '@' + keyInfo.username)}</span>
-                    <button class="copy-username-btn" data-username="${escapeHtml(String(keyInfo.username))}" title="Copy username">
-                        <i class="fas fa-copy"></i>
-                    </button>
-                </div>
-            `
+                shownStats.length
+                    ? `<div class="username-profile-stats">${shownStats
+                          .map(
+                              (stat) =>
+                                  `<span title="${escapeAttr(stat.full)}"><strong>${escapeHtml(stat.value)}</strong>${escapeHtml(stat.label)}</span>`
+                          )
+                          .join('')}</div>`
                     : ''
             }
 
-            <div class="username-card-content">
-                ${
-                    keyInfo.bio
-                        ? `
-                    <p class="username-card-bio">${pivotInText(String(keyInfo.bio))}</p>
-                `
-                        : ''
-                }
+            ${facts.html ? `<div class="username-card-content">${facts.html}</div>` : ''}
 
-                ${metaRows
-                    .map(
-                        (row) => `
-                    <div class="username-data-row">
-                        <strong>${escapeHtml(row.label)}</strong>
-                        <span title="${escapeHtml(String(row.value))}">${pivotField(row.label, row.value)}</span>
-                    </div>
-                `
-                    )
-                    .join('')}
-
-                ${
-                    keyInfo.numericStats && keyInfo.numericStats.length > 0
-                        ? `
-                    <div class="username-mini-stats">
-                        ${keyInfo.numericStats
-                            .slice(0, 6)
-                            .map(
-                                (stat) => `
-                            <div>
-                                <span>${escapeHtml(stat.key)}</span>
-                                <strong>${escapeHtml(this.formatFieldValue(stat.rawKey || stat.key, stat.value, { compactCounts: true }))}</strong>
-                            </div>
-                        `
-                            )
-                            .join('')}
-                    </div>
-                `
-                        : ''
-                }
-
-                ${
-                    keyInfo.socialLinks && keyInfo.socialLinks.length > 0
-                        ? `
-                    <div class="username-link-strip">
-                        ${keyInfo.socialLinks
-                            .slice(0, 5)
-                            .map(
-                                (link) => `
-                            <a href="${escapeHtml(link)}" target="_blank" title="${escapeHtml(link)}">
-                                <i class="fas fa-link"></i>
-                            </a>
-                        `
-                            )
-                            .join('')}
-                    </div>
-                `
-                        : ''
-                }
-            </div>
+            ${
+                info.socialLinks && info.socialLinks.length > 0
+                    ? `<div class="username-link-strip">${info.socialLinks
+                          .map((link) => safeUrl(link))
+                          .filter(Boolean)
+                          .slice(0, 5)
+                          .map(
+                              (link) =>
+                                  `<a href="${escapeAttr(link)}" target="_blank" rel="noopener noreferrer" title="${escapeAttr(link)}"><i class="fas fa-link"></i></a>`
+                          )
+                          .join('')}</div>`
+                    : ''
+            }
 
             <div class="username-card-actions">
-                <a href="${escapeHtml(result.url)}" target="_blank" title="${escapeHtml(result.url)}">
-                    <i class="fas fa-external-link-alt"></i>
-                    <span>View</span>
-                </a>
+                ${
+                    profileUrl
+                        ? `<a href="${escapeAttr(profileUrl)}" target="_blank" rel="noopener noreferrer" title="${escapeAttr(result.url)}">
+                    <i class="fas fa-external-link-alt"></i><span>View</span></a>`
+                        : '<span></span>'
+                }
                 ${
                     hasProfileData
-                        ? `
-                    <button class="expand-btn">
-                        <i class="fas fa-code"></i>
-                        <span>Data</span>
-                    </button>
-                `
+                        ? `<button type="button" class="expand-btn" title="All profile data">
+                    <i class="fas fa-code"></i><span>${moreFields > 0 ? `+${moreFields} field${moreFields === 1 ? '' : 's'}` : 'Data'}</span>
+                </button>`
                         : ''
                 }
             </div>
@@ -444,8 +452,7 @@ class OSINTSearch {
         if (copyUsernameBtn) {
             copyUsernameBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                const username = copyUsernameBtn.dataset.username;
-                this.copyToClipboard(username, copyUsernameBtn);
+                this.copyToClipboard(copyUsernameBtn.dataset.username, copyUsernameBtn);
             });
         }
 
@@ -459,6 +466,70 @@ class OSINTSearch {
         return card;
     }
 
+    // The site's icon (or two letters when it doesn't load): stands in for a missing picture
+    siteMarkHtml(result, faviconUrl) {
+        const platform = this.getPlatformIcon(result.siteName, result.category);
+        const fallback = `<div class="platform-icon ${platform.class}${faviconUrl ? ' username-site-mark-fallback' : ''}">${escapeHtml(platform.icon)}</div>`;
+        return `<div class="username-site-mark">${
+            faviconUrl
+                ? `<img src="${escapeAttr(faviconUrl)}" alt="" loading="lazy" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">`
+                : ''
+        }${fallback}</div>`;
+    }
+
+    // Counts as "8 followers", "4 likes": followers/following/posts first, then the rest
+    getStatChips(info) {
+        const chips = [];
+        const add = (label, value) => {
+            if (!Number.isFinite(value)) return;
+            chips.push({ label, value: this.formatNumber(value), full: `${value.toLocaleString()} ${label}` });
+        };
+        add('followers', info.followers);
+        add('following', info.following);
+        add('posts', info.posts);
+        add('reputation', info.reputation);
+        (info.numericStats || []).forEach((stat) => add(this.statLabel(stat.key), Number(stat.value)));
+        return chips;
+    }
+
+    statLabel(key) {
+        const label = String(key)
+            .replace(/\b(count|total|number of|num)\b/gi, '')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .toLowerCase();
+        return label || String(key).toLowerCase();
+    }
+
+    // Dates, place and a few other fields as label/value rows; how many more are in "Data"
+    getFactRows(info) {
+        const rows = [];
+        const add = (label, value) => {
+            if (value !== null && value !== undefined && value !== '') rows.push([label, value]);
+        };
+        add('Joined', info.createdAt);
+        add('Last active', info.lastActive);
+        add('Location', info.country);
+        add('Gender', info.gender);
+        add('Website', info.website);
+        const other = (info.otherFields || []).map((field) => [
+            field.key,
+            this.formatFieldValue(field.rawKey || field.key, field.value),
+        ]);
+        const shownOther = other.slice(0, Math.min(3, Math.max(0, 6 - rows.length)));
+        return {
+            html: [...rows, ...shownOther]
+                .map(
+                    ([label, value]) => `
+                <div class="username-data-row">
+                    <strong>${escapeHtml(label)}</strong>
+                    <span title="${escapeAttr(String(value))}">${pivotField(label, value)}</span>
+                </div>`
+                )
+                .join(''),
+            hidden: other.length - shownOther.length,
+        };
+    }
     getDomainFromUrl(url) {
         try {
             return new URL(url, window.location.origin).hostname.replace(/^www\./, '');
@@ -495,35 +566,6 @@ class OSINTSearch {
         ];
     }
 
-    getCompactRows(keyInfo) {
-        const rows = [];
-        const add = (label, value) => {
-            if (value !== null && value !== undefined && value !== '') {
-                rows.push({ label, value });
-            }
-        };
-
-        add('Name', keyInfo.fullName);
-        add('Followers', keyInfo.followers ? this.formatNumber(keyInfo.followers) : null);
-        add('Following', keyInfo.following ? this.formatNumber(keyInfo.following) : null);
-        add('Posts', keyInfo.posts ? this.formatNumber(keyInfo.posts) : null);
-        add('Reputation', keyInfo.reputation ? this.formatNumber(keyInfo.reputation) : null);
-        add('Country', keyInfo.country);
-        add('Gender', keyInfo.gender);
-        add('Website', keyInfo.website);
-        add('Joined', keyInfo.createdAt);
-        add('Active', keyInfo.lastActive);
-
-        if (keyInfo.verified) add('Verified', 'Yes');
-        if (keyInfo.otherFields) {
-            keyInfo.otherFields.slice(0, Math.max(0, 6 - rows.length)).forEach((field) => {
-                add(field.key, this.formatFieldValue(field.rawKey || field.key, field.value));
-            });
-        }
-
-        return rows.slice(0, 8);
-    }
-
     handleProfileExtracted(data) {
         const result = this.results.find((item) => item.url === data.url && item.siteName === data.site_name);
 
@@ -531,6 +573,7 @@ class OSINTSearch {
 
         result.profileData = data.profile_data;
         this.replaceResultCard(result);
+        this.queueOverview();
     }
 
     copyToClipboard(text, button) {
@@ -825,6 +868,12 @@ class OSINTSearch {
                 break;
             }
         }
+        // A handle has no spaces ("This username already exists" is a site's message;
+        // "Drain God" in a name field is a display name, picked up below)
+        const handle = String(info.username ?? '')
+            .trim()
+            .replace(/^@/, '');
+        info.username = /^[\w.-]{1,64}$/u.test(handle) ? handle : null;
 
         const nameFields = [
             'fullname',
@@ -892,8 +941,44 @@ class OSINTSearch {
                 if (info.profileImage) break;
             }
         }
+        // A site's stand-in picture says nothing about the person
+        if (info.profileImage && DEFAULT_PICTURE.test(String(info.profileImage))) info.profileImage = null;
 
-        const countryFields = ['country', 'location', 'city', 'place', 'nationality', 'region', 'area', 'locale'];
+        const bannerFields = [
+            'image_bg',
+            'banner',
+            'banner_url',
+            'bannerUrl',
+            'banner_image',
+            'profile_banner_url',
+            'cover',
+            'cover_url',
+            'coverPhoto',
+            'cover_photo',
+            'header_image',
+            'backgroundPicture',
+        ];
+        for (const field of bannerFields) {
+            const value = profileData[field];
+            const url = value && typeof value === 'object' ? value.url : value;
+            if (typeof url === 'string' && /^(https?:)?\/\//.test(url) && !DEFAULT_PICTURE.test(url)) {
+                info.banner = url;
+                break;
+            }
+        }
+
+        const countryFields = [
+            'country',
+            'country_code',
+            'countryCode',
+            'location',
+            'city',
+            'place',
+            'nationality',
+            'region',
+            'area',
+            'locale',
+        ];
         for (const field of countryFields) {
             if (profileData[field]) {
                 if (typeof profileData[field] === 'object') {
@@ -904,6 +989,7 @@ class OSINTSearch {
                 if (info.country) break;
             }
         }
+        info.country = this.countryName(info.country);
 
         const genderFields = ['gender', 'genderVerbal', 'gender_verbal', 'sex'];
         for (const field of genderFields) {
@@ -1018,19 +1104,22 @@ class OSINTSearch {
         ];
         for (const field of dateFields) {
             if (profileData[field]) {
-                const date = this.parseDate(profileData[field]);
+                const date = this.toDate(profileData[field]);
                 if (date) {
-                    info.createdAt = date;
+                    info.createdDate = date;
                     break;
                 }
             }
         }
         if (profileData.data && profileData.data.created_utc) {
-            const date = new Date(profileData.data.created_utc * 1000);
-            info.createdAt = date.toLocaleDateString();
+            info.createdDate = this.toDate(Number(profileData.data.created_utc)) || info.createdDate;
         }
+        info.createdAt = info.createdDate ? this.formatDay(info.createdDate) : null;
 
         const lastActiveFields = [
+            'latest_activity_at',
+            'last_activity_at',
+            'lastActivityAt',
             'last_active',
             'lastActive',
             'last_seen',
@@ -1046,13 +1135,14 @@ class OSINTSearch {
         ];
         for (const field of lastActiveFields) {
             if (profileData[field]) {
-                const date = this.parseDate(profileData[field]);
+                const date = this.toDate(profileData[field]);
                 if (date) {
-                    info.lastActive = date;
+                    info.lastActiveDate = date;
                     break;
                 }
             }
         }
+        info.lastActive = info.lastActiveDate ? this.formatDay(info.lastActiveDate) : null;
 
         const verifiedFields = [
             'verified',
@@ -1134,22 +1224,31 @@ class OSINTSearch {
             ...websiteFields,
             ...socialFields,
             ...socialPlatforms,
+            ...bannerFields,
             'data',
             'counters',
             'stats',
             'picture',
             'backgroundPicture',
             'links',
+            // How the data was read, not what it says
+            '_extractor',
+            'extracted_from',
         ];
+        // A page's own title next to OpenGraph data repeats the site's name, not the person's
+        if (profileData.extracted_from) skipFields.push('title');
 
         for (const [key, value] of Object.entries(profileData)) {
             if (skipFields.includes(key) || typeof value === 'object') continue;
+            if (/is_?default/i.test(key)) continue; // "default picture: yes" and the like
 
-            if (typeof value === 'number' && !alreadyCaptured.includes(key)) {
+            // Counts often come as text ("4"): still counts
+            const count = typeof value === 'string' && /^\d+$/.test(value.trim()) && this.shouldCompactNumber(key);
+            if ((typeof value === 'number' || count) && !alreadyCaptured.includes(key)) {
                 const formattedKey = this.formatFieldLabel(key);
 
                 if (this.shouldCompactNumber(key)) {
-                    info.numericStats.push({ key: formattedKey, rawKey: key, value: value });
+                    info.numericStats.push({ key: formattedKey, rawKey: key, value: Number(value) });
                 } else {
                     info.otherFields.push({ key: formattedKey, rawKey: key, value: value });
                 }
@@ -1251,24 +1350,51 @@ class OSINTSearch {
         return String(value);
     }
 
+    // A Date from what sites send: ISO, "2020-12-23 01:50:14 UTC", "...49.477000+00:00",
+    // RFC 2822, or unix seconds / milliseconds. Null for anything else, and for 0 or
+    // placeholder dates (before 1990).
+    toDate(value) {
+        if (value === null || value === undefined || value === '' || typeof value === 'boolean') return null;
+        let date;
+        const text = String(value).trim();
+        if (typeof value === 'number' || /^\d{9,13}$/.test(text)) {
+            const n = Number(value);
+            date = new Date(n > 1e11 ? n : n * 1000);
+        } else {
+            const iso = text
+                .replace(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})/, '$1T$2')
+                .replace(/(\.\d{3})\d+/, '$1')
+                .replace(/\s*UTC$/i, 'Z')
+                .replace(/\s+([+-]\d{2}:?\d{2})$/, '$1');
+            date = new Date(iso);
+            if (isNaN(date.getTime())) date = new Date(text);
+        }
+        if (isNaN(date.getTime())) return null;
+        const year = date.getFullYear();
+        return year >= 1990 && year <= new Date().getFullYear() + 1 ? date : null;
+    }
+
+    formatDay(date) {
+        return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+    }
+
     parseDate(value) {
+        const date = this.toDate(value);
+        return date ? this.formatDay(date) : null;
+    }
+
+    // "US" -> "United States"; anything else as it is
+    countryName(value) {
         if (!value) return null;
-
-        if (typeof value === 'number') {
-            const date = value > 10000000000 ? new Date(value) : new Date(value * 1000);
-            if (!isNaN(date.getTime())) {
-                return date.toLocaleDateString();
+        const text = String(value).trim();
+        if (/^[A-Za-z]{2}$/.test(text)) {
+            try {
+                return new Intl.DisplayNames(undefined, { type: 'region' }).of(text.toUpperCase()) || text;
+            } catch (error) {
+                return text;
             }
         }
-
-        if (typeof value === 'string') {
-            const date = new Date(value);
-            if (!isNaN(date.getTime())) {
-                return date.toLocaleDateString();
-            }
-        }
-
-        return null;
+        return text;
     }
 
     formatNumber(num) {
@@ -1453,6 +1579,7 @@ class OSINTSearch {
         this.elements.categoryStats.classList.add('hidden');
         this.elements.filterSection.classList.add('hidden');
         this.elements.categoryFilter.classList.add('hidden');
+        if (this.elements.overview) this.elements.overview.innerHTML = '';
         this.updateStats();
 
         this.elements.progressBar.style.width = '0%';
@@ -1517,6 +1644,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const search = window.osintSearch;
         search.resetResults();
+        search.lastUsername = data.username || '';
 
         // Update stats
         if (data.stats) {
