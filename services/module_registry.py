@@ -2,7 +2,9 @@
 is ready to use. Drives the search box, background jobs, pivot menus, the
 dashboard readiness badges and the settings page."""
 import asyncio
+import json
 import os
+import re
 import shutil
 import time
 from dataclasses import dataclass, field
@@ -125,15 +127,51 @@ MODULES_BY_ID = {m.id: m for m in MODULES}
 # Readiness
 # ---------------------------------------------------------------------------
 
-def _tool_available(setting: str) -> Optional[str]:
-    """None if the executable/script named by a setting exists, else a message."""
+_labels_cache: dict[str, Any] = {"mtime": None, "labels": {}}
+
+
+def setting_label(key: str) -> str:
+    """A setting's name as the Settings page shows it ("OSINT Industries API Key"), for
+    messages: people know the field's label, not OSINT_INDUSTRIES_API_KEY."""
+    path = Path("resources.json")
+    try:
+        mtime = path.stat().st_mtime
+        if _labels_cache["mtime"] != mtime:
+            labels = {}
+            for module in json.loads(path.read_text()).get("modules", []):
+                for name, config in (module.get("settings") or {}).items():
+                    # "SerpAPI Key (Optional)", "Telegram API ID (https://...)" -> the name alone
+                    label = re.sub(r"\s*\([^)]*\)", "", str(config.get("label") or "")).strip()
+                    if label:
+                        labels[name.upper()] = label
+            _labels_cache.update(mtime=mtime, labels=labels)
+    except (OSError, ValueError):
+        pass
+    if key in _labels_cache["labels"]:
+        return _labels_cache["labels"][key]
+    from services import plugin_loader
+    for plugin in plugin_loader.refresh().values():
+        spec = plugin.manifest.settings.get(key) if plugin.manifest else None
+        if spec and spec.label:
+            return f"{plugin.name} {spec.label}" if plugin.name.lower() not in spec.label.lower() else spec.label
+    return key.replace("_", " ").capitalize()
+
+
+def _fix(problem: str, action: str, href: str = "/settings") -> dict[str, str]:
+    """What stops a module, with what to do about it (a few words) and where."""
+    return {"problem": problem, "action": action, "href": href}
+
+
+def _tool_available(setting: str) -> Optional[dict[str, str]]:
+    """None if the executable/script named by a setting exists, else what to fix."""
     defaults = {"SUBFINDER_PATH": "subfinder", "HTTPX_PATH": "httpx-toolkit"}
     value = get_setting(setting) or defaults.get(setting)
+    label = setting_label(setting)
     if not value:
-        return f"{setting} is not set"
+        return _fix(f"{label} is not set", f"Set the {label}")
     if os.sep in value or value.endswith(".py"):
-        return None if Path(value).exists() else f"{value} not found"
-    return None if shutil.which(value) else f"{value} is not installed"
+        return None if Path(value).exists() else _fix(f"{label}: {value} was not found", f"Fix the {label}")
+    return None if shutil.which(value) else _fix(f"{value} is not installed", f"Install {value}")
 
 
 _telegram_cache: dict[str, Any] = {"at": 0.0, "ok": None}
@@ -154,29 +192,32 @@ async def telegram_authorized() -> bool:
 
 
 async def module_status(module: Module) -> dict[str, Any]:
-    problems: list[str] = []
+    fixes: list[dict[str, str]] = []
     for key in module.keys:
         if not get_setting(key):
-            problems.append(f"{key} is not configured")
+            label = setting_label(key)
+            fixes.append(_fix(f"{label} is not set", f"Add the {label}"))
     if module.id == "hlr" and not Path("assets/sms_logins.json").exists():
-        problems.append("assets/sms_logins.json is missing")
+        fixes.append(_fix("The HLR login file (assets/sms_logins.json) is missing", "Add the HLR login file"))
     if module.id == "ghunt":
         from services.ghunt_service import ghunt_command
         problem = ghunt_command()[1]
         if problem:
-            problems.append(problem)
+            fixes.append(_fix(problem, "Set up GHunt"))
     for tool in module.tools:
-        problem = _tool_available(tool)
-        if problem:
-            problems.append(problem)
+        fix = _tool_available(tool)
+        if fix:
+            fixes.append(fix)
     if module.needs_telegram:
         from utils import telegram_client
         if not telegram_client.is_configured():
-            problems.append("Telegram API ID and hash are not set")
+            fixes.append(_fix("The Telegram API ID and hash are not set", "Add the Telegram API ID and hash"))
         elif not await telegram_authorized():
-            problems.append("Telegram is not logged in")
+            fixes.append(_fix("Telegram is not logged in", "Log in to Telegram", "/telegram_auth"))
     if module.extra_problems:
-        problems += module.extra_problems()
+        fixes += [_fix(problem, "Review the plugin" if module.plugin else problem,
+                       "/plugins" if module.plugin else "/settings") for problem in module.extra_problems()]
+    problems = [fix["problem"] for fix in fixes]
     missing_optional = [k for k in module.optional_keys if not get_setting(k)]
     missing_optional += [t for t in module.optional_tools if _tool_available(t)]
     return {
@@ -190,6 +231,8 @@ async def module_status(module: Module) -> dict[str, Any]:
         "speed": module.speed,
         "ready": not problems,
         "problems": problems,
+        # the same, each with what to do (a few words) and the page to do it on
+        "setup": fixes,
         "optional_missing": missing_optional,
         "settings": module.keys + module.optional_keys + module.tools + module.optional_tools,
         "prefill": module.prefill,

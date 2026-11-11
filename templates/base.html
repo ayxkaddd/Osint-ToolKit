@@ -142,6 +142,13 @@
 
     <!-- Main Content -->
     <main class="flex-grow">
+        <!-- Module pages without an investigation selected: results are shown but not kept (main.js) -->
+        <div id="notSavedBanner" class="hidden max-w-6xl mx-auto px-6 mt-4" role="status">
+            <div class="bg-yellow-900/30 border border-yellow-700/60 rounded-lg px-4 py-3 flex items-center justify-between gap-3 text-sm">
+                <span class="text-yellow-100"><i class="fas fa-exclamation-triangle mr-2" aria-hidden="true"></i>No investigation is selected, so what you look up here is shown but not saved.</span>
+                <button type="button" onclick="openCreateInvestigationModal()" class="bg-yellow-700/60 hover:bg-yellow-600/60 px-3 py-1.5 rounded shrink-0">New investigation</button>
+            </div>
+        </div>
         {% block content %}{% endblock %}
     </main>
 

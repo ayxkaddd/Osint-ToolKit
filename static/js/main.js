@@ -629,6 +629,10 @@ function updateCurrentInvestigationDisplay() {
         // The active investigation was deleted
         setCurrentInvestigationLocal(null);
     }
+    // A module page (it sets window.currentService) with nowhere to save its results
+    document
+        .getElementById('notSavedBanner')
+        ?.classList.toggle('hidden', Boolean(currentInvestigationId) || !window.currentService);
     if (current) {
         displayElement.textContent = current.name;
         // Shown straight away on the next page load (inline script in base.html)
@@ -1376,7 +1380,7 @@ async function openPivotMenu(type, value, anchor, options = {}) {
         <div class="px-3 py-2 flex items-center justify-between gap-2 hover:bg-gray-800/70">
             <div class="min-w-0">
                 <div class="text-white truncate">${escapeHtml(m.name)}</div>
-                <div class="flex items-center gap-1.5 mt-0.5">${moduleBadges(m)}${m.ready ? '' : `<span class="text-[10px] text-red-300 truncate" title="${escapeAttr((m.problems || []).join('; '))}">not ready</span>`}</div>
+                <div class="flex items-center gap-1.5 mt-0.5">${moduleBadges(m)}${m.ready ? '' : setupLinkHtml(m)}</div>
                 ${earlierLine(m)}
             </div>
             <div class="flex gap-1.5 shrink-0">
@@ -1686,7 +1690,7 @@ function quickLookupRow(candidate, m, canRun) {
     <div class="px-3 py-2 flex items-center justify-between gap-2 hover:bg-gray-800/70">
         <div class="min-w-0">
             <div class="text-white truncate">${escapeHtml(m.name)}</div>
-            <div class="flex items-center gap-1.5 mt-0.5">${moduleBadges(m)}${m.ready ? '' : `<span class="text-[10px] text-red-300 truncate" title="${escapeAttr(problems)}">not ready</span>`}</div>
+            <div class="flex items-center gap-1.5 mt-0.5">${moduleBadges(m)}${m.ready ? '' : setupLinkHtml(m)}</div>
             ${last ? `<div class="text-[11px] text-amber-300 mt-0.5"><i class="fas fa-history mr-1"></i>Already looked up ${escapeHtml(timeAgo(last.timestamp))}</div>` : ''}
         </div>
         <div class="flex gap-1.5 shrink-0">
@@ -1698,6 +1702,14 @@ function quickLookupRow(candidate, m, canRun) {
         </div>
     </div>`;
 }
+
+// For a module that can't run yet: what to do, as a link to where it is done
+// ("Add the SerpAPI Key" -> Settings). The full reason is the tooltip.
+function setupLinkHtml(m) {
+    const fix = (m.setup || [])[0] || { action: 'Needs setup', href: '/settings' };
+    return `<a href="${escapeAttr(fix.href)}" class="text-[10px] text-amber-300 hover:text-amber-200 underline truncate" title="${escapeAttr((m.problems || []).join('; '))}">${escapeHtml(fix.action)}</a>`;
+}
+window.setupLinkHtml = setupLinkHtml;
 
 // A phone number typed without its country code: the full numbers it could be, to pick from
 // (data-lookup-suggest carries the full number; the lookup box and /lookup both use this)

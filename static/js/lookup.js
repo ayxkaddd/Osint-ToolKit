@@ -68,7 +68,7 @@ function moduleRow(candidate, m) {
                 ${moduleBadges(m)}
             </div>
             ${m.cost_note ? `<div class="text-xs text-gray-500">${escapeHtml(m.cost_note)}</div>` : ''}
-            ${m.ready ? '' : `<div class="text-xs text-red-300 mt-0.5">${escapeHtml((m.problems || []).join('; '))} <a href="/settings" class="underline">Settings</a></div>`}
+            ${m.ready ? '' : `<div class="text-xs text-amber-300/90 mt-0.5">${(m.setup || []).map((fix) => `${escapeHtml(fix.problem)} · <a href="${escapeAttr(fix.href)}" class="underline hover:text-amber-200">${escapeHtml(fix.action)}</a>`).join('<br>')}</div>`}
             ${last ? `<div class="text-xs text-amber-300 mt-0.5"><i class="fas fa-history mr-1"></i>Already looked up ${escapeHtml(timeAgo(last.timestamp))}${lastLink ? ` · <a href="${escapeAttr(lastLink)}" class="underline">open result</a>` : ''}</div>` : ''}
         </div>
     </label>`;

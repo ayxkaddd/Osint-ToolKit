@@ -10,7 +10,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 
-from services.entities import detect, make_entity, phone_suggestions, type_label
+from services.entities import detect, make_entity, norm_phone, phone_suggestions, type_label
 from services.investigation_service import investigation_service
 from services.ip_service import IPLookupError, IPService
 from services.job_manager import job_manager
@@ -259,8 +259,20 @@ def triage_result(investigation_id: UUID, result_id: str, body: TriageRequest):
 
 @router.get("/api/phone/info")
 @save_investigation(service_name="phone", method_name="phone_info")
-async def phone_lookup(phone: str = Query(..., min_length=1, max_length=40)) -> dict:
-    """Free offline analysis: validity, country, original carrier, line type, messenger links."""
+async def phone_lookup(request: Request, phone: str = Query(..., min_length=1, max_length=40)) -> dict:
+    """Free offline analysis: validity, country, original carrier, line type, messenger links.
+
+    A number without its country code is refused rather than guessed (its first digits
+    would be taken for a country: 415 555 2671 became a Swiss number). The answer names
+    the numbers it could be; the page offers them (/api/lookup/detect ``suggestions``)."""
+    digits = re.sub(r"[^\d+]", "", phone)
+    if re.search(r"\d{6}", re.sub(r"\D", "", digits)) and not digits.startswith(("+", "00")) \
+            and not norm_phone(digits, assume_international=True):
+        options = phone_suggestions(phone, _browser_regions(request))
+        could_be = "; ".join(f"{o['display']} ({o['country']})" for o in options)
+        raise HTTPException(status_code=400, detail="This number has no country code" + (
+            f" - it could be {could_be}. Enter it with the code." if options
+            else ". Enter it with the code, e.g. +380 50 123 4567"))
     try:
         return await lookup_phone(phone)
     except PhoneParseError as e:

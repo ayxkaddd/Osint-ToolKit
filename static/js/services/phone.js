@@ -228,6 +228,23 @@ function phoneInfoCard(info) {
         </div>`;
 }
 
+// A number that couldn't be analyzed. Without a country code the numbers it could be
+// are offered: picking one replaces it in the box and analyzes again.
+async function phoneProblemCard(number, detail) {
+    let suggestions = [];
+    try {
+        const response = await fetch(`/api/lookup/detect?q=${encodeURIComponent(number)}`);
+        if (response.ok) suggestions = (await response.json()).suggestions || [];
+    } catch (e) {
+        // the message alone then
+    }
+    if (!suggestions.length)
+        return `<div class="card text-red-300 text-sm"><span class="font-mono">${escapeHtml(number)}</span>: ${escapeHtml(detail || 'could not analyze')}</div>`;
+    return `<div class="card" data-phone-typed="${escapeAttr(number)}">
+        <div class="font-mono text-white mb-2">${escapeHtml(number)}</div>
+        ${phoneSuggestionsHtml(suggestions)}</div>`;
+}
+
 async function analyzePhones() {
     const numbers = phoneInput.value
         .split(/[,;\n]+/)
@@ -239,13 +256,23 @@ async function analyzePhones() {
         numbers.map(async (number) => {
             const response = await fetch(`/api/phone/info?phone=${encodeURIComponent(number)}`);
             const data = await response.json().catch(() => ({}));
-            if (!response.ok)
-                return `<div class="bg-gray-900 rounded-lg p-4 text-red-300 text-sm">${escapeHtml(number)}: ${escapeHtml(data.detail || 'could not analyze')}</div>`;
+            if (!response.ok) return phoneProblemCard(number, data.detail);
             return phoneInfoCard(data);
         })
     );
     phoneInfoResults.innerHTML = cards.join('');
 }
+
+phoneInfoResults.addEventListener('click', (e) => {
+    const pick = e.target.closest('[data-lookup-suggest]');
+    const card = pick && pick.closest('[data-phone-typed]');
+    if (!card) return;
+    phoneInput.value = phoneInput.value
+        .split(/([,;\n]+)/)
+        .map((part) => (part.trim() === card.dataset.phoneTyped ? pick.dataset.lookupSuggest : part))
+        .join('');
+    analyzePhones();
+});
 
 document.getElementById('analyzeButton').addEventListener('click', analyzePhones);
 searchButton.addEventListener('click', performHLRLookup);

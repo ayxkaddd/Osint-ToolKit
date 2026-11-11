@@ -464,22 +464,12 @@ document.addEventListener('investigation:created', loadActiveInvestigation);
 // Readiness badge on each module card (missing keys, tools, Telegram login)
 // Ready is the normal state and gets no marker. A module that can't run says
 // what is missing, in words, with a link to fix it.
-function setupProblem(problem) {
-    if (/Telegram/i.test(problem)) return { text: 'Log in to Telegram', href: '/telegram_auth' };
-    const key = (problem.match(/^([A-Z0-9_]+) is not (configured|set)/) || [])[1];
-    if (key)
-        return {
-            text: `Add ${key
-                .replace(/_(API_)?KEY$|_PATH$/, '')
-                .replace(/_/g, ' ')
-                .toLowerCase()} ${/_PATH$/.test(key) ? 'path' : 'key'}`,
-            href: '/settings',
-        };
-    const missingFile = (problem.match(/(\S+) is missing/) || [])[1];
-    if (missingFile) return { text: `Add ${missingFile.split('/').pop()}`, href: '/settings' };
-    if (/not installed|not found/i.test(problem))
-        return { text: problem.replace(/ is not installed| not found/, '') + ' is not installed', href: '/settings' };
-    return { text: problem, href: '/settings' };
+// The first thing to do for a module that can't run yet: {text, href}. The server says it
+// in words (module_registry: "Add the OSINT Industries API Key").
+function setupProblem(module) {
+    const fix = (module.setup || [])[0];
+    if (fix) return { text: fix.action, href: fix.href };
+    return { text: module.problems[0] || 'Needs setup', href: '/settings' };
 }
 
 async function annotateReadiness() {
@@ -489,7 +479,7 @@ async function annotateReadiness() {
         const blocked = related.filter((m) => !m.ready);
         if (!blocked.length) return;
         const partial = blocked.length < related.length;
-        const first = setupProblem(blocked[0].problems[0] || 'Needs setup');
+        const first = setupProblem(blocked[0]);
         const line = document.createElement('a');
         line.href = first.href;
         line.className =
@@ -497,6 +487,24 @@ async function annotateReadiness() {
         line.title = blocked.map((m) => `${m.name}: ${m.problems.join('; ')}`).join('\n');
         line.innerHTML = `<i class="fas fa-wrench text-[10px]"></i><span class="truncate">${partial ? `${escapeHtml(blocked.map((m) => m.name).join(', '))}: ` : ''}${escapeHtml(first.text)}</span><span class="ml-auto shrink-0 text-gray-500">Set up →</span>`;
         link.parentElement.appendChild(line);
-        if (!partial) link.querySelector('i')?.classList.add('opacity-50');
+        if (!partial) {
+            link.querySelector('i')?.classList.add('opacity-50');
+            link.closest('#modulesList > div')?.setAttribute('data-needs-setup', '');
+        }
     });
+    sortModulesByReadiness();
+}
+
+// Modules that work now come first; the ones that still need a key, a tool or a login
+// follow under their own heading, so a new install doesn't open on a wall of "set up".
+function sortModulesByReadiness() {
+    const list = document.getElementById('modulesList');
+    const blocked = [...list.querySelectorAll(':scope > [data-needs-setup]')];
+    list.querySelector('[data-setup-heading]')?.remove();
+    if (!blocked.length || blocked.length === list.querySelectorAll(':scope > div[class*="bg-"]').length) return;
+    const heading = document.createElement('h3');
+    heading.dataset.setupHeading = '';
+    heading.className = 'col-span-full mt-4 text-sm font-semibold text-gray-400 flex items-center gap-2';
+    heading.innerHTML = `<i class="fas fa-wrench text-xs" aria-hidden="true"></i>Needs setup <span class="font-normal text-gray-500">${blocked.length}</span>`;
+    list.append(heading, ...blocked);
 }
