@@ -32,6 +32,8 @@
         ).join(' ');
     }
 
+    let openedAtField = false; // the #KEY field from the address has been focused
+
     async function load() {
         let settingsRes, modules;
         try {
@@ -69,17 +71,27 @@
                     <button type="submit" class="bg-purple-600 hover:bg-purple-500 px-4 py-2 rounded-lg text-sm font-medium">Save</button>
                 </div>
             </form>`).join('');
-        focusField(decodeURIComponent(location.hash.slice(1)));
+        // only when the page opens: reloading after a save shouldn't jump back to that field
+        if (!openedAtField) {
+            openedAtField = true;
+            focusHashField();
+        }
     }
 
     // /settings#SERPAPI_KEY (the "Add the ... key" links): go to that field
-    function focusField(key) {
+    function focusHashField() {
+        let key = '';
+        try {
+            key = decodeURIComponent(location.hash.slice(1));
+        } catch (e) {
+            return; // a broken address (#%)
+        }
         const input = key && container.querySelector(`input[name="${CSS.escape(key)}"]`);
         if (!input) return;
         input.scrollIntoView({ block: 'center' });
         input.focus({ preventScroll: true });
     }
-    window.addEventListener('hashchange', () => focusField(decodeURIComponent(location.hash.slice(1))));
+    window.addEventListener('hashchange', focusHashField);
 
     container.addEventListener('submit', async (e) => {
         e.preventDefault();

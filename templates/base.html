@@ -127,22 +127,10 @@
                             <span class="hidden lg:inline">Notes</span>
                         </button>
 
-                        <a href="/plugins" title="Plugins" aria-label="Plugins" class="flex items-center p-2 -m-2 hover:text-purple-400 transition-colors">
-                            <i class="fas fa-puzzle-piece text-lg" aria-hidden="true"></i>
-                        </a>
-
-                        <a href="/settings" title="Settings &amp; API keys" aria-label="Settings and API keys" class="flex items-center p-2 -m-2 hover:text-purple-400 transition-colors">
-                            <i class="fas fa-cog text-lg" aria-hidden="true"></i>
-                        </a>
-
-                        <button onclick="checkForUpdates()" type="button" title="Check for updates" aria-label="Check for updates"
+                        <!-- Plugins, settings, updates, log out (main.js) -->
+                        <button id="moreMenuButton" type="button" title="Plugins, settings, log out" aria-label="More" aria-haspopup="menu"
                             class="flex items-center p-2 -m-2 hover:text-purple-400 transition-colors">
-                            <i class="fas fa-sync-alt text-lg" aria-hidden="true"></i>
-                        </button>
-
-                        <button onclick="logout()" type="button" title="Log out" aria-label="Log out"
-                            class="flex items-center p-2 -m-2 hover:text-red-400 transition-colors">
-                            <i class="fas fa-sign-out-alt text-lg" aria-hidden="true"></i>
+                            <i class="fas fa-ellipsis-v text-lg w-4 text-center" aria-hidden="true"></i>
                         </button>
                     </div>
                 </div>

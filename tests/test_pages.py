@@ -89,3 +89,16 @@ def test_page_scripts_do_not_redeclare_shared_names():
         shared_lexical = {n for name in shared for n in lexical.findall((scripts / name).read_text())}
         clashes += [f"{path.name}: {n}" for n in any_declaration.findall(text) if n in shared_lexical and n not in lexical.findall(text)]
     assert not clashes, clashes
+
+
+def test_header_keeps_occasional_actions_in_one_menu(client):
+    """Plugins, settings, updates and log out sit behind the "More" button, not as four header icons."""
+    page = client.get("/dashboard").text
+    header = page[page.index("<header"):page.index("</header>")]
+    assert 'id="moreMenuButton"' in header
+    for gone in ('href="/plugins"', 'href="/settings"', "checkForUpdates()", "logout()"):
+        assert gone not in header, gone
+    script = client.get("/static/js/main.js").text
+    menu = script[script.index("#moreMenuButton"):]
+    for item in ("href: '/plugins'", "href: '/settings'", "onClick: checkForUpdates", "onClick: logout"):
+        assert item in menu[:800], item

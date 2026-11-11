@@ -554,7 +554,9 @@ document.addEventListener(
     (event) => {
         if (event.key !== 'Escape' || !document.getElementById('contextMenu')) return;
         event.stopImmediatePropagation();
+        const owner = contextMenuOwner;
         closeContextMenu();
+        owner?.focus?.({ preventScroll: true }); // keyboard users land back on the button that opened it
     },
     true
 );
@@ -1522,6 +1524,19 @@ document.addEventListener('click', (event) => {
 });
 document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') setModulesMenu(false);
+});
+
+// "More" menu (header): the things not needed all the time
+document.addEventListener('click', (event) => {
+    const button = event.target.closest('#moreMenuButton');
+    if (!button) return;
+    openContextMenu(button, [
+        { label: 'Plugins', icon: 'fa-puzzle-piece', href: '/plugins' },
+        { label: 'Settings & API keys', icon: 'fa-cog', href: '/settings' },
+        { label: 'Check for updates', icon: 'fa-sync-alt', onClick: checkForUpdates },
+        { divider: true },
+        { label: 'Log out', icon: 'fa-sign-out-alt', onClick: logout, danger: true },
+    ]);
 });
 
 // ---------------------------------------------------------------------------
