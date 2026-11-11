@@ -1699,9 +1699,29 @@ function quickLookupRow(candidate, m, canRun) {
     </div>`;
 }
 
+// A phone number typed without its country code: the full numbers it could be, to pick from
+// (data-lookup-suggest carries the full number; the lookup box and /lookup both use this)
+function phoneSuggestionsHtml(suggestions) {
+    if (!suggestions || !suggestions.length) return '';
+    return `<div class="text-xs text-gray-400 mb-2"><i class="fas fa-phone mr-1.5 text-purple-300"></i>A phone number? Without its country code it could be any of these - pick one:</div>
+    <div class="flex flex-wrap gap-1.5">${suggestions
+        .map(
+            (s) => `<button type="button" data-lookup-suggest="${escapeAttr(s.value)}"
+            class="inline-flex items-center gap-2 px-2.5 py-1.5 rounded bg-gray-800 hover:bg-purple-700/50 border border-gray-700 text-xs">
+            <span class="font-mono text-purple-200">${escapeHtml(s.display)}</span><span class="text-gray-400">${escapeHtml(s.country)}</span></button>`
+        )
+        .join('')}</div>`;
+}
+window.phoneSuggestionsHtml = phoneSuggestionsHtml;
+
+const LOOKUP_EXAMPLES_HINT =
+    "Couldn't tell what this is. Try an email, a phone number with its country code (+1 415 555 2671), an @username, a domain or an IP address.";
+window.LOOKUP_EXAMPLES_HINT = LOOKUP_EXAMPLES_HINT;
+
 function renderQuickLookup(data) {
     const menu = document.getElementById('globalLookupMenu');
     const canRun = Boolean(data.investigation_id);
+    const suggestions = phoneSuggestionsHtml(data.suggestions);
     const sections = data.candidates
         .map(
             (c) => `
@@ -1709,13 +1729,16 @@ function renderQuickLookup(data) {
     ${
         c.modules.length
             ? c.modules.map((m) => quickLookupRow(c, m, canRun)).join('')
-            : '<div class="px-3 py-2 text-gray-500">No module looks up this type yet.</div>'
+            : '<div class="px-3 py-2 text-gray-500">No module looks this up yet - "All lookups" lists sites that do.</div>'
     }`
         )
         .join('');
     menu.innerHTML = `
     ${canRun ? '' : '<div class="px-3 py-2 border-b border-gray-700 text-xs text-yellow-200">Select or create an investigation to run lookups. Results are saved there.</div>'}
-    <div class="max-h-96 overflow-y-auto custom-scrollbar pb-1">${sections || '<div class="px-3 py-3 text-gray-500">Try an email, phone with country code, @username, domain or IP.</div>'}</div>
+    <div class="max-h-96 overflow-y-auto custom-scrollbar pb-1">
+        ${suggestions ? `<div class="px-3 py-2.5 border-b border-gray-800">${suggestions}</div>` : ''}
+        ${sections || (suggestions ? '' : `<div class="px-3 py-3 text-gray-500">${escapeHtml(LOOKUP_EXAMPLES_HINT)}</div>`)}
+    </div>
     <div class="px-3 py-2 border-t border-gray-700 text-right text-xs">
         <a href="/lookup?q=${encodeURIComponent(data.query)}" class="text-purple-300 hover:text-white">All lookups for this →</a>
     </div>`;
@@ -1758,6 +1781,13 @@ function setupQuickLookup() {
     });
     // Stays open after a run, so several modules can be started in a row
     menu.addEventListener('click', async (event) => {
+        const suggestion = event.target.closest('[data-lookup-suggest]');
+        if (suggestion) {
+            input.value = suggestion.dataset.lookupSuggest;
+            input.focus();
+            updateQuickLookup(input.value);
+            return;
+        }
         const run = event.target.closest('[data-quick-run]');
         if (!run) return;
         run.disabled = true;

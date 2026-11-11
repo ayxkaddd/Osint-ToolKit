@@ -77,22 +77,28 @@ function moduleRow(candidate, m) {
 function renderCandidates(data) {
     lastDetection = data;
     renderInvestigationBanner(data.investigation_id);
+    const suggestions = phoneSuggestionsHtml(data.suggestions);
+    const suggestionsCard = suggestions
+        ? `<section class="bg-[#14151f] border border-purple-500/30 rounded-xl p-5">${suggestions}</section>`
+        : '';
     if (!data.candidates.length) {
         lookupEls.candidates.innerHTML =
-            '<p class="text-gray-400">Couldn\'t recognise this - try an email, phone with country code, @username, domain or IP.</p>';
+            suggestionsCard || `<p class="text-gray-400">${escapeHtml(LOOKUP_EXAMPLES_HINT)}</p>`;
         updateRunBar();
         return;
     }
-    lookupEls.candidates.innerHTML = data.candidates
-        .map(
-            (c, i) => `
+    lookupEls.candidates.innerHTML =
+        suggestionsCard +
+        data.candidates
+            .map(
+                (c, i) => `
     <section class="bg-[#14151f] border border-[#24283b] rounded-xl p-5">
         <div class="flex items-baseline justify-between gap-3 mb-3 flex-wrap">
             <div>
                 <span class="text-xs uppercase tracking-wider text-gray-500">${i === 0 ? 'Looks like' : 'Could also be'} · ${escapeHtml(c.label)}</span>
                 <div class="font-mono text-lg text-purple-200 break-all">${escapeHtml(c.display || c.value)}</div>
             </div>
-            <div class="text-xs flex gap-3">
+            <div class="text-xs flex gap-3 ${c.modules.filter((m) => m.ready).length > 1 ? '' : 'hidden'}">
                 <button type="button" data-select-all="${i}" class="text-gray-400 hover:text-white">Select all ready</button>
                 <button type="button" data-select-none="${i}" class="text-gray-400 hover:text-white">None</button>
             </div>
@@ -100,11 +106,12 @@ function renderCandidates(data) {
         ${
             c.modules.length
                 ? `<div class="grid grid-cols-1 md:grid-cols-2 gap-2" data-candidate="${i}">${c.modules.map((m) => moduleRow(c, m)).join('')}</div>`
-                : '<p class="text-sm text-gray-500">No module looks this type up yet.</p>'
+                : `<p class="text-sm text-gray-500">No module looks up ${escapeHtml(articleFor(c.label))} yet.</p>`
         }
+        <div data-external-sites="${i}" class="-mx-3 -mb-2 mt-3 empty:hidden"></div>
     </section>`
-        )
-        .join('');
+            )
+            .join('');
     // Only the first reading is pre-selected; other readings are opt-in
     lookupEls.candidates.querySelectorAll('[data-candidate]').forEach((grid) => {
         if (grid.dataset.candidate !== '0')
@@ -113,6 +120,21 @@ function renderCandidates(data) {
             });
     });
     updateRunBar();
+    // Sites from the resources list that open on this kind of identifier (the only way
+    // on for types no module looks up, e.g. a wallet address)
+    data.candidates.forEach(async (c, i) => {
+        const sites = await externalSearchesFor(c.type);
+        const slot = lookupEls.candidates.querySelector(`[data-external-sites="${i}"]`);
+        if (slot && lastDetection === data) slot.innerHTML = externalSitesHtml(sites, c.type, c.value);
+    });
+}
+
+// "an email", "a phone": the type's name inside a sentence
+function articleFor(label) {
+    const name = /^(URL|IP|VK|Wi-Fi|Google|Telegram|Bitcoin|Ethereum)/.test(label)
+        ? label
+        : label.charAt(0).toLowerCase() + label.slice(1);
+    return `${/^[aeiou]/i.test(name) && !/^URL/.test(name) ? 'an' : 'a'} ${name}`;
 }
 
 async function analyze(query) {
@@ -159,6 +181,12 @@ lookupEls.form.addEventListener('submit', (e) => {
 
 lookupEls.candidates.addEventListener('change', updateRunBar);
 lookupEls.candidates.addEventListener('click', (e) => {
+    const suggestion = e.target.closest('[data-lookup-suggest]');
+    if (suggestion) {
+        lookupEls.query.value = suggestion.dataset.lookupSuggest;
+        analyze(lookupEls.query.value);
+        return;
+    }
     const all = e.target.closest('[data-select-all]');
     const none = e.target.closest('[data-select-none]');
     const index = (all || none)?.dataset.selectAll ?? (all || none)?.dataset.selectNone;
