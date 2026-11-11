@@ -179,7 +179,7 @@ function webCard(domain) {
                 ${field('IPs', (f.ips || []).map((ip) => pivotChip('ip', ip)).join(' '))}
                 ${field('Technologies', escapeHtml((f.tech || []).join(', ')))}
                 ${field('Certificate', f.cert ? escapeHtml(`${f.cert.subject || '?'} · ${f.cert.issuer || ''} · from ${nsDate(f.cert.not_before)}`) : '')}
-                ${field('Favicon / JARM', escapeHtml([f.favicon && `mmh3 ${f.favicon}`, f.jarm && `JARM ${f.jarm.slice(0, 16)}…`].filter(Boolean).join(' · ')))}
+                ${field('Favicon / JARM', [f.favicon && faviconHashTag(f.favicon), f.jarm && escapeHtml(`JARM ${f.jarm.slice(0, 16)}…`)].filter(Boolean).join(' · '))}
             </div>
             ${trackers ? `<div class="space-y-1">${trackers}</div>` : ''}
         </div>`;
@@ -187,8 +187,9 @@ function webCard(domain) {
 
 // ---------------- attribution ----------------
 
-// A signal's value; analytics / ads IDs get their BuiltWith link
+// A signal's value; analytics / ads IDs get their BuiltWith link, favicon hashes their FOFA search
 function signalValue(s) {
+    if (s.kind === 'favicon' && fofaIconHashUrl(s.raw)) return faviconHashTag(s.raw);
     return s.kind.startsWith('tracker_') && builtwithTagUrl(s.value) ? trackerTag(s.value) : escapeHtml(s.value);
 }
 

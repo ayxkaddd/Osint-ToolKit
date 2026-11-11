@@ -2035,6 +2035,28 @@ function trackerTag(id) {
 }
 window.trackerTag = trackerTag;
 
+// A favicon's mmh3 hash (httpx -favicon; the number Shodan and FOFA index). FOFA lists the
+// websites serving the same icon - often the same owner's other sites, or the real server
+// behind a CDN. Its query, icon_hash="<hash>", goes base64-encoded in the address.
+const FAVICON_HASH_RE = /^-?\d{1,11}$/;
+function fofaIconHashUrl(hash) {
+    const value = String(hash ?? '').trim();
+    if (!FAVICON_HASH_RE.test(value)) return null;
+    return `https://en.fofa.info/result?qbase64=${encodeURIComponent(btoa(`icon_hash="${value}"`))}`;
+}
+window.fofaIconHashUrl = fofaIconHashUrl;
+
+// A favicon hash in a result, with a link to the other websites that show the same icon
+function faviconHashTag(hash) {
+    const url = fofaIconHashUrl(hash);
+    return `<span class="inline-flex items-center gap-1"><code class="text-purple-200">mmh3 ${escapeHtml(hash)}</code>${
+        url
+            ? `<a href="${escapeAttr(url)}" target="_blank" rel="noopener noreferrer" class="text-gray-400 hover:text-white" title="Other websites with this favicon (FOFA)"><i class="fas fa-external-link-alt text-[10px]"></i></a>`
+            : ''
+    }</span>`;
+}
+window.faviconHashTag = faviconHashTag;
+
 // Identifiers grouped by type, as pivot chips (investigation results and module pages)
 function identifierGroupsHtml(entities, limit = 150) {
     const byType = {};
