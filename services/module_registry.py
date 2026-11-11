@@ -168,9 +168,10 @@ def _tool_available(setting: str) -> Optional[dict[str, str]]:
     value = get_setting(setting) or defaults.get(setting)
     label = setting_label(setting)
     if not value:
-        return _fix(f"{label} is not set", f"Set the {label}")
+        return _fix(f"{label} is not set", f"Set the {label}", f"/settings#{setting}")
     if os.sep in value or value.endswith(".py"):
-        return None if Path(value).exists() else _fix(f"{label}: {value} was not found", f"Fix the {label}")
+        return None if Path(value).exists() else _fix(f"{label}: {value} was not found", f"Fix the {label}",
+                                                      f"/settings#{setting}")
     return None if shutil.which(value) else _fix(f"{value} is not installed", f"Install {value}")
 
 
@@ -196,14 +197,14 @@ async def module_status(module: Module) -> dict[str, Any]:
     for key in module.keys:
         if not get_setting(key):
             label = setting_label(key)
-            fixes.append(_fix(f"{label} is not set", f"Add the {label}"))
+            fixes.append(_fix(f"{label} is not set", f"Add the {label}", f"/settings#{key}"))
     if module.id == "hlr" and not Path("assets/sms_logins.json").exists():
         fixes.append(_fix("The HLR login file (assets/sms_logins.json) is missing", "Add the HLR login file"))
     if module.id == "ghunt":
         from services.ghunt_service import ghunt_command
         problem = ghunt_command()[1]
         if problem:
-            fixes.append(_fix(problem, "Set up GHunt"))
+            fixes.append(_fix(problem, "Set up GHunt", "/settings#GHUNT_SCRIPT_PATH"))
     for tool in module.tools:
         fix = _tool_available(tool)
         if fix:
@@ -211,7 +212,7 @@ async def module_status(module: Module) -> dict[str, Any]:
     if module.needs_telegram:
         from utils import telegram_client
         if not telegram_client.is_configured():
-            fixes.append(_fix("The Telegram API ID and hash are not set", "Add the Telegram API ID and hash"))
+            fixes.append(_fix("The Telegram API ID and hash are not set", "Add the Telegram API ID and hash", "/settings#TG_API_ID"))
         elif not await telegram_authorized():
             fixes.append(_fix("Telegram is not logged in", "Log in to Telegram", "/telegram_auth"))
     if module.extra_problems:

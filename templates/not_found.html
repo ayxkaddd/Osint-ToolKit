@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+
+{% block title %}Not found - OSINT Toolkit{% endblock %}
+
+{% block content %}
+<div class="page text-center py-16">
+    <p class="text-sm text-gray-500 mb-2">404</p>
+    <h1 class="page-title">{{ heading }}</h1>
+    <p class="page-lead">{{ message }}</p>
+    <div class="flex flex-wrap justify-center gap-3 mt-8">
+        <a href="/dashboard" class="btn-primary">Dashboard</a>
+        <a href="/investigations" class="btn-secondary">Investigations</a>
+        <a href="/lookup" class="btn-secondary">Lookup</a>
+    </div>
+</div>
+{% endblock %}

@@ -28,7 +28,7 @@
     // Only what still blocks a module; a configured module needs no label
     function readinessFor(endpoint, modules) {
         return modules.filter(m => m.page === endpoint && !m.ready).map(m =>
-            `<span class="text-xs text-amber-300/80" title="${escapeAttr(m.problems.join('; '))}"><i class="fas fa-wrench mr-1 text-[10px]"></i>${escapeHtml(m.name)}: ${escapeHtml(m.problems[0] || 'needs setup')}</span>`
+            `<span class="text-xs text-amber-300/80" title="${escapeAttr(m.problems.join('; '))}"><i class="fas fa-wrench mr-1 text-[10px]" aria-hidden="true"></i>${escapeHtml(m.problems[0] || 'Needs setup')}</span>`
         ).join(' ');
     }
 
@@ -69,7 +69,17 @@
                     <button type="submit" class="bg-purple-600 hover:bg-purple-500 px-4 py-2 rounded-lg text-sm font-medium">Save</button>
                 </div>
             </form>`).join('');
+        focusField(decodeURIComponent(location.hash.slice(1)));
     }
+
+    // /settings#SERPAPI_KEY (the "Add the ... key" links): go to that field
+    function focusField(key) {
+        const input = key && container.querySelector(`input[name="${CSS.escape(key)}"]`);
+        if (!input) return;
+        input.scrollIntoView({ block: 'center' });
+        input.focus({ preventScroll: true });
+    }
+    window.addEventListener('hashchange', () => focusField(decodeURIComponent(location.hash.slice(1))));
 
     container.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -88,7 +98,9 @@
             showTemporaryNotification(data.detail || 'Failed to save', 'error');
             return;
         }
-        showTemporaryNotification(`Saved ${data.updated.join(', ')}`, 'success');
+        const saved = [...form.querySelectorAll('label')].filter((l) => data.updated.includes(l.querySelector('input')?.name))
+            .map((l) => l.querySelector('span > span')?.firstChild?.textContent.trim()).filter(Boolean);
+        showTemporaryNotification(`Saved: ${(saved.length ? saved : data.updated).join(', ')}`, 'success');
         load();
     });
 
@@ -98,7 +110,7 @@
             const status = await fetch('/auth/tg/status').then(r => r.json());
             box.innerHTML = `<div class="bg-[#14151f] border border-[#24283b] rounded-xl p-4 flex items-center justify-between">
                 <span><i class="fab fa-telegram text-sky-400 mr-2"></i>Telegram account (VK history, Funstat media)</span>
-                ${status.configured === false ? '<span class="text-sm text-gray-400">Add the API ID and hash under VK Profile History below</span>'
+                ${status.configured === false ? '<span class="text-sm text-gray-400">Needs an API ID and hash, free from <a href="https://my.telegram.org" target="_blank" rel="noopener noreferrer" class="underline hover:text-white">my.telegram.org</a> <a href="#TG_API_ID" class="ml-2 bg-sky-700 hover:bg-sky-600 text-white px-3 py-1.5 rounded">Add them</a></span>'
                     : status.authorized ? '<span class="text-sm text-emerald-300"><i class="fas fa-check mr-1"></i>logged in</span>'
                     : '<a href="/telegram_auth" class="text-sm bg-sky-700 hover:bg-sky-600 px-3 py-1.5 rounded">Log in</a>'}
             </div>`;
@@ -123,7 +135,7 @@
         try {
             data = await fetch('/api/proxies').then(r => r.json());
         } catch (e) { box.innerHTML = ''; return; }
-        const when = (t) => t ? new Date(t * 1000).toLocaleString() : 'never';
+        const when = (t) => t ? fmtDateTime(t * 1000) : 'never';
         const status = data.healthy
             ? `${data.healthy} healthy (${data.user_count} yours, ${data.public} public) · refreshed ${when(data.last_refresh)}`
             : (data.enabled ? 'no healthy proxies yet — checking in the background' : 'disabled');

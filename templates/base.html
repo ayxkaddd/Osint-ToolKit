@@ -8,10 +8,9 @@
     <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
     <link rel="icon" href="/static/favicon.ico" sizes="any">
     <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <!-- Fonts and icons are served from here (static/vendor), not a CDN: nothing outside is contacted -->
+    <link href="/static/vendor/fonts/jetbrains-mono.css" rel="stylesheet">
+    <link href="/static/vendor/fontawesome/css/all.min.css" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/tailwind.css">
     <link rel="stylesheet" href="/static/css/style.css">
     <link rel="stylesheet" href="/static/css/services/username.css">
@@ -37,19 +36,30 @@
                         <!-- Universal lookup: paste any identifier -->
                         <form id="globalLookupForm" action="/lookup" method="get" class="relative flex-1 max-w-md" role="search">
                             <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm"></i>
-                            <input id="globalLookupInput" name="q" type="search" autocomplete="off"
+                            <input id="globalLookupInput" name="q" type="search" autocomplete="off" aria-label="Look up an identifier"
                                 placeholder="Look up an email, phone, @user, domain, IP…  ( / )"
                                 class="w-full bg-gray-900 border border-gray-700 rounded-lg py-2 pl-9 pr-3 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-purple-500">
                             <div id="globalLookupMenu" class="hidden absolute left-0 top-full mt-2 w-full min-w-[min(22rem,calc(100vw-2rem))] bg-gray-900 border border-gray-700 rounded-xl shadow-2xl text-sm z-50"></div>
                         </form>
                     </div>
                     <div class="flex items-center gap-5 shrink-0">
+                        <!-- Modules: go to any module from any page (main.js) -->
+                        <div class="relative">
+                            <button id="modulesMenuButton" type="button" title="Modules" aria-label="Modules" aria-haspopup="true" aria-expanded="false"
+                                class="flex items-center gap-2 p-2 -m-2 hover:text-purple-400 transition-colors">
+                                <i class="fas fa-th-large text-lg" aria-hidden="true"></i>
+                            </button>
+                            <div id="modulesMenu"
+                                class="absolute right-0 mt-3 w-72 max-h-[70vh] overflow-y-auto custom-scrollbar bg-gray-900 border border-gray-700 rounded-lg shadow-xl hidden z-50 py-1 text-sm"></div>
+                        </div>
+
                         <!-- Investigations Dropdown -->
                         <div class="relative">
                             <button id="investigationsDropdown" type="button" onclick="toggleInvestigationsDropdown()"
+                                aria-haspopup="true"
                                 class="flex items-center space-x-2 hover:text-purple-400 transition-colors bg-gray-800/50 px-3 py-2 rounded-lg max-w-xs">
                                 <span class="rec-indicator" aria-hidden="true"></span>
-                                <i class="fas fa-folder-open text-lg"></i>
+                                <i class="fas fa-folder-open text-lg" aria-hidden="true"></i>
                                 <span id="currentInvestigationName" class="truncate">No investigation</span>
                                 <i class="fas fa-chevron-down text-sm transition-transform duration-200"
                                     id="dropdownIcon"></i>
@@ -93,9 +103,9 @@
 
                         <!-- Background lookups -->
                         <div class="relative">
-                            <button id="jobsTrayButton" type="button" title="Background lookups"
-                                class="relative flex items-center hover:text-purple-400 transition-colors">
-                                <i class="fas fa-tasks text-lg"></i>
+                            <button id="jobsTrayButton" type="button" title="Background lookups" aria-label="Background lookups"
+                                class="relative flex items-center p-2 -m-2 hover:text-purple-400 transition-colors">
+                                <i class="fas fa-tasks text-lg" aria-hidden="true"></i>
                                 <span id="jobsTrayCount" class="history-count hidden">0</span>
                             </button>
                             <div id="jobsTrayMenu"
@@ -111,28 +121,28 @@
                         </div>
 
                         <!-- Added quick notes button -->
-                        <button onclick="toggleNoteSidebar()" title="Quick notes (Ctrl+K)"
-                            class="flex items-center space-x-2 hover:text-purple-400 transition-colors">
-                            <i class="fas fa-sticky-note text-lg"></i>
+                        <button type="button" onclick="toggleNoteSidebar()" title="Quick notes (Ctrl+K)" aria-label="Quick notes"
+                            class="flex items-center space-x-2 p-2 -m-2 hover:text-purple-400 transition-colors">
+                            <i class="fas fa-sticky-note text-lg" aria-hidden="true"></i>
                             <span class="hidden lg:inline">Notes</span>
                         </button>
 
-                        <a href="/plugins" title="Plugins" class="flex items-center hover:text-purple-400 transition-colors">
-                            <i class="fas fa-puzzle-piece text-lg"></i>
+                        <a href="/plugins" title="Plugins" aria-label="Plugins" class="flex items-center p-2 -m-2 hover:text-purple-400 transition-colors">
+                            <i class="fas fa-puzzle-piece text-lg" aria-hidden="true"></i>
                         </a>
 
-                        <a href="/settings" title="Settings &amp; API keys" class="flex items-center hover:text-purple-400 transition-colors">
-                            <i class="fas fa-cog text-lg"></i>
+                        <a href="/settings" title="Settings &amp; API keys" aria-label="Settings and API keys" class="flex items-center p-2 -m-2 hover:text-purple-400 transition-colors">
+                            <i class="fas fa-cog text-lg" aria-hidden="true"></i>
                         </a>
 
-                        <button onclick="checkForUpdates()" type="button" title="Check for updates"
-                            class="flex items-center hover:text-purple-400 transition-colors">
-                            <i class="fas fa-sync-alt text-lg"></i>
+                        <button onclick="checkForUpdates()" type="button" title="Check for updates" aria-label="Check for updates"
+                            class="flex items-center p-2 -m-2 hover:text-purple-400 transition-colors">
+                            <i class="fas fa-sync-alt text-lg" aria-hidden="true"></i>
                         </button>
 
-                        <button onclick="logout()" type="button" title="Log out"
-                            class="flex items-center hover:text-red-400 transition-colors">
-                            <i class="fas fa-sign-out-alt text-lg"></i>
+                        <button onclick="logout()" type="button" title="Log out" aria-label="Log out"
+                            class="flex items-center p-2 -m-2 hover:text-red-400 transition-colors">
+                            <i class="fas fa-sign-out-alt text-lg" aria-hidden="true"></i>
                         </button>
                     </div>
                 </div>
@@ -168,11 +178,11 @@
                     <span id="noteSaveStatus" class="text-xs text-gray-500 truncate"></span>
                 </div>
                 <div class="flex items-center gap-1 shrink-0">
-                    <button type="button" onclick="newSidebarNote()" title="New note"
+                    <button type="button" onclick="newSidebarNote()" title="New note" aria-label="New note"
                         class="p-2 rounded text-gray-400 hover:text-white hover:bg-white/5"><i class="fas fa-plus"></i></button>
-                    <a id="noteFullPageLink" href="#" title="Open all notes"
+                    <a id="noteFullPageLink" href="#" title="Open all notes" aria-label="Open all notes"
                         class="p-2 rounded text-gray-400 hover:text-white hover:bg-white/5"><i class="fas fa-up-right-from-square"></i></a>
-                    <button type="button" onclick="closeNoteSidebar()" title="Close (Esc)"
+                    <button type="button" onclick="closeNoteSidebar()" title="Close (Esc)" aria-label="Close notes"
                         class="p-2 rounded text-gray-400 hover:text-white hover:bg-white/5"><i class="fas fa-times"></i></button>
                 </div>
             </div>
@@ -198,26 +208,26 @@
         <div class="modal-panel bg-gray-900 border border-gray-700 rounded-xl p-6 max-w-md w-full mx-4">
             <div class="flex justify-between items-center mb-4">
                 <h2 class="text-xl font-bold">Create New Investigation</h2>
-                <button onclick="closeCreateInvestigationModal()"
+                <button type="button" onclick="closeCreateInvestigationModal()" aria-label="Close"
                     class="text-gray-400 hover:text-white transition-colors">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
             <form id="createInvestigationForm" class="space-y-4">
                 <div>
-                    <label class="block text-sm font-medium text-gray-400 mb-2">Investigation Name</label>
+                    <label for="investigationName" class="block text-sm font-medium text-gray-400 mb-2">Investigation Name</label>
                     <input type="text" id="investigationName" required maxlength="120"
                         class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:border-purple-500"
                         placeholder="Enter investigation name">
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-400 mb-2">Description</label>
+                    <label for="investigationDescription" class="block text-sm font-medium text-gray-400 mb-2">Description</label>
                     <textarea id="investigationDescription"
                         class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:border-purple-500 h-24"
                         placeholder="Describe your investigation purpose"></textarea>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-400 mb-2">Picture (Optional)</label>
+                    <label for="investigationPicture" class="block text-sm font-medium text-gray-400 mb-2">Picture (Optional)</label>
                     <input type="file" id="investigationPicture" accept="image/*"
                         class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:border-purple-500">
                 </div>
@@ -242,7 +252,7 @@
         <div class="modal-panel bg-gray-900 border border-gray-700 rounded-xl p-6 max-w-md w-full mx-4">
             <div class="flex justify-between items-center mb-4">
                 <h2 class="text-xl font-bold">Update Available!</h2>
-                <button onclick="closeUpdateModal()" class="text-gray-400 hover:text-white transition-colors">
+                <button type="button" onclick="closeUpdateModal()" aria-label="Close" class="text-gray-400 hover:text-white transition-colors">
                     <i class="fas fa-times"></i>
                 </button>
             </div>

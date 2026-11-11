@@ -99,6 +99,21 @@ function refreshIcons() {
 }
 window.refreshIcons = refreshIcons;
 
+// Dates look the same everywhere: "Nov 11, 2026, 11:47 AM" in the reader's own locale
+// (month by name, so 11/12 can't be read two ways). `seconds` for message times.
+function fmtDateTime(value, seconds = false) {
+    const date = value instanceof Date ? value : new Date(value);
+    if (value === null || value === undefined || value === '' || isNaN(date)) return '';
+    return date.toLocaleString([], { dateStyle: 'medium', timeStyle: seconds ? 'medium' : 'short' });
+}
+function fmtDate(value) {
+    const date = value instanceof Date ? value : new Date(value);
+    if (value === null || value === undefined || value === '' || isNaN(date)) return '';
+    return date.toLocaleDateString([], { dateStyle: 'medium' });
+}
+window.fmtDateTime = fmtDateTime;
+window.fmtDate = fmtDate;
+
 function timeAgo(date) {
     const seconds = Math.floor((new Date() - new Date(date)) / 1000);
     const units = [
@@ -357,7 +372,7 @@ function updateInvestigationsList() {
                             ${status !== 'active' ? `<span class="text-[10px] uppercase px-1.5 py-0.5 rounded bg-gray-800 text-gray-400 border border-gray-700">${escapeHtml(status)}</span>` : ''}
                         </div>
                         <div class="text-xs text-gray-500 truncate">
-                            ${escapeHtml(investigation.results_count || 0)} results · ${escapeHtml(new Date(investigation.created_at).toLocaleDateString())}
+                            ${escapeHtml(investigation.results_count || 0)} results · ${escapeHtml(fmtDate(investigation.created_at))}
                         </div>
                     </div>
                 </div>
@@ -964,9 +979,7 @@ function showSavedResultBar(record, investigationId) {
     bar.className =
         'mb-5 bg-[#1a1b26] border border-gray-700 rounded-xl px-4 py-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm';
     const method = typeof methodLabel === 'function' ? methodLabel(record.method_name) : record.method_name;
-    const when = record.timestamp
-        ? `${timeAgo(record.timestamp)} · ${new Date(record.timestamp).toLocaleString()}`
-        : '';
+    const when = record.timestamp ? `${timeAgo(record.timestamp)} · ${fmtDateTime(record.timestamp)}` : '';
     const link = `/api/investigations/${encodeURIComponent(investigationId)}/view#result-${encodeURIComponent(record.result_id)}`;
     bar.innerHTML = `
         <i class="fas fa-history text-purple-400 shrink-0"></i>
@@ -1442,21 +1455,110 @@ async function openPivotMenu(type, value, anchor, options = {}) {
 }
 window.openPivotMenu = openPivotMenu;
 
-// External resources (resources.json) that open on a kind of identifier: {name, url, template}
-let externalSearchesPromise = null;
-function externalSearchesFor(type) {
-    externalSearchesPromise =
-        externalSearchesPromise ||
+// The dashboard's lists (resources.json plus plugins): {modules, ext_res}, fetched once per page
+let resourcesPromise = null;
+function getResources() {
+    resourcesPromise =
+        resourcesPromise ||
         fetch('/api/resources/')
-            .then((r) => (r.ok ? r.json() : { ext_res: [] }))
-            .then((d) => d.ext_res || [])
-            .catch(() => []);
-    return externalSearchesPromise.then((resources) =>
-        resources
+            .then((r) => (r.ok ? r.json() : {}))
+            .catch(() => ({}));
+    return resourcesPromise;
+}
+window.getResources = getResources;
+
+// External resources that open on a kind of identifier: {name, url, template}
+function externalSearchesFor(type) {
+    return getResources().then((resources) =>
+        (resources.ext_res || [])
             .filter((r) => r.search && r.search[type])
             .map((r) => ({ name: r.name, url: r.url, template: r.search[type] }))
     );
 }
+
+// ---------------------------------------------------------------------------
+// Modules menu (header): every module from every page, ones that need setup marked
+// ---------------------------------------------------------------------------
+async function renderModulesMenu() {
+    const menu = document.getElementById('modulesMenu');
+    const [resources, statuses] = await Promise.all([getResources(), getModules().catch(() => [])]);
+    const here = window.location.pathname;
+    const row = (href, icon, name, note = '') => `
+        <a href="${escapeAttr(href)}" role="menuitem" ${href === here ? 'aria-current="page"' : ''}
+            class="flex items-center gap-3 px-3 py-2 hover:bg-gray-800 ${href === here ? 'text-purple-300 bg-gray-800/60' : 'text-gray-200'}">
+            <span class="w-5 text-center text-gray-400" aria-hidden="true">${icon}</span>
+            <span class="truncate">${escapeHtml(name)}</span>${note}</a>`;
+    const modules = (resources.modules || []).map((m) => {
+        const related = statuses.filter((s) => s.page === m.endpoint);
+        const blocked = related.length && related.every((s) => !s.ready);
+        return row(
+            m.endpoint,
+            `<i class="${escapeAttr(m.icon_type || 'fas')} fa-${escapeAttr(m.icon || 'cube')}"></i>`,
+            m.name,
+            blocked ? '<span class="ml-auto shrink-0 text-[10px] text-amber-300/80">needs setup</span>' : ''
+        );
+    });
+    menu.innerHTML =
+        row('/dashboard', '<i class="fas fa-home"></i>', 'Dashboard') +
+        row('/lookup', '<i class="fas fa-search"></i>', 'Lookup') +
+        row('/investigations', '<i class="fas fa-folder-open"></i>', 'Investigations') +
+        `<div class="border-t border-gray-800 my-1"></div>${modules.join('') || '<div class="px-3 py-2 text-gray-500">Could not load the modules</div>'}`;
+}
+
+function setModulesMenu(open) {
+    const menu = document.getElementById('modulesMenu');
+    const button = document.getElementById('modulesMenuButton');
+    if (!menu || !button) return;
+    menu.classList.toggle('hidden', !open);
+    button.setAttribute('aria-expanded', String(open));
+    if (open) renderModulesMenu();
+}
+
+document.addEventListener('click', (event) => {
+    const menu = document.getElementById('modulesMenu');
+    if (!menu) return;
+    if (event.target.closest('#modulesMenuButton')) setModulesMenu(menu.classList.contains('hidden'));
+    else if (!event.target.closest('#modulesMenu')) setModulesMenu(false);
+});
+document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') setModulesMenu(false);
+});
+
+// ---------------------------------------------------------------------------
+// Names for screen readers. Icon-only buttons and links are described by their
+// tooltip, and fields without a <label> by their placeholder; this copies those
+// into aria-label wherever a page (or a later render) didn't set one.
+// ---------------------------------------------------------------------------
+function nameUnlabelledControls(root = document) {
+    root.querySelectorAll('button:not([aria-label]), a[href]:not([aria-label])').forEach((el) => {
+        if (el.textContent.trim() || el.getAttribute('aria-labelledby')) return;
+        const name = el.getAttribute('title') || el.querySelector('img[alt]')?.getAttribute('alt');
+        if (name) el.setAttribute('aria-label', name.replace(/\s*\([^)]*\)\s*$/, ''));
+    });
+    root.querySelectorAll(
+        'input:not([type=hidden]):not([aria-label]), textarea:not([aria-label]), select:not([aria-label])'
+    ).forEach((el) => {
+        if (el.getAttribute('aria-labelledby') || el.closest('label')) return;
+        if (el.id && document.querySelector(`label[for="${CSS.escape(el.id)}"]`)) return;
+        const name =
+            el.getAttribute('placeholder') ||
+            el.getAttribute('title') ||
+            (el.tagName === 'SELECT' ? el.options[0]?.textContent : '');
+        if (name) el.setAttribute('aria-label', name.trim());
+    });
+    // decorative icons are skipped by screen readers
+    root.querySelectorAll('i[class*="fa-"]:not([aria-hidden]), i[data-lucide]:not([aria-hidden])').forEach((icon) =>
+        icon.setAttribute('aria-hidden', 'true')
+    );
+}
+let namingTimer = null;
+document.addEventListener('DOMContentLoaded', () => {
+    nameUnlabelledControls();
+    new MutationObserver(() => {
+        clearTimeout(namingTimer);
+        namingTimer = setTimeout(nameUnlabelledControls, 300);
+    }).observe(document.body, { childList: true, subtree: true });
+});
 
 // "Check on another site": links that open those sites on this value (new tab)
 function externalSitesHtml(sites, type, value) {

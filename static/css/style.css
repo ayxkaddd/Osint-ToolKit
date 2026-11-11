@@ -356,3 +356,32 @@
 
 /* Images that open the viewer (openImageViewer in main.js) */
 [data-image-view], img.cm-md-image { cursor: zoom-in; }
+
+
+/* Keyboard focus is always visible on things you can press. Many buttons carry
+   focus:outline-none (to hide the ring on click); :focus-visible only applies when
+   moving with the keyboard, so the ring is forced back for that case. */
+a:focus-visible,
+button:focus-visible,
+summary:focus-visible,
+[role="button"]:focus-visible,
+[tabindex]:focus-visible,
+input[type="checkbox"]:focus-visible,
+input[type="radio"]:focus-visible,
+input[type="file"]:focus-visible,
+select:focus-visible {
+    outline: 2px solid #a855f7 !important;
+    outline-offset: 2px;
+}
+
+/* For people who ask their system for less motion: no slides, fades or spinning */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}

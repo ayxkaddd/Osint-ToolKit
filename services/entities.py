@@ -422,6 +422,8 @@ OWN_SITE_KEYS = {"blog", "website", "homepage", "web", "site", "personal_website
 SERVICE_SKIP_KEYS = {
     "dns_recon": {"httpx_results", "httpx_data", "subdomains", "hosts", "detected_urls"},
     "oi": {"raw"},  # the same data is in "modules", flattened
+    # links the toolkit builds itself (wa.me/<number>, a Google search): not found anywhere
+    "phone": {"links"},
 }
 
 

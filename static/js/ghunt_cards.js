@@ -37,7 +37,7 @@ function ghuntDate(value) {
                 : days < 730
                   ? `${Math.round(days / 30)} months ago`
                   : `${Math.round(days / 365)} years ago`;
-    return `<span title="${escapeAttr(value)}">${escapeHtml(parsed.toLocaleDateString())} <span class="text-gray-500">(${ago})</span></span>`;
+    return `<span title="${escapeAttr(value)}">${escapeHtml(fmtDate(parsed))} <span class="text-gray-500">(${ago})</span></span>`;
 }
 
 function ghuntSection(icon, title, body, extra = '') {

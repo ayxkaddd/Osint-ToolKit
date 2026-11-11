@@ -159,6 +159,8 @@ function renderResources(resources) {
                             <button
                                 onclick="openSettings(${jsArg(module.name)})"
                                 type="button"
+                                title="${escapeAttr(module.name)} settings"
+                                aria-label="${escapeAttr(module.name)} settings"
                                 class="absolute top-4 right-4 p-2 text-gray-400 hover:text-white transition-colors z-10">
                                 <i class="fas fa-cog"></i>
                             </button>

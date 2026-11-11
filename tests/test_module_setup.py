@@ -27,7 +27,7 @@ def test_problems_say_what_is_missing_in_words(client):
         assert len(module["setup"]) == len(module["problems"]) > 0
         for fix in module["setup"]:
             assert fix["problem"] in module["problems"]
-            assert fix["action"] and fix["href"] in ("/settings", "/telegram_auth", "/plugins")
+            assert fix["action"] and fix["href"].split("#")[0] in ("/settings", "/telegram_auth", "/plugins")
             for text in (fix["problem"], fix["action"]):
                 assert not re.search(r"\b[A-Z][A-Z0-9]*_[A-Z0-9_]+\b", text), f"{module['id']}: {text}"
 
@@ -36,7 +36,8 @@ def test_missing_key_names_the_field_and_the_action(client):
     oi = modules(client)["oi"]
     assert oi["problems"] == ["OSINT Industries API Key is not set"]
     assert oi["setup"] == [{"problem": "OSINT Industries API Key is not set",
-                            "action": "Add the OSINT Industries API Key", "href": "/settings"}]
+                            "action": "Add the OSINT Industries API Key",
+                            "href": "/settings#OSINT_INDUSTRIES_API_KEY"}]
 
 
 def test_ready_modules_have_nothing_to_set_up(client):
@@ -47,4 +48,4 @@ def test_ready_modules_have_nothing_to_set_up(client):
 def test_telegram_modules_point_to_the_right_page(client):
     vk = modules(client)["vk_profile"]
     assert vk["setup"][0] == {"problem": "The Telegram API ID and hash are not set",
-                              "action": "Add the Telegram API ID and hash", "href": "/settings"}
+                              "action": "Add the Telegram API ID and hash", "href": "/settings#TG_API_ID"}

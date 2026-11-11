@@ -398,9 +398,7 @@ function displayResults(data) {
     warningsBox.classList.toggle('hidden', !warnings.length);
 
     document.getElementById('domainTitle').innerHTML = data.domain ? pivotChip('domain', data.domain) : '';
-    document.getElementById('scanTimestamp').textContent = data.timestamp
-        ? new Date(data.timestamp).toLocaleString()
-        : '';
+    document.getElementById('scanTimestamp').textContent = data.timestamp ? fmtDateTime(data.timestamp) : '';
 
     recon.subdomains = (data.subdomains || []).map((s) => (typeof s === 'string' ? { name: s } : s));
     recon.showAll = false;

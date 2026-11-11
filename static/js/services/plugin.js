@@ -93,7 +93,7 @@ window.loadResultIntoView = function (result, record) {
     els.cards.innerHTML = renderPluginResult(result);
     masonryPackAll(els.cards);
     if (window.lucide) lucide.createIcons();
-    const when = record && record.timestamp ? ` · ${new Date(record.timestamp).toLocaleString()}` : '';
+    const when = record && record.timestamp ? ` · ${fmtDateTime(record.timestamp)}` : '';
     setStatus('done', `Saved result for ${result.value || '…'}: ${countText((result.items || []).length)}${when}`);
 };
 

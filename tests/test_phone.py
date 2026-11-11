@@ -49,3 +49,12 @@ def test_refused_number_is_not_saved(client, investigation):
     before = client.get(f"/api/investigations/{investigation}/results").json()["results_count"]
     assert client.get("/api/phone/info", params={"phone": "4155552671"}).status_code == 400
     assert client.get(f"/api/investigations/{investigation}/results").json()["results_count"] == before
+
+
+def test_the_toolkits_own_links_are_not_identifiers(client):
+    """The WhatsApp / Telegram / Google links on the phone card are made from the number;
+    listing them as identifiers found in the case buried the real ones."""
+    from services.entities import extract_entities
+    info = client.get("/api/phone/info", params={"phone": "+380501234567"}).json()
+    assert info["links"]["whatsapp"].startswith("https://wa.me/")
+    assert {e.key for e, _ in extract_entities(info, "phone")} == {"phone:+380501234567"}
