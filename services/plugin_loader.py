@@ -989,11 +989,10 @@ def _check_input(plugin: Plugin, value: str, kind: Optional[str]) -> tuple[str, 
                 raise RunRefused(400, f"Choose what '{value}' is: {', '.join(ENTITY_TYPES[t] for t in accepts)}")
     if kind not in accepts:
         raise RunRefused(400, f"{plugin.name} doesn't look up {ENTITY_TYPES.get(kind, kind)}")
-    entity = make_entity(kind, value)
+    entity = make_entity(kind, value, typed=True)
     if entity:
         value = entity.value
-    # Normalizing also drops "noise" (example.org, private IPs) meant for result
-    # extraction - typed input only has to look right
+    # Phones without a country code and free-form VK/text values: only the shape is checked
     elif ((kind == "email" and not EMAIL_INPUT_RE.match(value)) or (kind == "phone" and not re.search(r"\d{5}", value))
           or (kind not in ("text", "phone") and re.search(r"\s", value))):
         raise RunRefused(400, f"'{value}' doesn't look like {ENTITY_TYPES[kind].lower()}")

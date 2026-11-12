@@ -531,7 +531,7 @@ function displayContextModal(context, chatUsername) {
     const formatContextMessage = (msg, type = 'normal') => {
         if (!msg) return '';
 
-        const date = msg.date ? new Date(msg.date).toLocaleString() : '';
+        const date = msg.date ? fmtDateTime(msg.date, true) : '';
         const senderName = msg.sender_name || msg.sender?.first_name || 'Unknown';
         const senderUsername = msg.sender_username || msg.sender?.username || '';
         const text = msg.text || msg.message || '';
@@ -857,7 +857,7 @@ function renderTikTokCard(data) {
                 <div class="mt-4 pt-3 border-t border-gray-700/50 flex flex-wrap gap-3 text-xs text-gray-500">
                     ${data.device ? `<span><i class="fas fa-mobile-alt mr-1"></i>${escapeHtml(data.device)}</span>` : ''}
                     ${data.share_method ? `<span><i class="fas fa-share mr-1"></i>${escapeHtml(data.share_method)}</span>` : ''}
-                    ${data.shared_at ? `<span><i class="fas fa-clock mr-1"></i>${new Date(data.shared_at).toLocaleString()}</span>` : ''}
+                    ${data.shared_at ? `<span><i class="fas fa-clock mr-1"></i>${fmtDateTime(data.shared_at, true)}</span>` : ''}
                 </div>
             `
                     : ''
@@ -1611,11 +1611,11 @@ function displayUserStats(stats, full = false) {
                 <div class="mt-4 grid grid-cols-2 gap-4">
                     <div class="text-sm">
                         <span class="text-gray-400">First Message:</span>
-                        <span class="ml-2 text-white">${new Date(stats.first_msg_date).toLocaleDateString()}</span>
+                        <span class="ml-2 text-white">${fmtDate(stats.first_msg_date)}</span>
                     </div>
                     <div class="text-sm">
                         <span class="text-gray-400">Last Message:</span>
-                        <span class="ml-2 text-white">${new Date(stats.last_msg_date).toLocaleDateString()}</span>
+                        <span class="ml-2 text-white">${fmtDate(stats.last_msg_date)}</span>
                     </div>
                 </div>
             `
@@ -2141,7 +2141,7 @@ function analysisMessageHtml(msg, riskClass, formatDataType) {
                         </span>
                     </div>
                 </div>
-                <span class="text-xs text-gray-500">${escapeHtml(msg.date ? new Date(msg.date).toLocaleString() : '')}</span>
+                <span class="text-xs text-gray-500">${escapeHtml(msg.date ? fmtDateTime(msg.date, true) : '')}</span>
             </div>
             <p class="text-sm text-white mb-2 whitespace-pre-wrap break-words">${textHtml}</p>
             <div class="flex flex-wrap items-center gap-1 mb-2">
@@ -2476,7 +2476,7 @@ function displayTextResults(data) {
                                     ${result.username ? `<span class="text-purple-400">${pivotText('telegram_username', result.username, '@' + result.username)}</span>` : ''}
                                     ${result.name ? `<span class="text-white">${escapeHtml(result.name)}</span>` : ''}
                                 </div>
-                                <span class="text-xs text-gray-500">${escapeHtml(result.date ? new Date(result.date).toLocaleString() : '')}</span>
+                                <span class="text-xs text-gray-500">${escapeHtml(result.date ? fmtDateTime(result.date, true) : '')}</span>
                             </div>
 
                             ${

@@ -315,7 +315,7 @@ function openDashboardInvestigationDetails(investigationId) {
     const createdEl = document.getElementById('dashboardModalCreatedDate');
     const updatedEl = document.getElementById('dashboardModalUpdatedDate');
 
-    if (dateEl) dateEl.textContent = createdDate.toLocaleDateString();
+    if (dateEl) dateEl.textContent = fmtDate(createdDate);
     if (createdEl)
         createdEl.textContent = createdDate.toLocaleDateString('en-US', {
             month: 'short',

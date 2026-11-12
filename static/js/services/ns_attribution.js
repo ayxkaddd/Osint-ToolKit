@@ -129,7 +129,14 @@ const NsAttribution = (() => {
             if (!value) return;
             const key = `${kind}\u0000${String(value).toLowerCase()}`;
             if (!buckets.has(key))
-                buckets.set(key, { kind, label, strength, value: display || String(value), domains: new Set() });
+                buckets.set(key, {
+                    kind,
+                    label,
+                    strength,
+                    value: display || String(value),
+                    raw: String(value), // display may be decorated ("mmh3 …"); links need the value itself
+                    domains: new Set(),
+                });
             buckets.get(key).domains.add(domain);
         };
 
@@ -213,7 +220,7 @@ const NsAttribution = (() => {
                 strength = named.length >= 2 ? 'strong' : 'weak';
             }
             const common = strength === 'medium' && domains.length >= commonAt;
-            signals.push({ kind: b.kind, label: b.label, strength, value: b.value, domains, common });
+            signals.push({ kind: b.kind, label: b.label, strength, value: b.value, raw: b.raw, domains, common });
         }
         const order = { strong: 0, medium: 1, weak: 2 };
         return signals.sort((a, b) => order[a.strength] - order[b.strength] || b.domains.length - a.domains.length);

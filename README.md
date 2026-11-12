@@ -19,9 +19,10 @@ A self-hosted web workspace for OSINT investigations. Built with FastAPI and Tai
 - **Timeline**: when things happened, from the dates inside the results - accounts created, domains registered or expiring, leaks, name changes, messages
 - **Add manually**: save what you found outside the toolkit (a site without an API, a Telegram bot, a leak) as a result - text, identifiers, a link, a date and files or pasted screenshots
 - **Background lookups**: run a lookup from any identifier's menu and keep working; open it while it runs to watch the results arrive
-- **Universal lookup**: paste an email, phone, @user, domain or IP in the top bar and run a module right from the dropdown, on any page, or open the full list of lookups
+- **Universal lookup**: paste an email, phone, @user, domain or IP in the top bar and run a module right from the dropdown, on any page, or open the full list of lookups. A phone number typed without its country code isn't guessed: the full numbers it could be are offered to pick from. The grid icon next to the box opens any module
 - **Triage, notes and reports**: mark results as confirmed or important, keep Markdown notes with images (drag and drop or paste), print a case report (findings, timeline, files added, tracking IDs - nothing from other cases, so it can be shared) and export the whole case as a .zip with its files
-- **Dashboard and settings**: each module shows whether it is ready and what it costs; API keys and tool paths are set in the browser
+- **Dashboard and settings**: each module shows whether it is ready and what it costs; modules that still need a key, a tool or a login are listed apart, each with a link to the field to fill in. API keys and tool paths are set in the browser (Settings, Plugins, the update check and Log out are in the ⋮ menu at the right of the top bar)
+- **Nothing loaded from outside**: fonts and icons are served by the toolkit itself, so opening a page contacts no CDN
 - **Plugins**: connect any service with an API without writing code - see [Plugins](#plugins)
 
 ### Modules
@@ -33,11 +34,11 @@ A self-hosted web workspace for OSINT investigations. Built with FastAPI and Tai
 - **VK Profile History**: earlier names, photos, contacts and details of a VK profile, shown as the bot sends them
 - **Face Search**: VK profiles with a similar face
 - **Cavalier (Hudson Rock)**: infostealer infections that leaked logins for an email or username
-- **Phone Lookup**: offline number analysis plus a paid HLR network lookup
+- **Phone Lookup**: offline number analysis plus a paid HLR network lookup. A number without its country code is refused rather than read as some other country's; the numbers it could be are offered instead
 - **Web Search**: search-engine dorks for a username, name, email or phone (optionally run through SerpAPI)
 - **DNS Recon**: subdomains (crt.sh, subfinder, SecurityTrails, VirusTotal), mail/DNS/hosting providers, SPF/DMARC, verification tokens, analytics and ads IDs on the pages (with the other websites that use them, via BuiltWith), ASN hosting and DNS history
 - **WHOIS History**: every archived WHOIS record of a domain - free preview of how many exist, then contacts, registrar/name server periods and a change log
-- **Shared NS Lookup**: domains on the same name server pair, then parsed WHOIS and an httpx web fingerprint of each to group the domains most likely run by the same owner
+- **Shared NS Lookup**: domains on the same name server pair, then parsed WHOIS and an httpx web fingerprint of each to group the domains most likely run by the same owner; favicon hashes link to a FOFA search for other sites with the same icon
 - **IP Lookup**: location, network owner, reverse DNS, abuse reports and exposed services
 - **External Resources**: a curated directory of OSINT sites, grouped by category and searchable, each tagged with its cost and the identifier types it takes; many open straight on an identifier from its pivot menu
 
@@ -164,7 +165,7 @@ Settings → **Proxies** sends the modules that query websites directly through 
 
 Plugins add your own modules: a page to search with, a place in the lookup box, pivots and background lookups, API keys in Settings, and results saved to the investigation like any other module.
 
-- **No code**: Plugins page (puzzle icon in the top bar) → **New plugin**. Paste an example request from the service's API documentation (a `curl` line) - the address, settings and API key are filled in for you. Press **Test**, and the result cards are worked out from the answer automatically; click values in the answer to change what's shown. A service that does several things (e.g. checking an email and listing a company's emails) can be one plugin with several searches that share the API key.
+- **No code**: Plugins page (⋮ menu at the right of the top bar → **Plugins**) → **New plugin**. Paste an example request from the service's API documentation (a `curl` line) - the address, settings and API key are filled in for you. Press **Test**, and the result cards are worked out from the answer automatically; click values in the answer to change what's shown. A service that does several things (e.g. checking an email and listing a company's emails) can be one plugin with several searches that share the API key.
 - **Python**: `python -m plugins new my_plugin --python` creates a plugin with a `run(value, type, ctx)` function, for anything that needs more than one request.
 
 The format, both kinds and examples are in [plugins/README.md](plugins/README.md). Examples ship with the toolkit: GitHub user, certificate transparency (crt.sh), Gravatar, OathNet and Hunter.io (one plugin with three searches: domain search, email verification, person enrichment).

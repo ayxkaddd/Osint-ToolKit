@@ -974,7 +974,7 @@ function renderFunstatMessages(messages) {
                 <div class="bg-gray-900 p-3 rounded-lg border border-gray-800">
                     <div class="flex justify-between gap-3 text-xs text-gray-500 mb-1">
                         <span class="text-purple-300 truncate">${escapeHtml((m.group && m.group.title) || 'Unknown chat')}</span>
-                        <span class="shrink-0">${escapeHtml(m.date ? new Date(m.date).toLocaleString() : '')}</span>
+                        <span class="shrink-0">${escapeHtml(m.date ? fmtDateTime(m.date, true) : '')}</span>
                     </div>
                     <div class="text-sm text-gray-200 whitespace-pre-wrap break-words">${m.text ? pivotInText(m.text) : '<i class="text-gray-500">media / no text</i>'}</div>
                 </div>`

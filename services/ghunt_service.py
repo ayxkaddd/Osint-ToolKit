@@ -64,12 +64,12 @@ def ghunt_command() -> tuple[list[str], Optional[str]]:
             venv, script = venv or parts[0], parts[1]
     if not script:
         if venv:
-            return [], "GHUNT_SCRIPT_PATH is not set (path to GHunt's main.py)"
+            return [], "The GHunt script path (GHunt's main.py) is not set"
         found = shutil.which("ghunt")
         return (["ghunt"], None) if found else ([], "GHunt is not set up: set its venv and main.py paths in Settings")
     script_path = Path(script).expanduser()
     if not script_path.exists():
-        return [], f"{script} not found (GHUNT_SCRIPT_PATH)"
+        return [], f"GHunt script path: {script} was not found"
     if script_path.suffix != ".py":
         return [str(script_path)], None   # an executable (GHunt installed with pipx, a wrapper)
     python = _venv_python(venv) if venv else "python3"

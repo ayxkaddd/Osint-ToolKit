@@ -99,6 +99,21 @@ function refreshIcons() {
 }
 window.refreshIcons = refreshIcons;
 
+// Dates look the same everywhere: "Nov 11, 2026, 11:47 AM" in the reader's own locale
+// (month by name, so 11/12 can't be read two ways). `seconds` for message times.
+function fmtDateTime(value, seconds = false) {
+    const date = value instanceof Date ? value : new Date(value);
+    if (value === null || value === undefined || value === '' || isNaN(date)) return '';
+    return date.toLocaleString([], { dateStyle: 'medium', timeStyle: seconds ? 'medium' : 'short' });
+}
+function fmtDate(value) {
+    const date = value instanceof Date ? value : new Date(value);
+    if (value === null || value === undefined || value === '' || isNaN(date)) return '';
+    return date.toLocaleDateString([], { dateStyle: 'medium' });
+}
+window.fmtDateTime = fmtDateTime;
+window.fmtDate = fmtDate;
+
 function timeAgo(date) {
     const seconds = Math.floor((new Date() - new Date(date)) / 1000);
     const units = [
@@ -357,7 +372,7 @@ function updateInvestigationsList() {
                             ${status !== 'active' ? `<span class="text-[10px] uppercase px-1.5 py-0.5 rounded bg-gray-800 text-gray-400 border border-gray-700">${escapeHtml(status)}</span>` : ''}
                         </div>
                         <div class="text-xs text-gray-500 truncate">
-                            ${escapeHtml(investigation.results_count || 0)} results · ${escapeHtml(new Date(investigation.created_at).toLocaleDateString())}
+                            ${escapeHtml(investigation.results_count || 0)} results · ${escapeHtml(fmtDate(investigation.created_at))}
                         </div>
                     </div>
                 </div>
@@ -539,7 +554,9 @@ document.addEventListener(
     (event) => {
         if (event.key !== 'Escape' || !document.getElementById('contextMenu')) return;
         event.stopImmediatePropagation();
+        const owner = contextMenuOwner;
         closeContextMenu();
+        owner?.focus?.({ preventScroll: true }); // keyboard users land back on the button that opened it
     },
     true
 );
@@ -629,6 +646,10 @@ function updateCurrentInvestigationDisplay() {
         // The active investigation was deleted
         setCurrentInvestigationLocal(null);
     }
+    // A module page (it sets window.currentService) with nowhere to save its results
+    document
+        .getElementById('notSavedBanner')
+        ?.classList.toggle('hidden', Boolean(currentInvestigationId) || !window.currentService);
     if (current) {
         displayElement.textContent = current.name;
         // Shown straight away on the next page load (inline script in base.html)
@@ -960,9 +981,7 @@ function showSavedResultBar(record, investigationId) {
     bar.className =
         'mb-5 bg-[#1a1b26] border border-gray-700 rounded-xl px-4 py-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm';
     const method = typeof methodLabel === 'function' ? methodLabel(record.method_name) : record.method_name;
-    const when = record.timestamp
-        ? `${timeAgo(record.timestamp)} · ${new Date(record.timestamp).toLocaleString()}`
-        : '';
+    const when = record.timestamp ? `${timeAgo(record.timestamp)} · ${fmtDateTime(record.timestamp)}` : '';
     const link = `/api/investigations/${encodeURIComponent(investigationId)}/view#result-${encodeURIComponent(record.result_id)}`;
     bar.innerHTML = `
         <i class="fas fa-history text-purple-400 shrink-0"></i>
@@ -1376,7 +1395,7 @@ async function openPivotMenu(type, value, anchor, options = {}) {
         <div class="px-3 py-2 flex items-center justify-between gap-2 hover:bg-gray-800/70">
             <div class="min-w-0">
                 <div class="text-white truncate">${escapeHtml(m.name)}</div>
-                <div class="flex items-center gap-1.5 mt-0.5">${moduleBadges(m)}${m.ready ? '' : `<span class="text-[10px] text-red-300 truncate" title="${escapeAttr((m.problems || []).join('; '))}">not ready</span>`}</div>
+                <div class="flex items-center gap-1.5 mt-0.5">${moduleBadges(m)}${m.ready ? '' : setupLinkHtml(m)}</div>
                 ${earlierLine(m)}
             </div>
             <div class="flex gap-1.5 shrink-0">
@@ -1438,21 +1457,123 @@ async function openPivotMenu(type, value, anchor, options = {}) {
 }
 window.openPivotMenu = openPivotMenu;
 
-// External resources (resources.json) that open on a kind of identifier: {name, url, template}
-let externalSearchesPromise = null;
-function externalSearchesFor(type) {
-    externalSearchesPromise =
-        externalSearchesPromise ||
+// The dashboard's lists (resources.json plus plugins): {modules, ext_res}, fetched once per page
+let resourcesPromise = null;
+function getResources() {
+    resourcesPromise =
+        resourcesPromise ||
         fetch('/api/resources/')
-            .then((r) => (r.ok ? r.json() : { ext_res: [] }))
-            .then((d) => d.ext_res || [])
-            .catch(() => []);
-    return externalSearchesPromise.then((resources) =>
-        resources
+            .then((r) => (r.ok ? r.json() : {}))
+            .catch(() => ({}));
+    return resourcesPromise;
+}
+window.getResources = getResources;
+
+// External resources that open on a kind of identifier: {name, url, template}
+function externalSearchesFor(type) {
+    return getResources().then((resources) =>
+        (resources.ext_res || [])
             .filter((r) => r.search && r.search[type])
             .map((r) => ({ name: r.name, url: r.url, template: r.search[type] }))
     );
 }
+
+// ---------------------------------------------------------------------------
+// Modules menu (header): every module from every page, ones that need setup marked
+// ---------------------------------------------------------------------------
+async function renderModulesMenu() {
+    const menu = document.getElementById('modulesMenu');
+    const [resources, statuses] = await Promise.all([getResources(), getModules().catch(() => [])]);
+    const here = window.location.pathname;
+    const row = (href, icon, name, note = '') => `
+        <a href="${escapeAttr(href)}" role="menuitem" ${href === here ? 'aria-current="page"' : ''}
+            class="flex items-center gap-3 px-3 py-2 hover:bg-gray-800 ${href === here ? 'text-purple-300 bg-gray-800/60' : 'text-gray-200'}">
+            <span class="w-5 text-center text-gray-400" aria-hidden="true">${icon}</span>
+            <span class="truncate">${escapeHtml(name)}</span>${note}</a>`;
+    const modules = (resources.modules || []).map((m) => {
+        const related = statuses.filter((s) => s.page === m.endpoint);
+        const blocked = related.length && related.every((s) => !s.ready);
+        return row(
+            m.endpoint,
+            `<i class="${escapeAttr(m.icon_type || 'fas')} fa-${escapeAttr(m.icon || 'cube')}"></i>`,
+            m.name,
+            blocked ? '<span class="ml-auto shrink-0 text-[10px] text-amber-300/80">needs setup</span>' : ''
+        );
+    });
+    menu.innerHTML =
+        row('/dashboard', '<i class="fas fa-home"></i>', 'Dashboard') +
+        row('/lookup', '<i class="fas fa-search"></i>', 'Lookup') +
+        row('/investigations', '<i class="fas fa-folder-open"></i>', 'Investigations') +
+        `<div class="border-t border-gray-800 my-1"></div>${modules.join('') || '<div class="px-3 py-2 text-gray-500">Could not load the modules</div>'}`;
+}
+
+function setModulesMenu(open) {
+    const menu = document.getElementById('modulesMenu');
+    const button = document.getElementById('modulesMenuButton');
+    if (!menu || !button) return;
+    menu.classList.toggle('hidden', !open);
+    button.setAttribute('aria-expanded', String(open));
+    if (open) renderModulesMenu();
+}
+
+document.addEventListener('click', (event) => {
+    const menu = document.getElementById('modulesMenu');
+    if (!menu) return;
+    if (event.target.closest('#modulesMenuButton')) setModulesMenu(menu.classList.contains('hidden'));
+    else if (!event.target.closest('#modulesMenu')) setModulesMenu(false);
+});
+document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') setModulesMenu(false);
+});
+
+// "More" menu (header): the things not needed all the time
+document.addEventListener('click', (event) => {
+    const button = event.target.closest('#moreMenuButton');
+    if (!button) return;
+    openContextMenu(button, [
+        { label: 'Plugins', icon: 'fa-puzzle-piece', href: '/plugins' },
+        { label: 'Settings & API keys', icon: 'fa-cog', href: '/settings' },
+        { label: 'Check for updates', icon: 'fa-sync-alt', onClick: checkForUpdates },
+        { divider: true },
+        { label: 'Log out', icon: 'fa-sign-out-alt', onClick: logout, danger: true },
+    ]);
+});
+
+// ---------------------------------------------------------------------------
+// Names for screen readers. Icon-only buttons and links are described by their
+// tooltip, and fields without a <label> by their placeholder; this copies those
+// into aria-label wherever a page (or a later render) didn't set one.
+// ---------------------------------------------------------------------------
+function nameUnlabelledControls(root = document) {
+    root.querySelectorAll('button:not([aria-label]), a[href]:not([aria-label])').forEach((el) => {
+        if (el.textContent.trim() || el.getAttribute('aria-labelledby')) return;
+        const name = el.getAttribute('title') || el.querySelector('img[alt]')?.getAttribute('alt');
+        if (name) el.setAttribute('aria-label', name.replace(/\s*\([^)]*\)\s*$/, ''));
+    });
+    root.querySelectorAll(
+        'input:not([type=hidden]):not([aria-label]), textarea:not([aria-label]), select:not([aria-label])'
+    ).forEach((el) => {
+        if (el.getAttribute('aria-labelledby') || el.closest('label')) return;
+        if (el.id && document.querySelector(`label[for="${CSS.escape(el.id)}"]`)) return;
+        const name =
+            el.getAttribute('placeholder') ||
+            el.getAttribute('title') ||
+            (el.tagName === 'SELECT' ? el.options[0]?.textContent : '');
+        if (name) el.setAttribute('aria-label', name.trim());
+    });
+    // decorative icons are skipped by screen readers
+    root.querySelectorAll('i[class*="fa-"]:not([aria-hidden]), i[data-lucide]:not([aria-hidden])').forEach((icon) =>
+        icon.setAttribute('aria-hidden', 'true')
+    );
+}
+let namingTimer = null;
+document.addEventListener('DOMContentLoaded', () => {
+    nameUnlabelledControls();
+    new MutationObserver(() => {
+        clearTimeout(namingTimer);
+        namingTimer = setTimeout(nameUnlabelledControls, 300);
+    }).observe(document.body, { childList: true, subtree: true });
+});
 
 // "Check on another site": links that open those sites on this value (new tab)
 function externalSitesHtml(sites, type, value) {
@@ -1686,7 +1807,7 @@ function quickLookupRow(candidate, m, canRun) {
     <div class="px-3 py-2 flex items-center justify-between gap-2 hover:bg-gray-800/70">
         <div class="min-w-0">
             <div class="text-white truncate">${escapeHtml(m.name)}</div>
-            <div class="flex items-center gap-1.5 mt-0.5">${moduleBadges(m)}${m.ready ? '' : `<span class="text-[10px] text-red-300 truncate" title="${escapeAttr(problems)}">not ready</span>`}</div>
+            <div class="flex items-center gap-1.5 mt-0.5">${moduleBadges(m)}${m.ready ? '' : setupLinkHtml(m)}</div>
             ${last ? `<div class="text-[11px] text-amber-300 mt-0.5"><i class="fas fa-history mr-1"></i>Already looked up ${escapeHtml(timeAgo(last.timestamp))}</div>` : ''}
         </div>
         <div class="flex gap-1.5 shrink-0">
@@ -1699,9 +1820,37 @@ function quickLookupRow(candidate, m, canRun) {
     </div>`;
 }
 
+// For a module that can't run yet: what to do, as a link to where it is done
+// ("Add the SerpAPI Key" -> Settings). The full reason is the tooltip.
+function setupLinkHtml(m) {
+    const fix = (m.setup || [])[0] || { action: 'Needs setup', href: '/settings' };
+    return `<a href="${escapeAttr(fix.href)}" class="text-[10px] text-amber-300 hover:text-amber-200 underline truncate" title="${escapeAttr((m.problems || []).join('; '))}">${escapeHtml(fix.action)}</a>`;
+}
+window.setupLinkHtml = setupLinkHtml;
+
+// A phone number typed without its country code: the full numbers it could be, to pick from
+// (data-lookup-suggest carries the full number; the lookup box and /lookup both use this)
+function phoneSuggestionsHtml(suggestions) {
+    if (!suggestions || !suggestions.length) return '';
+    return `<div class="text-xs text-gray-400 mb-2"><i class="fas fa-phone mr-1.5 text-purple-300"></i>A phone number? Without its country code it could be any of these - pick one:</div>
+    <div class="flex flex-wrap gap-1.5">${suggestions
+        .map(
+            (s) => `<button type="button" data-lookup-suggest="${escapeAttr(s.value)}"
+            class="inline-flex items-center gap-2 px-2.5 py-1.5 rounded bg-gray-800 hover:bg-purple-700/50 border border-gray-700 text-xs">
+            <span class="font-mono text-purple-200">${escapeHtml(s.display)}</span><span class="text-gray-400">${escapeHtml(s.country)}</span></button>`
+        )
+        .join('')}</div>`;
+}
+window.phoneSuggestionsHtml = phoneSuggestionsHtml;
+
+const LOOKUP_EXAMPLES_HINT =
+    "Couldn't tell what this is. Try an email, a phone number with its country code (+1 415 555 2671), an @username, a domain or an IP address.";
+window.LOOKUP_EXAMPLES_HINT = LOOKUP_EXAMPLES_HINT;
+
 function renderQuickLookup(data) {
     const menu = document.getElementById('globalLookupMenu');
     const canRun = Boolean(data.investigation_id);
+    const suggestions = phoneSuggestionsHtml(data.suggestions);
     const sections = data.candidates
         .map(
             (c) => `
@@ -1709,13 +1858,16 @@ function renderQuickLookup(data) {
     ${
         c.modules.length
             ? c.modules.map((m) => quickLookupRow(c, m, canRun)).join('')
-            : '<div class="px-3 py-2 text-gray-500">No module looks up this type yet.</div>'
+            : '<div class="px-3 py-2 text-gray-500">No module looks this up yet - "All lookups" lists sites that do.</div>'
     }`
         )
         .join('');
     menu.innerHTML = `
     ${canRun ? '' : '<div class="px-3 py-2 border-b border-gray-700 text-xs text-yellow-200">Select or create an investigation to run lookups. Results are saved there.</div>'}
-    <div class="max-h-96 overflow-y-auto custom-scrollbar pb-1">${sections || '<div class="px-3 py-3 text-gray-500">Try an email, phone with country code, @username, domain or IP.</div>'}</div>
+    <div class="max-h-96 overflow-y-auto custom-scrollbar pb-1">
+        ${suggestions ? `<div class="px-3 py-2.5 border-b border-gray-800">${suggestions}</div>` : ''}
+        ${sections || (suggestions ? '' : `<div class="px-3 py-3 text-gray-500">${escapeHtml(LOOKUP_EXAMPLES_HINT)}</div>`)}
+    </div>
     <div class="px-3 py-2 border-t border-gray-700 text-right text-xs">
         <a href="/lookup?q=${encodeURIComponent(data.query)}" class="text-purple-300 hover:text-white">All lookups for this →</a>
     </div>`;
@@ -1758,6 +1910,13 @@ function setupQuickLookup() {
     });
     // Stays open after a run, so several modules can be started in a row
     menu.addEventListener('click', async (event) => {
+        const suggestion = event.target.closest('[data-lookup-suggest]');
+        if (suggestion) {
+            input.value = suggestion.dataset.lookupSuggest;
+            input.focus();
+            updateQuickLookup(input.value);
+            return;
+        }
         const run = event.target.closest('[data-quick-run]');
         if (!run) return;
         run.disabled = true;
@@ -1890,6 +2049,28 @@ function trackerTag(id) {
     }</span>`;
 }
 window.trackerTag = trackerTag;
+
+// A favicon's mmh3 hash (httpx -favicon; the number Shodan and FOFA index). FOFA lists the
+// websites serving the same icon - often the same owner's other sites, or the real server
+// behind a CDN. Its query, icon_hash="<hash>", goes base64-encoded in the address.
+const FAVICON_HASH_RE = /^-?\d{1,11}$/;
+function fofaIconHashUrl(hash) {
+    const value = String(hash ?? '').trim();
+    if (!FAVICON_HASH_RE.test(value)) return null;
+    return `https://en.fofa.info/result?qbase64=${encodeURIComponent(btoa(`icon_hash="${value}"`))}`;
+}
+window.fofaIconHashUrl = fofaIconHashUrl;
+
+// A favicon hash in a result, with a link to the other websites that show the same icon
+function faviconHashTag(hash) {
+    const url = fofaIconHashUrl(hash);
+    return `<span class="inline-flex items-center gap-1"><code class="text-purple-200">mmh3 ${escapeHtml(hash)}</code>${
+        url
+            ? `<a href="${escapeAttr(url)}" target="_blank" rel="noopener noreferrer" class="text-gray-400 hover:text-white" title="Other websites with this favicon (FOFA)"><i class="fas fa-external-link-alt text-[10px]"></i></a>`
+            : ''
+    }</span>`;
+}
+window.faviconHashTag = faviconHashTag;
 
 // Identifiers grouped by type, as pivot chips (investigation results and module pages)
 function identifierGroupsHtml(entities, limit = 150) {

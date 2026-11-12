@@ -1,7 +1,10 @@
 from fastapi import FastAPI, Request, Response
 from fastapi.exceptions import HTTPException
 from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.exception_handlers import http_exception_handler
 from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from starlette.exceptions import HTTPException as StarletteHTTPException
 import asyncio
 import hmac
 from contextlib import asynccontextmanager
@@ -80,9 +83,27 @@ class OsintFramework:
         self.setup_routes()
         self.setup_static_files()
         self.setup_auth()
+        self.setup_not_found()
         self.app.middleware("http")(self.access_middleware)
         # Added last, so it runs first: before login, setup gating and every route
         self.app.middleware("http")(self.security_middleware)
+
+    def setup_not_found(self):
+        """A page the browser asked for that doesn't exist (a mistyped address, a deleted
+        investigation or plugin) gets a page with a way back, not raw JSON. Scripts and
+        the API (anything not asking for HTML) keep the JSON answer."""
+        templates = Jinja2Templates(directory="templates")
+
+        @self.app.exception_handler(StarletteHTTPException)
+        async def not_found(request: Request, exc: StarletteHTTPException):
+            if exc.status_code != 404 or request.method != "GET" \
+                    or "text/html" not in request.headers.get("accept", ""):
+                return await http_exception_handler(request, exc)
+            detail = exc.detail if isinstance(exc.detail, str) and exc.detail != "Not Found" else ""
+            return templates.TemplateResponse(request, "not_found.html", {
+                "heading": "Page not found" if not detail else "Not found",
+                "message": detail or "The address may be mistyped, or what it pointed to was deleted.",
+            }, status_code=404)
 
     def setup_static_files(self):
         self.app.mount("/static", StaticFiles(directory="static"), name="static")

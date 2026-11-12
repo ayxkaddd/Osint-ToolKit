@@ -35,3 +35,70 @@ def test_favicon_needs_no_login(anon):
 def test_pages_link_the_favicon(anon, client, path):
     page = (anon if path == "/" else client).get(path).text
     assert 'href="/static/favicon.svg"' in page and 'href="/static/favicon.ico"' in page
+
+
+def test_unknown_page_has_a_way_back(client):
+    """A browser gets a page (with the app's header), not {"detail": "Not Found"}."""
+    response = client.get("/no-such-page", headers={"Accept": "text/html,application/xhtml+xml"})
+    assert response.status_code == 404 and response.headers["content-type"].startswith("text/html")
+    assert "Page not found" in response.text and 'href="/dashboard"' in response.text
+
+
+def test_missing_investigation_and_plugin_pages_say_what_is_missing(client):
+    html = {"Accept": "text/html"}
+    response = client.get("/api/investigations/00000000-0000-4000-8000-000000000000/view", headers=html)
+    assert response.status_code == 404 and "not found" in response.text and "<h1" in response.text
+    response = client.get("/plugins/no_such_plugin", headers=html)
+    assert response.status_code == 404 and "No plugin" in response.text and "<h1" in response.text
+
+
+def test_scripts_still_get_json_for_missing_things(client):
+    response = client.get("/no-such-page")
+    assert response.status_code == 404 and response.json() == {"detail": "Not Found"}
+    response = client.get("/api/investigations/00000000-0000-4000-8000-000000000000", headers={"Accept": "application/json"})
+    assert response.status_code == 404 and "detail" in response.json()
+    # not for other errors or other methods
+    assert client.post("/no-such-page", headers={"Accept": "text/html"}).json() == {"detail": "Not Found"}
+
+
+def test_page_scripts_do_not_redeclare_shared_names():
+    """Every page loads the shared scripts (base.html) and then its own. A page script that
+    declares a top-level const/let/class with a name a shared script already uses doesn't
+    run at all ("Identifier ... has already been declared"), which broke the NS page."""
+    import re
+    from conftest import REPO
+
+    shared = ["main.js", "masonry.js", "oi_cards.js", "ghunt_cards.js", "result_renderers.js", "plugin_cards.js", "notes.js"]
+    any_declaration = re.compile(r"^(?:async\s+)?(?:function\s+|const\s+|let\s+|class\s+)([A-Za-z_$][\w$]*)", re.M)
+    lexical = re.compile(r"^(?:const|let|class)\s+([A-Za-z_$][\w$]*)", re.M)
+    scripts = REPO / "static" / "js"
+    base = (REPO / "templates" / "base.html").read_text()
+    taken = {}
+    for name in shared:
+        assert f"/static/js/{name}" in base, f"{name} is no longer loaded by base.html"
+        for identifier in any_declaration.findall((scripts / name).read_text()):
+            assert identifier not in taken or name == taken[identifier], f"{identifier}: {taken[identifier]} and {name}"
+            taken[identifier] = name
+    clashes = []
+    for path in sorted(scripts.rglob("*.js")):
+        if path.name in shared or path.name == "lucide.js":
+            continue
+        text = path.read_text()
+        clashes += [f"{path.name}: {n} (also in {taken[n]})" for n in lexical.findall(text) if n in taken]
+        # a shared const/let can't be redeclared as a function either
+        shared_lexical = {n for name in shared for n in lexical.findall((scripts / name).read_text())}
+        clashes += [f"{path.name}: {n}" for n in any_declaration.findall(text) if n in shared_lexical and n not in lexical.findall(text)]
+    assert not clashes, clashes
+
+
+def test_header_keeps_occasional_actions_in_one_menu(client):
+    """Plugins, settings, updates and log out sit behind the "More" button, not as four header icons."""
+    page = client.get("/dashboard").text
+    header = page[page.index("<header"):page.index("</header>")]
+    assert 'id="moreMenuButton"' in header
+    for gone in ('href="/plugins"', 'href="/settings"', "checkForUpdates()", "logout()"):
+        assert gone not in header, gone
+    script = client.get("/static/js/main.js").text
+    menu = script[script.index("#moreMenuButton"):]
+    for item in ("href: '/plugins'", "href: '/settings'", "onClick: checkForUpdates", "onClick: logout"):
+        assert item in menu[:800], item

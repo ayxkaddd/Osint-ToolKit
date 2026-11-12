@@ -927,7 +927,7 @@ class InvestigationService:
         for note in notes:
             keys = set()
             for entity_type, value in NOTE_ENTITY_REF.findall(note["content"]):
-                entity = make_entity(entity_type, value.strip())
+                entity = make_entity(entity_type, value.strip(), typed=True)
                 if entity:
                     keys.add(entity.key)
             referenced.append((note, keys))

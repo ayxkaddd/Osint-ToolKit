@@ -55,7 +55,7 @@
             "settings": {
                 "OSINT_INDUSTRIES_API_KEY": {
                     "type": "password",
-                    "label": "Osint Industries API Key"
+                    "label": "OSINT Industries API Key"
                 }
             }
         },

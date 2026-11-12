@@ -60,7 +60,7 @@ function parseWhois(whois) {
     };
 }
 
-const fmtDate = (v) => (v ? String(v).slice(0, 10) : '—');
+const nsDate = (v) => (v ? String(v).slice(0, 10) : '—');
 const ROLE_NAMES = { registrant: 'Registrant', administrative: 'Admin', technical: 'Tech', billing: 'Billing' };
 
 function prettyJson(text) {
@@ -110,9 +110,9 @@ function whoisCard(w) {
         <div class="space-y-3">
             <div class="grid grid-cols-2 gap-3">
                 ${field('Registrar', escapeHtml(w.registrar || '') + (w.registrar_iana ? ` <span class="text-xs text-gray-500">IANA ${escapeHtml(w.registrar_iana)}</span>` : ''))}
-                ${field('Registered', fmtDate(w.created))}
-                ${field('Last changed', fmtDate(w.updated))}
-                ${field('Expires', fmtDate(w.expires))}
+                ${field('Registered', nsDate(w.created))}
+                ${field('Last changed', nsDate(w.updated))}
+                ${field('Expires', nsDate(w.expires))}
                 ${field('Name servers', (w.nameservers || []).map(escapeHtml).join('<br>'))}
                 ${field('DNSSEC', w.dnssec === null || w.dnssec === undefined ? '' : w.dnssec ? 'signed' : 'unsigned')}
             </div>
@@ -178,8 +178,8 @@ function webCard(domain) {
                 ${field('Network', escapeHtml(f.asn || ''))}
                 ${field('IPs', (f.ips || []).map((ip) => pivotChip('ip', ip)).join(' '))}
                 ${field('Technologies', escapeHtml((f.tech || []).join(', ')))}
-                ${field('Certificate', f.cert ? escapeHtml(`${f.cert.subject || '?'} · ${f.cert.issuer || ''} · from ${fmtDate(f.cert.not_before)}`) : '')}
-                ${field('Favicon / JARM', escapeHtml([f.favicon && `mmh3 ${f.favicon}`, f.jarm && `JARM ${f.jarm.slice(0, 16)}…`].filter(Boolean).join(' · ')))}
+                ${field('Certificate', f.cert ? escapeHtml(`${f.cert.subject || '?'} · ${f.cert.issuer || ''} · from ${nsDate(f.cert.not_before)}`) : '')}
+                ${field('Favicon / JARM', [f.favicon && faviconHashTag(f.favicon), f.jarm && escapeHtml(`JARM ${f.jarm.slice(0, 16)}…`)].filter(Boolean).join(' · '))}
             </div>
             ${trackers ? `<div class="space-y-1">${trackers}</div>` : ''}
         </div>`;
@@ -187,8 +187,9 @@ function webCard(domain) {
 
 // ---------------- attribution ----------------
 
-// A signal's value; analytics / ads IDs get their BuiltWith link
+// A signal's value; analytics / ads IDs get their BuiltWith link, favicon hashes their FOFA search
 function signalValue(s) {
+    if (s.kind === 'favicon' && fofaIconHashUrl(s.raw)) return faviconHashTag(s.raw);
     return s.kind.startsWith('tracker_') && builtwithTagUrl(s.value) ? trackerTag(s.value) : escapeHtml(s.value);
 }
 
@@ -295,7 +296,7 @@ function domainRow(domain) {
                 ${realContact ? '<span class="text-[11px] px-1.5 py-0.5 rounded bg-emerald-900/50 text-emerald-300">real WHOIS contact</span>' : ''}
                 ${status ? `<span class="text-[11px] px-1.5 py-0.5 rounded ${statusCls}">${escapeHtml(status)}</span>` : ''}
                 <span class="text-xs text-gray-400 truncate flex-1 min-w-0">${escapeHtml((f && f.title) || '')}</span>
-                <span class="text-xs text-gray-500 shrink-0">${escapeHtml([w && w.registrar, w && w.created && fmtDate(w.created)].filter(Boolean).join(' · '))}</span>
+                <span class="text-xs text-gray-500 shrink-0">${escapeHtml([w && w.registrar, w && w.created && nsDate(w.created)].filter(Boolean).join(' · '))}</span>
             </button>
             ${
                 open

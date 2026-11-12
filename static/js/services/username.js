@@ -1795,7 +1795,8 @@ class OSINTSearch {
             const date = new Date(value);
             if (!isNaN(date.getTime())) {
                 const formattedValue =
-                    date.toLocaleDateString() + (value.includes('T') ? ' ' + date.toLocaleTimeString() : '');
+                    fmtDate(date) +
+                    (value.includes('T') ? ' ' + date.toLocaleTimeString([], { timeStyle: 'short' }) : '');
                 return `
                     <div class="${indentClass} flex justify-between items-start gap-4 mb-2">
                         <span class="text-gray-400 text-sm whitespace-nowrap">${escapeHtml(key)}</span>
@@ -1826,7 +1827,7 @@ class OSINTSearch {
         if (diffInSeconds < 60) return 'Just now';
         if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`;
         if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`;
-        return time.toLocaleDateString();
+        return fmtDate(time);
     }
 
     updateProgress(progress) {

@@ -196,7 +196,7 @@ function renderHeader(investigation) {
         completed: 'bg-blue-950/80 text-blue-300 border-blue-700/60',
         archived: 'bg-gray-800 text-gray-400 border-gray-700',
     };
-    const fmt = (iso) => (iso ? new Date(iso).toLocaleString() : '—');
+    const fmt = (iso) => (iso ? fmtDateTime(iso) : '—');
 
     header.innerHTML = `
         <div class="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
@@ -623,7 +623,7 @@ function renderDetail(record) {
                     <i data-lucide="corner-down-right" class="w-4 h-4"></i>${escapeHtml(partTitle(child, (child.result || {}).title))}
                     ${child.partial ? '<span class="text-[10px] uppercase px-1.5 py-0.5 rounded bg-yellow-900/60 text-yellow-300">partial</span>' : ''}
                 </h4>
-                <span class="text-xs text-gray-500">${escapeHtml(child.timestamp ? new Date(child.timestamp).toLocaleString() : '')}</span>
+                <span class="text-xs text-gray-500">${escapeHtml(child.timestamp ? fmtDateTime(child.timestamp) : '')}</span>
             </div>
             ${safeRender(child.service_name, child.method_name, child.result, child)}
             ${rawJsonBlock(String(i))}
@@ -754,7 +754,7 @@ async function loadResultChanges(resultId) {
 
 function changesHtml(c) {
     const when = c.previous.timestamp
-        ? `${timeAgo(c.previous.timestamp)} (${new Date(c.previous.timestamp).toLocaleString()})`
+        ? `${timeAgo(c.previous.timestamp)} (${fmtDateTime(c.previous.timestamp)})`
         : 'earlier';
     const lastKey = (path) =>
         String(path)

@@ -10,7 +10,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 
-from services.entities import detect, make_entity, type_label
+from services.entities import detect, make_entity, norm_phone, phone_suggestions, type_label
 from services.investigation_service import investigation_service
 from services.ip_service import IPLookupError, IPService
 from services.job_manager import job_manager
@@ -71,12 +71,26 @@ async def module_balances():
 
 # ==================== SEARCH BOX ====================
 
+def _browser_regions(request: Request) -> list[str]:
+    """Countries of the browser's languages ("en-US,ru-RU;q=0.9" -> US, RU), likeliest first."""
+    regions = []
+    for part in (request.headers.get("accept-language") or "").split(","):
+        tag = part.split(";")[0].strip()
+        if "-" in tag:
+            region = tag.rsplit("-", 1)[1].upper()
+            if len(region) == 2 and region.isalpha() and region not in regions:
+                regions.append(region)
+    return regions[:5]
+
+
 @router.get("/api/lookup/detect")
-async def detect_query(q: str = Query(..., min_length=1, max_length=500)):
+async def detect_query(request: Request, q: str = Query(..., min_length=1, max_length=500)):
     """What the query could be, and which modules can look each reading up.
 
     Earlier lookups of the same identifier in the current investigation are
-    included so paid modules aren't run twice by accident.
+    included so paid modules aren't run twice by accident. A phone number typed
+    without its country code comes back in ``suggestions`` (the full numbers it
+    could be) instead of being guessed.
     """
     current = investigation_service.get_current_investigation()
     candidates = []
@@ -89,7 +103,8 @@ async def detect_query(q: str = Query(..., min_length=1, max_length=500)):
             modules.append({**status, "previous": sorted(earlier, key=lambda p: p.get("timestamp", ""))[-3:]})
         candidates.append({"type": entity.type, "label": type_label(entity.type), "value": entity.value,
                            "display": entity.display, "key": entity.key, "modules": modules})
-    return {"query": q, "investigation_id": str(current) if current else None, "candidates": candidates}
+    return {"query": q, "investigation_id": str(current) if current else None, "candidates": candidates,
+            "suggestions": phone_suggestions(q, _browser_regions(request))}
 
 
 # ==================== JOBS ====================
@@ -103,7 +118,7 @@ async def start_job(body: JobRequest, request: Request):
     module = MODULES_BY_ID.get(body.module)
     if module is None:
         raise HTTPException(status_code=404, detail="Unknown module")
-    entity = make_entity(body.type, body.value)
+    entity = make_entity(body.type, body.value, typed=True)
     if entity is None:
         raise HTTPException(status_code=400, detail=f"Not a valid {type_label(body.type).lower()}")
     status = await module_status(module)
@@ -180,7 +195,7 @@ def entities_elsewhere(body: ElsewhereRequest):
     """Which of these identifiers other investigations have, keyed "type:value" as sent."""
     sent: dict[str, str] = {}
     for item in body.items:
-        entity = make_entity(item.type, item.value)
+        entity = make_entity(item.type, item.value, typed=True)
         if entity:
             sent[f"{item.type}:{item.value}"] = entity.key
     found = investigation_service.investigations_with(list(sent.values()), exclude=body.exclude)
@@ -199,7 +214,7 @@ def entity_lookups(investigation_id: UUID, type: str, value: str):
     """Earlier lookups of one identifier in this investigation (the pivot menu shows
     them next to each module, so a paid lookup isn't run twice by accident)."""
     _require_investigation(investigation_id)
-    entity = make_entity(type, value)
+    entity = make_entity(type, value, typed=True)
     if entity is None:
         return {"lookups": []}
     lookups = investigation_service.previous_lookups(investigation_id, entity.key)
@@ -244,8 +259,20 @@ def triage_result(investigation_id: UUID, result_id: str, body: TriageRequest):
 
 @router.get("/api/phone/info")
 @save_investigation(service_name="phone", method_name="phone_info")
-async def phone_lookup(phone: str = Query(..., min_length=1, max_length=40)) -> dict:
-    """Free offline analysis: validity, country, original carrier, line type, messenger links."""
+async def phone_lookup(request: Request, phone: str = Query(..., min_length=1, max_length=40)) -> dict:
+    """Free offline analysis: validity, country, original carrier, line type, messenger links.
+
+    A number without its country code is refused rather than guessed (its first digits
+    would be taken for a country: 415 555 2671 became a Swiss number). The answer names
+    the numbers it could be; the page offers them (/api/lookup/detect ``suggestions``)."""
+    digits = re.sub(r"[^\d+]", "", phone)
+    if re.search(r"\d{6}", re.sub(r"\D", "", digits)) and not digits.startswith(("+", "00")) \
+            and not norm_phone(digits, assume_international=True):
+        options = phone_suggestions(phone, _browser_regions(request))
+        could_be = "; ".join(f"{o['display']} ({o['country']})" for o in options)
+        raise HTTPException(status_code=400, detail="This number has no country code" + (
+            f" - it could be {could_be}. Enter it with the code." if options
+            else ". Enter it with the code, e.g. +380 50 123 4567"))
     try:
         return await lookup_phone(phone)
     except PhoneParseError as e:
