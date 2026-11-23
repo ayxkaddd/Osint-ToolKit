@@ -249,7 +249,12 @@ values are left out. `entities` is `{"email": "a@b.c", "url": [...]}`.
 ## Custom result view (renderer.js)
 
 Cards fit most results. For anything else, add `renderer.js`; it runs in every page
-(so it needs a review when the plugin is from another source):
+(so it needs a review when the plugin is from another source).
+
+An enabled `renderer.js` runs as part of the toolkit, with the logged-in user's access:
+it can call the whole API, so it can read and change every investigation and run any
+module, paid ones included. Enable one only after reading it, or when it comes from
+someone you trust.
 
 ```js
 registerPluginRenderer(pluginId, (result) => {

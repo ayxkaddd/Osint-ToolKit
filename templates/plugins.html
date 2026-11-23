@@ -34,6 +34,9 @@
                 <p><i class="fas fa-exclamation-triangle mr-2"></i><strong>Only enable plugins you have read, or that come from someone you trust.</strong></p>
                 <p>An enabled plugin runs with the toolkit's access: <code>plugin.py</code> can read your files, API keys and
                     investigations; <code>renderer.js</code> runs in your browser while you're logged in.</p>
+                <p id="reviewRenderer" class="hidden"><strong>This plugin has <code>renderer.js</code>.</strong> Once enabled, it runs on
+                    every page with the same access as you: it can open and change all investigations, read their notes and run any
+                    module, including paid ones.</p>
                 <p id="reviewReasons"></p>
             </div>
             <div id="reviewFiles" class="space-y-3"></div>
@@ -144,6 +147,7 @@
         reviewing = id;
         document.getElementById('reviewName').textContent = data.plugin.name;
         document.getElementById('reviewReasons').textContent = data.plugin.blocked || data.plugin.warnings[0] || '';
+        document.getElementById('reviewRenderer').classList.toggle('hidden', !data.plugin.has_renderer);
         document.getElementById('reviewFiles').innerHTML = data.files.map(f => `
             <div>
                 <div class="flex items-center justify-between text-sm mb-1">
