@@ -1,6 +1,5 @@
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+# Metadata and tool settings only. The server runs from a checkout (uvicorn main:app)
+# and is not a pip-installable package; requirements.txt is what gets installed.
 
 [project]
 name = "osint-toolkit"
@@ -19,37 +18,32 @@ dependencies = [
     "fastapi>=0.115.8",
     "starlette>=0.45.3",
     "uvicorn>=0.34.0",
+    "watchfiles>=1.0",
     "jinja2>=3.1.5",
+    "python-multipart>=0.0.20",
+    "pydantic[email]>=2.10.6",
+    "pyjwt>=2.10.1",
+    "bcrypt>=4.2,<6",
+    "python-dotenv>=1.0.1",
+    "pyyaml>=6.0.2",
+    "anyio>=4.0",
     "httpx[socks]>=0.28.1",
     "curl_cffi>=0.17.0",
-    "pyjwt>=2.10.1",
-    "bcrypt==4.3.0",
-    "cryptography>=44.0.1",
-    "python-dotenv>=1.0.1",
-    "python-multipart>=0.0.20",
-    "pydantic>=2.10.6",
-    "pydantic-settings>=2.10.1",
-    "pydantic[email]>=2.10.6",
+    "charset-normalizer>=3.0",
     "telethon>=1.39.0",
     "dnspython>=2.7.0",
     "python-whois>=0.9.5",
     "beautifulsoup4>=4.12.3",
     "socid-extractor>=0.0.27",
-    "sse-starlette>=2.2.1",
-    "pillow>=12.1.0",
     "aiofiles>=25.1.0",
+    "pillow>=12.1.0",
     "phonenumbers>=8.13.50",
-    "pyyaml>=6.0.2",
-    "watchfiles>=1.0"
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8"]
+dev = ["pytest>=8"]  # same as requirements-dev.txt
 
 [project.urls]
 Homepage = "https://github.com/ayxkaddd/Osint-ToolKit"
 Source = "https://github.com/ayxkaddd/Osint-ToolKit"
 Issues = "https://github.com/ayxkaddd/Osint-ToolKit/issues"
-
-[tool.hatch.build.targets.wheel]
-packages = ["src"]

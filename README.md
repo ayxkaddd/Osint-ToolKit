@@ -61,6 +61,7 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 `requirements-lock.txt` has the exact versions the project is tested with, if a newer release of a dependency causes problems.
+The server runs from this folder; it is not a package to `pip install`.
 
 4. Start the server and open `http://localhost:8000`:
 ```bash
