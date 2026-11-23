@@ -135,6 +135,6 @@
 
 {% block scripts %}
 <script type="application/json" id="setupData">{{ {"system_status": system_status, "step": step} | tojson }}</script>
-<script src="/static/js/setup-advanced.js"></script>
-<script src="/static/js/setup.js"></script>
+<script defer src="/static/js/setup-advanced.js"></script>
+<script defer src="/static/js/setup.js"></script>
 {% endblock %}

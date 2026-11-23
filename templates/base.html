@@ -297,15 +297,17 @@
         </div>
     </div>
 
-    <script src="/static/js/main.js"></script>
+    <!-- main.js is a module (deferred); the scripts after it are deferred too, so they run
+         in this order once the page is parsed, after main.js has set the shared globals -->
+    <script type="module" src="/static/js/main.js"></script>
     <!-- Shared by result views and notes (snapshots of results render like the investigation page) -->
-    <script src="/static/js/masonry.js"></script>
-    <script src="/static/js/oi_cards.js"></script>
-    <script src="/static/js/ghunt_cards.js"></script>
-    <script src="/static/js/result_renderers.js"></script>
-    <script src="/static/js/plugin_cards.js"></script>
-    <script src="/api/plugins/client.js"></script>
-    <script src="/static/js/notes.js"></script>
+    <script defer src="/static/js/masonry.js"></script>
+    <script defer src="/static/js/oi_cards.js"></script>
+    <script defer src="/static/js/ghunt_cards.js"></script>
+    <script defer src="/static/js/result_renderers.js"></script>
+    <script defer src="/static/js/plugin_cards.js"></script>
+    <script defer src="/api/plugins/client.js"></script>
+    <script defer src="/static/js/notes.js"></script>
     {% block scripts %}{% endblock %}
     {% block extra_scripts %}{% endblock %}
 </body>
