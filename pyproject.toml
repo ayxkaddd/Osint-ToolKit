@@ -47,3 +47,16 @@ dev = ["pytest>=8"]  # same as requirements-dev.txt
 Homepage = "https://github.com/ayxkaddd/Osint-ToolKit"
 Source = "https://github.com/ayxkaddd/Osint-ToolKit"
 Issues = "https://github.com/ayxkaddd/Osint-ToolKit/issues"
+
+[tool.ruff]
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "B", "UP"]
+# E501: no line length limit yet. UP006/UP007/UP035/UP045: Optional[X], Dict, List are the
+# codebase's style; rewriting every annotation would only churn the history.
+ignore = ["E501", "UP006", "UP007", "UP035", "UP045"]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI parameters are declared with these as defaults
+extend-immutable-calls = ["fastapi.Body", "fastapi.Depends", "fastapi.File", "fastapi.Form", "fastapi.Header", "fastapi.Path", "fastapi.Query", "fastapi.Security"]

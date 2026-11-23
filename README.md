@@ -67,7 +67,7 @@ The server runs from this folder; it is not a package to `pip install`.
 ```bash
 uvicorn main:app
 ```
-Run it as a single process (no `--workers`): investigations and the login limit are kept by that one process.
+Run it as a single process (no `--workers`): investigations and the login limit are kept by that one process, so a second process on the same folder refuses to start.
 
 Behind a reverse proxy (nginx, Caddy) that adds the client address to `X-Forwarded-For`, set `TRUST_PROXY_HEADERS=true` in `.env` so the login limit counts each client separately. If the proxy runs on another machine, also start uvicorn with `--forwarded-allow-ips <proxy address>`. When the proxy serves HTTPS, the login cookie is sent over HTTPS only, without setting anything (`COOKIE_SECURE=true` forces that).
 
@@ -183,10 +183,10 @@ Plugins you make, and the examples, run as they are. A plugin from someone else 
 ## Project Structure
 
 - `/routes`: API route handlers and page routes
-- `/services`: lookups and external integrations (`module_registry.py` lists every module, its inputs and requirements)
+- `/services`: lookups and external integrations (`module_registry.py` lists every module, its inputs and requirements). Investigation storage is in `services/investigations/` and the plugin loader in `services/pluginkit/`, one module per area
 - `/models`: Pydantic models
 - `/utils`: investigation saving, stream reducers, settings, subprocess and Telegram helpers
 - `/plugins`: plugins (one folder each), the plugin SDK and `python -m plugins`
-- `/templates`, `/static`: pages, per-module JS (`static/js/services/`) and the Tailwind build
-- `/tests`: automated tests (`pip install -r requirements-dev.txt`, then `python -m pytest`). They run in a temporary folder with their own settings and need no network
+- `/templates`, `/static`: pages, per-module JS (`static/js/services/`), the shared JS (`static/js/main.js`, an ES module made of `static/js/lib/`) and the Tailwind build
+- `/tests`: automated tests (`pip install -r requirements-dev.txt`, then `python -m pytest`; `ruff check .` is the lint CI runs). They run in a temporary folder with their own settings and need no network
 - `/investigation_results`, `/media`: local case data (git-ignored, never commit it)
