@@ -142,7 +142,7 @@ def _path_label(path: str) -> str:
 
 def _read_json(path: Path, default):
     try:
-        with open(path, 'r') as f:
+        with open(path) as f:
             return json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
         return default

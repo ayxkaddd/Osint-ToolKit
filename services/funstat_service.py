@@ -84,19 +84,19 @@ class FunstatService:
             raise HTTPException(
                 status_code=e.response.status_code,
                 detail=f"Funstat API error: {e.response.text}"
-            )
+            ) from e
         except httpx.RequestError as e:
             logger.error('Request error: %s', str(e))
             raise HTTPException(
                 status_code=500,
                 detail=f"Request to Funstat API failed: {str(e)}"
-            )
+            ) from e
         except Exception as e:
             logger.error('Unexpected error: %s', str(e))
             raise HTTPException(
                 status_code=500,
                 detail=f"Unexpected error: {str(e)}"
-            )
+            ) from e
 
     # ==================== USER ENDPOINTS ====================
 

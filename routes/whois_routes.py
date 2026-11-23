@@ -14,7 +14,7 @@ async def get_whois(domain: str) -> JSONResponse:
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 @router.get("/history/preview")
 async def preview_whois_history(domain: str):
@@ -35,4 +35,4 @@ async def get_whois_history(domain: str) -> JSONResponse:
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e

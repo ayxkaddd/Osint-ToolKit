@@ -77,7 +77,7 @@ async def get_tme_profile(username: str = Query(..., description="Telegram usern
     try:
         return await tme_service.fetch_profile(username)
     except tme_service.TmeError as e:
-        raise HTTPException(status_code=400 if "valid" in str(e) else 502, detail=str(e))
+        raise HTTPException(status_code=400 if "valid" in str(e) else 502, detail=str(e)) from e
 
 @user_router.get("/{user_id}/stats_min")
 @save_investigation(service_name="funstat", method_name="stats_min")
@@ -274,12 +274,12 @@ async def get_full_media(
     try:
         return await telethon_service.download_full_media(chat_identifier, message_id)
     except MediaUnavailable as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except TelegramNotAuthorized as e:
-        raise HTTPException(status_code=401, detail=str(e))
+        raise HTTPException(status_code=401, detail=str(e)) from e
     except Exception as e:
         logger.exception("Full media download failed for %s/%s", chat_identifier, message_id)
-        raise HTTPException(status_code=502, detail=f"Telegram download failed: {e}")
+        raise HTTPException(status_code=502, detail=f"Telegram download failed: {e}") from e
 
 @media_router.get("/avatars/{filename}")
 def get_avatar(filename: str):

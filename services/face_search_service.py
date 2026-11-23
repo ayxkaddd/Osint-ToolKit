@@ -98,9 +98,9 @@ class FaceSearch:
 
             return DetectFacesResponse(faces=[FaceCoordinates(x1=face[0], y1=face[1], x2=face[2], y2=face[3]) for face in faces])
         except httpx.HTTPError as e:
-            raise HTTPException(status_code=500, detail=f"Error calling face detection API: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Error calling face detection API: {str(e)}") from e
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}") from e
 
 
     async def search(self, image: UploadFile) -> FaceSearchResponse:
@@ -124,6 +124,6 @@ class FaceSearch:
                                       results=[SearchResult(**result) for result in results])
 
         except httpx.HTTPError as e:
-            raise HTTPException(status_code=500, detail=f"Error calling face search API: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Error calling face search API: {str(e)}") from e
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}") from e

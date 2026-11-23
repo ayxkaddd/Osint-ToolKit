@@ -140,7 +140,7 @@ def _drive(method, proxy_behaviour, **kwargs):
 
 def _raise(code):
     async def behaviour():
-        raise RequestException("Failed to perform, curl: (%d) nope" % code, code)
+        raise RequestException(f"Failed to perform, curl: ({code}) nope", code)
     return behaviour
 
 

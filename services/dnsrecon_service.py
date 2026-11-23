@@ -244,7 +244,7 @@ class DNSReconService:
         """DNS records via dnspython (blocking resolver -> worker threads)."""
         record_types = ['A', 'AAAA', 'MX', 'NS', 'TXT', 'CNAME', 'SOA', 'CAA']
         values = await asyncio.gather(*(self.resolve(domain, rt) for rt in record_types))
-        return dict(zip(record_types, values))
+        return dict(zip(record_types, values, strict=True))
 
     async def resolve_many(self, names: list[str]) -> dict[str, list[str]]:
         """A records for many names (which subdomains still exist, and where)."""

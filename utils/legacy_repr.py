@@ -53,7 +53,7 @@ def _eval(node: ast.AST) -> Any:
     if isinstance(node, (ast.List, ast.Tuple, ast.Set)):
         return [_eval(e) for e in node.elts]
     if isinstance(node, ast.Dict):
-        return {str(_eval(k)): _eval(v) for k, v in zip(node.keys, node.values)}
+        return {str(_eval(k)): _eval(v) for k, v in zip(node.keys, node.values, strict=True)}
     if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub):
         return -_eval(node.operand)
     if isinstance(node, ast.Call):

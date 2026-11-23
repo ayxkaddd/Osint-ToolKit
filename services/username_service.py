@@ -381,7 +381,7 @@ class StreamingUsernameSearchService:
             return self._metadata_cache
         except Exception as e:
             logger.error('Failed to fetch metadata: %s', str(e))
-            raise HTTPException(status_code=500, detail=f"Failed to fetch the WhatsMyName site list: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Failed to fetch the WhatsMyName site list: {str(e)}") from e
 
     def _refresh_metadata(self, raise_errors: bool = False):
         """Download the current WhatsMyName list and save it to assets/."""

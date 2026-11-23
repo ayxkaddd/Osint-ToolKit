@@ -9,14 +9,14 @@ router = APIRouter(prefix="/api/resources")
 @router.get("/")
 def get_resources() -> JSONResponse:
     try:
-        with open("resources.json", "r") as f:
+        with open("resources.json") as f:
             resources = Resources.model_validate(json.load(f))
         resources.modules += [Module.model_validate(card) for card in _plugin_cards()]
         return resources
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 def _plugin_cards() -> list:

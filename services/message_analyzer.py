@@ -4,10 +4,10 @@ Regex-based and offline: emails, phones, crypto wallets, card numbers, usernames
 links, ages and more, with validation, risk scores and per-conversation summaries.
 """
 import re
-from functools import lru_cache
+from functools import cache
 
 
-@lru_cache(maxsize=None)
+@cache
 def _rx(pattern: str, flags: int = 0) -> "re.Pattern":
     """Compiled regex for a fixed pattern. The analyzer runs dozens of these per message,
     so this skips the lookup in re.search and re.match. Not for patterns built from text."""
@@ -377,7 +377,7 @@ class MessageAnalyzer:
             'unionpay': [r'^62'],
         }
 
-        for network, patterns in VALID_BINS.items():
+        for _network, patterns in VALID_BINS.items():
             for pattern in patterns:
                 if _rx(pattern).match(bin_prefix):
                     return True

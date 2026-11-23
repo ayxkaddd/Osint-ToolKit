@@ -121,7 +121,7 @@ async def get_metadata():
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 #         return JSONResponse({
@@ -182,4 +182,4 @@ async def bulk_search_usernames(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Bulk search failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Bulk search failed: {str(e)}") from e

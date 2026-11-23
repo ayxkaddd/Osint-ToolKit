@@ -196,6 +196,10 @@ def _record_date(record: dict[str, Any]) -> str:
     return ''
 
 
+def _change_text(value) -> str:
+    return ', '.join(value) if isinstance(value, list) else (value or '(none)')
+
+
 def _clean(value: Any) -> Optional[str]:
     text = str(value or '').strip()
     return text or None
@@ -260,8 +264,7 @@ def analyze_whois_history(records: list[dict[str, Any]]) -> dict[str, Any]:
             for key in ('registrar', 'nameservers', 'registrant', 'admin', 'tech', 'status'):
                 before, after = previous.get(key), state.get(key)
                 if before != after and (before or after):
-                    fmt = lambda v: ', '.join(v) if isinstance(v, list) else (v or '(none)')
-                    changes.append({'field': key, 'from': fmt(before), 'to': fmt(after)})
+                    changes.append({'field': key, 'from': _change_text(before), 'to': _change_text(after)})
         if changes or previous is None:
             timeline.append({
                 'date': date,
@@ -275,7 +278,10 @@ def analyze_whois_history(records: list[dict[str, Any]]) -> dict[str, Any]:
         previous = state
 
     created = sorted(filter(None, (_clean(r.get('createdDateISO8601')) for r in records)))
-    ordered = lambda table: [{'name': k, **v} for k, v in sorted(table.items(), key=lambda kv: kv[1]['first_seen'] or '')]
+
+    def ordered(table):
+        return [{'name': k, **v} for k, v in sorted(table.items(), key=lambda kv: kv[1]['first_seen'] or '')]
+
     people = sorted(contacts.values(), key=lambda c: (c['privacy'], c['first_seen'] or ''))
     return {
         'snapshots': len(snapshots),

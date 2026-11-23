@@ -275,7 +275,7 @@ def _check_manifest(plugin: "Plugin", manifest: Manifest) -> None:
             raise ValueError(f"setting {key} must start with {prefix} (or be the key of a built-in module)")
     request, response = _templates(manifest)
     for text in request + response:
-        for name, filters in TEMPLATE_RE.findall(text):
+        for _name, filters in TEMPLATE_RE.findall(text):
             unknown = [f for f in filters.split("|") if f and f not in FILTERS]
             if unknown:
                 raise ValueError(f"unknown filter |{unknown[0]} in {text!r} (known: {', '.join(FILTERS)})")
@@ -1107,7 +1107,7 @@ async def _run_yaml(run: PreparedRun) -> None:
     results = await asyncio.gather(*(_run_action(plugin, a, run.value, run.type) for a in actions),
                                    return_exceptions=True)
     errors, raw = [], {}
-    for action, result in zip(actions, results):
+    for action, result in zip(actions, results, strict=True):
         if isinstance(result, BaseException):
             if not isinstance(result, (PluginError, RunRefused)):
                 logger.warning("Plugin %s, %s failed", plugin.id, action.id, exc_info=result)

@@ -28,7 +28,7 @@ async def get_oi(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 QUERY_TYPES = "^(email|phone|username|name|wallet)$"
 
@@ -76,4 +76,4 @@ async def query_credits() -> JSONResponse:
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e

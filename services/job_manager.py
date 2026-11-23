@@ -52,7 +52,7 @@ class Job:
 
 class JobManager:
     def __init__(self):
-        self.jobs: "OrderedDict[str, Job]" = OrderedDict()
+        self.jobs: OrderedDict[str, Job] = OrderedDict()
         self._tasks: dict[str, asyncio.Task] = {}
         self._global: Optional[asyncio.Semaphore] = None
         self._per_module: dict[str, asyncio.Semaphore] = {}

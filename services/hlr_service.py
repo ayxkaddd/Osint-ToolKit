@@ -44,13 +44,13 @@ class HLRService:
         try:
             json_path = os.path.join(os.path.dirname(__file__), '..', 'assets', 'sms_logins.json')
             logger.info('Loading credentials from: %s', json_path)
-            with open(json_path, 'r') as f:
+            with open(json_path) as f:
                 creds = json.load(f)
             logger.info('Loaded credentials for regions: %s', ', '.join(creds.keys()))
             return creds
         except Exception as e:
             logger.error('Failed to load credentials: %s', str(e))
-            raise HTTPException(status_code=503, detail=f"HLR credentials could not be loaded: {e}")
+            raise HTTPException(status_code=503, detail=f"HLR credentials could not be loaded: {e}") from e
 
     def switch_credentials(self, region: str = 'ru') -> bool:
         """Switch to next available credential for given region"""

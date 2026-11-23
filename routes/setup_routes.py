@@ -639,9 +639,12 @@ def setup_admin(
     except HTTPException:
         raise
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        # the email or password rules (AdminCredentials)
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Configuration failed: {str(e)}")
+        # the detail (paths, file errors) goes to the log, not the browser
+        logger.exception("Saving the admin account failed")
+        raise HTTPException(status_code=500, detail="Could not save the admin account - see the server log") from e
 
 
 @router.post("/setup/features")

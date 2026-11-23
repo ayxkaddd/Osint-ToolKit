@@ -55,3 +55,18 @@ def test_go_install_reports_success(monkeypatch):
     result = setup_routes.install_go_tool("subfinder", "example.com/subfinder@latest")
     assert result == {"success": True, "message": "Successfully installed subfinder",
                       "path": "/usr/bin/subfinder", "output": "line1\nline2"}
+
+
+def test_admin_setup_error_keeps_details_in_the_log(app, monkeypatch, caplog):
+    from fastapi.testclient import TestClient
+
+    def fail(config):
+        raise OSError("[Errno 13] Permission denied: '/srv/secret/.env'")
+
+    monkeypatch.setattr(setup_routes, "check_setup_complete", lambda: False)
+    monkeypatch.setattr(setup_routes, "save_env_config", fail)
+    response = TestClient(app, client=("127.0.0.1", 5000)).post(
+        "/setup/admin", data={"email": "admin@example.com", "password": "Admin-pass1", "confirm_password": "Admin-pass1"})
+    assert response.status_code == 500
+    assert "/srv/secret" not in response.text and "server log" in response.json()["detail"]
+    assert "/srv/secret" in caplog.text
