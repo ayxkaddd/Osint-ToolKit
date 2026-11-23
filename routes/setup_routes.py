@@ -182,6 +182,10 @@ def check_go_tools() -> dict[str, dict[str, Any]]:
     return tools
 
 
+GITFIVE_IMPORT_CHECK = "import trio, git, imagehash"
+GO_INSTALL_TIMEOUT = 600
+
+
 def check_gitfive_detailed() -> dict[str, Any]:
     """Check GitFive installation with detailed information"""
     possible_paths = [
@@ -201,8 +205,9 @@ def check_gitfive_detailed() -> dict[str, Any]:
             requirements_met = False
             if has_venv and has_script:
                 try:
+                    # Packages from GitFive's own requirements.txt (trio, GitPython, imagehash)
                     result = subprocess.run(
-                        [str(venv_python), "-c", "import ghunt"],
+                        [str(venv_python), "-c", GITFIVE_IMPORT_CHECK],
                         capture_output=True,
                         timeout=5
                     )
@@ -409,19 +414,24 @@ def install_go_tool(tool_name: str, package: str) -> dict[str, Any]:
             }
         
         # Install the tool
-        process = subprocess.Popen(
-            ["go", "install", "-v", package],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True
-        )
-        
-        output = []
-        for line in process.stdout:
-            output.append(line.strip())
-        
-        process.wait()
-        
+        try:
+            process = subprocess.run(
+                ["go", "install", "-v", package],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                timeout=GO_INSTALL_TIMEOUT,
+            )
+        except subprocess.TimeoutExpired as e:
+            partial = e.stdout.decode(errors="replace") if isinstance(e.stdout, bytes) else (e.stdout or "")
+            return {
+                "success": False,
+                "message": f"Installing {tool_name} took longer than {GO_INSTALL_TIMEOUT // 60} minutes and was stopped",
+                "output": partial.strip(),
+            }
+
+        output = [line.strip() for line in process.stdout.splitlines()]
+
         if process.returncode == 0:
             # Verify installation
             tool_path = shutil.which(tool_name)
