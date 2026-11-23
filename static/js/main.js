@@ -733,9 +733,9 @@ document.addEventListener('keydown', (event) => {
     document.getElementById('historyModal')?.remove();
 });
 
-async function logout() {
+async function logout(everywhere = false) {
     try {
-        await fetch('/logout', { method: 'POST' });
+        await fetch(everywhere ? '/logout?everywhere=true' : '/logout', { method: 'POST' });
     } finally {
         window.location.href = '/';
     }
@@ -1535,7 +1535,8 @@ document.addEventListener('click', (event) => {
         { label: 'Settings & API keys', icon: 'fa-cog', href: '/settings' },
         { label: 'Check for updates', icon: 'fa-sync-alt', onClick: checkForUpdates },
         { divider: true },
-        { label: 'Log out', icon: 'fa-sign-out-alt', onClick: logout, danger: true },
+        { label: 'Log out', icon: 'fa-sign-out-alt', onClick: () => logout(), danger: true },
+        { label: 'Log out everywhere', icon: 'fa-user-slash', onClick: () => logout(true), danger: true },
     ]);
 });
 

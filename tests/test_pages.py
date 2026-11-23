@@ -100,5 +100,5 @@ def test_header_keeps_occasional_actions_in_one_menu(client):
         assert gone not in header, gone
     script = client.get("/static/js/main.js").text
     menu = script[script.index("#moreMenuButton"):]
-    for item in ("href: '/plugins'", "href: '/settings'", "onClick: checkForUpdates", "onClick: logout"):
+    for item in ("href: '/plugins'", "href: '/settings'", "onClick: checkForUpdates", "onClick: () => logout()"):
         assert item in menu[:800], item

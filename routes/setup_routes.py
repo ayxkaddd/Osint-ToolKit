@@ -12,6 +12,8 @@ import shutil
 import httpx
 from pathlib import Path
 from typing import Optional, Any
+import hmac
+import ipaddress
 import json
 import platform
 
@@ -25,6 +27,12 @@ templates = Jinja2Templates(directory="templates")
 CONFIG_PATH = Path(".env")
 SETUP_COMPLETE_FLAG = Path(".setup_complete")
 SETUP_STATE_PATH = Path(".setup_state.json")
+
+# Until setup is done, anyone who can reach the port could create the admin account.
+# Requests from this computer are trusted; from anywhere else the setup pages need
+# this token, printed in the server console (setup_link_message).
+SETUP_TOKEN = secrets.token_urlsafe(24)
+SETUP_TOKEN_COOKIE = "setup_token"
 
 
 class SetupState(BaseModel):
@@ -73,6 +81,32 @@ def save_setup_state(state: SetupState):
 def check_setup_complete() -> bool:
     """Check if setup has been completed"""
     return SETUP_COMPLETE_FLAG.exists() and CONFIG_PATH.exists()
+
+
+def setup_link_message() -> str:
+    return ("Setup is not complete. Open /setup in a browser on this computer, or from "
+            f"another computer open /setup?token={SETUP_TOKEN} on this server's address.")
+
+
+def is_local_request(request: Request) -> bool:
+    host = request.client.host if request.client else ""
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
+
+
+def valid_setup_token(token: Optional[str]) -> bool:
+    return bool(token) and hmac.compare_digest(token, SETUP_TOKEN)
+
+
+def setup_locked_response(request: Request, json_response: bool):
+    message = ("Setup can only be done from the computer the server runs on, or with the "
+               "setup link printed in the server console.")
+    if json_response:
+        return JSONResponse({"detail": message}, status_code=403)
+    return templates.TemplateResponse(request, "setup_locked.html", {"message": message},
+                                      status_code=403)
 
 
 def check_dependency(command: str) -> bool:
@@ -844,7 +878,8 @@ def reset_setup(confirm: str = Form(...)):
     
     if SETUP_STATE_PATH.exists():
         SETUP_STATE_PATH.unlink()
-    
+
+    logger.warning(setup_link_message())
     return JSONResponse({
         "success": True,
         "message": "Setup reset successfully. You can now run setup again."

@@ -67,6 +67,8 @@ async def lifespan(app: FastAPI):
     # Telegram connects on first use (Funstat media, VK, status checks), not at startup.
     # The proxy pool primes and refreshes itself in the background so no lookup ever
     # waits on fetching or health-checking proxies.
+    if not setup_routes.check_setup_complete():
+        logger.warning(setup_routes.setup_link_message())
     from services.proxy_pool import pool
     proxy_task = asyncio.create_task(pool.run_forever())
     yield
@@ -79,6 +81,9 @@ class OsintFramework:
     def __init__(self):
         self.app = FastAPI(title="Osint Framework", version="1.0.0", lifespan=lifespan)
         self.auth_handler = AuthHandler()
+        # Failed logins per client, in memory: the limit resets on restart and only holds
+        # with a single worker process (the app must run as one process anyway: see
+        # services/investigation_service.py)
         self.failed_logins: dict[str, deque] = defaultdict(deque)
         self.setup_routes()
         self.setup_static_files()
@@ -153,7 +158,7 @@ class OsintFramework:
         if not setup_complete:
             # Until setup is finished only the setup wizard (and its API) is usable
             if path == "/setup" or path.startswith("/setup/"):
-                return await call_next(request)
+                return await self._setup_gate(request, call_next)
             if self._wants_json(path):
                 return JSONResponse({"detail": "Setup is not complete"}, status_code=503)
             return RedirectResponse(url="/setup")
@@ -172,6 +177,21 @@ class OsintFramework:
             return JSONResponse({"detail": "Not authenticated"}, status_code=401)
         return RedirectResponse(url="/")
 
+    async def _setup_gate(self, request: Request, call_next):
+        """Setup from this computer, or with the token from the console (setup_link_message).
+        The link's token is moved into a cookie, so the wizard's own requests carry it."""
+        if setup_routes.is_local_request(request) or \
+                setup_routes.valid_setup_token(request.cookies.get(setup_routes.SETUP_TOKEN_COOKIE)):
+            return await call_next(request)
+        token = request.query_params.get("token")
+        if not setup_routes.valid_setup_token(token):
+            return setup_routes.setup_locked_response(request, request.url.path != "/setup")
+        response = RedirectResponse(url=request.url.path) if request.method == "GET" \
+            else await call_next(request)
+        response.set_cookie(setup_routes.SETUP_TOKEN_COOKIE, token, httponly=True, samesite="strict",
+                            secure=self._cookie_secure(request))
+        return response
+
     @staticmethod
     def _login_key(request: Request) -> str:
         """Who a login attempt counts against.
@@ -185,6 +205,17 @@ class OsintFramework:
                 (get_setting('TRUST_PROXY_HEADERS', 'false') or '').lower() != 'true':
             return "forwarded"
         return request.client.host if request.client else "unknown"
+
+    @staticmethod
+    def _cookie_secure(request: Request) -> bool:
+        """Cookies are HTTPS-only when COOKIE_SECURE is set or the browser came over HTTPS:
+        directly, through a proxy uvicorn trusts (it then sets the scheme from
+        X-Forwarded-Proto), or through one trusted with TRUST_PROXY_HEADERS."""
+        if (get_setting('COOKIE_SECURE', 'false') or '').lower() == 'true' or request.url.scheme == "https":
+            return True
+        forwarded_proto = request.headers.get("x-forwarded-proto", "").split(",")[0].strip().lower()
+        return forwarded_proto == "https" and \
+            (get_setting('TRUST_PROXY_HEADERS', 'false') or '').lower() == 'true'
 
     def _login_blocked(self, ip: str) -> bool:
         attempts = self.failed_logins[ip]
@@ -217,14 +248,17 @@ class OsintFramework:
                 key="access_token",
                 value=token,
                 httponly=True,
-                secure=(get_setting('COOKIE_SECURE', 'false') or '').lower() == 'true',
+                secure=self._cookie_secure(request),
                 samesite="lax",
                 max_age=86400
             )
             return {"success": True}
 
         @self.app.post("/logout")
-        async def logout():
+        async def logout(request: Request, everywhere: bool = False):
+            # everywhere: every token issued so far stops working (other browsers, copies)
+            if everywhere and self._is_authenticated(request):
+                self.auth_handler.end_all_sessions()
             response = JSONResponse({"success": True})
             response.delete_cookie("access_token")
             return response

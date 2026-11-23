@@ -4,9 +4,18 @@ from fastapi import HTTPException, Security
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 import bcrypt
 from utils import telegram_client
-from utils.config import get_setting
+from utils.config import get_setting, update_env
 
 TOKEN_TTL = timedelta(hours=24)
+
+
+def session_epoch() -> int:
+    """Tokens carry the SESSION_EPOCH they were issued under; raising it ends every
+    session at once (logging out everywhere), even copies of a token."""
+    try:
+        return int(get_setting('SESSION_EPOCH') or 0)
+    except ValueError:
+        return 0
 
 
 class AuthHandler:
@@ -43,7 +52,8 @@ class AuthHandler:
         payload = {
             'exp': now + TOKEN_TTL,
             'iat': now,
-            'sub': user_id
+            'sub': user_id,
+            'epoch': session_epoch(),
         }
         return jwt.encode(
             payload,
@@ -54,11 +64,18 @@ class AuthHandler:
     def decode_token(self, token):
         try:
             payload = jwt.decode(token, self.secret, algorithms=['HS256'])
+            # Tokens from before epochs existed count as epoch 0
+            if payload.get('epoch', 0) != session_epoch():
+                raise HTTPException(status_code=401, detail='Session ended')
             return payload['sub']
         except jwt.ExpiredSignatureError:
             raise HTTPException(status_code=401, detail='Signature has expired') from None
         except (jwt.InvalidTokenError, KeyError):
             raise HTTPException(status_code=401, detail='Invalid token') from None
+
+    @staticmethod
+    def end_all_sessions() -> None:
+        update_env({'SESSION_EPOCH': str(session_epoch() + 1)})
 
     def auth_wrapper(self, auth: HTTPAuthorizationCredentials = Security(security)):
         return self.decode_token(auth.credentials)
