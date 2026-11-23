@@ -78,7 +78,7 @@ function resourceCard(resource) {
     return `
         <a href="${escapeAttr(safeUrl(resource.url))}" target="_blank" rel="noopener noreferrer"
            class="bg-[#14151f] border border-[#24283b] hover:border-gray-600 rounded-xl p-4 flex items-start gap-4 group transition-colors">
-            <img src="${escapeAttr(resourceIcon(resource))}" alt="" loading="lazy" class="w-8 h-8 rounded shrink-0" onerror="faviconFallback(this)">
+            <img src="${escapeAttr(resourceIcon(resource))}" alt="" loading="lazy" class="w-8 h-8 rounded shrink-0" data-img-error="faviconFallback">
             <div class="min-w-0 flex-grow">
                 <div class="flex items-center gap-2">
                     <h3 class="font-semibold text-white truncate">${escapeHtml(resource.name)}</h3>
@@ -157,7 +157,7 @@ function renderResources(resources) {
                             module.settings
                                 ? `
                             <button
-                                onclick="openSettings(${jsArg(module.name)})"
+                                data-click="openSettings" data-args="${clickArgs(module.name)}"
                                 type="button"
                                 title="${escapeAttr(module.name)} settings"
                                 aria-label="${escapeAttr(module.name)} settings"
@@ -300,7 +300,7 @@ async function loadActiveInvestigation() {
                         </div>
                     </div>
                     <div class="flex items-center gap-3 w-full md:w-auto justify-end">
-                        <button onclick="if(window.openCreateModal) window.openCreateModal(); else window.location.href='/investigations';" 
+                        <button type="button" data-click="openCreateInvestigationModal"
                                 class="flex-1 md:flex-initial px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-xl transition-colors flex items-center justify-center gap-2 text-sm">
                             <i class="fas fa-plus"></i> Create Investigation
                         </button>
@@ -510,3 +510,5 @@ function sortModulesByReadiness() {
     heading.innerHTML = `<i class="fas fa-wrench text-xs" aria-hidden="true"></i>Needs setup <span class="font-normal text-gray-500">${blocked.length}</span>`;
     list.append(heading, ...blocked);
 }
+
+registerActions({ faviconFallback, openSettings, closeSettings, saveSettings });

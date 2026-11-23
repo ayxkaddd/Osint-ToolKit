@@ -8,7 +8,7 @@ function getStep2HTML() {
         <div class="bg-gray-800/50 border border-gray-700 rounded-lg p-4 mb-6">
             <div class="flex items-center justify-between mb-3">
                 <h3 class="text-white font-semibold">System Status</h3>
-                <button onclick="refreshSystemStatus()" class="text-gray-400 hover:text-white transition-colors">
+                <button data-click="refreshSystemStatus" class="text-gray-400 hover:text-white transition-colors">
                     <i data-lucide="refresh-cw" class="w-4 h-4"></i>
                 </button>
             </div>
@@ -134,7 +134,7 @@ function getStep2HTML() {
             </div>
 
             <div class="flex gap-4 mt-6">
-                <button type="button" onclick="previousStep()" class="flex-1 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-white font-bold py-3 px-6 rounded-lg transition-colors flex items-center justify-center gap-2">
+                <button type="button" data-click="previousStep" class="flex-1 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-white font-bold py-3 px-6 rounded-lg transition-colors flex items-center justify-center gap-2">
                     <i data-lucide="arrow-left" class="w-4 h-4"></i> Back
                 </button>
                 <button type="submit" class="flex-1 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-white font-bold py-3 px-6 rounded-lg transition-colors flex items-center justify-center gap-2">
@@ -158,7 +158,7 @@ function getStep3HTML() {
                 Go Tools Installation
             </h3>
             <div id="go-tools-status" class="space-y-3 mb-4"></div>
-            <button type="button" onclick="installGoTools()" id="install-go-btn" class="w-full bg-blue-600 hover:bg-blue-700 border border-blue-600 text-white font-bold py-3 px-6 rounded-lg transition-colors flex items-center justify-center gap-2">
+            <button type="button" data-click="installGoTools" id="install-go-btn" class="w-full bg-blue-600 hover:bg-blue-700 border border-blue-600 text-white font-bold py-3 px-6 rounded-lg transition-colors flex items-center justify-center gap-2">
                 <i data-lucide="download" class="w-4 h-4"></i> Install Go Tools
             </button>
         </div>
@@ -169,16 +169,16 @@ function getStep3HTML() {
                 GitFive Setup Guide
             </h3>
             <div id="gitfive-guide" class="space-y-2 mb-4 text-sm text-gray-400"></div>
-            <button type="button" onclick="showGitFiveGuide()" class="w-full bg-purple-600 hover:bg-purple-700 border border-purple-600 text-white font-bold py-3 px-6 rounded-lg transition-colors flex items-center justify-center gap-2">
+            <button type="button" data-click="showGitFiveGuide" class="w-full bg-purple-600 hover:bg-purple-700 border border-purple-600 text-white font-bold py-3 px-6 rounded-lg transition-colors flex items-center justify-center gap-2">
                 <i data-lucide="book-open" class="w-4 h-4"></i> View Detailed Guide
             </button>
         </div>
 
         <div class="flex gap-4">
-            <button type="button" onclick="previousStep()" class="flex-1 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-white font-bold py-3 px-6 rounded-lg transition-colors flex items-center justify-center gap-2">
+            <button type="button" data-click="previousStep" class="flex-1 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-white font-bold py-3 px-6 rounded-lg transition-colors flex items-center justify-center gap-2">
                 <i data-lucide="arrow-left" class="w-4 h-4"></i> Back
             </button>
-            <button type="button" onclick="nextStep()" class="flex-1 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-white font-bold py-3 px-6 rounded-lg transition-colors flex items-center justify-center gap-2">
+            <button type="button" data-click="nextStep" class="flex-1 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-white font-bold py-3 px-6 rounded-lg transition-colors flex items-center justify-center gap-2">
                 Continue <i data-lucide="arrow-right" class="w-4 h-4"></i>
             </button>
         </div>
@@ -207,7 +207,7 @@ function getStep4HTML() {
             </div>
             <div class="flex gap-2">
                 <input type="text" name="${api.name}" id="${api.name}_input" class="flex-1 px-4 py-3 bg-gray-800 border border-gray-700 text-white rounded-lg focus:outline-none focus:border-gray-500 transition-colors placeholder-gray-500" placeholder="Enter API key (optional)">
-                <button type="button" onclick="validateKey(${jsArg(api.name)})" class="px-4 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-white rounded-lg transition-colors">
+                <button type="button" data-click="validateKey" data-args="${clickArgs(api.name)}" class="px-4 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-white rounded-lg transition-colors">
                     <i data-lucide="check" class="w-4 h-4"></i>
                 </button>
             </div>
@@ -240,7 +240,7 @@ function getStep4HTML() {
             </div>
 
             <div class="flex gap-4 mt-6">
-                <button type="button" onclick="previousStep()" class="flex-1 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-white font-bold py-3 px-6 rounded-lg transition-colors flex items-center justify-center gap-2">
+                <button type="button" data-click="previousStep" class="flex-1 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-white font-bold py-3 px-6 rounded-lg transition-colors flex items-center justify-center gap-2">
                     <i data-lucide="arrow-left" class="w-4 h-4"></i> Back
                 </button>
                 <button type="submit" class="flex-1 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-white font-bold py-3 px-6 rounded-lg transition-colors flex items-center justify-center gap-2">
@@ -284,10 +284,10 @@ function getStep5HTML() {
         </div>
 
         <div class="flex gap-4">
-            <button type="button" onclick="previousStep()" class="flex-1 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-white font-bold py-3 px-6 rounded-lg transition-colors flex items-center justify-center gap-2">
+            <button type="button" data-click="previousStep" class="flex-1 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-white font-bold py-3 px-6 rounded-lg transition-colors flex items-center justify-center gap-2">
                 <i data-lucide="arrow-left" class="w-4 h-4"></i> Back
             </button>
-            <button type="button" onclick="completeSetup()" class="flex-1 bg-green-600 hover:bg-green-700 border border-green-600 text-white font-bold py-3 px-6 rounded-lg transition-colors flex items-center justify-center gap-2">
+            <button type="button" data-click="completeSetup" class="flex-1 bg-green-600 hover:bg-green-700 border border-green-600 text-white font-bold py-3 px-6 rounded-lg transition-colors flex items-center justify-center gap-2">
                 Complete Setup <i data-lucide="check" class="w-4 h-4"></i>
             </button>
         </div>
@@ -392,7 +392,7 @@ async function showGitFiveGuide() {
         modal.className = 'fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4';
         modal.innerHTML =
             html +
-            '<button onclick="this.parentElement.remove()" class="absolute top-4 right-4 text-white hover:text-gray-400"><i data-lucide="x" class="w-6 h-6"></i></button>';
+            '<button data-click="removeParent" class="absolute top-4 right-4 text-white hover:text-gray-400"><i data-lucide="x" class="w-6 h-6"></i></button>';
         modal.onclick = (e) => {
             if (e.target === modal) modal.remove();
         };

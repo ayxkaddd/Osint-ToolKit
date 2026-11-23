@@ -37,12 +37,113 @@ window.escapeHtml = escapeHtml;
 window.escapeAttr = escapeAttr;
 window.safeUrl = safeUrl;
 
-// A value passed to a function in an inline handler: onclick="fn(${jsArg(value)})".
-// A JSON string literal, then attribute-escaped (the browser decodes the attribute first).
-function jsArg(value) {
-    return escapeAttr(JSON.stringify(String(value ?? '')));
+// ---------------------------------------------------------------------------
+// Event handlers in markup. The Content-Security-Policy (main.py) blocks inline
+// on…="" handlers, so markup names a registered action instead:
+//   data-click="name"      on click: name.call(element, ...args)
+//   data-args="..."        the arguments as a JSON array: data-args="${clickArgs(a, b)}"
+//   data-backdrop          only clicks on the element itself, not inside it (modal backdrops)
+//   data-submit="name"     on form submit: name.call(form, event)
+//   data-img-error="name"  when an image fails to load: name.call(img, img)
+// Page scripts and plugin renderers add theirs with registerActions({ name: fn }).
+// The innermost element with data-click handles a click, so a button inside a
+// clickable card doesn't also open the card.
+// ---------------------------------------------------------------------------
+const ACTIONS = Object.create(null);
+
+function registerActions(actions) {
+    Object.assign(ACTIONS, actions);
 }
-window.jsArg = jsArg;
+
+function clickArgs(...values) {
+    return escapeAttr(JSON.stringify(values));
+}
+
+function runAction(name, element, args) {
+    const action = ACTIONS[name];
+    if (typeof action !== 'function') {
+        console.error(`No action named "${name}" (registerActions)`);
+        return;
+    }
+    return action.apply(element, args);
+}
+
+registerActions({
+    // clickable area that does nothing itself, so the card around it isn't opened
+    none() {},
+    removeParent() {
+        this.parentElement.remove();
+    },
+    removeClosest(selector) {
+        this.closest(selector)?.remove();
+    },
+    hideImage(img) {
+        img.style.display = 'none';
+    },
+    removeImage(img) {
+        img.remove();
+    },
+    // site icons: the next address to try (data-next), then the letters placed after the image
+    siteIconFailed(img) {
+        if (img.dataset.next) {
+            img.src = img.dataset.next;
+            img.removeAttribute('data-next');
+            return;
+        }
+        img.style.display = 'none';
+        if (img.nextElementSibling) img.nextElementSibling.style.display = 'flex';
+    },
+});
+
+document.addEventListener('click', (event) => {
+    const element = event.target.closest?.('[data-click]');
+    if (!element || (element.hasAttribute('data-backdrop') && event.target !== element)) return;
+    let args = [];
+    try {
+        args = element.dataset.args ? JSON.parse(element.dataset.args) : [];
+    } catch (e) {
+        console.error('Bad data-args', element.dataset.args);
+    }
+    runAction(element.dataset.click, element, args);
+});
+
+document.addEventListener('submit', (event) => {
+    const form = event.target.closest?.('[data-submit]');
+    if (form) runAction(form.dataset.submit, form, [event]);
+});
+
+// Image errors don't bubble, so this listens in the capture phase. Once per address: a
+// fallback may set another src, which can fail again.
+function handleImageError(img) {
+    const src = img.getAttribute('src') || '';
+    if (img.dataset.imgErrorFor === src) return;
+    img.dataset.imgErrorFor = src;
+    runAction(img.dataset.imgError, img, [img]);
+}
+document.addEventListener(
+    'error',
+    (event) => {
+        if (event.target instanceof HTMLImageElement && event.target.dataset.imgError) handleImageError(event.target);
+    },
+    true
+);
+// ...and images in the page itself may have failed before this script ran
+document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('img[data-img-error]').forEach((img) => {
+        if (img.complete && img.naturalWidth === 0 && img.getAttribute('src')) handleImageError(img);
+    });
+});
+
+window.registerActions = registerActions;
+window.clickArgs = clickArgs;
+
+// Data a template hands to its script, as <script type="application/json" id="...">:
+// it isn't run, so the Content-Security-Policy allows it
+function pageData(id) {
+    const element = document.getElementById(id);
+    return element ? JSON.parse(element.textContent) : null;
+}
+window.pageData = pageData;
 
 // Pictures already on screen are carried over when a part of the page is rebuilt: an
 // <img> in `fresh` with the same src as one in `old` is swapped for the old element,
@@ -743,6 +844,13 @@ async function logout(everywhere = false) {
 window.logout = logout;
 
 window.getCurrentInvestigationId = () => currentInvestigationId;
+
+registerActions({
+    toggleInvestigationsDropdown,
+    openCreateInvestigationModal,
+    closeCreateInvestigationModal,
+    closeUpdateModal,
+});
 window.openCreateModal = openCreateInvestigationModal;
 window.loadInvestigationsDropdown = loadInvestigations;
 window.selectInvestigation = selectInvestigation;
@@ -1592,7 +1700,7 @@ function externalSitesHtml(sites, type, value) {
             }
             return `<a href="${escapeAttr(href)}" target="_blank" rel="noopener noreferrer" title="${escapeAttr(`Open ${site.name} on this ${ENTITY_LABELS[type] || type}`)}"
                 class="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 text-xs text-gray-200">
-                ${host ? `<img src="/api/oi/icon/${encodeURIComponent(host)}" alt="" class="w-3.5 h-3.5 rounded-sm" loading="lazy" onerror="this.remove()">` : ''}${escapeHtml(site.name)}</a>`;
+                ${host ? `<img src="/api/oi/icon/${encodeURIComponent(host)}" alt="" class="w-3.5 h-3.5 rounded-sm" loading="lazy" data-img-error="removeImage">` : ''}${escapeHtml(site.name)}</a>`;
         })
         .join('');
     return `<div class="px-3 py-2 border-t border-gray-700">

@@ -457,9 +457,9 @@
     </div>
 
     <div class="segmented mb-6">
-        <button type="button" onclick="switchTab('user')" id="userTab" class="funstat-tab active"><i class="fas fa-user"></i>User</button>
-        <button type="button" onclick="switchTab('group')" id="groupTab" class="funstat-tab"><i class="fas fa-users"></i>Group</button>
-        <button type="button" onclick="switchTab('text')" id="textTab" class="funstat-tab"><i class="fas fa-search"></i>Text</button>
+        <button type="button" data-click="switchTab" data-args='["user"]' id="userTab" class="funstat-tab active"><i class="fas fa-user"></i>User</button>
+        <button type="button" data-click="switchTab" data-args='["group"]' id="groupTab" class="funstat-tab"><i class="fas fa-users"></i>Group</button>
+        <button type="button" data-click="switchTab" data-args='["text"]' id="textTab" class="funstat-tab"><i class="fas fa-search"></i>Text</button>
     </div>
 
     <!-- User Search Tab -->
@@ -493,7 +493,7 @@
                             </div>
                         </div>
 
-                        <button onclick="searchUser()"
+                        <button data-click="searchUser"
                             class="btn-primary w-full">
                             <i class="fas fa-search mr-2"></i>Search User
                         </button>
@@ -501,25 +501,25 @@
                         <div class="border-t border-gray-800 pt-4 mt-4">
                             <h4 class="text-sm font-medium text-gray-400 mb-3">Quick Actions:</h4>
                             <div class="space-y-2">
-                                <button onclick="getUserStats()" id="getStatsBtn" disabled
+                                <button data-click="getUserStats" id="getStatsBtn" disabled
                                     class="btn-secondary w-full !justify-start">
                                     <i class="fas fa-chart-bar mr-2"></i>Get Full Stats (Cost: 1)
                                 </button>
-                                <button onclick="getUserGroups()" id="getGroupsBtn" disabled
+                                <button data-click="getUserGroups" id="getGroupsBtn" disabled
                                     class="btn-secondary w-full !justify-start">
                                     <i class="fas fa-users mr-2"></i>Get Groups (Cost: 5)
                                 </button>
-                                <button onclick="getUserMessages()" id="getMessagesBtn" disabled
+                                <button data-click="getUserMessages" id="getMessagesBtn" disabled
                                     class="btn-secondary w-full !justify-start">
                                     <i class="fas fa-comments mr-2"></i>Get Messages (Cost: 10)
                                 </button>
                                 <!-- Added Get All Messages button -->
-                                <button onclick="getAllUserMessages()" id="getAllMessagesBtn" disabled
+                                <button data-click="getAllUserMessages" id="getAllMessagesBtn" disabled
                                     class="btn-secondary w-full !justify-start">
                                     <i class="fas fa-download mr-2"></i>Get All Messages (Cost: 10)
                                 </button>
                                 <!-- NEW: Username/Name History button -->
-                                <button onclick="getUsernameHistory()" id="getUsernameHistoryBtn" disabled
+                                <button data-click="getUsernameHistory" id="getUsernameHistoryBtn" disabled
                                     class="btn-secondary w-full !justify-start">
                                     <i class="fas fa-history mr-2"></i>Get Username / Name History (Cost: 1)
                                 </button>
@@ -559,13 +559,13 @@
                                 class="field field-sm">
                         </div>
 
-                        <button onclick="searchGroup()"
+                        <button data-click="searchGroup"
                             class="btn-primary w-full">
                             <i class="fas fa-search mr-2"></i>Search Group
                         </button>
 
                         <div class="border-t border-gray-800 pt-4 mt-4">
-                            <button onclick="getGroupMembers()" id="getMembersBtn" disabled
+                            <button data-click="getGroupMembers" id="getMembersBtn" disabled
                                 class="btn-secondary w-full !justify-start">
                                 <i class="fas fa-user-friends mr-2"></i>Get Members (Cost: 15)
                             </button>
@@ -597,7 +597,7 @@
             <div class="flex gap-4">
                 <input type="text" id="textSearchInput" placeholder="Enter text to search..."
                     class="field field-sm flex-1">
-                <button onclick="searchText()"
+                <button data-click="searchText"
                     class="btn-primary !py-2">
                     <i class="fas fa-search mr-2"></i>Search
                 </button>
@@ -624,7 +624,7 @@
             <div class="flex gap-4">
                 <input type="text" id="usernameSearchInput" placeholder="Enter username (without @)..."
                     class="field field-sm flex-1">
-                <button onclick="searchUsernameUsage()"
+                <button data-click="searchUsernameUsage"
                     class="btn-primary !py-2">
                     <i class="fas fa-search mr-2"></i>Lookup
                 </button>
@@ -659,7 +659,7 @@
                 <div class="flex gap-2 shrink-0">
                     <a id="mediaDownload" class="hidden" download title="Save the original"><i class="fas fa-download"></i></a>
                     <a id="mediaTelegramLink" target="_blank" rel="noopener noreferrer" title="Open in Telegram"><i class="fab fa-telegram"></i></a>
-                    <button type="button" onclick="closeMediaModal()" title="Close (Esc)"><i class="fas fa-times"></i></button>
+                    <button type="button" data-click="closeMediaModal" title="Close (Esc)"><i class="fas fa-times"></i></button>
                 </div>
             </div>
             <div id="mediaStage" class="username-image-preview-body overflow-auto">
@@ -677,7 +677,7 @@
                     <i class="fas fa-comments text-purple-400 mr-2"></i>
                     Conversation Context
                 </h3>
-                <button onclick="closeContextModal()" class="text-gray-400 hover:text-white transition-colors">
+                <button data-click="closeContextModal" class="text-gray-400 hover:text-white transition-colors">
                     <i class="fas fa-times text-xl"></i>
                 </button>
             </div>
@@ -697,7 +697,7 @@
                         <i class="fas fa-history text-purple-400 mr-3"></i>
                         Username & Name History
                     </h3>
-                    <button onclick="closeHistoryModal()" class="text-gray-400 hover:text-white transition-colors">
+                    <button data-click="closeHistoryModal" class="text-gray-400 hover:text-white transition-colors">
                         <i class="fas fa-times text-xl"></i>
                     </button>
                 </div>

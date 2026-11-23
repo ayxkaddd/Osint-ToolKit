@@ -58,6 +58,23 @@ PUBLIC_AFTER_SETUP = {"/setup/status"}
 # Prefixes whose callers expect JSON rather than an HTML redirect
 API_PREFIXES = ("/api/", "/funstat/", "/web/", "/auth/", "/setup/")
 
+# Pages may only run the app's own script files: no inline <script> or on…="" handlers
+# (markup uses data-click, see main.js), no eval. Pictures come from anywhere (results
+# show remote avatars and site icons); everything else only from this server.
+PAGE_CSP = "; ".join([
+    "default-src 'self'",
+    "script-src 'self'",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob: https: http:",
+    "media-src 'self' blob:",
+    "connect-src 'self'",
+    "frame-src 'none'",
+    "frame-ancestors 'none'",
+    "base-uri 'none'",
+    "form-action 'self'",
+    "object-src 'none'",
+])
+
 LOGIN_MAX_FAILURES = 5
 LOGIN_WINDOW_SECONDS = 15 * 60
 
@@ -142,6 +159,7 @@ class OsintFramework:
         content_type = response.headers.get("content-type", "")
         if content_type.startswith("text/html"):
             response.headers.setdefault("X-Frame-Options", "DENY")
+            response.headers.setdefault("Content-Security-Policy", PAGE_CSP)
         elif not content_type.startswith("application/pdf"):
             # Files (icons, media, plugin SVGs) opened directly can't run scripts as this app
             response.headers.setdefault("Content-Security-Policy", "default-src 'none'; img-src 'self' data:; media-src 'self'; style-src 'unsafe-inline'; sandbox")

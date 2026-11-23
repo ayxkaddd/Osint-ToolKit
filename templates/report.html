@@ -61,7 +61,7 @@
         {% else %}
         <a href="?include=all">Include every result</a>
         {% endif %}
-        <button class="primary" onclick="window.print()">Print / save as PDF</button>
+        <button class="primary" id="printReport">Print / save as PDF</button>
     </div>
 
     <div class="page">
@@ -246,5 +246,6 @@
             investigation; Export downloads all of it as a .zip, with the files that were added.
         </footer>
     </div>
+<script src="/static/js/report.js"></script>
 </body>
 </html>

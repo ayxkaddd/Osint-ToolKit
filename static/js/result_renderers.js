@@ -646,9 +646,14 @@ function mailboxIcon(provider, email, size = 'w-4 h-4') {
     if (!domain) return fallback;
     const src = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=64`;
     return `<img src="${escapeAttr(src)}" alt="${name}" title="${name}" loading="lazy" referrerpolicy="no-referrer"
-        class="${size} shrink-0 rounded-sm bg-white/95 p-px" onerror="this.nextElementSibling.hidden=false;this.remove()">${fallback}`;
+        class="${size} shrink-0 rounded-sm bg-white/95 p-px" data-img-error="mailboxIconFailed">${fallback}`;
 }
 window.mailboxIcon = mailboxIcon;
+
+function mailboxIconFailed(img) {
+    img.nextElementSibling.hidden = false;
+    img.remove();
+}
 
 function renderUsernameSearch(data) {
     if (!data || typeof data !== 'object' || !Array.isArray(data.results)) return renderValue(data);
@@ -884,7 +889,7 @@ function imageLoadFailed(img) {
 function faceImageHtml(url, name, sizeClass, imageClass) {
     if (!url) return imagePlaceholderHtml(sizeClass);
     return `<img src="${escapeAttr(url)}" alt="" loading="lazy" referrerpolicy="no-referrer" data-image-view="" data-image-title="${escapeAttr(name || 'Match')}"
-        data-placeholder-size="${sizeClass}" onerror="imageLoadFailed(this)" class="${sizeClass} ${imageClass}">`;
+        data-placeholder-size="${sizeClass}" data-img-error="imageLoadFailed" class="${sizeClass} ${imageClass}">`;
 }
 
 function renderFaceSearch(data) {
@@ -989,3 +994,5 @@ function renderFunstatTextSearch(data) {
     if (!results.length) return renderValue(data);
     return renderFunstatMessages(results.map((r) => ({ ...r, group: r.group, text: r.text })));
 }
+
+registerActions({ mailboxIconFailed, imageLoadFailed });

@@ -273,7 +273,7 @@ function addEntry(entry) {
                     <img src="${escapeAttr(safeUrl(entry.avatar))}" referrerpolicy="no-referrer"
                          alt="Profile avatar" data-image-view="" data-image-title="Profile avatar"
                          class="w-12 h-12 rounded-full object-cover"
-                         data-placeholder-size="w-12 h-12 rounded-full shrink-0" data-placeholder-icon-only onerror="imageLoadFailed(this)">`
+                         data-placeholder-size="w-12 h-12 rounded-full shrink-0" data-placeholder-icon-only data-img-error="imageLoadFailed">`
                         : '<div class="w-12 h-12 rounded-full bg-gray-700 flex items-center justify-center"><i data-lucide="user" class="w-6 h-6"></i></div>'
                 }
                 <div>
@@ -336,7 +336,7 @@ function addEntry(entry) {
                 (url) => `
             <button type="button" data-image-view="${escapeAttr(safeUrl(url))}" data-image-title="${escapeAttr(`Photo · ${entry.year_month || ''}`)}">
                 <img src="${escapeAttr(safeUrl(url))}" referrerpolicy="no-referrer" alt="" loading="lazy"
-                     class="w-16 h-16 rounded-lg object-cover" data-placeholder-size="w-16 h-16 rounded-lg" onerror="imageLoadFailed(this)">
+                     class="w-16 h-16 rounded-lg object-cover" data-placeholder-size="w-16 h-16 rounded-lg" data-img-error="imageLoadFailed">
             </button>`
             )
             .join('')}</div>`
@@ -364,7 +364,7 @@ function addPhotos(urls) {
                 <img src="${escapeAttr(safeUrl(photoUrl))}" referrerpolicy="no-referrer"
                      alt="Profile photo"
                      class="w-full h-48 object-cover rounded-lg transition-transform duration-200 group-hover:scale-105"
-                     data-placeholder-size="w-full h-48 rounded-lg" onerror="imageLoadFailed(this)">
+                     data-placeholder-size="w-full h-48 rounded-lg" data-img-error="imageLoadFailed">
             </button>
         `;
         els.photos.appendChild(photoDiv);
@@ -386,3 +386,5 @@ if (els.input) {
         }
     });
 }
+
+registerActions({ searchProfile, stopSearch });

@@ -265,3 +265,18 @@ registerPluginRenderer(pluginId, (result) => {
 ```
 
 Escape anything from the API with `escapeHtml()` / `escapeAttr()` and links with `safeUrl()`.
+
+Pages only run script files (a Content-Security-Policy), so inline handlers such as
+`onclick="..."` or `onerror="..."` in the HTML you return do nothing. Name an action
+instead and register it:
+
+```js
+registerActions({
+    showRaw(id) {            // `this` is the clicked element
+        console.log(id);
+    },
+});
+// in the returned HTML:
+`<button type="button" data-click="showRaw" data-args="${clickArgs(result.value)}">Raw</button>`
+// a picture that may not load: data-img-error="hideImage" (or "removeImage")
+```

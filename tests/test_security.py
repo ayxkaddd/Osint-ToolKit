@@ -254,3 +254,74 @@ def test_cookie_secure_behind_trusted_https_proxy(app, monkeypatch):
 
 def test_cookie_secure_setting(app, monkeypatch):
     assert "secure" in _login_cookie(app, monkeypatch, COOKIE_SECURE="true")
+
+
+# --- Content-Security-Policy: pages run only the app's own script files ---
+
+def _page_csp(response):
+    assert response.headers["content-type"].startswith("text/html")
+    csp = response.headers["content-security-policy"]
+    directives = dict(d.strip().split(" ", 1) for d in csp.split(";") if " " in d.strip())
+    return directives
+
+
+@pytest.mark.parametrize("path", ["/", "/dashboard", "/investigations", "/username", "/funstat", "/plugins",
+                                  "/plugins/builder", "/settings", "/websearch", "/no-such-page"])
+def test_pages_have_a_strict_script_policy(anon, client, path):
+    response = (anon if path == "/" else client).get(path, headers={"Accept": "text/html"})
+    directives = _page_csp(response)
+    assert directives["script-src"] == "'self'"
+    assert "'unsafe-inline'" not in directives["script-src"] and "'unsafe-eval'" not in directives["script-src"]
+    assert directives["object-src"] == "'none'" and directives["frame-ancestors"] == "'none'"
+
+
+def test_investigation_pages_have_the_policy(client, investigation):
+    for page in ("view", "notes/view", "report"):
+        response = client.get(f"/api/investigations/{investigation}/{page}")
+        assert response.status_code == 200, page
+        assert _page_csp(response)["script-src"] == "'self'", page
+
+
+def test_setup_pages_have_the_policy(app, monkeypatch):
+    from fastapi.testclient import TestClient
+    from routes import setup_routes
+    monkeypatch.setattr(setup_routes, "check_setup_complete", lambda: False)
+    for host in ("127.0.0.1", "203.0.113.9"):  # the wizard, and the "setup link needed" page
+        response = TestClient(app, client=(host, 5000)).get("/setup")
+        assert _page_csp(response)["script-src"] == "'self'"
+
+
+def test_templates_have_no_inline_scripts_or_handlers():
+    """The policy would block them: scripts go in static/js, handlers use data-click (main.js)."""
+    import re
+    from conftest import REPO
+    inline_script = re.compile(r'<script(?![^>]*\b(?:src=|type="application/json"))[^>]*>')
+    handler = re.compile(r'\son[a-z]+\s*=\s*["\']', re.I)
+    problems = []
+    for path in sorted((REPO / "templates").glob("*.html")):
+        text = path.read_text()
+        problems += [f"{path.name}: {m.group(0)}" for m in inline_script.finditer(text)]
+        problems += [f"{path.name}: {m.group(0)}" for m in handler.finditer(text)]
+    for path in sorted((REPO / "static/js").rglob("*.js")):
+        problems += [f"{path.relative_to(REPO)}: {m.group(0)}" for m in handler.finditer(path.read_text())]
+    assert not problems, problems
+
+
+def test_every_markup_action_is_registered():
+    """data-click="name" (and data-submit, data-img-error) only runs actions passed to registerActions."""
+    import re
+    from conftest import REPO
+    used, registered = {}, set()
+    files = list((REPO / "templates").glob("*.html")) + list((REPO / "static/js").rglob("*.js"))
+    for path in files:
+        text = re.sub(r'^\s*//[^\n]*', '', path.read_text(), flags=re.M)  # not the ones in comments
+        for name in re.findall(r'data-(?:click|submit|img-error)="(\w+)"', text):
+            used.setdefault(name, path.name)
+        for block in re.findall(r'registerActions\(\{(.*?)\}\);', text, re.S):
+            block = re.sub(r'//[^\n]*', '', block)
+            # shorthand names (`fn,`) and methods (`name(...) {`) at the top level of the object
+            registered.update(re.findall(r'^\s*(\w+)\s*(?:,|$|\()', block, re.M))
+            registered.update(re.findall(r'\{\s*(\w+)\s*,', "{" + block))
+            registered.update(re.findall(r',\s*(\w+)\s*(?=,|$)', block))
+    missing = {name: where for name, where in used.items() if name not in registered}
+    assert not missing, missing

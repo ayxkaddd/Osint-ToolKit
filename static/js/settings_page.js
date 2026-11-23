@@ -1,0 +1,234 @@
+// Settings page (settings.html): API keys and module settings
+(function () {
+    const container = document.getElementById('settingsModules');
+    // API keys, not a login: keep browsers and password managers from filling saved credentials in
+    // ("new-password" is the value browsers honour on password fields; "off" is ignored there)
+    const NO_AUTOFILL = (type) =>
+        `autocomplete="${type === 'password' ? 'new-password' : 'off'}" data-lpignore="true" data-1p-ignore data-bwignore data-form-type="other"`;
+
+    // Only what still blocks a module; a configured module needs no label
+    function readinessFor(endpoint, modules) {
+        return modules
+            .filter((m) => m.page === endpoint && !m.ready)
+            .map(
+                (m) =>
+                    `<span class="text-xs text-amber-300/80" title="${escapeAttr(m.problems.join('; '))}"><i class="fas fa-wrench mr-1 text-[10px]" aria-hidden="true"></i>${escapeHtml(m.problems[0] || 'Needs setup')}</span>`
+            )
+            .join(' ');
+    }
+
+    let openedAtField = false; // the #KEY field from the address has been focused
+
+    async function load() {
+        let settingsRes, modules;
+        try {
+            const response = await fetch('/api/settings');
+            settingsRes = await response.json();
+            if (!response.ok || !Array.isArray(settingsRes.modules))
+                throw new Error(settingsRes.detail || `HTTP ${response.status}`);
+            modules = await getModules(true);
+        } catch (error) {
+            container.innerHTML = `<p class="text-red-400">Could not load settings: ${escapeHtml(error.message)}</p>`;
+            return;
+        }
+        container.innerHTML = settingsRes.modules
+            .map(
+                (group, i) => `
+            <form class="card" data-settings-form="${i}">
+                <div class="flex items-center justify-between gap-3 flex-wrap mb-4">
+                    <a href="${escapeAttr(group.endpoint)}" class="text-lg font-semibold hover:text-purple-300">${escapeHtml(group.module)}${
+                        group.plugin
+                            ? ' <span class="ml-1 align-middle px-2 py-0.5 rounded-md text-xs font-normal bg-purple-500/15 text-purple-300"><i class="fas fa-puzzle-piece mr-1"></i>Plugin</span>'
+                            : ''
+                    }</a>
+                    <div class="flex flex-wrap gap-1.5">${readinessFor(group.endpoint, modules)}</div>
+                </div>
+                <div class="space-y-3">
+                    ${group.fields
+                        .map(
+                            (f) => `
+                        <label class="block">
+                            <span class="flex items-center justify-between text-sm text-gray-300 mb-1">
+                                <span>${escapeHtml(f.label)} <span class="text-xs text-gray-500 font-mono">${escapeHtml(f.key)}</span></span>
+                                ${
+                                    f.configured
+                                        ? `<span class="text-xs text-emerald-300"><i class="fas fa-check mr-1"></i>set ${f.display ? `<span class="font-mono text-gray-400">${escapeHtml(f.display)}</span>` : ''}</span>`
+                                        : '<span class="text-xs text-gray-500">not set</span>'
+                                }
+                            </span>
+                            <input name="${escapeAttr(f.key)}" type="${f.type === 'password' ? 'password' : 'text'}" ${NO_AUTOFILL(f.type)}
+                                placeholder="${f.configured ? 'Enter a new value to replace it' : 'Not set'}"
+                                class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-purple-500">
+                            ${f.help ? `<span class="block text-xs text-gray-500 mt-1">${escapeHtml(f.help)}</span>` : ''}
+                        </label>`
+                        )
+                        .join('')}
+                </div>
+                <div class="flex justify-end mt-4">
+                    <button type="submit" class="bg-purple-600 hover:bg-purple-500 px-4 py-2 rounded-lg text-sm font-medium">Save</button>
+                </div>
+            </form>`
+            )
+            .join('');
+        // only when the page opens: reloading after a save shouldn't jump back to that field
+        if (!openedAtField) {
+            openedAtField = true;
+            focusHashField();
+        }
+    }
+
+    // /settings#SERPAPI_KEY (the "Add the ... key" links): go to that field
+    function focusHashField() {
+        let key = '';
+        try {
+            key = decodeURIComponent(location.hash.slice(1));
+        } catch (e) {
+            return; // a broken address (#%)
+        }
+        const input = key && container.querySelector(`input[name="${CSS.escape(key)}"]`);
+        if (!input) return;
+        input.scrollIntoView({ block: 'center' });
+        input.focus({ preventScroll: true });
+    }
+    window.addEventListener('hashchange', focusHashField);
+
+    container.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const form = e.target;
+        const values = {};
+        new FormData(form).forEach((v, k) => {
+            if (String(v).trim()) values[k] = String(v).trim();
+        });
+        if (!Object.keys(values).length) {
+            showTemporaryNotification('Nothing to save - all fields are empty', 'info');
+            return;
+        }
+        const response = await fetch('/api/settings/update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(values),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            showTemporaryNotification(data.detail || 'Failed to save', 'error');
+            return;
+        }
+        const saved = [...form.querySelectorAll('label')]
+            .filter((l) => data.updated.includes(l.querySelector('input')?.name))
+            .map((l) => l.querySelector('span > span')?.firstChild?.textContent.trim())
+            .filter(Boolean);
+        showTemporaryNotification(`Saved: ${(saved.length ? saved : data.updated).join(', ')}`, 'success');
+        load();
+    });
+
+    async function telegram() {
+        const box = document.getElementById('settingsTelegram');
+        try {
+            const status = await fetch('/auth/tg/status').then((r) => r.json());
+            box.innerHTML = `<div class="bg-[#14151f] border border-[#24283b] rounded-xl p-4 flex items-center justify-between">
+                <span><i class="fab fa-telegram text-sky-400 mr-2"></i>Telegram account (VK history, Funstat media)</span>
+                ${
+                    status.configured === false
+                        ? '<span class="text-sm text-gray-400">Needs an API ID and hash, free from <a href="https://my.telegram.org" target="_blank" rel="noopener noreferrer" class="underline hover:text-white">my.telegram.org</a> <a href="#TG_API_ID" class="ml-2 bg-sky-700 hover:bg-sky-600 text-white px-3 py-1.5 rounded">Add them</a></span>'
+                        : status.authorized
+                          ? '<span class="text-sm text-emerald-300"><i class="fas fa-check mr-1"></i>logged in</span>'
+                          : '<a href="/telegram_auth" class="text-sm bg-sky-700 hover:bg-sky-600 px-3 py-1.5 rounded">Log in</a>'
+                }
+            </div>`;
+        } catch (e) {
+            box.innerHTML = '';
+        }
+    }
+
+    async function balances() {
+        const box = document.getElementById('settingsBalances');
+        try {
+            const data = await fetch('/api/modules/balances').then((r) => r.json());
+            const entries = Object.entries(data.balances || {});
+            if (!entries.length) return;
+            const names = { oi: 'OSINT Industries credits', web_search: 'SerpAPI', funstat: 'Funstat (last seen)' };
+            box.innerHTML = `<div class="flex flex-wrap gap-3">${entries
+                .map(
+                    ([k, v]) =>
+                        `<div class="bg-[#14151f] border border-[#24283b] rounded-xl px-4 py-2 text-sm"><span class="text-gray-400">${escapeHtml(names[k] || k)}:</span> <span class="text-white">${escapeHtml(v)}</span></div>`
+                )
+                .join('')}</div>`;
+        } catch (e) {
+            /* balances are optional */
+        }
+    }
+
+    async function proxies() {
+        const box = document.getElementById('settingsProxies');
+        let data;
+        try {
+            data = await fetch('/api/proxies').then((r) => r.json());
+        } catch (e) {
+            box.innerHTML = '';
+            return;
+        }
+        const when = (t) => (t ? fmtDateTime(t * 1000) : 'never');
+        const status = data.healthy
+            ? `${data.healthy} healthy (${data.user_count} yours, ${data.public} public) · refreshed ${when(data.last_refresh)}`
+            : data.enabled
+              ? 'no healthy proxies yet — checking in the background'
+              : 'disabled';
+        box.innerHTML = `
+          <form class="card" id="proxyForm">
+            <div class="flex items-center justify-between gap-3 flex-wrap mb-3">
+                <span class="text-lg font-semibold"><i class="fas fa-network-wired mr-2 text-purple-300"></i>Proxies</span>
+                <span class="text-xs ${data.healthy ? 'text-emerald-300' : 'text-gray-400'}">${escapeHtml(status)}</span>
+            </div>
+            <p class="text-sm text-gray-400 mb-3">Route the scraping modules (username, DNS recon, t.me, face search, Cavalier, WHOIS history) through proxies, so the sites don't see this server's address. One per line, <span class="font-mono">host:port</span> or <span class="font-mono">scheme://host:port</span> (http, https, socks4, socks5). Leave empty to use free public proxies, fetched and checked automatically. Dead proxies are skipped and the request goes direct.</p>
+            <p class="text-sm text-amber-300/80 mb-3"><i class="fas fa-triangle-exclamation mr-1"></i>Lookups take longer through proxies, and many sites block free proxies, so a username search can find fewer accounts than without them. Off by default; your own paid proxies work much better than public ones.</p>
+            <textarea id="proxyList" rows="6" spellcheck="false" ${NO_AUTOFILL('text')}
+                placeholder="203.0.113.5:8080&#10;socks5://198.51.100.9:1080"
+                class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm font-mono focus:outline-none focus:border-purple-500"></textarea>
+            <div class="flex flex-wrap items-center gap-4 mt-3">
+                <label class="flex items-center gap-2 text-sm text-gray-300"><input type="checkbox" id="proxyEnabled" class="accent-purple-500"> Use proxies</label>
+                <label class="flex items-center gap-2 text-sm text-gray-300"><input type="checkbox" id="proxyFetchPublic" class="accent-purple-500"> Fetch public proxies when my list is empty or short</label>
+            </div>
+            <div class="flex justify-end gap-2 mt-4">
+                <button type="button" id="proxyRefresh" class="bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded-lg text-sm font-medium"><i class="fas fa-rotate mr-1"></i>Refresh now</button>
+                <button type="submit" class="bg-purple-600 hover:bg-purple-500 px-4 py-2 rounded-lg text-sm font-medium">Save</button>
+            </div>
+          </form>`;
+        document.getElementById('proxyList').value = data.proxies || '';
+        document.getElementById('proxyEnabled').checked = !!data.enabled;
+        document.getElementById('proxyFetchPublic').checked = !!data.fetch_public;
+
+        document.getElementById('proxyForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const body = {
+                proxies: document.getElementById('proxyList').value,
+                enabled: document.getElementById('proxyEnabled').checked,
+                fetch_public: document.getElementById('proxyFetchPublic').checked,
+            };
+            const response = await fetch('/api/proxies', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            });
+            const d = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                showTemporaryNotification(d.detail || 'Failed to save', 'error');
+                return;
+            }
+            showTemporaryNotification(
+                `Saved ${d.saved} prox${d.saved === 1 ? 'y' : 'ies'} — validating in the background`,
+                'success'
+            );
+            setTimeout(proxies, 1500);
+        });
+        document.getElementById('proxyRefresh').addEventListener('click', async () => {
+            await fetch('/api/proxies/refresh', { method: 'POST' });
+            showTemporaryNotification('Refreshing the proxy pool in the background', 'info');
+            setTimeout(proxies, 2000);
+        });
+    }
+
+    load();
+    telegram();
+    balances();
+    proxies();
+})();
