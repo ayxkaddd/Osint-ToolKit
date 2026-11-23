@@ -2,6 +2,7 @@
 // Summaries are listed up front; a result's payload is fetched only when its
 // card is expanded (results can be large), then cached.
 
+const investigationId = pageData('investigationId');
 let currentInvestigation = null;
 let allResults = []; // summaries from /results
 const detailCache = {}; // result_id -> full record
@@ -223,12 +224,12 @@ function renderHeader(investigation) {
                 </div>
             </div>
             <div class="flex flex-wrap gap-2 shrink-0">
-                ${isCurrent ? '' : `<button type="button" onclick="setThisInvestigationAsActive()" class="px-3 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-sm font-medium flex items-center gap-1.5"><i data-lucide="radio" class="w-4 h-4"></i>Record here</button>`}
+                ${isCurrent ? '' : `<button type="button" data-click="setThisInvestigationAsActive" class="px-3 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-sm font-medium flex items-center gap-1.5"><i data-lucide="radio" class="w-4 h-4"></i>Record here</button>`}
                 <a href="/api/investigations/${escapeAttr(investigation.investigation_id)}/notes/view" class="px-3 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm flex items-center gap-1.5"><i data-lucide="sticky-note" class="w-4 h-4"></i>Notes</a>
-                <button type="button" onclick="openEditModal()" class="px-3 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm flex items-center gap-1.5"><i data-lucide="pencil" class="w-4 h-4"></i>Edit</button>
+                <button type="button" data-click="openEditModal" class="px-3 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm flex items-center gap-1.5"><i data-lucide="pencil" class="w-4 h-4"></i>Edit</button>
                 <a href="/api/investigations/${escapeAttr(investigation.investigation_id)}/report" target="_blank" class="px-3 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm flex items-center gap-1.5"><i data-lucide="file-text" class="w-4 h-4"></i>Report</a>
-                <button type="button" onclick="exportResults()" class="px-3 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm flex items-center gap-1.5"><i data-lucide="download" class="w-4 h-4"></i>Export</button>
-                <button type="button" onclick="deleteInvestigation()" class="px-3 py-2 bg-gray-800 hover:bg-red-900/60 border border-gray-700 hover:border-red-700 text-gray-300 hover:text-red-200 rounded-lg text-sm flex items-center gap-1.5"><i data-lucide="trash-2" class="w-4 h-4"></i>Delete</button>
+                <button type="button" data-click="exportResults" class="px-3 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm flex items-center gap-1.5"><i data-lucide="download" class="w-4 h-4"></i>Export</button>
+                <button type="button" data-click="deleteInvestigation" class="px-3 py-2 bg-gray-800 hover:bg-red-900/60 border border-gray-700 hover:border-red-700 text-gray-300 hover:text-red-200 rounded-lg text-sm flex items-center gap-1.5"><i data-lucide="trash-2" class="w-4 h-4"></i>Delete</button>
             </div>
         </div>
     `;
@@ -1129,7 +1130,7 @@ const entityState = {
 function sharedStatHtml() {
     const n = entityState.sharedCount;
     if (!n) return '';
-    return `<button type="button" onclick="showSharedIdentifiers()" class="text-amber-300 hover:text-amber-200" title="Identifiers that other investigations have too">
+    return `<button type="button" data-click="showSharedIdentifiers" class="text-amber-300 hover:text-amber-200" title="Identifiers that other investigations have too">
         <i data-lucide="folder-open" class="w-3.5 h-3.5 inline mr-1"></i>${n.toLocaleString()} in other investigations</button>`;
 }
 
@@ -1648,3 +1649,18 @@ async function reloadResults() {
     populateModuleFilterOptions();
     renderResults();
 }
+
+registerActions({
+    setThisInvestigationAsActive,
+    openEditModal,
+    closeEditModal,
+    submitEditModal,
+    exportResults,
+    deleteInvestigation,
+    showSharedIdentifiers,
+    openManualModal,
+    closeManualModal,
+    submitManualModal,
+    closeMoveModal,
+    submitMoveModal,
+});

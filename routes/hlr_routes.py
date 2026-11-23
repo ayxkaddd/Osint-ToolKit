@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from services.hlr_service import HLRService
 from utils.investigation_decorator import save_investigation
+from utils.errors import fail
 
 router = APIRouter(prefix="/api/hlr")
 hlr_service = HLRService()
@@ -21,4 +22,4 @@ async def hlr_lookup(request: HLRRequest):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        fail("HLR lookup failed", e)

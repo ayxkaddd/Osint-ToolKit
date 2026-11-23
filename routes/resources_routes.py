@@ -3,20 +3,21 @@ from fastapi.responses import JSONResponse
 import json
 from models.resources_models import Module, Resources
 from services import plugin_loader
+from utils.errors import fail
 
 router = APIRouter(prefix="/api/resources")
 
 @router.get("/")
 def get_resources() -> JSONResponse:
     try:
-        with open("resources.json", "r") as f:
+        with open("resources.json") as f:
             resources = Resources.model_validate(json.load(f))
         resources.modules += [Module.model_validate(card) for card in _plugin_cards()]
         return resources
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        fail("Loading resources.json failed", e)
 
 
 def _plugin_cards() -> list:

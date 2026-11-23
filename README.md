@@ -61,17 +61,32 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 `requirements-lock.txt` has the exact versions the project is tested with, if a newer release of a dependency causes problems.
+The server runs from this folder; it is not a package to `pip install`.
 
 4. Start the server and open `http://localhost:8000`:
 ```bash
 uvicorn main:app
 ```
+Run it as a single process (no `--workers`): investigations and the login limit are kept by that one process, so a second process on the same folder refuses to start.
 
-Behind a reverse proxy (nginx, Caddy) that adds the client address to `X-Forwarded-For`, set `TRUST_PROXY_HEADERS=true` in `.env` so the login limit counts each client separately. If the proxy runs on another machine, also start uvicorn with `--forwarded-allow-ips <proxy address>`.
+Behind a reverse proxy (nginx, Caddy) that adds the client address to `X-Forwarded-For`, set `TRUST_PROXY_HEADERS=true` in `.env` so the login limit counts each client separately. If the proxy runs on another machine, also start uvicorn with `--forwarded-allow-ips <proxy address>`. When the proxy serves HTTPS, the login cookie is sent over HTTPS only, without setting anything (`COOKIE_SECURE=true` forces that).
 
-5. The setup wizard opens on first start: create the admin login, pick the modules you want and add API keys. Everything can be changed later on the Settings page (it writes `.env` - see `.env.example` for all keys).
+5. The setup wizard opens on first start: create the admin login, pick the modules you want and add API keys. On the computer the server runs on it opens as it is; from another computer (a server on `0.0.0.0`, Docker), open the setup link printed in the server console (`/setup?token=...`), so nobody else who reaches the port can create the admin account. Everything can be changed later on the Settings page (it writes `.env` - see `.env.example` for all keys).
 
 The CSS is prebuilt (`static/css/tailwind.css`). After changing templates, rebuild it with `npm install && npm run build:css`.
+
+## Command-line client
+
+`osint` works with the same investigations from a terminal: list them, show results and identifiers, start background lookups, export cases. It talks to a running server over its API, so you can use it on another computer too. Install it with [pipx](https://pipx.pypa.io) (or `uv tool install` with the same address) on Windows, macOS or Linux:
+
+```bash
+pipx install "git+https://github.com/ayxkaddd/Osint-ToolKit#subdirectory=cli"
+osint login http://127.0.0.1:8000
+osint list
+osint lookup someone@example.com -m holehe   # without -m it only lists the modules that could run
+```
+
+Read commands take `--json` for `jq`. All commands are in [cli/README.md](cli/README.md).
 
 # Modules Setup
 
@@ -170,15 +185,21 @@ Plugins add your own modules: a page to search with, a place in the lookup box, 
 
 The format, both kinds and examples are in [plugins/README.md](plugins/README.md). Examples ship with the toolkit: GitHub user, certificate transparency (crt.sh), Gravatar, OathNet and Hunter.io (one plugin with three searches: domain search, email verification, person enrichment).
 
-Plugins you make, and the examples, run as they are. A plugin from someone else is marked **not checked**: a no-code one works, with a warning saying where your searches are sent, while one that runs code, reads another module's API key or connects to your local network stays off until you look at its files and turn it on.
+Plugins you make, and the examples, run as they are. A plugin from someone else is marked **not checked**: a no-code one works, with a warning saying where your searches are sent, while one that runs code, reads another module's API key or connects to your local network stays off until you look at its files and turn it on. A plugin's `renderer.js` runs in your pages with your access to every investigation, so read it before turning it on.
+
+## Security
+
+- Pages only run the toolkit's own script files (a Content-Security-Policy), so a value from a result that slips past escaping can't run as a script. Plugin views use `data-click` instead of inline `onclick` (see [plugins/README.md](plugins/README.md)).
+- Logins last 24 hours. **Log out everywhere** (⋮ menu) also ends the sessions in other browsers and any copied login cookie.
+- Other websites can link to pages, but can't call the API or submit anything.
 
 ## Project Structure
 
 - `/routes`: API route handlers and page routes
-- `/services`: lookups and external integrations (`module_registry.py` lists every module, its inputs and requirements)
+- `/services`: lookups and external integrations (`module_registry.py` lists every module, its inputs and requirements). Investigation storage is in `services/investigations/` and the plugin loader in `services/pluginkit/`, one module per area
 - `/models`: Pydantic models
 - `/utils`: investigation saving, stream reducers, settings, subprocess and Telegram helpers
 - `/plugins`: plugins (one folder each), the plugin SDK and `python -m plugins`
-- `/templates`, `/static`: pages, per-module JS (`static/js/services/`) and the Tailwind build
-- `/tests`: automated tests (`pip install -r requirements-dev.txt`, then `python -m pytest`). They run in a temporary folder with their own settings and need no network
+- `/templates`, `/static`: pages, per-module JS (`static/js/services/`), the shared JS (`static/js/main.js`, an ES module made of `static/js/lib/`) and the Tailwind build
+- `/tests`: automated tests (`pip install -r requirements-dev.txt`, then `python -m pytest`; `ruff check .` is the lint CI runs). They run in a temporary folder with their own settings and need no network
 - `/investigation_results`, `/media`: local case data (git-ignored, never commit it)

@@ -100,7 +100,7 @@ def parse_spf(record: str) -> dict[str, Any]:
         t = term.lstrip("+")
         lower = t.lower()
         if lower.startswith(("include:", "redirect=")):
-            host = re.split(r"[:=]", t, 1)[1].lower()
+            host = re.split(r"[:=]", t, maxsplit=1)[1].lower()
             includes.append(host)
             service = match_provider(host, SPF_SERVICES)
             if service and service not in services:
@@ -169,7 +169,7 @@ def analyze_records(records: dict[str, list[str]], dmarc_txt: Iterable[str]) -> 
     soa = (records.get("SOA") or [""])[0].split()
     if len(soa) >= 2 and "." in soa[1]:
         # SOA RNAME: the first unescaped dot is the @ (hostmaster.example.com)
-        local, host = (re.split(r"(?<!\\)\.", soa[1].rstrip("."), 1) + [""])[:2]
+        local, host = (re.split(r"(?<!\\)\.", soa[1].rstrip("."), maxsplit=1) + [""])[:2]
         local = local.replace("\\.", ".")
         generic = "hostmaster" in local.lower() or "dns" in local.lower() or local.lower() in ("root", "admin", "noc")
         if host and not generic:
@@ -226,7 +226,7 @@ def parse_cymru_origin(txt: str) -> dict[str, str]:
     # "15169 | 8.8.8.0/24 | US | arin | 2014-03-14"
     parts = [p.strip() for p in txt_value(txt).split("|")]
     keys = ["asn", "prefix", "country", "registry", "allocated"]
-    out = dict(zip(keys, parts))
+    out = dict(zip(keys, parts, strict=False))  # the answer may have fewer fields
     out["asn"] = (out.get("asn") or "").split()[0] if out.get("asn") else ""
     return out
 

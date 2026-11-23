@@ -55,7 +55,7 @@
 
                         <!-- Investigations Dropdown -->
                         <div class="relative">
-                            <button id="investigationsDropdown" type="button" onclick="toggleInvestigationsDropdown()"
+                            <button id="investigationsDropdown" type="button" data-click="toggleInvestigationsDropdown"
                                 aria-haspopup="true"
                                 class="flex items-center space-x-2 hover:text-purple-400 transition-colors bg-gray-800/50 px-3 py-2 rounded-lg max-w-xs">
                                 <span class="rec-indicator" aria-hidden="true"></span>
@@ -64,24 +64,13 @@
                                 <i class="fas fa-chevron-down text-sm transition-transform duration-200"
                                     id="dropdownIcon"></i>
                             </button>
-                            <script>
-                                // Last known name, before the first paint; main.js corrects it from the server
-                                try {
-                                    const name = localStorage.getItem("currentInvestigationName");
-                                    if (name && localStorage.getItem("currentInvestigationId")) {
-                                        const label = document.getElementById("currentInvestigationName");
-                                        label.textContent = name;
-                                        label.classList.add("text-purple-300");
-                                        document.getElementById("investigationsDropdown").classList.add("recording");
-                                    }
-                                } catch (e) {}
-                            </script>
+                            <script src="/static/js/investigation_name.js"></script>
 
                             <!-- Dropdown Menu -->
                             <div id="investigationsDropdownMenu"
                                 class="absolute right-0 mt-2 w-80 bg-gray-900 border border-gray-700 rounded-lg shadow-xl hidden z-50">
                                 <div class="p-3 border-b border-gray-700">
-                                    <button onclick="openCreateInvestigationModal()"
+                                    <button data-click="openCreateInvestigationModal"
                                         class="w-full flex items-center space-x-2 text-left hover:bg-gray-800 px-3 py-2 rounded-lg transition-colors text-green-400">
                                         <i class="fas fa-plus"></i>
                                         <span>Create New Investigation</span>
@@ -121,7 +110,7 @@
                         </div>
 
                         <!-- Added quick notes button -->
-                        <button type="button" onclick="toggleNoteSidebar()" title="Quick notes (Ctrl+K)" aria-label="Quick notes"
+                        <button type="button" data-click="toggleNoteSidebar" title="Quick notes (Ctrl+K)" aria-label="Quick notes"
                             class="flex items-center space-x-2 p-2 -m-2 hover:text-purple-400 transition-colors">
                             <i class="fas fa-sticky-note text-lg" aria-hidden="true"></i>
                             <span class="hidden lg:inline">Notes</span>
@@ -144,7 +133,7 @@
         <div id="notSavedBanner" class="hidden max-w-6xl mx-auto px-6 mt-4" role="status">
             <div class="bg-yellow-900/30 border border-yellow-700/60 rounded-lg px-4 py-3 flex items-center justify-between gap-3 text-sm">
                 <span class="text-yellow-100"><i class="fas fa-exclamation-triangle mr-2" aria-hidden="true"></i>No investigation is selected, so what you look up here is shown but not saved.</span>
-                <button type="button" onclick="openCreateInvestigationModal()" class="bg-yellow-700/60 hover:bg-yellow-600/60 px-3 py-1.5 rounded shrink-0">New investigation</button>
+                <button type="button" data-click="openCreateInvestigationModal" class="bg-yellow-700/60 hover:bg-yellow-600/60 px-3 py-1.5 rounded shrink-0">New investigation</button>
             </div>
         </div>
         {% block content %}{% endblock %}
@@ -153,7 +142,7 @@
     <!-- Notes sidebar (static/js/notes.js) -->
     <div id="noteSidebarBackdrop"
          class="fixed inset-0 bg-black/50 hidden z-40 transition-all duration-300 opacity-0"
-         onclick="closeNoteSidebar()">
+         data-click="closeNoteSidebar">
     </div>
 
     <div id="noteSidebar"
@@ -166,11 +155,11 @@
                     <span id="noteSaveStatus" class="text-xs text-gray-500 truncate"></span>
                 </div>
                 <div class="flex items-center gap-1 shrink-0">
-                    <button type="button" onclick="newSidebarNote()" title="New note" aria-label="New note"
+                    <button type="button" data-click="newSidebarNote" title="New note" aria-label="New note"
                         class="p-2 rounded text-gray-400 hover:text-white hover:bg-white/5"><i class="fas fa-plus"></i></button>
                     <a id="noteFullPageLink" href="#" title="Open all notes" aria-label="Open all notes"
                         class="p-2 rounded text-gray-400 hover:text-white hover:bg-white/5"><i class="fas fa-up-right-from-square"></i></a>
-                    <button type="button" onclick="closeNoteSidebar()" title="Close (Esc)" aria-label="Close notes"
+                    <button type="button" data-click="closeNoteSidebar" title="Close (Esc)" aria-label="Close notes"
                         class="p-2 rounded text-gray-400 hover:text-white hover:bg-white/5"><i class="fas fa-times"></i></button>
                 </div>
             </div>
@@ -192,11 +181,11 @@
     <!-- Create Investigation Modal -->
     <div id="createInvestigationModal"
         class="modal fixed inset-0 bg-black/70 hidden items-center justify-center z-50"
-        onclick="if (event.target === this) closeCreateInvestigationModal()">
+        data-click="closeCreateInvestigationModal" data-backdrop>
         <div class="modal-panel bg-gray-900 border border-gray-700 rounded-xl p-6 max-w-md w-full mx-4">
             <div class="flex justify-between items-center mb-4">
                 <h2 class="text-xl font-bold">Create New Investigation</h2>
-                <button type="button" onclick="closeCreateInvestigationModal()" aria-label="Close"
+                <button type="button" data-click="closeCreateInvestigationModal" aria-label="Close"
                     class="text-gray-400 hover:text-white transition-colors">
                     <i class="fas fa-times"></i>
                 </button>
@@ -220,7 +209,7 @@
                         class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:border-purple-500">
                 </div>
                 <div class="flex justify-end space-x-3 mt-6">
-                    <button type="button" onclick="closeCreateInvestigationModal()"
+                    <button type="button" data-click="closeCreateInvestigationModal"
                         class="px-4 py-2 bg-gray-700 text-white rounded hover:bg-gray-600 transition-colors">
                         Cancel
                     </button>
@@ -236,11 +225,11 @@
     <!-- Update Modal -->
     <div id="updateModal"
         class="modal fixed inset-0 bg-black/70 hidden items-center justify-center z-50"
-        onclick="if (event.target === this) closeUpdateModal()">
+        data-click="closeUpdateModal" data-backdrop>
         <div class="modal-panel bg-gray-900 border border-gray-700 rounded-xl p-6 max-w-md w-full mx-4">
             <div class="flex justify-between items-center mb-4">
                 <h2 class="text-xl font-bold">Update Available!</h2>
-                <button type="button" onclick="closeUpdateModal()" aria-label="Close" class="text-gray-400 hover:text-white transition-colors">
+                <button type="button" data-click="closeUpdateModal" aria-label="Close" class="text-gray-400 hover:text-white transition-colors">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
@@ -308,15 +297,17 @@
         </div>
     </div>
 
-    <script src="/static/js/main.js"></script>
+    <!-- main.js is a module (deferred); the scripts after it are deferred too, so they run
+         in this order once the page is parsed, after main.js has set the shared globals -->
+    <script type="module" src="/static/js/main.js"></script>
     <!-- Shared by result views and notes (snapshots of results render like the investigation page) -->
-    <script src="/static/js/masonry.js"></script>
-    <script src="/static/js/oi_cards.js"></script>
-    <script src="/static/js/ghunt_cards.js"></script>
-    <script src="/static/js/result_renderers.js"></script>
-    <script src="/static/js/plugin_cards.js"></script>
-    <script src="/api/plugins/client.js"></script>
-    <script src="/static/js/notes.js"></script>
+    <script defer src="/static/js/masonry.js"></script>
+    <script defer src="/static/js/oi_cards.js"></script>
+    <script defer src="/static/js/ghunt_cards.js"></script>
+    <script defer src="/static/js/result_renderers.js"></script>
+    <script defer src="/static/js/plugin_cards.js"></script>
+    <script defer src="/api/plugins/client.js"></script>
+    <script defer src="/static/js/notes.js"></script>
     {% block scripts %}{% endblock %}
     {% block extra_scripts %}{% endblock %}
 </body>

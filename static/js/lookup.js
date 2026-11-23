@@ -43,7 +43,7 @@ function renderInvestigationBanner(investigationId) {
         lookupEls.investigation.innerHTML = `
       <div class="bg-yellow-900/30 border border-yellow-700/60 rounded-lg px-4 py-3 flex items-center justify-between gap-3">
         <span class="text-yellow-100">Lookups are saved to an investigation. Select one in the header, or create one.</span>
-        <button type="button" onclick="openCreateModal()" class="bg-yellow-700/60 hover:bg-yellow-600/60 px-3 py-1.5 rounded text-sm shrink-0">New investigation</button>
+        <button type="button" data-click="openCreateInvestigationModal" class="bg-yellow-700/60 hover:bg-yellow-600/60 px-3 py-1.5 rounded text-sm shrink-0">New investigation</button>
       </div>`;
     }
 }

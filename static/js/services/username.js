@@ -632,7 +632,7 @@ class OSINTSearch {
                 banner
                     ? `<button type="button" class="username-card-banner" data-image-view="${escapeAttr(banner)}" data-image-title="${site}" data-image-note="Profile banner" title="Preview banner">
                 <img src="${escapeAttr(banner)}" alt="" loading="lazy" referrerpolicy="no-referrer"
-                    onerror="this.closest('.username-profile-card').classList.remove('has-banner'); this.parentElement.remove();">
+                    data-img-error="usernameBannerFailed">
             </button>`
                     : ''
             }
@@ -642,7 +642,7 @@ class OSINTSearch {
                         avatar
                             ? `<button type="button" class="username-avatar-preview-btn" data-image-view="${escapeAttr(avatar)}" data-image-title="${site}" data-image-note="Profile picture" title="Preview profile picture">
                         <img src="${escapeAttr(avatar)}" alt="" loading="lazy" referrerpolicy="no-referrer" class="username-profile-avatar"
-                            onerror="this.closest('.username-profile-pic').classList.add('no-avatar')">
+                            data-img-error="usernameAvatarFailed">
                     </button>
                     <div class="username-reverse-search" aria-label="Reverse image search">
                         ${this.getReverseImageSearchLinks(avatar)
@@ -658,7 +658,7 @@ class OSINTSearch {
                 </div>
                 <div class="username-profile-ident">
                     <div class="username-profile-site">
-                        ${faviconUrl ? `<img src="${escapeAttr(faviconUrl)}" alt="" loading="lazy" class="username-profile-favicon" onerror="this.remove()">` : ''}
+                        ${faviconUrl ? `<img src="${escapeAttr(faviconUrl)}" alt="" loading="lazy" class="username-profile-favicon" data-img-error="removeImage">` : ''}
                         <span>${escapeHtml(result.siteName)}</span>
                         ${result.category ? `<span class="username-profile-cat">${escapeHtml(result.category)}</span>` : ''}
                     </div>
@@ -748,7 +748,7 @@ class OSINTSearch {
         const fallback = `<div class="platform-icon ${platform.class}${faviconUrl ? ' username-site-mark-fallback' : ''}">${escapeHtml(platform.icon)}</div>`;
         return `<div class="username-site-mark">${
             faviconUrl
-                ? `<img src="${escapeAttr(faviconUrl)}" alt="" loading="lazy" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">`
+                ? `<img src="${escapeAttr(faviconUrl)}" alt="" loading="lazy" data-img-error="siteIconFailed">`
                 : ''
         }${fallback}</div>`;
     }
@@ -926,7 +926,7 @@ class OSINTSearch {
             categories
                 .map(
                     (category) =>
-                        `<option value="${category}" ${currentValue === category ? 'selected' : ''}>${category.charAt(0).toUpperCase() + category.slice(1)}</option>`
+                        `<option value="${escapeAttr(category)}" ${currentValue === category ? 'selected' : ''}>${escapeHtml(category.charAt(0).toUpperCase() + category.slice(1))}</option>`
                 )
                 .join('');
     }
@@ -1023,7 +1023,7 @@ class OSINTSearch {
             <div class="modal-content">
                 <div class="modal-header">
                     <div>
-                        <h2 class="text-xl font-bold text-white">${result.siteName}</h2>
+                        <h2 class="text-xl font-bold text-white">${escapeHtml(result.siteName)}</h2>
                         <p class="text-sm text-gray-400 mt-1">Full Profile Data</p>
                     </div>
                     <button class="close-modal text-gray-400 hover:text-white transition-colors">
@@ -1984,3 +1984,14 @@ document.addEventListener('DOMContentLoaded', () => {
         search.elements.filterSection.classList.remove('hidden');
     };
 });
+
+function usernameBannerFailed(img) {
+    img.closest('.username-profile-card')?.classList.remove('has-banner');
+    img.parentElement.remove();
+}
+
+function usernameAvatarFailed(img) {
+    img.closest('.username-profile-pic')?.classList.add('no-avatar');
+}
+
+registerActions({ usernameBannerFailed, usernameAvatarFailed });

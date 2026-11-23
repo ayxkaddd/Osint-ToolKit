@@ -1,6 +1,4 @@
 from fastapi import UploadFile
-import httpx
-from fastapi import HTTPException
 
 from utils.proxy_transport import make_async_client
 import io
@@ -11,6 +9,7 @@ import base64
 from typing import Optional
 
 from PIL import Image, UnidentifiedImageError
+from utils.errors import fail
 
 class FaceCoordinates(BaseModel):
     x1: float
@@ -97,10 +96,8 @@ class FaceSearch:
             faces =  response.json().get("faces", [])
 
             return DetectFacesResponse(faces=[FaceCoordinates(x1=face[0], y1=face[1], x2=face[2], y2=face[3]) for face in faces])
-        except httpx.HTTPError as e:
-            raise HTTPException(status_code=500, detail=f"Error calling face detection API: {str(e)}")
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+            fail("Face detection failed", e)
 
 
     async def search(self, image: UploadFile) -> FaceSearchResponse:
@@ -123,7 +120,5 @@ class FaceSearch:
             return FaceSearchResponse(query_image=thumbnail_data_url(image_data),
                                       results=[SearchResult(**result) for result in results])
 
-        except httpx.HTTPError as e:
-            raise HTTPException(status_code=500, detail=f"Error calling face search API: {str(e)}")
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+            fail("Face search failed", e)

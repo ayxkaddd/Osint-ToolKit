@@ -12,14 +12,14 @@
             <input type="text" id="user-id" autocomplete="off" placeholder="VK id, @name or vk.com link" class="field pl-11">
             <div class="field-icon"><i data-lucide="user" class="w-4 h-4"></i></div>
         </div>
-        <button type="button" id="vkSearchBtn" onclick="searchProfile()" class="btn-primary">Search</button>
+        <button type="button" id="vkSearchBtn" data-click="searchProfile" class="btn-primary">Search</button>
     </div>
 
     <div id="results" class="hidden space-y-4 mt-6">
         <div id="vkStatus" class="hidden flex items-center gap-3 text-sm text-gray-300">
             <span id="vkStatusIcon" class="w-4 flex justify-center shrink-0"></span>
             <span id="vkStatusText" class="flex-1"></span>
-            <button type="button" id="vkStopBtn" onclick="stopSearch()" class="hidden btn-secondary !py-1 !px-3 text-xs">Stop</button>
+            <button type="button" id="vkStopBtn" data-click="stopSearch" class="hidden btn-secondary !py-1 !px-3 text-xs">Stop</button>
         </div>
         <div id="vkError" class="hidden px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-sm text-red-300 break-words"></div>
         <div id="vkNotices" class="hidden bg-gray-900/60 border border-gray-700 rounded-lg p-4 text-sm text-gray-200 space-y-2"></div>
@@ -37,5 +37,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/services/vk_history.js"></script>
+<script defer src="/static/js/services/vk_history.js"></script>
 {% endblock %}

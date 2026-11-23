@@ -12,10 +12,13 @@ import shutil
 import httpx
 from pathlib import Path
 from typing import Optional, Any
+import hmac
+import ipaddress
 import json
 import platform
 
 from utils.config import update_env
+from utils.errors import describe
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -25,6 +28,12 @@ templates = Jinja2Templates(directory="templates")
 CONFIG_PATH = Path(".env")
 SETUP_COMPLETE_FLAG = Path(".setup_complete")
 SETUP_STATE_PATH = Path(".setup_state.json")
+
+# Until setup is done, anyone who can reach the port could create the admin account.
+# Requests from this computer are trusted; from anywhere else the setup pages need
+# this token, printed in the server console (setup_link_message).
+SETUP_TOKEN = secrets.token_urlsafe(24)
+SETUP_TOKEN_COOKIE = "setup_token"
 
 
 class SetupState(BaseModel):
@@ -73,6 +82,32 @@ def save_setup_state(state: SetupState):
 def check_setup_complete() -> bool:
     """Check if setup has been completed"""
     return SETUP_COMPLETE_FLAG.exists() and CONFIG_PATH.exists()
+
+
+def setup_link_message() -> str:
+    return ("Setup is not complete. Open /setup in a browser on this computer, or from "
+            f"another computer open /setup?token={SETUP_TOKEN} on this server's address.")
+
+
+def is_local_request(request: Request) -> bool:
+    host = request.client.host if request.client else ""
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
+
+
+def valid_setup_token(token: Optional[str]) -> bool:
+    return bool(token) and hmac.compare_digest(token, SETUP_TOKEN)
+
+
+def setup_locked_response(request: Request, json_response: bool):
+    message = ("Setup can only be done from the computer the server runs on, or with the "
+               "setup link printed in the server console.")
+    if json_response:
+        return JSONResponse({"detail": message}, status_code=403)
+    return templates.TemplateResponse(request, "setup_locked.html", {"message": message},
+                                      status_code=403)
 
 
 def check_dependency(command: str) -> bool:
@@ -132,7 +167,7 @@ def check_go_tools() -> dict[str, dict[str, Any]]:
 
                 version = version_line or cleaned
 
-            except Exception:
+            except (OSError, subprocess.SubprocessError):
                 version = None
 
         
@@ -146,6 +181,10 @@ def check_go_tools() -> dict[str, dict[str, Any]]:
         }
     
     return tools
+
+
+GITFIVE_IMPORT_CHECK = "import trio, git, imagehash"
+GO_INSTALL_TIMEOUT = 600
 
 
 def check_gitfive_detailed() -> dict[str, Any]:
@@ -167,13 +206,14 @@ def check_gitfive_detailed() -> dict[str, Any]:
             requirements_met = False
             if has_venv and has_script:
                 try:
+                    # Packages from GitFive's own requirements.txt (trio, GitPython, imagehash)
                     result = subprocess.run(
-                        [str(venv_python), "-c", "import ghunt"],
+                        [str(venv_python), "-c", GITFIVE_IMPORT_CHECK],
                         capture_output=True,
                         timeout=5
                     )
                     requirements_met = result.returncode == 0
-                except Exception:
+                except (OSError, subprocess.SubprocessError):
                     pass
             
             return {
@@ -352,7 +392,8 @@ def validate_api_key(service: str, api_key: str) -> dict[str, Any]:
     try:
         return validator(api_key)
     except Exception as e:
-        return {"valid": False, "message": f"Validation error: {str(e)}"}
+        logger.warning("Checking the %s key failed", service, exc_info=True)
+        return {"valid": False, "message": f"Could not check the key: {describe(e)}"}
 
 
 def save_env_config(config: dict[str, str]):
@@ -375,19 +416,24 @@ def install_go_tool(tool_name: str, package: str) -> dict[str, Any]:
             }
         
         # Install the tool
-        process = subprocess.Popen(
-            ["go", "install", "-v", package],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True
-        )
-        
-        output = []
-        for line in process.stdout:
-            output.append(line.strip())
-        
-        process.wait()
-        
+        try:
+            process = subprocess.run(
+                ["go", "install", "-v", package],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                timeout=GO_INSTALL_TIMEOUT,
+            )
+        except subprocess.TimeoutExpired as e:
+            partial = e.stdout.decode(errors="replace") if isinstance(e.stdout, bytes) else (e.stdout or "")
+            return {
+                "success": False,
+                "message": f"Installing {tool_name} took longer than {GO_INSTALL_TIMEOUT // 60} minutes and was stopped",
+                "output": partial.strip(),
+            }
+
+        output = [line.strip() for line in process.stdout.splitlines()]
+
         if process.returncode == 0:
             # Verify installation
             tool_path = shutil.which(tool_name)
@@ -413,10 +459,11 @@ def install_go_tool(tool_name: str, package: str) -> dict[str, Any]:
                 "output": "\n".join(output)
             }
     
-    except Exception as e:
+    except (OSError, subprocess.SubprocessError):
+        logger.exception("Installing %s failed", tool_name)
         return {
             "success": False,
-            "message": f"Error installing {tool_name}: {str(e)}"
+            "message": f"Could not install {tool_name} (details in the server log)"
         }
 
 
@@ -523,7 +570,7 @@ def setup_page(request: Request):
                     timeout=5
                 )
                 system_status["go_version"] = result.stdout.strip()
-            except Exception:
+            except (OSError, subprocess.SubprocessError):
                 pass
         
         return templates.TemplateResponse(
@@ -535,9 +582,9 @@ def setup_page(request: Request):
                 "state": state.model_dump()
             }
         )
-    except Exception as e:
+    except Exception:
         logger.exception("Setup page failed")
-        return JSONResponse(status_code=500, content={"error": str(e)})
+        return JSONResponse(status_code=500, content={"error": "The setup page could not be shown (details in the server log)"})
 
 
 @router.post("/setup/admin")
@@ -595,9 +642,12 @@ def setup_admin(
     except HTTPException:
         raise
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        # the email or password rules (AdminCredentials)
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Configuration failed: {str(e)}")
+        # the detail (paths, file errors) goes to the log, not the browser
+        logger.exception("Saving the admin account failed")
+        raise HTTPException(status_code=500, detail="Could not save the admin account - see the server log") from e
 
 
 @router.post("/setup/features")
@@ -844,7 +894,8 @@ def reset_setup(confirm: str = Form(...)):
     
     if SETUP_STATE_PATH.exists():
         SETUP_STATE_PATH.unlink()
-    
+
+    logger.warning(setup_link_message())
     return JSONResponse({
         "success": True,
         "message": "Setup reset successfully. You can now run setup again."

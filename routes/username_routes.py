@@ -11,6 +11,7 @@ from typing import Optional
 from utils.config import update_env
 from utils.investigation_decorator import save_investigation
 from utils.stream_reducers import reduce_username_search
+from utils.errors import fail
 
 router = APIRouter(prefix="/api/username")
 search_service = StreamingUsernameSearchService()
@@ -121,7 +122,7 @@ async def get_metadata():
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        fail("Loading the site list failed", e)
 
 
 #         return JSONResponse({
@@ -182,4 +183,4 @@ async def bulk_search_usernames(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Bulk search failed: {str(e)}")
+        fail("Bulk search failed", e)

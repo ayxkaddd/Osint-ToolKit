@@ -1,0 +1,419 @@
+// Web search page (web_search.html)
+document.addEventListener('DOMContentLoaded', function () {
+    // --- Element References ---
+    const searchInput = document.getElementById('searchInput');
+    const inputType = document.getElementById('inputType');
+    const previewButton = document.getElementById('previewButton');
+    const previewPanel = document.getElementById('previewPanel');
+    const dorksContainer = document.getElementById('dorksContainer');
+    const previewValue = document.getElementById('previewValue');
+    const runSearchButton = document.getElementById('runSearchButton');
+    const editCustomButton = document.getElementById('editCustomButton');
+    const customEditorPanel = document.getElementById('customEditorPanel');
+    const customDorksTextarea = document.getElementById('customDorksTextarea');
+    const runCustomSearchButton = document.getElementById('runCustomSearchButton');
+    const cancelCustomButton = document.getElementById('cancelCustomButton');
+    const loadingIndicator = document.getElementById('loadingIndicator');
+    const loadingText = document.getElementById('loadingText');
+    const statsContainer = document.getElementById('statsContainer');
+    const resultsContainer = document.getElementById('resultsContainer');
+    const errorToast = document.getElementById('errorToast');
+    const errorMessage = document.getElementById('errorMessage');
+    const errorClose = document.getElementById('errorClose');
+    // const healthBadge = document.getElementById('healthBadge');
+    const healthDot = document.getElementById('healthDot');
+    const healthText = document.getElementById('healthText');
+
+    let currentPreviewData = null;
+
+    // --- Initialize Lucide Icons ---
+    lucide.createIcons();
+
+    // --- Health Check ---
+    // async function checkHealth() {
+    //     try {
+    //         const res = await fetch('/web/health');
+    //         const data = await res.json();
+    //         healthBadge.classList.remove('hidden');
+    //         if (data.status === 'healthy') {
+    //             healthBadge.classList.add('border-green-800', 'text-green-400');
+    //             healthDot.classList.add('bg-green-400');
+    //             healthText.textContent = 'Service Ready';
+    //         } else {
+    //             healthBadge.classList.add('border-red-800', 'text-red-400');
+    //             healthDot.classList.add('bg-red-400');
+    //             healthText.textContent = 'SERPAPI key not configured';
+    //         }
+    //     } catch (e) {
+    //         healthBadge.classList.remove('hidden');
+    //         healthBadge.classList.add('border-red-800', 'text-red-400');
+    //         healthDot.classList.add('bg-red-400');
+    //         healthText.textContent = 'Service Unavailable';
+    //     }
+    // }
+    // checkHealth();
+
+    // --- Input Validation ---
+    function updatePreviewButton() {
+        const hasValue = searchInput.value.trim().length > 0;
+        const hasEngine = document.querySelectorAll('.engine-checkbox:checked').length > 0;
+        const enabled = hasValue && hasEngine;
+        previewButton.disabled = !enabled;
+        previewButton.classList.toggle('opacity-50', !enabled);
+        previewButton.classList.toggle('cursor-not-allowed', !enabled);
+    }
+    searchInput.addEventListener('input', updatePreviewButton);
+    document.querySelectorAll('.engine-checkbox').forEach((cb) => {
+        cb.addEventListener('change', updatePreviewButton);
+    });
+
+    // --- Error Handling ---
+    function showError(msg) {
+        errorMessage.textContent = msg;
+        errorToast.classList.remove('hidden');
+        setTimeout(() => {
+            errorToast.classList.add('hidden');
+        }, 6000);
+    }
+    errorClose.addEventListener('click', () => {
+        errorToast.classList.add('hidden');
+    });
+
+    // --- Loading ---
+    function showLoading(text) {
+        loadingText.textContent = text || 'Loading...';
+        loadingIndicator.classList.remove('hidden');
+    }
+    function hideLoading() {
+        loadingIndicator.classList.add('hidden');
+    }
+
+    // --- Get Selected Engines ---
+    function getSelectedEngines() {
+        return Array.from(document.querySelectorAll('.engine-checkbox:checked')).map((cb) => cb.value);
+    }
+
+    // --- Preview Flow ---
+    previewButton.addEventListener('click', async function () {
+        const value = searchInput.value.trim();
+        const engines = getSelectedEngines();
+        if (!value || engines.length === 0) return;
+
+        previewPanel.classList.add('hidden');
+        customEditorPanel.classList.add('hidden');
+        statsContainer.classList.add('hidden');
+        resultsContainer.innerHTML = '';
+        showLoading('Generating dork queries...');
+
+        try {
+            const res = await fetch('/web/dorks/preview', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    value: value,
+                    input_type: inputType.value,
+                    engines: engines,
+                }),
+            });
+
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.detail || 'Preview request failed');
+            }
+
+            const data = await res.json();
+            currentPreviewData = data;
+            renderPreview(data);
+        } catch (e) {
+            showError(e.message || 'Failed to generate dork preview');
+        } finally {
+            hideLoading();
+        }
+    });
+
+    // Manual search in the browser: free, and sees results SerpAPI misses (logged-in views, images)
+    function engineUrl(engine, dork) {
+        return engine === 'yandex'
+            ? `https://yandex.com/search/?text=${encodeURIComponent(dork)}`
+            : `https://www.google.com/search?q=${encodeURIComponent(dork)}`;
+    }
+
+    // --- Render Preview ---
+    function renderPreview(data) {
+        previewValue.textContent = data.value;
+        dorksContainer.innerHTML = '';
+
+        const dorksByEngine = data.dorks_by_engine || {};
+        for (const [engine, dorks] of Object.entries(dorksByEngine)) {
+            const engineBlock = document.createElement('div');
+            engineBlock.className = 'space-y-2';
+            engineBlock.innerHTML = `
+                <div class="flex items-center gap-2 mb-3">
+                    <i data-lucide="${engine === 'google' ? 'search' : 'globe'}" class="w-4 h-4 text-gray-400"></i>
+                    <h4 class="text-sm font-bold uppercase tracking-wider text-gray-300">${escapeHtml(engine)}</h4>
+                    <span class="text-xs text-gray-500">${dorks.length} dorks</span>
+                </div>
+            `;
+
+            dorks.forEach((dork, idx) => {
+                const dorkRow = document.createElement('div');
+                dorkRow.className = 'flex items-center gap-2 group';
+                dorkRow.innerHTML = `
+                    <div class="flex-1 bg-gray-800 border border-gray-700/50 rounded-lg px-4 py-2.5 text-sm text-gray-300 overflow-x-auto whitespace-nowrap">
+                        <code>${escapeHtml(dork)}</code>
+                    </div>
+                    <a href="${escapeAttr(engineUrl(engine, dork))}" target="_blank" rel="noopener noreferrer" class="shrink-0 p-2 rounded-lg bg-gray-800/50 border border-gray-700/50 hover:bg-gray-800 transition-colors" title="Open in ${escapeAttr(engine)} (free)">
+                        <i data-lucide="external-link" class="w-4 h-4 text-gray-400"></i>
+                    </a>
+                    <button class="copy-dork-btn shrink-0 p-2 rounded-lg bg-gray-800/50 border border-gray-700/50 hover:bg-gray-800 transition-colors" data-dork="${escapeAttr(dork)}" title="Copy dork">
+                        <i data-lucide="copy" class="w-4 h-4 text-gray-400"></i>
+                    </button>
+                `;
+                engineBlock.appendChild(dorkRow);
+            });
+
+            dorksContainer.appendChild(engineBlock);
+        }
+
+        const total = Object.values(dorksByEngine).reduce((n, d) => n + d.length, 0);
+        runSearchButton.innerHTML = `<i data-lucide="play" class="w-4 h-4"></i> Run all via SerpAPI <span class="text-xs text-yellow-300/80">(${total} searches)</span>`;
+        previewPanel.classList.remove('hidden');
+        lucide.createIcons();
+        bindCopyButtons();
+    }
+
+    // --- Copy Buttons ---
+    function bindCopyButtons() {
+        document.querySelectorAll('.copy-dork-btn').forEach((btn) => {
+            btn.addEventListener('click', function () {
+                const dork = this.getAttribute('data-dork');
+                navigator.clipboard.writeText(dork).then(() => {
+                    const icon = this.querySelector('i');
+                    icon.setAttribute('data-lucide', 'check');
+                    lucide.createIcons();
+                    setTimeout(() => {
+                        icon.setAttribute('data-lucide', 'copy');
+                        lucide.createIcons();
+                    }, 1500);
+                });
+            });
+        });
+    }
+
+    // --- Run Search ---
+    runSearchButton.addEventListener('click', async function () {
+        const value = searchInput.value.trim();
+        const engines = getSelectedEngines();
+        if (!value || engines.length === 0) return;
+
+        previewPanel.classList.add('hidden');
+        customEditorPanel.classList.add('hidden');
+        statsContainer.classList.add('hidden');
+        resultsContainer.innerHTML = '';
+        showLoading('Executing search across engines...');
+
+        try {
+            const res = await fetch('/web/search', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    value: value,
+                    input_type: inputType.value,
+                    engines: engines,
+                    max_results_per_dork: 10,
+                    rate_limit_delay: 1.0,
+                }),
+            });
+
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.detail || 'Search request failed');
+            }
+
+            const data = await res.json();
+            renderResults(data);
+        } catch (e) {
+            showError(e.message || 'Search failed');
+        } finally {
+            hideLoading();
+        }
+    });
+
+    // --- Edit & Run Custom ---
+    editCustomButton.addEventListener('click', function () {
+        if (!currentPreviewData) return;
+
+        const allDorks = [];
+        const dorksByEngine = currentPreviewData.dorks_by_engine || {};
+        for (const [engine, dorks] of Object.entries(dorksByEngine)) {
+            dorks.forEach((d) => allDorks.push(d));
+        }
+        customDorksTextarea.value = allDorks.join('\n');
+        customEditorPanel.classList.remove('hidden');
+    });
+
+    cancelCustomButton.addEventListener('click', function () {
+        customEditorPanel.classList.add('hidden');
+    });
+
+    runCustomSearchButton.addEventListener('click', async function () {
+        const dorks = customDorksTextarea.value
+            .split('\n')
+            .map((d) => d.trim())
+            .filter((d) => d.length > 0);
+        const engines = getSelectedEngines();
+        if (dorks.length === 0) {
+            showError('Enter at least one dork query');
+            return;
+        }
+        if (engines.length === 0) {
+            showError('Select at least one search engine');
+            return;
+        }
+
+        previewPanel.classList.add('hidden');
+        customEditorPanel.classList.add('hidden');
+        statsContainer.classList.add('hidden');
+        resultsContainer.innerHTML = '';
+        showLoading('Running custom dork search...');
+
+        try {
+            const res = await fetch('/web/search/custom', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    dorks: dorks,
+                    engines: engines,
+                    max_results_per_dork: 10,
+                    rate_limit_delay: 1.0,
+                }),
+            });
+
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.detail || 'Custom search request failed');
+            }
+
+            const data = await res.json();
+            renderResults(data);
+        } catch (e) {
+            showError(e.message || 'Custom search failed');
+        } finally {
+            hideLoading();
+        }
+    });
+
+    // Saved results from this investigation can be re-opened here
+    window.currentService = 'web_search';
+    window.loadResultIntoView = (data) => renderResults(data);
+
+    // --- Render Results ---
+    function renderResults(data) {
+        const results = data.results || [];
+        const enginesUsed = new Set();
+        const dorksUsed = new Set();
+
+        results.forEach((r) => {
+            if (r.engine) enginesUsed.add(r.engine);
+            if (r.dork) dorksUsed.add(r.dork);
+        });
+
+        // Stats
+        document.getElementById('statTotalResults').textContent = results.length;
+        document.getElementById('statEnginesUsed').textContent = enginesUsed.size || data.engines_used || 0;
+        document.getElementById('statDorksExecuted').textContent = data.dorks_executed || dorksUsed.size || 0;
+        statsContainer.classList.remove('hidden');
+
+        // Results
+        resultsContainer.innerHTML = '';
+
+        // Failed dorks (quota exhausted, invalid key...) - explain empty or partial results
+        const errors = data.errors || [];
+        if (errors.length) {
+            const reasons = [...new Set(errors.map((e) => e.error))];
+            resultsContainer.insertAdjacentHTML(
+                'beforeend',
+                `
+                <div class="bg-yellow-900/30 border border-yellow-700/60 rounded-lg p-4 text-sm text-yellow-100 mb-4">
+                    <p class="font-semibold mb-1"><i class="fas fa-exclamation-triangle mr-1"></i>${errors.length} of ${data.dorks_executed || errors.length} searches failed</p>
+                    ${reasons
+                        .slice(0, 3)
+                        .map((r) => `<p class="text-yellow-200/80 break-words">${escapeHtml(r)}</p>`)
+                        .join('')}
+                </div>`
+            );
+        }
+
+        if (results.length === 0) {
+            resultsContainer.insertAdjacentHTML(
+                'beforeend',
+                `
+                <div class="bg-gray-900 border border-gray-700 rounded-lg p-8 text-center">
+                    <i data-lucide="search-x" class="w-10 h-10 text-gray-600 mx-auto mb-3"></i>
+                    <p class="text-gray-400">No results found</p>
+                    <p class="text-sm text-gray-500 mt-1">Try adjusting your query or using different dorks</p>
+                </div>
+            `
+            );
+            lucide.createIcons();
+            return;
+        }
+
+        results.forEach((result, index) => {
+            const url = result.link || result.url || '';
+            const domain = extractDomain(url);
+            const card = document.createElement('div');
+            card.className = 'card hover:border-gray-600 transition-colors';
+            card.innerHTML = `
+                <div class="flex items-start justify-between gap-4 mb-2">
+                    <div class="flex items-start gap-3 min-w-0">
+                        ${domain ? `<img src="${escapeAttr(faviconUrl(domain))}" alt="" width="16" height="16" class="mt-0.5 shrink-0 rounded-sm" data-img-error="hideImage">` : ''}
+                        <a href="${escapeAttr(safeUrl(url) || '#')}" target="_blank" rel="noopener noreferrer"
+                            class="text-white font-bold hover:text-gray-300 transition-colors text-sm leading-snug">
+                            ${escapeHtml(result.title || 'Untitled')}
+                        </a>
+                    </div>
+                    <div class="flex items-center gap-2 shrink-0">
+                        ${result.engine ? `<span class="text-xs px-2 py-0.5 rounded-full border border-gray-700 text-gray-400 uppercase tracking-wider">${escapeHtml(result.engine)}</span>` : ''}
+                        <span class="text-xs text-gray-600">#${index + 1}</span>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2 mb-2">
+                    ${domain ? `<span class="text-xs text-gray-400 font-bold">${pivotText('domain', domain)}</span><span class="text-gray-700">|</span>` : ''}
+                    <p class="text-xs text-gray-500 truncate">${escapeHtml(url)}</p>
+                </div>
+                ${result.snippet ? `<p class="text-sm text-gray-400 leading-relaxed mb-3">${pivotInText(result.snippet)}</p>` : ''}
+                ${
+                    result.dork
+                        ? `
+                    <div class="flex items-center gap-2 mt-2 pt-2 border-t border-gray-800">
+                        <i data-lucide="terminal" class="w-3 h-3 text-gray-600"></i>
+                        <code class="text-xs text-gray-500 truncate">${escapeHtml(result.dork)}</code>
+                    </div>
+                `
+                        : ''
+                }
+            `;
+            resultsContainer.appendChild(card);
+        });
+
+        lucide.createIcons();
+    }
+
+    // --- Utilities ---
+    function extractDomain(url) {
+        if (!url) return null;
+        try {
+            const parsed = new URL(url);
+            return parsed.hostname;
+        } catch (e) {
+            const match = url.match(/^(?:https?:\/\/)?([^\/\?#]+)/i);
+            return match ? match[1] : null;
+        }
+    }
+
+    function faviconUrl(domain) {
+        if (!domain) return '';
+        return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=16`;
+    }
+});

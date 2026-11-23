@@ -61,7 +61,7 @@
         {% else %}
         <a href="?include=all">Include every result</a>
         {% endif %}
-        <button class="primary" onclick="window.print()">Print / save as PDF</button>
+        <button class="primary" id="printReport">Print / save as PDF</button>
     </div>
 
     <div class="page">
@@ -151,7 +151,7 @@
                     {% if m.date %}Happened {{ m.date }}<br>{% endif %}Added {{ (m.timestamp or '')[:16] | replace('T', ' ') }}
                 </div>
             </div>
-            {% if m.url %}<div style="margin-top:4px"><a href="{{ m.url }}" rel="noopener noreferrer">{{ m.url }}</a></div>{% endif %}
+            {% if m.url %}<div style="margin-top:4px">{% if m.url.lower().startswith(('http://', 'https://')) %}<a href="{{ m.url }}" rel="noopener noreferrer">{{ m.url }}</a>{% else %}{{ m.url }}{% endif %}</div>{% endif %}
             {% if m.text %}<div class="desc">{{ m.text[:3000] }}{% if m.text | length > 3000 %}…{% endif %}</div>{% endif %}
             {% if m.entities %}
             <div style="margin-top:6px;font-size:13px">{% for kind, values in m.entities.items() %}<span class="muted">{{ type_label(kind) }}:</span> <span class="v">{{ values | join(', ') }}</span>{% if not loop.last %} · {% endif %}{% endfor %}</div>
@@ -246,5 +246,6 @@
             investigation; Export downloads all of it as a .zip, with the files that were added.
         </footer>
     </div>
+<script src="/static/js/report.js"></script>
 </body>
 </html>

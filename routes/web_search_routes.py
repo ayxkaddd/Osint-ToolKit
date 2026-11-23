@@ -18,6 +18,7 @@ from models.web_search_models import (
     DorksResponse,
 )
 from utils.investigation_decorator import save_investigation
+from utils.errors import fail
 
 
 # Initialize router
@@ -84,9 +85,9 @@ async def search_osint(request: SearchRequest):
     except HTTPException:
         raise
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
+        fail("Search failed", e)
 
 
 @osint_router.post("/search/custom", response_model=SearchResponse)
@@ -140,9 +141,9 @@ async def search_custom_dorks(request: CustomDorksRequest):
     except HTTPException:
         raise
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Custom search failed: {str(e)}")
+        fail("Custom search failed", e)
 
 
 @osint_router.post("/dorks/preview", response_model=DorksResponse)
@@ -191,9 +192,9 @@ def get_dorks_preview(request: GetDorksRequest):
     except HTTPException:
         raise
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Dork generation failed: {str(e)}")
+        fail("Dork generation failed", e)
 
 
 @osint_router.get("/health")

@@ -171,7 +171,7 @@ function displayDashboardInvestigations(investigations) {
             return `
             <div class="bg-[#14151f] border ${isCurrent ? 'border-emerald-500 shadow-lg shadow-emerald-950/30 ring-1 ring-emerald-500/50' : 'border-[#24283b]'} rounded-xl overflow-hidden hover:border-purple-500/50 transition-all duration-300 cursor-pointer group flex flex-col justify-between relative"
                  data-investigation-card="${escapeAttr(inv.investigation_id)}" title="Right-click for more"
-                 onclick="openDashboardInvestigationDetails(${jsArg(inv.investigation_id)})">
+                 data-click="openDashboardInvestigationDetails" data-args="${clickArgs(inv.investigation_id)}">
                 
                 ${
                     isCurrent
@@ -196,7 +196,7 @@ function displayDashboardInvestigations(investigations) {
                     }
                     <div class="absolute top-3 right-3">
                         <span class="text-xs px-2.5 py-1 rounded-full border ${statusColor} font-medium">
-                            ${inv.status}
+                            ${escapeHtml(inv.status)}
                         </span>
                     </div>
                 </div>
@@ -227,21 +227,21 @@ function displayDashboardInvestigations(investigations) {
 
                         <!-- Action Buttons -->
                         <div class="grid grid-cols-2 gap-2">
-                            <a href="/api/investigations/${inv.investigation_id}/view"
-                               onclick="event.stopPropagation()"
+                            <a href="/api/investigations/${encodeURIComponent(inv.investigation_id)}/view"
+                               data-click="none"
                                class="bg-purple-600/80 hover:bg-purple-600 text-white py-2 rounded-lg transition-colors text-xs font-semibold flex items-center justify-center gap-1.5">
                                 <i data-lucide="eye" class="w-3.5 h-3.5"></i> Results
                             </a>
                             ${
                                 !isCurrent
                                     ? `
-                                <button onclick="event.stopPropagation(); setActiveInvestigationDirectly(${jsArg(inv.investigation_id)})"
+                                <button type="button" data-click="setActiveInvestigationDirectly" data-args="${clickArgs(inv.investigation_id)}"
                                     class="bg-gray-800 hover:bg-emerald-600 hover:text-white text-gray-300 py-2 rounded-lg transition-colors text-xs font-medium flex items-center justify-center gap-1.5 border border-gray-700">
                                     <i data-lucide="radio" class="w-3.5 h-3.5"></i> Record here
                                 </button>
                             `
                                     : `
-                                <button onclick="event.stopPropagation(); openDashboardInvestigationDetails(${jsArg(inv.investigation_id)})"
+                                <button type="button" data-click="openDashboardInvestigationDetails" data-args="${clickArgs(inv.investigation_id)}"
                                     class="bg-emerald-950/60 border border-emerald-700 text-emerald-300 py-2 rounded-lg text-xs font-medium flex items-center justify-center gap-1.5">
                                     <i data-lucide="info" class="w-3.5 h-3.5"></i> Details
                                 </button>
@@ -541,4 +541,16 @@ document.addEventListener('investigation:created', loadDashboardInvestigations);
 document.addEventListener('investigation:changed', (e) => {
     currentActiveInvestigationId = e.detail ? e.detail.investigationId : null;
     loadDashboardInvestigations();
+});
+
+registerActions({
+    openDashboardInvestigationDetails,
+    closeDashboardInvestigationDetailsModal,
+    setActiveInvestigationDirectly,
+    setDashboardInvestigationAsActive,
+    viewDashboardInvestigationResults,
+    openEditDashboardInvestigationModal,
+    closeEditDashboardInvestigationModal,
+    submitEditInvestigation,
+    deleteDashboardInvestigation,
 });

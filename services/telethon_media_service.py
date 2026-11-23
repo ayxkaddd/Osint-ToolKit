@@ -11,6 +11,9 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, asdict
 from collections import OrderedDict
 
+from models.funstat_models import ThumbnailResult
+from utils import telegram_client
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -33,8 +36,6 @@ class MessageContext:
     context_size: int
     total_messages: int
 
-from models.funstat_models import ThumbnailResult
-from utils import telegram_client
 
 # Private media storage (never under /static, which needs no login)
 THUMBNAIL_DIR = os.path.join("media", "thumbnails")
@@ -136,7 +137,7 @@ class TelethonMediaService:
         self.session_name = session_name
 
         # Client instance (initialized in start())
-        self.client: Optional["TelegramClient"] = None
+        self.client: Optional[TelegramClient] = None
         self._client_started = False
         self._start_lock = asyncio.Lock()
 
@@ -628,7 +629,7 @@ class TelethonMediaService:
             return list(reversed(serialized))
 
         except Exception as e:
-            logger.error('Batch reply fetch failed: %s', e)
+            logger.error('Batch reply fetch failed: %s', e, exc_info=True)
             return []
 
     async def get_conversation_thread(
@@ -1232,7 +1233,7 @@ class TelethonMediaService:
                         size
                     )
                 except Exception as e:
-                    logger.error('Thumbnail failed for message %s: %s', msg_id, e)
+                    logger.error('Thumbnail failed for message %s: %s', msg_id, e, exc_info=True)
                     return None
 
         # Run concurrently

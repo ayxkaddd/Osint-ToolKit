@@ -26,3 +26,6 @@ media/
 
 # plugins you enabled or marked as yours (per machine)
 plugins/.trust.json
+
+# held by the running server (one process per folder)
+.server.lock

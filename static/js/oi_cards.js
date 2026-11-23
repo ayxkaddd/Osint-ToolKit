@@ -69,12 +69,8 @@ function oiSiteMark(urls, label) {
     );
     const fallback = `<div class="platform-icon bg-gray-600${src ? ' username-site-mark-fallback' : ''}">${letters}</div>`;
     if (!src) return `<div class="username-site-mark">${fallback}</div>`;
-    const giveUp = "this.style.display='none';this.nextElementSibling.style.display='flex'";
-    const onerror = next
-        ? `if(this.dataset.next){this.src=this.dataset.next;this.removeAttribute('data-next')}else{${giveUp}}`
-        : giveUp;
     return `<div class="username-site-mark">
-        <img src="${escapeAttr(src)}" ${next ? `data-next="${escapeAttr(next)}"` : ''} alt="" loading="lazy" referrerpolicy="no-referrer" onerror="${onerror}">
+        <img src="${escapeAttr(src)}" ${next ? `data-next="${escapeAttr(next)}"` : ''} alt="" loading="lazy" referrerpolicy="no-referrer" data-img-error="siteIconFailed">
         ${fallback}</div>`;
 }
 
@@ -84,7 +80,7 @@ function oiAvatar(url) {
         <div class="username-card-media">
             <button type="button" data-image-view="${escapeAttr(url)}" data-image-title="Profile picture" class="username-avatar-preview-btn" title="Preview profile picture">
                 <img src="${escapeAttr(url)}" alt="" loading="lazy" referrerpolicy="no-referrer" class="username-card-avatar"
-                    onerror="this.closest('.username-result-card').classList.remove('has-profile-image'); this.closest('.username-card-media').style.display='none';">
+                    data-img-error="oiAvatarFailed">
             </button>
             <div class="username-reverse-search" aria-label="Reverse image search">
                 <a href="https://lens.google.com/uploadbyurl?url=${encoded}" target="_blank" rel="noopener noreferrer" title="Google reverse image search"><i class="fab fa-google"></i></a>
@@ -322,6 +318,11 @@ const OI_SUMMARY_OPEN = new Set();
 // Pictures that didn't load are left out of later rebuilds instead of failing again
 const OI_BROKEN_PICTURES = new Set();
 
+function oiAvatarFailed(img) {
+    img.closest('.username-result-card')?.classList.remove('has-profile-image');
+    img.closest('.username-card-media').style.display = 'none';
+}
+
 function oiPictureFailed(img) {
     OI_BROKEN_PICTURES.add(img.getAttribute('src'));
     img.closest('button').remove();
@@ -504,7 +505,7 @@ function oiSummaryHtml(cards, { timeline: withTimeline = true } = {}) {
                           photos,
                           (p) => `
                 <button type="button" data-image-view="${escapeAttr(safeUrl(p.value))}" data-image-title="${escapeAttr(p.sources.join(', ') || 'Photo')}" title="${escapeAttr(p.sources.join(', '))}" class="shrink-0">
-                    <img src="${escapeAttr(safeUrl(p.value))}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="oiPictureFailed(this)"
+                    <img src="${escapeAttr(safeUrl(p.value))}" alt="" loading="lazy" referrerpolicy="no-referrer" data-img-error="oiPictureFailed"
                         class="w-14 h-14 rounded-lg object-cover border border-[#293142] hover:border-purple-400/70"></button>`,
                           10
                       )}
@@ -700,3 +701,5 @@ class OiResultsView {
         return { breaches, accounts: this.items.length - breaches };
     }
 }
+
+registerActions({ oiAvatarFailed, oiPictureFailed });

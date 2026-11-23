@@ -3,7 +3,7 @@
 // as a tree whose values can be clicked to put them on the cards, with a live preview.
 // The API key is written {key:API_KEY} in the form and becomes {settings.<ID>_API_KEY}.
 (function () {
-    const TYPES = window.builderTypes;
+    const TYPES = (window.builderTypes = pageData('builderTypes'));
     const params = new URLSearchParams(location.search);
     const editId = params.get('edit');
     const fromId = params.get('from');

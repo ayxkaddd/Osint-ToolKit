@@ -1,5 +1,6 @@
 // Plugin page (templates/plugin.html): runs /api/plugins/<id>/run and
 // shows the NDJSON events as cards (PluginResultsView, static/js/plugin_cards.js).
+window.pluginInfo = pageData('pluginInfo');
 const plugin = window.pluginInfo;
 window.currentService = plugin.id;
 

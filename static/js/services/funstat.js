@@ -241,7 +241,7 @@ function showToast(message, type = 'info') {
         <div class="flex-1">
             <p class="text-white font-medium">${escapeHtml(message)}</p>
         </div>
-        <button onclick="this.parentElement.remove()" class="text-gray-400 hover:text-white transition-colors">
+        <button type="button" data-click="removeParent" class="text-gray-400 hover:text-white transition-colors">
             <i class="fas fa-times"></i>
         </button>
     `;
@@ -387,7 +387,7 @@ function renderUserHistoryModal(data) {
                                     </div>
                                 </div>
                                 <button
-                                    onclick="copyToClipboard(${jsArg(entry.value)}, this)"
+                                    data-click="copyValue" data-args="${clickArgs(entry.value)}"
                                     class="text-gray-500 hover:text-purple-400 transition-colors p-2"
                                     title="Copy to clipboard"
                                 >
@@ -537,7 +537,7 @@ function displayContextModal(context, chatUsername) {
         const text = msg.text || msg.message || '';
         const hasMedia = msg.media_type || msg.media;
         const messageId = msg.message_id || msg.id;
-        const messageLink = `https://t.me/${escapeHtml(chatUsername)}/${messageId}`;
+        const messageLink = `https://t.me/${encodeURIComponent(chatUsername)}/${encodeURIComponent(messageId)}`;
 
         let typeClass = '';
         let typeLabel = '';
@@ -572,7 +572,7 @@ function displayContextModal(context, chatUsername) {
                 `
                         : ''
                 }
-                <a href="${messageLink}" target="_blank" class="text-xs text-purple-400 hover:text-purple-300">
+                <a href="${escapeAttr(messageLink)}" target="_blank" rel="noopener noreferrer" class="text-xs text-purple-400 hover:text-purple-300">
                     <i class="fas fa-external-link-alt mr-1"></i>Open in Telegram
                 </a>
             </div>
@@ -694,10 +694,11 @@ async function enrichLinks(links) {
 }
 
 // Format large numbers
+// HTML: a count from a scraped profile may be any text
 function formatNumber(num) {
     if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
     if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
-    return num?.toString() || '0';
+    return escapeHtml(num?.toString() || '0');
 }
 
 // Display enriched links section
@@ -731,8 +732,8 @@ function displayEnrichedLinks(results) {
         html += `
             <div class="mb-4">
                 <div class="flex items-center gap-2 mb-3">
-                    <span class="platform-badge platform-${platform}">
-                        <i class="${getPlatformIcon(platform)} mr-1"></i>${platform}
+                    <span class="platform-badge platform-${escapeAttr(platform)}">
+                        <i class="${escapeAttr(getPlatformIcon(platform))} mr-1"></i>${escapeHtml(platform)}
                     </span>
                     <span class="text-sm text-gray-500">(${platformResults.length} links)</span>
                 </div>
@@ -797,7 +798,7 @@ function renderTikTokCard(data) {
                 ${
                     data.avatar_url
                         ? `
-                    <img src="${escapeAttr(safeUrl(data.avatar_url))}" alt="${escapeAttr(data.username)}" data-image-view="" class="enriched-avatar" onerror="this.style.display='none'">
+                    <img src="${escapeAttr(safeUrl(data.avatar_url))}" alt="${escapeAttr(data.username)}" data-image-view="" class="enriched-avatar" data-img-error="hideImage">
                 `
                         : `
                     <div class="enriched-avatar bg-gradient-to-br from-pink-500 to-purple-600 flex items-center justify-center text-2xl">
@@ -887,7 +888,7 @@ function renderInstagramCard(data) {
                 ${
                     data.avatar_url || data.profile_pic_url
                         ? `
-                    <img src="${escapeAttr(safeUrl(data.avatar_url || data.profile_pic_url))}" alt="${escapeAttr(data.username)}" data-image-view="" class="enriched-avatar" onerror="this.style.display='none'">
+                    <img src="${escapeAttr(safeUrl(data.avatar_url || data.profile_pic_url))}" alt="${escapeAttr(data.username)}" data-image-view="" class="enriched-avatar" data-img-error="hideImage">
                 `
                         : `
                     <div class="enriched-avatar bg-gradient-to-br from-pink-500 via-red-500 to-yellow-500 flex items-center justify-center text-2xl">
@@ -952,7 +953,7 @@ function renderDiscordCard(data) {
                 ${
                     data.icon_url || data.avatar_url
                         ? `
-                    <img src="${escapeAttr(safeUrl(data.icon_url || data.avatar_url))}" alt="${escapeAttr(data.name)}" data-image-view="" class="enriched-avatar" onerror="this.style.display='none'">
+                    <img src="${escapeAttr(safeUrl(data.icon_url || data.avatar_url))}" alt="${escapeAttr(data.name)}" data-image-view="" class="enriched-avatar" data-img-error="hideImage">
                 `
                         : `
                     <div class="enriched-avatar bg-[#5865f2] flex items-center justify-center text-2xl">
@@ -1005,7 +1006,7 @@ function renderTelegramCard(data) {
                 ${
                     data.avatar_url || data.photo_url
                         ? `
-                    <img src="${escapeAttr(safeUrl(data.avatar_url || data.photo_url))}" alt="${escapeAttr(data.title)}" data-image-view="" class="enriched-avatar" onerror="this.style.display='none'">
+                    <img src="${escapeAttr(safeUrl(data.avatar_url || data.photo_url))}" alt="${escapeAttr(data.title)}" data-image-view="" class="enriched-avatar" data-img-error="hideImage">
                 `
                         : `
                     <div class="enriched-avatar bg-[#0088cc] flex items-center justify-center text-2xl">
@@ -1060,7 +1061,7 @@ function renderGenericCard(data, platform) {
                 ${
                     data.avatar_url || data.icon_url || data.image_url
                         ? `
-                    <img src="${escapeAttr(safeUrl(data.avatar_url || data.icon_url || data.image_url))}" alt="${escapeAttr(title)}" data-image-view="" class="enriched-avatar" onerror="this.style.display='none'">
+                    <img src="${escapeAttr(safeUrl(data.avatar_url || data.icon_url || data.image_url))}" alt="${escapeAttr(title)}" data-image-view="" class="enriched-avatar" data-img-error="hideImage">
                 `
                         : `
                     <div class="enriched-avatar bg-gray-700 flex items-center justify-center text-2xl">
@@ -1152,13 +1153,13 @@ async function processAndEnrichLinks(messages, containerId) {
 
 function buildTelegramLink(chatId, messageId, username = null) {
     if (username) {
-        return `https://t.me/${encodeURIComponent(username)}/${messageId}`;
+        return `https://t.me/${encodeURIComponent(username)}/${encodeURIComponent(messageId)}`;
     }
     const absId = Math.abs(parseInt(chatId));
     if (String(absId).startsWith('100')) {
-        return `https://t.me/c/${String(absId).slice(3)}/${messageId}`;
+        return `https://t.me/c/${String(absId).slice(3)}/${encodeURIComponent(messageId)}`;
     }
-    return `https://t.me/${absId}/${messageId}`;
+    return `https://t.me/${absId}/${encodeURIComponent(messageId)}`;
 }
 
 function buildTelegramChatLink(chatId, username = null) {
@@ -1511,7 +1512,7 @@ function displayUserBasicInfo(user, savedTmeProfile = null) {
                         <div id="tmeProfile" class="text-sm"></div>
                         <div class="flex items-center gap-2 mt-1">
                             <p class="text-gray-500 text-sm">ID: ${pivotText('telegram_id', user.id)}</p>
-                            <button onclick="copyToClipboard(${jsArg(user.id)}, this)" class="text-gray-500 hover:text-purple-400 transition-colors text-sm" title="Copy ID">
+                            <button type="button" data-click="copyValue" data-args="${clickArgs(user.id)}" class="text-gray-500 hover:text-purple-400 transition-colors text-sm" title="Copy ID">
                                 <i class="fas fa-copy"></i>
                             </button>
                         </div>
@@ -1694,14 +1695,14 @@ function displayUserMessages(data) {
                 totalPages > 1
                     ? `
                 <div class="mt-4 flex justify-center items-center gap-2">
-                    <button onclick="getUserMessages(${Math.max(1, messagesPaginationState.page - 1)})"
+                    <button type="button" data-click="getUserMessages" data-args="${clickArgs(Math.max(1, messagesPaginationState.page - 1))}"
                             class="pagination-btn" ${messagesPaginationState.page === 1 ? 'disabled' : ''}>
                         <i class="fas fa-chevron-left mr-1"></i>Previous
                     </button>
                     <span class="text-sm text-gray-400">
                         Page <span class="font-bold">${messagesPaginationState.page}</span> of <span class="font-bold">${totalPages}</span>
                     </span>
-                    <button onclick="getUserMessages(${Math.min(totalPages, messagesPaginationState.page + 1)})"
+                    <button type="button" data-click="getUserMessages" data-args="${clickArgs(Math.min(totalPages, messagesPaginationState.page + 1))}"
                             class="pagination-btn" ${messagesPaginationState.page === totalPages ? 'disabled' : ''}>
                         Next<i class="fas fa-chevron-right ml-1"></i>
                     </button>
@@ -2361,7 +2362,7 @@ function displayGroupInfo(group) {
                         `
                                 : ''
                         }
-                        <p class="text-gray-500 text-sm">ID: ${currentGroupId}</p>
+                        <p class="text-gray-500 text-sm">ID: ${escapeHtml(currentGroupId)}</p>
                     </div>
                 </div>
             </div>
@@ -2484,7 +2485,7 @@ function displayTextResults(data) {
                                     ? `
                                 <p class="text-sm text-gray-400 mb-2">
                                     <i class="fas fa-users mr-1"></i>
-                                    <a href="${chatLink}" target="_blank" class="hover:text-purple-400">
+                                    <a href="${escapeAttr(chatLink)}" target="_blank" rel="noopener noreferrer" class="hover:text-purple-400">
                                         ${escapeHtml(result.group.title)}
                                     </a>
                                 </p>
@@ -2498,13 +2499,13 @@ function displayTextResults(data) {
                                 result.group
                                     ? `
                                 <div class="flex items-center gap-3">
-                                    <a href="${messageLink}" target="_blank" class="text-xs text-purple-400 hover:text-purple-300">
+                                    <a href="${escapeAttr(messageLink)}" target="_blank" rel="noopener noreferrer" class="text-xs text-purple-400 hover:text-purple-300">
                                         <i class="fas fa-external-link-alt mr-1"></i>Open in Telegram
                                     </a>
                                     ${
                                         result.group.username
                                             ? `
-                                        <button onclick="getMessageContext(${jsArg(result.group.username)}, ${escapeHtml(result.message_id)})"
+                                        <button type="button" data-click="getMessageContext" data-args="${clickArgs(result.group.username, Number(result.message_id))}"
                                             class="context-btn text-xs text-blue-400 hover:text-blue-300 bg-blue-900/30 px-2 py-1 rounded">
                                             <i class="fas fa-comments mr-1"></i>Get Context
                                         </button>
@@ -2529,11 +2530,11 @@ function displayTextResults(data) {
                 data.totalPages > 1
                     ? `
                 <div class="mt-4 flex justify-center items-center gap-2">
-                    <button type="button" onclick="searchText(${Number(data.currentPage) - 1})" class="pagination-btn" ${data.currentPage === 1 ? 'disabled' : ''}>
+                    <button type="button" data-click="searchText" data-args="${clickArgs(Number(data.currentPage) - 1)}" class="pagination-btn" ${data.currentPage === 1 ? 'disabled' : ''}>
                         <i class="fas fa-chevron-left mr-1"></i>Previous
                     </button>
                     <span class="text-sm text-gray-400">Page ${escapeHtml(data.currentPage)} of ${escapeHtml(data.totalPages)}</span>
-                    <button type="button" onclick="searchText(${Number(data.currentPage) + 1})" class="pagination-btn" ${data.isLastPage ? 'disabled' : ''}>
+                    <button type="button" data-click="searchText" data-args="${clickArgs(Number(data.currentPage) + 1)}" class="pagination-btn" ${data.isLastPage ? 'disabled' : ''}>
                         Next<i class="fas fa-chevron-right ml-1"></i>
                     </button>
                 </div>
@@ -2665,3 +2666,26 @@ function displayError(containerId, message) {
         </div>
     `;
 }
+
+function copyValue(text) {
+    copyToClipboard(text, this);
+}
+
+registerActions({
+    switchTab,
+    searchUser,
+    getUserStats,
+    getUserGroups,
+    getUserMessages,
+    getAllUserMessages,
+    getUsernameHistory,
+    searchGroup,
+    getGroupMembers,
+    searchText,
+    searchUsernameUsage,
+    getMessageContext,
+    copyValue,
+    closeMediaModal,
+    closeContextModal,
+    closeHistoryModal,
+});

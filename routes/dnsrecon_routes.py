@@ -7,6 +7,7 @@ from models.dnsrecon_models import DomainRequest, ReconResults
 from services.dnsrecon_service import DNSReconService
 from utils.investigation_decorator import save_investigation
 from utils.subprocess_runner import run_command
+from utils.errors import fail
 
 router = APIRouter(prefix="/api/recon")
 dns_recon_service = DNSReconService()
@@ -26,7 +27,7 @@ async def perform_reconnaissance(request: DomainRequest, investigation_id: Optio
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Reconnaissance failed: {str(e)}") from e
+        fail("Reconnaissance failed", e)
 
 
 @router.get("/health")

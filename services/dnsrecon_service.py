@@ -244,7 +244,7 @@ class DNSReconService:
         """DNS records via dnspython (blocking resolver -> worker threads)."""
         record_types = ['A', 'AAAA', 'MX', 'NS', 'TXT', 'CNAME', 'SOA', 'CAA']
         values = await asyncio.gather(*(self.resolve(domain, rt) for rt in record_types))
-        return dict(zip(record_types, values))
+        return dict(zip(record_types, values, strict=True))
 
     async def resolve_many(self, names: list[str]) -> dict[str, list[str]]:
         """A records for many names (which subdomains still exist, and where)."""
@@ -273,6 +273,8 @@ class DNSReconService:
                 'admin_email': str(w.admin_email) if hasattr(w, 'admin_email') and w.admin_email else None
             }
         except Exception as e:
+            # python-whois says why ("No match for ..."); nothing secret in it
+            logger.warning("WHOIS for %s failed", domain, exc_info=True)
             return {'error': str(e)}
 
     async def run_nmap_scan(self, domain: str, warnings: list[str]) -> list[dict[str, Any]]:

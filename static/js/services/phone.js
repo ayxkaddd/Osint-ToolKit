@@ -169,7 +169,7 @@ function showRawResponse(rawResponse) {
         <div class="bg-gray-900 rounded-lg p-6 max-w-2xl w-full mx-4">
             <div class="flex justify-between items-center mb-4">
                 <h3 class="text-lg font-semibold">Raw SMSC Response</h3>
-                <button onclick="this.closest('.fixed').remove()" class="text-gray-400 hover:text-white">
+                <button type="button" data-click="removeClosest" data-args='[".fixed"]' class="text-gray-400 hover:text-white">
                     <i data-lucide="x" class="w-5 h-5"></i>
                 </button>
             </div>
@@ -221,7 +221,7 @@ function phoneInfoCard(info) {
             <div class="mt-4 flex flex-wrap gap-2">
                 ${link(info.links.whatsapp, 'WhatsApp', 'fab fa-whatsapp')}
                 ${link(info.links.telegram, 'Telegram', 'fab fa-telegram')}
-                ${`<a href="${escapeAttr(info.links.viber)}" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-gray-800 hover:bg-gray-700 text-xs"><i class="fab fa-viber"></i>Viber</a>`}
+                ${/^viber:\/\/chat\?number=%2B\d+$/.test(info.links.viber || '') ? `<a href="${escapeAttr(info.links.viber)}" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-gray-800 hover:bg-gray-700 text-xs"><i class="fab fa-viber"></i>Viber</a>` : ''}
                 ${link(info.links.google, 'Google all formats', 'fab fa-google')}
             </div>
             <p class="text-xs text-gray-500 mt-3">${escapeHtml(info.note)}</p>

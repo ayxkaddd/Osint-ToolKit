@@ -57,6 +57,6 @@
 {% endblock %}
 
 {% block scripts %}
-<script>window.pluginInfo = {{ plugin | tojson }};</script>
-<script src="/static/js/services/plugin.js"></script>
+<script type="application/json" id="pluginInfo">{{ plugin | tojson }}</script>
+<script defer src="/static/js/services/plugin.js"></script>
 {% endblock %}

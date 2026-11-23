@@ -14,7 +14,7 @@
             class="card max-w-md w-full mx-4 transform transition-all duration-300 scale-95 opacity-0">
             <div class="flex justify-between items-center mb-4">
                 <h2 class="text-xl font-bold" id="settingsTitle">Module Settings</h2>
-                <button onclick="closeSettings()" class="text-gray-400 hover:text-white transition-colors">
+                <button data-click="closeSettings" class="text-gray-400 hover:text-white transition-colors">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
@@ -22,7 +22,7 @@
                 <!-- Settings fields will be dynamically inserted here -->
             </div>
             <div class="flex justify-end mt-6">
-                <button onclick="saveSettings()" class="btn-primary !py-2">
+                <button data-click="saveSettings" class="btn-primary !py-2">
                     Save Settings
                 </button>
             </div>
@@ -65,5 +65,5 @@
 {% endblock %}
 
 {% block extra_scripts %}
-<script src="/static/js/dashboard.js"></script>
+<script defer src="/static/js/dashboard.js"></script>
 {% endblock %}
