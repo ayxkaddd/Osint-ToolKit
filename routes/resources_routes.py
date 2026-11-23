@@ -3,6 +3,7 @@ from fastapi.responses import JSONResponse
 import json
 from models.resources_models import Module, Resources
 from services import plugin_loader
+from utils.errors import fail
 
 router = APIRouter(prefix="/api/resources")
 
@@ -16,7 +17,7 @@ def get_resources() -> JSONResponse:
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        fail("Loading resources.json failed", e)
 
 
 def _plugin_cards() -> list:

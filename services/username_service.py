@@ -8,7 +8,6 @@ from typing import Optional
 from collections.abc import AsyncGenerator
 from urllib.parse import parse_qsl, urlparse, parse_qs, quote
 from bs4 import BeautifulSoup
-from fastapi import HTTPException
 from dataclasses import dataclass, asdict
 from enum import Enum
 from collections import defaultdict
@@ -22,6 +21,7 @@ from services.mailbox_service import check_mailboxes as run_mailbox_checks
 from services.proxy_pool import pool as proxy_pool
 from utils.browser_client import BrowserClient, BrowserResponse, RequestError, RequestTimeout
 from utils.proxy_transport import proxied_get
+from utils.errors import fail
 
 # Through proxies each check takes several times longer, but the requests come from
 # many addresses (one or two per site), so far more can run at once without
@@ -380,8 +380,7 @@ class StreamingUsernameSearchService:
             self._refresh_metadata(raise_errors=True)
             return self._metadata_cache
         except Exception as e:
-            logger.error('Failed to fetch metadata: %s', str(e))
-            raise HTTPException(status_code=500, detail=f"Failed to fetch the WhatsMyName site list: {str(e)}") from e
+            fail("Failed to fetch the WhatsMyName site list", e)
 
     def _refresh_metadata(self, raise_errors: bool = False):
         """Download the current WhatsMyName list and save it to assets/."""
@@ -484,7 +483,7 @@ class StreamingUsernameSearchService:
             best = from_bytes(raw[:200_000]).best()
             if best is not None:
                 return raw.decode(best.encoding, errors="replace")
-        except Exception:
+        except (LookupError, ValueError):  # an encoding Python doesn't know
             pass
         return raw.decode("latin-1", errors="ignore")
 
@@ -711,7 +710,7 @@ class StreamingUsernameSearchService:
                             await asyncio.sleep(self.stream_delay)
 
         except Exception as e:
-            logger.error('DuckDuckGo search error: %s', str(e))
+            logger.error('DuckDuckGo search error: %s', str(e), exc_info=True)
 
     @staticmethod
     def _select_sites(sites: list[dict], categories, only_sites, priority_sites) -> list[dict]:
@@ -792,7 +791,7 @@ class StreamingUsernameSearchService:
                 found += result.status == MAILBOX_FOUND
                 await queue_event(StreamEvent(event_type=EventType.MAILBOX_RESULT, data=result.to_dict()))
         except Exception as e:  # noqa: BLE001 - the site checks go on regardless
-            logger.error("mailbox checks failed: %s", e)
+            logger.error("mailbox checks failed: %s", e, exc_info=True)
         # The providers answer in seconds, long before the sites: the page can settle the panel
         await queue_event(StreamEvent(event_type=EventType.MAILBOX_COMPLETED, data={"found": found}))
 

@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 from services.whois_service import WhoisService
 from utils.investigation_decorator import save_investigation
+from utils.errors import fail
 
 router = APIRouter(prefix="/api/domain")
 whois_service = WhoisService()
@@ -14,7 +15,7 @@ async def get_whois(domain: str) -> JSONResponse:
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        fail("WHOIS lookup failed", e)
 
 @router.get("/history/preview")
 async def preview_whois_history(domain: str):
@@ -24,7 +25,7 @@ async def preview_whois_history(domain: str):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"WhoisXML preview failed: {e}") from e
+        fail("WhoisXML preview failed", e, 502)
 
 
 @router.get("/history")
@@ -35,4 +36,4 @@ async def get_whois_history(domain: str) -> JSONResponse:
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        fail("WHOIS history lookup failed", e)

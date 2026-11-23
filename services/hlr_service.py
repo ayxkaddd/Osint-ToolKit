@@ -7,6 +7,7 @@ import httpx
 import logging
 from fastapi import HTTPException
 import os
+from utils.errors import fail
 
 logger = logging.getLogger(__name__)
 
@@ -49,8 +50,7 @@ class HLRService:
             logger.info('Loaded credentials for regions: %s', ', '.join(creds.keys()))
             return creds
         except Exception as e:
-            logger.error('Failed to load credentials: %s', str(e))
-            raise HTTPException(status_code=503, detail=f"HLR credentials could not be loaded: {e}") from e
+            fail("HLR credentials could not be loaded", e, 503)
 
     def switch_credentials(self, region: str = 'ru') -> bool:
         """Switch to next available credential for given region"""
@@ -162,7 +162,7 @@ class HLRService:
                 logger.warning('  Error code: %s', result['error'])
 
         except Exception as e:
-            logger.error('Error parsing status response: %s', str(e))
+            logger.error('Error parsing status response: %s', str(e), exc_info=True)
             logger.error('Raw response was: %s', response.text)
 
         return result
@@ -236,7 +236,7 @@ class HLRService:
                             break  # Success, move to next number
 
                         except Exception as e:
-                            logger.error('Error processing HLR response for %s: %s', phone, str(e))
+                            logger.error('Error processing HLR response for %s: %s', phone, str(e), exc_info=True)
                             results.append({
                                 'phone': phone,
                                 'status': 'Error',
@@ -264,7 +264,7 @@ class HLRService:
                         break
 
                 except Exception as e:
-                    logger.error('Error during HLR lookup for %s: %s', phone, str(e))
+                    logger.error('Error during HLR lookup for %s: %s', phone, str(e), exc_info=True)
                     if self.switch_credentials(region):
                         retry_count_for_phone -= 1
                         continue

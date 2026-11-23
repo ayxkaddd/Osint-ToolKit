@@ -3,6 +3,7 @@ is ready to use. Drives the search box, background jobs, pivot menus, the
 dashboard readiness badges and the settings page."""
 import asyncio
 import json
+import logging
 import os
 import re
 import shutil
@@ -15,6 +16,8 @@ from collections.abc import Callable
 import httpx
 
 from utils.config import get_setting
+
+logger = logging.getLogger(__name__)
 
 FREE, PAID, PAID_API = "free", "paid", "paid"
 
@@ -186,7 +189,8 @@ async def telegram_authorized() -> bool:
     try:
         client = await asyncio.wait_for(telegram_client.ensure_connected(require_authorized=False), timeout=10)
         ok = bool(await client.is_user_authorized())
-    except Exception:
+    except Exception:  # not configured, no network, a session Telegram ended...: not ready
+        logger.debug("Telegram status check failed", exc_info=True)
         ok = False
     _telegram_cache.update(at=time.monotonic(), ok=ok)
     return ok

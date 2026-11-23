@@ -4,6 +4,7 @@ from services import site_icon_service
 from services.oi_service import OiService
 from utils.investigation_decorator import save_investigation
 from utils.stream_reducers import reduce_oi_stream
+from utils.errors import fail
 
 router = APIRouter(prefix="/api/oi")
 oi_service = OiService()
@@ -28,7 +29,7 @@ async def get_oi(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        fail("OSINT Industries lookup failed", e)
 
 QUERY_TYPES = "^(email|phone|username|name|wallet)$"
 
@@ -76,4 +77,4 @@ async def query_credits() -> JSONResponse:
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        fail("Checking OSINT Industries credits failed", e)

@@ -9,6 +9,8 @@ import logging
 
 
 from models.vk_history_models import ProfileEntry
+from telethon.errors import RPCError
+from utils.errors import describe
 
 # Field labels in the bot's snapshots, lower case and without the emoji in front
 # (the same label comes with different emoji: "⚧ Пол", "👩‍❤️‍👨 Пол"). A label with a
@@ -101,8 +103,11 @@ class VkHistoryService:
                 async for event in self._converse(user_id):
                     yield event
             except Exception as e:
-                self.logger.error('VK history lookup failed: %s', str(e), exc_info=True)
-                yield {"event": "error", "detail": str(e)}
+                self.logger.error('VK history lookup failed', exc_info=True)
+                # Telethon's own errors are written for people (flood waits, deleted accounts,
+                # 'No user has "VKInfoRobot" as username' is a ValueError)
+                readable = isinstance(e, (RPCError, ValueError))
+                yield {"event": "error", "detail": str(e) if readable else describe(e)}
 
     async def _converse(self, user_id: str) -> AsyncGenerator[dict, None]:
         bot_username = 'VKInfoRobot'
@@ -221,6 +226,6 @@ class VkHistoryService:
 
             return urls
         except Exception as e:
-            self.logger.error('Error parsing photo URLs: %s', str(e))
+            self.logger.error('Error parsing photo URLs: %s', str(e), exc_info=True)
             self.logger.error('Text being parsed: %s', text)
             return []

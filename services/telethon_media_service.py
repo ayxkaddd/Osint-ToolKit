@@ -629,7 +629,7 @@ class TelethonMediaService:
             return list(reversed(serialized))
 
         except Exception as e:
-            logger.error('Batch reply fetch failed: %s', e)
+            logger.error('Batch reply fetch failed: %s', e, exc_info=True)
             return []
 
     async def get_conversation_thread(
@@ -1233,7 +1233,7 @@ class TelethonMediaService:
                         size
                     )
                 except Exception as e:
-                    logger.error('Thumbnail failed for message %s: %s', msg_id, e)
+                    logger.error('Thumbnail failed for message %s: %s', msg_id, e, exc_info=True)
                     return None
 
         # Run concurrently

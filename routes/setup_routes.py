@@ -18,6 +18,7 @@ import json
 import platform
 
 from utils.config import update_env
+from utils.errors import describe
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -166,7 +167,7 @@ def check_go_tools() -> dict[str, dict[str, Any]]:
 
                 version = version_line or cleaned
 
-            except Exception:
+            except (OSError, subprocess.SubprocessError):
                 version = None
 
         
@@ -212,7 +213,7 @@ def check_gitfive_detailed() -> dict[str, Any]:
                         timeout=5
                     )
                     requirements_met = result.returncode == 0
-                except Exception:
+                except (OSError, subprocess.SubprocessError):
                     pass
             
             return {
@@ -391,7 +392,8 @@ def validate_api_key(service: str, api_key: str) -> dict[str, Any]:
     try:
         return validator(api_key)
     except Exception as e:
-        return {"valid": False, "message": f"Validation error: {str(e)}"}
+        logger.warning("Checking the %s key failed", service, exc_info=True)
+        return {"valid": False, "message": f"Could not check the key: {describe(e)}"}
 
 
 def save_env_config(config: dict[str, str]):
@@ -457,10 +459,11 @@ def install_go_tool(tool_name: str, package: str) -> dict[str, Any]:
                 "output": "\n".join(output)
             }
     
-    except Exception as e:
+    except (OSError, subprocess.SubprocessError):
+        logger.exception("Installing %s failed", tool_name)
         return {
             "success": False,
-            "message": f"Error installing {tool_name}: {str(e)}"
+            "message": f"Could not install {tool_name} (details in the server log)"
         }
 
 
@@ -567,7 +570,7 @@ def setup_page(request: Request):
                     timeout=5
                 )
                 system_status["go_version"] = result.stdout.strip()
-            except Exception:
+            except (OSError, subprocess.SubprocessError):
                 pass
         
         return templates.TemplateResponse(
@@ -579,9 +582,9 @@ def setup_page(request: Request):
                 "state": state.model_dump()
             }
         )
-    except Exception as e:
+    except Exception:
         logger.exception("Setup page failed")
-        return JSONResponse(status_code=500, content={"error": str(e)})
+        return JSONResponse(status_code=500, content={"error": "The setup page could not be shown (details in the server log)"})
 
 
 @router.post("/setup/admin")

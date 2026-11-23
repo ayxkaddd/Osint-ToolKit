@@ -1,3 +1,4 @@
+import logging
 import asyncio
 import json
 from typing import Optional
@@ -11,7 +12,9 @@ from services.whois_service import WhoisService
 from utils.investigation_decorator import save_investigation
 from services.fingerprint_service import FingerprintError, fingerprint_domains
 from utils.stream_reducers import reduce_fingerprints, reduce_whois_analysis
+from utils.errors import describe, fail
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/ns")
 ns_service = NsService()
 whois_service = WhoisService()
@@ -33,7 +36,7 @@ async def get_domains(ns1: str, ns2: str, investigation_id: Optional[str] = None
     except NsLookupError as e:
         raise HTTPException(status_code=502, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        fail("NS lookup failed", e)
 
 
 @router.post("/fingerprint")
@@ -70,7 +73,8 @@ async def whois_analysis(body: WhoisAnalysisRequest, parent_result_id: Optional[
             except HTTPException as e:
                 return {"type": "domain", "domain": domain, "ok": False, "error": str(e.detail)}
             except Exception as e:
-                return {"type": "domain", "domain": domain, "ok": False, "error": str(e) or type(e).__name__}
+                logger.warning("WHOIS for %s failed", domain, exc_info=True)
+                return {"type": "domain", "domain": domain, "ok": False, "error": describe(e)}
 
     async def generate():
         semaphore = asyncio.Semaphore(WHOIS_CONCURRENCY)

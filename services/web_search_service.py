@@ -11,6 +11,7 @@ import httpx
 from abc import ABC, abstractmethod
 import re
 import logging
+from utils.errors import describe
 
 logger = logging.getLogger(__name__)
 
@@ -127,12 +128,12 @@ class PhoneDorkGenerator(DorkGenerator):
 
     def _normalize_phone(self, phone: str) -> list[str]:
         """Generate different phone number formats"""
+        from services.phone_service import PhoneParseError, search_formats
         try:
-            from services.phone_service import search_formats
             formats = search_formats(phone) or []
             if formats:
                 return formats[:4]
-        except Exception:
+        except PhoneParseError:
             pass  # not parseable as an international number - fall back to digit patterns
         digits = re.sub(r'\D', '', phone)
         variants = [digits]
@@ -307,8 +308,9 @@ class SearchExecutor:
                     logger.info('Search completed for dork: %s...', dork[:50])
                     await asyncio.sleep(delay)  # Rate limiting
                 except Exception as e:
-                    logger.error("Search failed for dork '%s': %s", dork, str(e))
-                    results.append({"dork": dork, "engine": engine.value, "error": str(e)})
+                    # the error's text has the request URL, with the SerpAPI key in it
+                    logger.warning("Search failed for dork '%s'", dork, exc_info=True)
+                    results.append({"dork": dork, "engine": engine.value, "error": describe(e)})
 
         return results
 

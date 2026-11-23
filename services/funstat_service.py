@@ -5,6 +5,7 @@ from fastapi import HTTPException
 import logging
 from services.message_analyzer import MessageAnalyzer
 from utils.config import get_setting
+from utils.errors import fail
 from models.funstat_models import (
     TechInfo,
     ResolvedUser,
@@ -92,11 +93,7 @@ class FunstatService:
                 detail=f"Request to Funstat API failed: {str(e)}"
             ) from e
         except Exception as e:
-            logger.error('Unexpected error: %s', str(e))
-            raise HTTPException(
-                status_code=500,
-                detail=f"Unexpected error: {str(e)}"
-            ) from e
+            fail("Funstat request failed", e)
 
     # ==================== USER ENDPOINTS ====================
 

@@ -26,6 +26,7 @@ from services import tme_service
 
 from utils.config import get_setting
 from utils.investigation_decorator import save_investigation
+from utils.errors import fail
 
 logger = logging.getLogger(__name__)
 
@@ -278,8 +279,7 @@ async def get_full_media(
     except TelegramNotAuthorized as e:
         raise HTTPException(status_code=401, detail=str(e)) from e
     except Exception as e:
-        logger.exception("Full media download failed for %s/%s", chat_identifier, message_id)
-        raise HTTPException(status_code=502, detail=f"Telegram download failed: {e}") from e
+        fail(f"Telegram download of {chat_identifier}/{message_id} failed", e, 502)
 
 @media_router.get("/avatars/{filename}")
 def get_avatar(filename: str):

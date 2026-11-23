@@ -273,6 +273,8 @@ class DNSReconService:
                 'admin_email': str(w.admin_email) if hasattr(w, 'admin_email') and w.admin_email else None
             }
         except Exception as e:
+            # python-whois says why ("No match for ..."); nothing secret in it
+            logger.warning("WHOIS for %s failed", domain, exc_info=True)
             return {'error': str(e)}
 
     async def run_nmap_scan(self, domain: str, warnings: list[str]) -> list[dict[str, Any]]:
