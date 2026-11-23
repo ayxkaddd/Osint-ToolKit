@@ -75,6 +75,19 @@ Behind a reverse proxy (nginx, Caddy) that adds the client address to `X-Forward
 
 The CSS is prebuilt (`static/css/tailwind.css`). After changing templates, rebuild it with `npm install && npm run build:css`.
 
+## Command-line client
+
+`osint` works with the same investigations from a terminal: list them, show results and identifiers, start background lookups, export cases. It talks to a running server over its API, so you can use it on another computer too. Install it with [pipx](https://pipx.pypa.io) (or `uv tool install` with the same address) on Windows, macOS or Linux:
+
+```bash
+pipx install "git+https://github.com/ayxkaddd/Osint-ToolKit#subdirectory=cli"
+osint login http://127.0.0.1:8000
+osint list
+osint lookup someone@example.com -m holehe   # without -m it only lists the modules that could run
+```
+
+Read commands take `--json` for `jq`. All commands are in [cli/README.md](cli/README.md).
+
 # Modules Setup
 
 Modules without an entry below need no setup. The dashboard marks any module that is missing a key or tool, with a link to fix it.

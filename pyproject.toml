@@ -58,5 +58,5 @@ select = ["E", "F", "B", "UP"]
 ignore = ["E501", "UP006", "UP007", "UP035", "UP045"]
 
 [tool.ruff.lint.flake8-bugbear]
-# FastAPI parameters are declared with these as defaults
-extend-immutable-calls = ["fastapi.Body", "fastapi.Depends", "fastapi.File", "fastapi.Form", "fastapi.Header", "fastapi.Path", "fastapi.Query", "fastapi.Security"]
+# FastAPI and Typer (cli/) parameters are declared with these as defaults
+extend-immutable-calls = ["fastapi.Body", "fastapi.Depends", "fastapi.File", "fastapi.Form", "fastapi.Header", "fastapi.Path", "fastapi.Query", "fastapi.Security", "typer.Argument", "typer.Option"]
