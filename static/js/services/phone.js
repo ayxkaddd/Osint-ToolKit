@@ -221,7 +221,7 @@ function phoneInfoCard(info) {
             <div class="mt-4 flex flex-wrap gap-2">
                 ${link(info.links.whatsapp, 'WhatsApp', 'fab fa-whatsapp')}
                 ${link(info.links.telegram, 'Telegram', 'fab fa-telegram')}
-                ${`<a href="${escapeAttr(info.links.viber)}" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-gray-800 hover:bg-gray-700 text-xs"><i class="fab fa-viber"></i>Viber</a>`}
+                ${/^viber:\/\/chat\?number=%2B\d+$/.test(info.links.viber || '') ? `<a href="${escapeAttr(info.links.viber)}" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-gray-800 hover:bg-gray-700 text-xs"><i class="fab fa-viber"></i>Viber</a>` : ''}
                 ${link(info.links.google, 'Google all formats', 'fab fa-google')}
             </div>
             <p class="text-xs text-gray-500 mt-3">${escapeHtml(info.note)}</p>

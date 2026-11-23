@@ -926,7 +926,7 @@ class OSINTSearch {
             categories
                 .map(
                     (category) =>
-                        `<option value="${category}" ${currentValue === category ? 'selected' : ''}>${category.charAt(0).toUpperCase() + category.slice(1)}</option>`
+                        `<option value="${escapeAttr(category)}" ${currentValue === category ? 'selected' : ''}>${escapeHtml(category.charAt(0).toUpperCase() + category.slice(1))}</option>`
                 )
                 .join('');
     }
@@ -1023,7 +1023,7 @@ class OSINTSearch {
             <div class="modal-content">
                 <div class="modal-header">
                     <div>
-                        <h2 class="text-xl font-bold text-white">${result.siteName}</h2>
+                        <h2 class="text-xl font-bold text-white">${escapeHtml(result.siteName)}</h2>
                         <p class="text-sm text-gray-400 mt-1">Full Profile Data</p>
                     </div>
                     <button class="close-modal text-gray-400 hover:text-white transition-colors">

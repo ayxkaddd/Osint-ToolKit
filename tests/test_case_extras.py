@@ -115,3 +115,17 @@ def test_report_reads_note_references_and_names_whois(client, investigation):
     page = client.get(f"/api/investigations/{investigation}/report", params={"include": "all"}).text
     assert "Owner ref.person@gmail.com and the WHOIS" in page and "[[" not in page
     assert "<b>WHOIS</b>" in page and "WHOIS history" not in page
+
+
+def test_report_links_only_web_addresses(client, investigation):
+    """A saved report opened from disk has no Content-Security-Policy: a javascript: address
+    in a result must not become a link there."""
+    service, inv = _service(), UUID(investigation)
+    service.save_investigation_result(inv, "manual", "add_manual", {"kwargs": {}},
+                                      {"title": "Crafted", "url": "javascript:alert(1)", "text": "x"})
+    service.save_investigation_result(inv, "manual", "add_manual", {"kwargs": {}},
+                                      {"title": "Normal", "url": "https://example.test/page", "text": "y"})
+    page = client.get(f"/api/investigations/{investigation}/report", params={"include": "all"}).text
+    assert "Crafted" in page and "javascript:alert(1)" in page
+    assert 'href="javascript:' not in page
+    assert 'href="https://example.test/page"' in page

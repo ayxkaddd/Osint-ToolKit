@@ -537,7 +537,7 @@ function displayContextModal(context, chatUsername) {
         const text = msg.text || msg.message || '';
         const hasMedia = msg.media_type || msg.media;
         const messageId = msg.message_id || msg.id;
-        const messageLink = `https://t.me/${escapeHtml(chatUsername)}/${messageId}`;
+        const messageLink = `https://t.me/${encodeURIComponent(chatUsername)}/${encodeURIComponent(messageId)}`;
 
         let typeClass = '';
         let typeLabel = '';
@@ -572,7 +572,7 @@ function displayContextModal(context, chatUsername) {
                 `
                         : ''
                 }
-                <a href="${messageLink}" target="_blank" class="text-xs text-purple-400 hover:text-purple-300">
+                <a href="${escapeAttr(messageLink)}" target="_blank" rel="noopener noreferrer" class="text-xs text-purple-400 hover:text-purple-300">
                     <i class="fas fa-external-link-alt mr-1"></i>Open in Telegram
                 </a>
             </div>
@@ -694,10 +694,11 @@ async function enrichLinks(links) {
 }
 
 // Format large numbers
+// HTML: a count from a scraped profile may be any text
 function formatNumber(num) {
     if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
     if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
-    return num?.toString() || '0';
+    return escapeHtml(num?.toString() || '0');
 }
 
 // Display enriched links section
@@ -731,8 +732,8 @@ function displayEnrichedLinks(results) {
         html += `
             <div class="mb-4">
                 <div class="flex items-center gap-2 mb-3">
-                    <span class="platform-badge platform-${platform}">
-                        <i class="${getPlatformIcon(platform)} mr-1"></i>${platform}
+                    <span class="platform-badge platform-${escapeAttr(platform)}">
+                        <i class="${escapeAttr(getPlatformIcon(platform))} mr-1"></i>${escapeHtml(platform)}
                     </span>
                     <span class="text-sm text-gray-500">(${platformResults.length} links)</span>
                 </div>
@@ -1152,13 +1153,13 @@ async function processAndEnrichLinks(messages, containerId) {
 
 function buildTelegramLink(chatId, messageId, username = null) {
     if (username) {
-        return `https://t.me/${encodeURIComponent(username)}/${messageId}`;
+        return `https://t.me/${encodeURIComponent(username)}/${encodeURIComponent(messageId)}`;
     }
     const absId = Math.abs(parseInt(chatId));
     if (String(absId).startsWith('100')) {
-        return `https://t.me/c/${String(absId).slice(3)}/${messageId}`;
+        return `https://t.me/c/${String(absId).slice(3)}/${encodeURIComponent(messageId)}`;
     }
-    return `https://t.me/${absId}/${messageId}`;
+    return `https://t.me/${absId}/${encodeURIComponent(messageId)}`;
 }
 
 function buildTelegramChatLink(chatId, username = null) {
@@ -2361,7 +2362,7 @@ function displayGroupInfo(group) {
                         `
                                 : ''
                         }
-                        <p class="text-gray-500 text-sm">ID: ${currentGroupId}</p>
+                        <p class="text-gray-500 text-sm">ID: ${escapeHtml(currentGroupId)}</p>
                     </div>
                 </div>
             </div>
@@ -2484,7 +2485,7 @@ function displayTextResults(data) {
                                     ? `
                                 <p class="text-sm text-gray-400 mb-2">
                                     <i class="fas fa-users mr-1"></i>
-                                    <a href="${chatLink}" target="_blank" class="hover:text-purple-400">
+                                    <a href="${escapeAttr(chatLink)}" target="_blank" rel="noopener noreferrer" class="hover:text-purple-400">
                                         ${escapeHtml(result.group.title)}
                                     </a>
                                 </p>
@@ -2498,7 +2499,7 @@ function displayTextResults(data) {
                                 result.group
                                     ? `
                                 <div class="flex items-center gap-3">
-                                    <a href="${messageLink}" target="_blank" class="text-xs text-purple-400 hover:text-purple-300">
+                                    <a href="${escapeAttr(messageLink)}" target="_blank" rel="noopener noreferrer" class="text-xs text-purple-400 hover:text-purple-300">
                                         <i class="fas fa-external-link-alt mr-1"></i>Open in Telegram
                                     </a>
                                     ${

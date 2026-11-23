@@ -427,7 +427,7 @@ async function validateKey(service) {
         if (data.valid) {
             statusDiv.innerHTML = `<span class="text-green-400">✓ Valid${data.credits ? ` (${data.credits} credits)` : ''}</span>`;
         } else {
-            statusDiv.innerHTML = `<span class="text-red-400">✗ ${data.message}</span>`;
+            statusDiv.innerHTML = `<span class="text-red-400">✗ ${escapeHtml(data.message)}</span>`;
         }
     } catch (error) {
         statusDiv.innerHTML = `<span class="text-red-400">Validation failed: ${escapeHtml(error.message)}</span>`;

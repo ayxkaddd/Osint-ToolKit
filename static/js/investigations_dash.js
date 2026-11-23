@@ -196,7 +196,7 @@ function displayDashboardInvestigations(investigations) {
                     }
                     <div class="absolute top-3 right-3">
                         <span class="text-xs px-2.5 py-1 rounded-full border ${statusColor} font-medium">
-                            ${inv.status}
+                            ${escapeHtml(inv.status)}
                         </span>
                     </div>
                 </div>

@@ -960,7 +960,7 @@ function renderTmeProfile(p) {
                 <div class="text-lg font-semibold text-white">${escapeHtml(p.name || '')}</div>
                 <div>${pivotChip('telegram_username', p.username, '@' + p.username)}</div>
                 ${p.bio ? `<div class="text-gray-300 whitespace-pre-wrap break-words">${pivotInText(p.bio)}</div>` : ''}
-                <a href="${escapeAttr(p.link)}" target="_blank" rel="noopener noreferrer" class="text-xs text-purple-300 hover:text-white">${escapeHtml(p.link)}</a>
+                ${link(p.link)}
             </div>
         </div>`;
 }

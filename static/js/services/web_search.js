@@ -150,7 +150,7 @@ document.addEventListener('DOMContentLoaded', function () {
             engineBlock.innerHTML = `
                 <div class="flex items-center gap-2 mb-3">
                     <i data-lucide="${engine === 'google' ? 'search' : 'globe'}" class="w-4 h-4 text-gray-400"></i>
-                    <h4 class="text-sm font-bold uppercase tracking-wider text-gray-300">${engine}</h4>
+                    <h4 class="text-sm font-bold uppercase tracking-wider text-gray-300">${escapeHtml(engine)}</h4>
                     <span class="text-xs text-gray-500">${dorks.length} dorks</span>
                 </div>
             `;
@@ -368,7 +368,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 <div class="flex items-start justify-between gap-4 mb-2">
                     <div class="flex items-start gap-3 min-w-0">
                         ${domain ? `<img src="${escapeAttr(faviconUrl(domain))}" alt="" width="16" height="16" class="mt-0.5 shrink-0 rounded-sm" data-img-error="hideImage">` : ''}
-                        <a href="${escapeAttr(url || '#')}" target="_blank" rel="noopener noreferrer"
+                        <a href="${escapeAttr(safeUrl(url) || '#')}" target="_blank" rel="noopener noreferrer"
                             class="text-white font-bold hover:text-gray-300 transition-colors text-sm leading-snug">
                             ${escapeHtml(result.title || 'Untitled')}
                         </a>

@@ -177,7 +177,7 @@ function renderResources(resources) {
                                 ${module.tags
                                     .map(
                                         (tag) => `
-                                    <span class="px-3 py-1 bg-gray-800 text-gray-300 rounded-full text-sm">${tag}</span>
+                                    <span class="px-3 py-1 bg-gray-800 text-gray-300 rounded-full text-sm">${escapeHtml(tag)}</span>
                                 `
                                     )
                                     .join('')}
@@ -275,7 +275,7 @@ async function loadActiveInvestigation() {
                         </div>
 
                         <div class="flex flex-wrap items-center gap-3 shrink-0 w-full md:w-auto">
-                            <a href="/api/investigations/${inv.investigation_id}/view" 
+                            <a href="/api/investigations/${encodeURIComponent(inv.investigation_id)}/view" 
                                class="flex-1 md:flex-initial px-4 py-2.5 bg-purple-600 hover:bg-purple-500 text-white font-medium rounded-xl transition-all duration-200 flex items-center justify-center gap-2 text-sm shadow-lg shadow-purple-950/50 hover:shadow-purple-900/50 hover:-translate-y-0.5">
                                 <i class="fas fa-chart-line"></i> View Results (${inv.results_count || 0})
                             </a>
@@ -346,15 +346,15 @@ function openSettings(moduleName) {
 
             return `
                 <div>
-                    <label class="block text-sm font-medium text-gray-400 mb-2">${config.label}</label>
-                    <input type="${config.type}"
-                           name="${key}"
+                    <label class="block text-sm font-medium text-gray-400 mb-2">${escapeHtml(config.label)}</label>
+                    <input type="${escapeAttr(config.type)}"
+                           name="${escapeAttr(key)}"
                            autocomplete="${config.type === 'password' ? 'new-password' : 'off'}"
                            data-lpignore="true" data-1p-ignore data-bwignore data-form-type="other"
-                           data-module="${moduleName}"
+                           data-module="${escapeAttr(moduleName)}"
                            class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500"
-                           value="${displayValue}"
-                           placeholder="${config.label}">
+                           value="${escapeAttr(displayValue)}"
+                           placeholder="${escapeAttr(config.label)}">
                 </div>
             `;
         })
@@ -393,7 +393,9 @@ async function saveSettings() {
     let hasChanges = false;
 
     Object.entries(currentModule.settings).forEach(([key, config]) => {
-        const input = document.querySelector(`input[name="${key}"][data-module="${currentModule.name}"]`);
+        const input = document.querySelector(
+            `input[name="${CSS.escape(key)}"][data-module="${CSS.escape(currentModule.name)}"]`
+        );
         const value = input.value;
 
         if (config.type === 'password' && value === '•'.repeat(8)) {

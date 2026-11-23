@@ -110,9 +110,9 @@ function whoisCard(w) {
         <div class="space-y-3">
             <div class="grid grid-cols-2 gap-3">
                 ${field('Registrar', escapeHtml(w.registrar || '') + (w.registrar_iana ? ` <span class="text-xs text-gray-500">IANA ${escapeHtml(w.registrar_iana)}</span>` : ''))}
-                ${field('Registered', nsDate(w.created))}
-                ${field('Last changed', nsDate(w.updated))}
-                ${field('Expires', nsDate(w.expires))}
+                ${field('Registered', escapeHtml(nsDate(w.created)))}
+                ${field('Last changed', escapeHtml(nsDate(w.updated)))}
+                ${field('Expires', escapeHtml(nsDate(w.expires)))}
                 ${field('Name servers', (w.nameservers || []).map(escapeHtml).join('<br>'))}
                 ${field('DNSSEC', w.dnssec === null || w.dnssec === undefined ? '' : w.dnssec ? 'signed' : 'unsigned')}
             </div>
