@@ -209,3 +209,35 @@ def test_server_address_from_option_and_environment(logged_in, monkeypatch):
     assert logged_in.requests[-1].url.host == "from-env.test"
     run("--url", "http://from-option.test", "list")
     assert logged_in.requests[-1].url.host == "from-option.test"
+
+
+# --- Consoles that can't show every character (a pipe on Windows is cp1252) ---
+
+def _cp1252(*args, **env):
+    import subprocess
+    import sys
+    return subprocess.run([sys.executable, "-c", "from osint_cli.main import app; app()", *args],
+                          capture_output=True, env={**os.environ, "PYTHONIOENCODING": "cp1252", **env}, timeout=60)
+
+
+def test_help_on_a_cp1252_console():
+    result = _cp1252("--help")
+    assert result.returncode == 0, result.stderr.decode(errors="replace")
+    assert b"list" in result.stdout and b"Traceback" not in result.stderr
+
+
+def test_names_a_console_cannot_show_do_not_stop_the_command(tmp_path):
+    import io
+    from osint_cli import main
+    stream = io.TextIOWrapper(io.BytesIO(), encoding="cp1252")
+    main.sys.stdout, saved = stream, main.sys.stdout
+    try:
+        main._never_fail_on_characters()
+        print("Справа ● 🔍", file=stream)
+        main.print_json({"name": "Справа"})
+        stream.flush()
+    finally:
+        main.sys.stdout = saved
+    text = stream.buffer.getvalue().decode("cp1252")
+    assert "?" in text
+    assert json.loads(text[text.index("{"):]) == {"name": "Справа"}  # escaped, nothing lost

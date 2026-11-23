@@ -18,7 +18,7 @@ If `osint` isn't found afterwards, run `pipx ensurepath` once and open a new ter
 
 ```bash
 osint login http://127.0.0.1:8000     # asks for the admin email and password
-osint list                            # investigations; ● is the current one
+osint list                            # investigations; * is the current one
 osint use 1a2b                        # make one current (its id, the start of it, or its name)
 osint show                            # its results, follow-up lookups under the one they came from
 osint entities --type email           # identifiers found in it

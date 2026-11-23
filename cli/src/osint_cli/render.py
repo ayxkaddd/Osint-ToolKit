@@ -27,7 +27,7 @@ def investigations(items: list[dict], current_id: Optional[str]) -> Table:
     for column in ("", "Name", "Status", "Results", "Updated", "ID"):
         table.add_column(column, overflow="fold" if column == "Name" else "ellipsis", no_wrap=column != "Name")
     for inv in items:
-        mark = "[green]●[/]" if inv.get("investigation_id") == current_id else ""
+        mark = "[green]*[/]" if inv.get("investigation_id") == current_id else ""
         table.add_row(mark, escape(inv.get("name") or ""), escape(inv.get("status") or ""),
                       str(inv.get("results_count", 0)), when(inv.get("updated_at")),
                       f"[dim]{escape(inv.get('investigation_id', '')[:8])}[/]")  # enough for `osint use`

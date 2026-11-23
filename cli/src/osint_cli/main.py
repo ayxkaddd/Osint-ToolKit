@@ -4,9 +4,11 @@ Everything goes through the server's HTTP API, so what the CLI does shows up in 
 dashboard (and the other way round). Read commands take --json: the API's answer on
 stdout and nothing else, for jq.
 """
+import codecs
 import functools
 import json
 import re
+import sys
 from pathlib import Path
 from typing import Optional
 
@@ -14,6 +16,24 @@ import typer
 
 from . import __version__, config, render
 from .client import ApiError, Client
+
+
+def _utf8(stream) -> bool:
+    try:
+        return codecs.lookup(getattr(stream, "encoding", None) or "ascii").name == "utf-8"
+    except LookupError:
+        return False
+
+
+def _never_fail_on_characters() -> None:
+    """Output into a pipe on Windows is cp1252: a name in Cyrillic, an emoji (or the help's
+    own text) would stop the command with UnicodeEncodeError. Such characters show as "?"."""
+    for stream in (sys.stdout, sys.stderr):
+        if stream is not None and not _utf8(stream) and hasattr(stream, "reconfigure"):
+            stream.reconfigure(errors="replace")
+
+
+_never_fail_on_characters()
 
 app = typer.Typer(help="Investigations, identifiers and background lookups of an OSINT Toolkit server.",
                   no_args_is_help=True, add_completion=False,
@@ -62,7 +82,8 @@ def client(require_login: bool = True) -> Client:
 
 
 def print_json(data) -> None:
-    typer.echo(json.dumps(data, indent=2, ensure_ascii=False))
+    # where output can't be UTF-8, non-ASCII characters go out as \u escapes: still the same JSON
+    typer.echo(json.dumps(data, indent=2, ensure_ascii=not _utf8(sys.stdout)))
 
 
 def resolve_investigation(api: Client, given: Optional[str]) -> str:
@@ -135,7 +156,7 @@ def logout(everywhere: bool = typer.Option(False, "--everywhere", help="End ever
 @app.command("list")
 @handles_errors
 def list_investigations(as_json: bool = JsonOption):
-    """All investigations (● marks the current one)."""
+    """All investigations (* marks the current one)."""
     api = client()
     data = api.investigations()
     if as_json:
