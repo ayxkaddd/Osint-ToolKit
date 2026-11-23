@@ -40,6 +40,7 @@ from routes import (
 )
 from auth.auth_handler import AuthHandler
 from services import plugin_loader
+from utils import single_process
 from utils.config import get_setting, load_env
 
 logging.basicConfig(
@@ -84,6 +85,13 @@ async def lifespan(app: FastAPI):
     # Telegram connects on first use (Funstat media, VK, status checks), not at startup.
     # The proxy pool primes and refreshes itself in the background so no lookup ever
     # waits on fetching or health-checking proxies.
+    # Refuses to start when another process already serves this folder (see utils/single_process.py)
+    try:
+        single_process.hold()
+    except single_process.AnotherServerRunning as e:
+        logger.error("%s", e)
+        single_process.stop_supervisor()
+        raise
     if not setup_routes.check_setup_complete():
         logger.warning(setup_routes.setup_link_message())
     from services.proxy_pool import pool
@@ -92,15 +100,15 @@ async def lifespan(app: FastAPI):
     proxy_task.cancel()
     from routes.funstat_routes import telethon_service
     await telethon_service.stop()
+    single_process.release()
 
 
 class OsintFramework:
     def __init__(self):
         self.app = FastAPI(title="Osint Framework", version="1.0.0", lifespan=lifespan)
         self.auth_handler = AuthHandler()
-        # Failed logins per client, in memory: the limit resets on restart and only holds
-        # with a single worker process (the app must run as one process anyway: see
-        # services/investigation_service.py)
+        # Failed logins per client, in memory: the limit resets on restart. It holds because
+        # the app runs as one process (utils/single_process.py refuses a second one).
         self.failed_logins: dict[str, deque] = defaultdict(deque)
         self.setup_routes()
         self.setup_static_files()
