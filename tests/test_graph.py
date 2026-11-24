@@ -357,3 +357,77 @@ def test_graph_tab_and_full_screen_page(client, investigation):
 def test_full_screen_page_needs_login(anon, investigation):
     response = anon.get(f"/investigations/{investigation}/graph", follow_redirects=False)
     assert response.status_code in (302, 303, 307)
+
+
+# ---------------------------------------------------------------------------
+# The saved view (graph.json)
+# ---------------------------------------------------------------------------
+M1, M2 = "m:" + "a" * 32, "m:" + "b" * 32
+
+
+def _state(**changes):
+    state = {
+        "positions": {"e:email:x@y.test": [10.4, -20.6], M1: [100, 200]},
+        "expanded": ["g:r:1:type:url"], "collapsed": ["r:2"], "hidden": ["e:url:https://a.test/"], "removed": [],
+        "manual_nodes": [{"id": M1, "type": "person", "label": "John", "note": "met at the conference",
+                          "url": "https://example.test/john", "color": "#f472b6"},
+                         {"id": M2, "type": "email", "label": "j@x.test"}],
+        "manual_edges": [{"id": "l:" + "c" * 32, "source": M1, "target": "e:email:x@y.test", "label": "same person"}],
+        "viewport": {"zoom": 0.8, "x": 12.5, "y": -40},
+        "filters": {"types": ["email"], "shared_only": True},
+        "layout": "tree",
+    }
+    state.update(changes)
+    return state
+
+
+def test_graph_view_is_saved_and_comes_back(client, investigation):
+    url = f"/api/investigations/{investigation}/graph/state"
+    assert client.get(url).json() == {}
+    response = client.put(url, json=_state())
+    assert response.status_code == 200 and response.json()["updated_at"]
+    saved = client.get(url).json()
+    assert saved["positions"] == {"e:email:x@y.test": [10, -21], M1: [100, 200]}     # whole pixels
+    assert saved["manual_nodes"][0]["label"] == "John" and saved["manual_nodes"][1].get("url") is None
+    assert saved["manual_edges"][0]["label"] == "same person"
+    assert saved["collapsed"] == ["r:2"] and saved["filters"]["shared_only"] is True
+    # the first view comes with it
+    assert client.get(f"/api/investigations/{investigation}/graph").json()["state"]["hidden"] == ["e:url:https://a.test/"]
+
+
+@pytest.mark.parametrize("change", [
+    {"surprise": 1},                                                                  # unknown key
+    {"positions": {f"e:x{i}": [0, 0] for i in range(5001)}},                          # too many
+    {"manual_nodes": [{"id": M1, "type": "person", "label": "x" * 201}]},             # label too long
+    {"manual_nodes": [{"id": M1, "type": "person", "label": "x", "url": "javascript:alert(1)"}]},
+    {"manual_nodes": [{"id": M1, "type": "person", "label": "x", "image": "../../.env"}]},
+    {"manual_nodes": [{"id": "m:../x", "type": "person", "label": "x"}]},
+    {"manual_nodes": [{"id": M1, "type": "spaceship", "label": "x"}]},
+    {"manual_nodes": [{"id": M1, "type": "person", "label": "x", "color": "red; background:url(x)"}]},
+    {"manual_nodes": [{"id": M1, "type": "person", "label": "x", "onclick": "alert(1)"}]},
+    {"manual_edges": [{"id": "l:" + "c" * 32, "source": M1, "target": "x" * 1001}]},
+    {"viewport": {"zoom": 0.8, "x": 0, "y": 0, "extra": 1}},
+    {"layout": "spiral"},
+    {"hidden": ["e:x"] * 5001},
+])
+def test_graph_view_is_checked(client, investigation, change):
+    response = client.put(f"/api/investigations/{investigation}/graph/state", json=_state(**change))
+    assert response.status_code == 422, response.text
+    assert client.get(f"/api/investigations/{investigation}/graph/state").json() == {}
+
+
+def test_graph_view_rejects_bad_numbers_and_huge_bodies(client, investigation):
+    url = f"/api/investigations/{investigation}/graph/state"
+    body = '{"positions": {"e:a": [NaN, 1]}}'
+    assert client.put(url, content=body, headers={"Content-Type": "application/json"}).status_code == 422
+    huge = '{"hidden": ["' + "x" * (3 * 1024 * 1024) + '"]}'
+    assert client.put(url, content=huge, headers={"Content-Type": "application/json"}).status_code == 413
+
+
+def test_graph_view_needs_login_and_this_site(anon, client, investigation):
+    url = f"/api/investigations/{investigation}/graph/state"
+    assert anon.get(url).status_code == 401
+    assert anon.put(url, json={}).status_code == 401
+    assert client.put(url, json={}, headers={"Sec-Fetch-Site": "cross-site"}).status_code == 403
+    assert client.get(url, headers={"Sec-Fetch-Site": "cross-site"}).status_code == 403
+    assert client.put("/api/investigations/00000000-0000-4000-8000-000000000000/graph/state", json={}).status_code == 404

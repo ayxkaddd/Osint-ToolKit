@@ -6,9 +6,10 @@ from fastapi.responses import FileResponse, JSONResponse, HTMLResponse
 from fastapi.concurrency import run_in_threadpool
 from fastapi.templating import Jinja2Templates
 from starlette.background import BackgroundTask
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 from starlette.datastructures import UploadFile as FormUpload
 from utils.investigation_decorator import live_result
+from services.investigations.graph import GraphState
 from services.investigation_service import (
     MANUAL_FILE_MAX_UPLOAD, MANUAL_FILES_MAX, MANUAL_TEXT_MAX, NOTE_IMAGE_MAX_UPLOAD, find_target,
     investigation_service,
@@ -18,6 +19,9 @@ router = APIRouter(prefix="/api/investigations")
 templates = Jinja2Templates(directory="templates")
 
 VALID_STATUSES = {"active", "completed", "archived"}
+
+# The graph's saved view (5000 positions and the rest fit well under it)
+GRAPH_STATE_MAX_BYTES = 2 * 1024 * 1024
 
 # One "add manually" request: several files together
 MANUAL_UPLOAD_MAX = 200 * 1024 * 1024
@@ -288,6 +292,31 @@ def get_investigation_graph(investigation_id: UUID, noise: bool = False) -> JSON
     folded into groups (opened with /graph/expand). ``noise``: boilerplate and false positives too."""
     _require_investigation(investigation_id)
     return JSONResponse(content=investigation_service.get_graph(investigation_id, noise=noise))
+
+
+@router.get("/{investigation_id}/graph/state")
+def get_graph_state(investigation_id: UUID) -> JSONResponse:
+    """The saved view: positions, opened and folded nodes, hidden and removed ones,
+    what the analyst added, zoom and filters."""
+    _require_investigation(investigation_id)
+    return JSONResponse(content=investigation_service.get_graph_state(investigation_id))
+
+
+@router.put("/{investigation_id}/graph/state")
+async def put_graph_state(investigation_id: UUID, request: Request) -> JSONResponse:
+    """Replace the saved view (the browser sends it whole, a moment after each change)."""
+    _require_investigation(investigation_id)
+    if int(request.headers.get("content-length") or 0) > GRAPH_STATE_MAX_BYTES:
+        raise HTTPException(status_code=413, detail="The graph view is too large")
+    body = await request.body()
+    if len(body) > GRAPH_STATE_MAX_BYTES:
+        raise HTTPException(status_code=413, detail="The graph view is too large")
+    try:
+        state = GraphState.model_validate_json(body)
+    except ValidationError as e:
+        raise HTTPException(status_code=422, detail=e.errors(include_url=False, include_input=False, include_context=False)) from e
+    saved = await run_in_threadpool(investigation_service.save_graph_state, investigation_id, state)
+    return JSONResponse(content={"status": "success", "updated_at": saved["updated_at"]})
 
 
 @router.get("/{investigation_id}/graph/node")

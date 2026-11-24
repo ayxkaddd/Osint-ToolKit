@@ -12,15 +12,19 @@ across rebuilds (saved positions and hidden marks refer to them):
 Edges run identifier -> lookup (searched), lookup -> identifier or group (found),
 group -> identifier (member) and lookup -> follow-up lookup (followup).
 """
+import math
 import re
 import threading
-from typing import Any, Optional
+from datetime import datetime
+from typing import Annotated, Any, Literal, Optional
 from urllib.parse import urljoin, urlparse
 from uuid import UUID
 
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
+
 from services.entities import ENTITY_TYPES, NOISE_DOMAINS, NOISE_EMAIL_LOCALS, Entity, is_noise
-from .constants import GRAPH_INLINE_MAX, GRAPH_NODE_BUDGET, GRAPH_VERSION, MANUAL_SERVICE
-from .storage import _GRAPH_CACHE, _SHARED_CACHE, _read_json
+from .constants import GRAPH_INLINE_MAX, GRAPH_NODE_BUDGET, GRAPH_VERSION, MANUAL_SERVICE, NOTE_IMAGE_NAME
+from .storage import _GRAPH_CACHE, _SHARED_CACHE, _STORE_LOCK, _read_json, _write_json_atomic
 
 TRIAGE_RANK = {"confirmed": 0, "important": 1, None: 2, "false_positive": 3}
 
@@ -36,6 +40,101 @@ DEFAULT_PICTURE = re.compile(r"default[_-]?(avatar|profile|user|photo|image|pic)
 
 # Requests run in threads; the cache's order changes on every read
 _GRAPH_LOCK = threading.Lock()
+
+
+# ---------------------------------------------------------------------------
+# The saved view (graph.json): what the analyst moved, opened, hid and added
+# ---------------------------------------------------------------------------
+# Things the analyst can add besides identifiers
+MANUAL_NODE_TYPES = ("person", "organisation", "location", "event", "note", "image")
+
+NodeId = Annotated[str, StringConstraints(min_length=1, max_length=1000)]
+Label = Annotated[str, StringConstraints(max_length=200)]
+Name = Annotated[str, StringConstraints(max_length=100)]
+
+
+class _Strict(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class GraphManualNode(_Strict):
+    id: str = Field(pattern=r"^m:[0-9a-f]{32}$")
+    type: str
+    label: str = Field(min_length=1, max_length=200)
+    note: str = Field("", max_length=5000)
+    url: Optional[str] = Field(None, max_length=2000)
+    image: Optional[str] = Field(None, max_length=60)      # a note image (POST .../note-images)
+    color: Optional[str] = Field(None, pattern=r"^#[0-9a-fA-F]{6}$")
+
+    @field_validator("type")
+    @classmethod
+    def _known_type(cls, value: str) -> str:
+        if value not in ENTITY_TYPES and value not in MANUAL_NODE_TYPES:
+            raise ValueError("unknown node type")
+        return value
+
+    @field_validator("url")
+    @classmethod
+    def _web_link(cls, value: Optional[str]) -> Optional[str]:
+        value = (value or "").strip()
+        if value and not re.match(r"https?://\S+$", value, re.I):
+            raise ValueError("the link must start with http:// or https://")
+        return value or None
+
+    @field_validator("image")
+    @classmethod
+    def _note_image(cls, value: Optional[str]) -> Optional[str]:
+        if value and not NOTE_IMAGE_NAME.fullmatch(value):
+            raise ValueError("not an uploaded image")
+        return value or None
+
+
+class GraphManualEdge(_Strict):
+    id: str = Field(pattern=r"^l:[0-9a-f]{32}$")
+    source: NodeId
+    target: NodeId
+    label: Label = ""
+
+
+class GraphViewport(_Strict):
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+    zoom: float = Field(ge=0.01, le=10)
+    x: float = Field(ge=-1e8, le=1e8)
+    y: float = Field(ge=-1e8, le=1e8)
+
+
+class GraphFilters(_Strict):
+    types: list[Name] = Field(default_factory=list, max_length=40)
+    modules: list[Name] = Field(default_factory=list, max_length=200)
+    triage: list[Name] = Field(default_factory=list, max_length=5)
+    date_from: Optional[Name] = None
+    date_to: Optional[Name] = None
+    shared_only: bool = False
+    noise: bool = False
+
+
+class GraphState(_Strict):
+    """graph.json. Node ids are the graph's (e:..., r:..., g:..., m:...); ids that are no
+    longer in the graph are kept, so a deleted and re-run lookup comes back as it was."""
+    positions: dict[NodeId, tuple[float, float]] = Field(default_factory=dict)
+    expanded: list[NodeId] = Field(default_factory=list, max_length=5000)
+    collapsed: list[NodeId] = Field(default_factory=list, max_length=5000)
+    hidden: list[NodeId] = Field(default_factory=list, max_length=5000)
+    removed: list[NodeId] = Field(default_factory=list, max_length=5000)
+    manual_nodes: list[GraphManualNode] = Field(default_factory=list, max_length=1000)
+    manual_edges: list[GraphManualEdge] = Field(default_factory=list, max_length=2000)
+    viewport: Optional[GraphViewport] = None
+    filters: Optional[GraphFilters] = None
+    layout: Literal["tree", "web"] = "tree"
+
+    @field_validator("positions")
+    @classmethod
+    def _positions(cls, value: dict[str, tuple[float, float]]) -> dict[str, tuple[float, float]]:
+        if len(value) > 5000:
+            raise ValueError("at most 5000 positions")
+        if not all(math.isfinite(c) and abs(c) <= 1e7 for point in value.values() for c in point):
+            raise ValueError("positions must be numbers")
+        return {node: (round(x), round(y)) for node, (x, y) in value.items()}
 
 
 def _noise_domain(host: str) -> bool:
@@ -93,6 +192,12 @@ class GraphMixin:
         """The saved view (positions, hidden and removed nodes, what the analyst added)."""
         state = _read_json(self._graph_file(investigation_id), {})
         return state if isinstance(state, dict) else {}
+
+    def save_graph_state(self, investigation_id: UUID, state: GraphState) -> dict[str, Any]:
+        saved = {**state.model_dump(mode="json", exclude_none=True), "updated_at": datetime.now().isoformat()}
+        with _STORE_LOCK:
+            _write_json_atomic(self._graph_file(investigation_id), saved, compact=True)
+        return saved
 
     # -- the model: everything about the case's graph, rebuilt when its files change --
 
