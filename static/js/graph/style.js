@@ -39,7 +39,17 @@ export const TYPE_ICONS = {
     text: 'type',
 };
 
-export const typeColor = (type) => TYPE_COLORS[type] || '#9ca3af';
+// What the analyst adds besides identifiers
+export const MANUAL_TYPES = {
+    person: { label: 'Person', color: '#f472b6', icon: 'user-round' },
+    organisation: { label: 'Organisation', color: '#c084fc', icon: 'building-2' },
+    location: { label: 'Location', color: '#4ade80', icon: 'map-pin' },
+    event: { label: 'Event', color: '#facc15', icon: 'calendar' },
+    note: { label: 'Note', color: '#9ca3af', icon: 'sticky-note' },
+    image: { label: 'Image', color: '#94a3b8', icon: 'image' },
+};
+
+export const typeColor = (type) => TYPE_COLORS[type] || MANUAL_TYPES[type]?.color || '#9ca3af';
 
 const PURPLE = '#a855f7';
 const AMBER = '#f59e0b';
@@ -140,10 +150,15 @@ export function decorate(data) {
 
     if (data.kind === 'identifier') {
         add(iconUri(TYPE_ICONS[data.type] || 'circle'));
-        if (data.image) add(data.image, { w: '100%', h: '100%', fit: 'cover' });
+        if (data.picture) add(data.picture, { w: '100%', h: '100%', fit: 'cover' });
         if (data.status === 'confirmed') badge(iconBadge('check', PURPLE), 'top-right');
         else if (data.status === 'important') badge(iconBadge('star', AMBER, '#1f1300'), 'top-right');
         if (data.shared) badge(sharedBadge(data.shared), 'bottom-right');
+    } else if (data.kind === 'manual') {
+        add(iconUri(MANUAL_TYPES[data.type]?.icon || TYPE_ICONS[data.type] || 'circle'));
+        if (data.picture) add(data.picture, { w: '100%', h: '100%', fit: 'cover' });
+        // the analyst's own
+        badge(iconBadge('pencil', '#374151', '#e5e7eb'), 'top-left');
     } else if (data.kind === 'lookup') {
         add(iconUri(data.icon || 'terminal', '#c4b5fd', 0.9), { w: '16px', h: '16px', x: '0%', ox: 12 });
         // + how many findings it hides; − when it is open and can fold
@@ -304,6 +319,34 @@ export function stylesheet() {
                 width: 1.5,
             },
         },
+        {
+            selector: 'edge[kind = "manual"]',
+            style: {
+                'curve-style': 'unbundled-bezier',
+                'line-style': 'dashed',
+                'line-dash-pattern': [6, 4],
+                'line-color': '#c4b5fd',
+                'target-arrow-color': '#c4b5fd',
+                'line-opacity': 0.75,
+                width: 1.5,
+                label: 'data(label)',
+                color: '#ddd6fe',
+                'font-family': 'JetBrains Mono, ui-monospace, monospace',
+                'font-size': 9,
+                'text-background-color': '#0f1017',
+                'text-background-opacity': 0.9,
+                'text-background-padding': 2,
+                'text-background-shape': 'roundrectangle',
+                'text-rotation': 'autorotate',
+                'min-zoomed-font-size': 5,
+            },
+        },
+        { selector: 'node[kind = "manual"]', style: { 'border-style': 'double', 'border-width': 3 } },
+        {
+            selector: 'node.link-from',
+            style: { 'underlay-color': '#c4b5fd', 'underlay-opacity': 0.4, 'underlay-padding': 9 },
+        },
+        { selector: '.is-hidden', style: { display: 'none' } },
         { selector: '.faded', style: { opacity: 0.2 } },
         { selector: 'node[status = "false_positive"].faded', style: { opacity: 0.1 } },
     ];

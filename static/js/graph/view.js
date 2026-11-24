@@ -1,7 +1,10 @@
 // The investigation graph: what the server sends (/graph) drawn with Cytoscape,
 // lookups and groups opening and folding on click, and the side panel.
-import { decorate, stylesheet, typeColor } from './style.js';
+// Editing (hide, remove, add, link, undo) is in edit.js; the saved view in state.js.
+import { MANUAL_TYPES, decorate, stylesheet, typeColor } from './style.js';
 import { treeLayout } from './layout.js';
+import { History, SavedView } from './state.js';
+import { editing } from './edit.js';
 
 const REDUCED_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)');
 const motion = (ms) => (REDUCED_MOTION.matches ? 0 : ms);
@@ -9,7 +12,7 @@ const motion = (ms) => (REDUCED_MOTION.matches ? 0 : ms);
 const SPRING = 'cubic-bezier(0.34, 1.4, 0.64, 1)';
 const LABEL_MAX = 28;
 
-const clip = (text, max = LABEL_MAX) => {
+export const clip = (text, max = LABEL_MAX) => {
     const s = String(text ?? '').replace(/\s+/g, ' ');
     return s.length > max ? `${s.slice(0, max - 1)}…` : s;
 };
@@ -17,7 +20,7 @@ const clip = (text, max = LABEL_MAX) => {
 const moduleOf = (service) =>
     typeof moduleInfo === 'function' ? moduleInfo(service) : { name: service || 'Lookup', icon: 'terminal' };
 const methodName = (method) => (typeof methodLabel === 'function' ? methodLabel(method) : method || '');
-const typeName = (type) => (window.ENTITY_LABELS || {})[type] || type;
+export const typeName = (type) => MANUAL_TYPES[type]?.label || (window.ENTITY_LABELS || {})[type] || type;
 const esc = (value) => window.escapeHtml(value);
 
 function lookupTitle(node) {
@@ -42,6 +45,8 @@ export class GraphView {
         this.stash = new Map(); // folded node id -> the elements it hid (restored without a request)
         this.parentOf = new Map();
         this.panelNode = null;
+        this.state = new SavedView(investigationId);
+        this.history = new History(() => this.updateToolbar());
         this.build();
         this.load();
     }
@@ -66,6 +71,13 @@ export class GraphView {
                 <button type="button" data-graph="zoomOut" title="Zoom out (-)"><i data-lucide="zoom-out" class="w-4 h-4"></i></button>
                 <span class="w-px h-5 bg-[#24283b] mx-1"></span>
                 <button type="button" data-graph="collapseAll" title="Fold every lookup"><i data-lucide="fold-horizontal" class="w-4 h-4"></i></button>
+                <span class="w-px h-5 bg-[#24283b] mx-1"></span>
+                <button type="button" data-graph="addNodeDialog" title="Add a node (N)"><i data-lucide="plus" class="w-4 h-4"></i></button>
+                <button type="button" data-graph="startLink" title="Link two nodes (L)"><i data-lucide="spline" class="w-4 h-4"></i></button>
+                <button type="button" data-graph="undo" title="Undo (Ctrl+Z)"><i data-lucide="undo-2" class="w-4 h-4"></i></button>
+                <button type="button" data-graph="redo" title="Redo (Ctrl+Shift+Z)"><i data-lucide="redo-2" class="w-4 h-4"></i></button>
+                <button type="button" data-graph="toggleTray" data-tray-button title="Hidden and removed nodes"><i data-lucide="eye-off" class="w-4 h-4"></i><span data-tray-count class="ml-1 text-[11px]"></span></button>
+                <span class="w-px h-5 bg-[#24283b] mx-1"></span>
                 <button type="button" data-graph="reload" title="Reload the graph"><i data-lucide="refresh-cw" class="w-4 h-4"></i></button>
                 ${
                     this.fullscreen
@@ -73,6 +85,8 @@ export class GraphView {
                         : `<a href="/investigations/${esc(this.investigationId)}/graph" title="Full screen"><i data-lucide="maximize-2" class="w-4 h-4"></i></a>`
                 }
             </div>
+            <div class="graph-tray hidden absolute top-14 left-3 z-20 w-80 max-h-[60%] overflow-y-auto custom-scrollbar bg-[#1a1b26] border border-[#24283b] rounded-lg shadow-2xl text-sm"></div>
+            <div class="graph-mode hidden absolute top-3 left-1/2 -translate-x-1/2 z-20 bg-purple-950/90 border border-purple-700 text-purple-100 text-xs rounded-lg px-3 py-2"></div>
             <div class="graph-stats absolute bottom-3 left-3 text-[11px] text-gray-500 bg-black/60 rounded px-2 py-1 pointer-events-none"></div>
             <div class="graph-tooltip hidden absolute z-20 max-w-sm pointer-events-none bg-[#0f1017] border border-[#24283b] rounded-lg px-3 py-2 text-xs text-gray-200 shadow-2xl"></div>
             <div class="graph-message hidden absolute inset-0 flex items-center justify-center text-sm text-gray-400"></div>
@@ -82,17 +96,26 @@ export class GraphView {
         this.panel = this.root.querySelector('.graph-panel');
         this.stats = this.root.querySelector('.graph-stats');
         this.message = this.root.querySelector('.graph-message');
+        this.tray = this.root.querySelector('.graph-tray');
+        this.modeBar = this.root.querySelector('.graph-mode');
         this.root.querySelectorAll('.graph-toolbar button, .graph-toolbar a').forEach((el) => {
             el.className =
-                'w-8 h-8 inline-flex items-center justify-center rounded-md text-gray-400 hover:text-white hover:bg-gray-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500';
+                'h-8 min-w-8 px-1.5 inline-flex items-center justify-center rounded-md text-gray-400 hover:text-white hover:bg-gray-800 disabled:opacity-40 disabled:hover:bg-transparent focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500';
             el.setAttribute('aria-label', el.title);
         });
+        // keys work while the graph has focus (clicking it gives it focus)
+        this.root.tabIndex = 0;
+        this.root.addEventListener('keydown', (e) => this.onKey(e));
+        this.tray.addEventListener('click', (e) => this.onTrayClick(e));
         this.root.querySelector('.graph-toolbar').addEventListener('click', (e) => {
             const action = e.target.closest('[data-graph]')?.dataset.graph;
             if (action) this[action]();
         });
         this.panel.addEventListener('click', (e) => {
             if (e.target.closest('[data-panel-close]')) this.closePanel();
+            if (e.target.closest('[data-panel-edit]')) this.nodeDialog({ editing: this.panelNode });
+            if (e.target.closest('[data-panel-add-to-case]'))
+                this.nodeDialog({ editing: this.panelNode, addToCase: true });
             const focus = e.target.closest('[data-focus-node]');
             if (focus) this.focusNode(focus.dataset.focusNode);
         });
@@ -120,18 +143,29 @@ export class GraphView {
         this.cy.elements().remove();
         this.stash.clear();
         this.closePanel();
-        if (!graph.nodes.length) {
-            this.show('Nothing to draw yet: run a lookup while this investigation is selected.');
+        this.state.load(graph.state);
+        if (!graph.nodes.length && !this.state.data.manual_nodes.length) {
+            this.show('Nothing to draw yet: run a lookup while this investigation is selected, or add a node (N).');
+            this.updateToolbar();
             return;
         }
         this.show('');
         this.cy.add(this.elements(graph.nodes, graph.edges));
-        this.refreshFoldable(this.cy.nodes());
         this.statsData = graph.stats;
+        // the view as the analyst left it (edit.js)
+        await this.state.whileRestoring(() => this.restoreView());
+        this.refreshFoldable(this.cy.nodes());
         this.updateStats();
+        this.updateToolbar();
         this.relayout({ animate: false });
-        this.moved = false;
-        this.fitAll();
+        const viewport = this.state.data.viewport;
+        if (viewport) {
+            this.cy.viewport({ zoom: viewport.zoom, pan: { x: viewport.x, y: viewport.y } });
+            this.moved = true;
+        } else {
+            this.moved = false;
+            this.fitAll();
+        }
     }
 
     fitAll() {
@@ -167,6 +201,7 @@ export class GraphView {
             delete data.parent;
         }
         if (node.kind === 'identifier') {
+            data.picture = node.image || null;
             data.color = typeColor(node.type);
             // a link reads better without https://www. (the full value is in the tooltip)
             const shown = String(node.display || node.value);
@@ -182,6 +217,12 @@ export class GraphView {
             data.color = '#24283b';
             data.w = 50 + 6.2 * Math.max(title.length, detail.length);
             data.h = 40;
+        } else if (node.kind === 'manual') {
+            data.color = node.color || typeColor(node.type);
+            data.label = clip(node.label);
+            data.w = data.h = 36;
+            if (node.image)
+                data.picture = `/api/investigations/${encodeURIComponent(this.investigationId)}/note-images/${encodeURIComponent(node.image)}`;
         } else if (node.kind === 'group') {
             data.color = typeColor(groupType(node.key));
             data.label = clip(node.label);
@@ -212,7 +253,7 @@ export class GraphView {
 
     updateStats() {
         const s = this.statsData || {};
-        const shown = this.cy.nodes('[kind = "identifier"]').length;
+        const shown = this.cy.nodes('[kind = "identifier"]').not('.is-hidden').length;
         this.stats.textContent = `${shown} of ${s.identifiers ?? '?'} identifiers shown · ${s.lookups ?? 0} lookups${
             s.noise || s.false_positive
                 ? ` · ${(s.noise || 0) + (s.false_positive || 0)} left out (noise, false positives)`
@@ -229,7 +270,8 @@ export class GraphView {
             style: stylesheet(),
             minZoom: 0.08,
             maxZoom: 3,
-            boxSelectionEnabled: false,
+            // Shift + drag selects several nodes (to hide or remove them at once)
+            boxSelectionEnabled: true,
             selectionType: 'single',
             pixelRatio: 'auto',
         });
@@ -247,6 +289,21 @@ export class GraphView {
         grid();
 
         cy.on('tap', 'node', (e) => this.onTap(e.target));
+        cy.on('tap', () => this.root.focus({ preventScroll: true }));
+        // the order nodes were selected in (a link goes from the first to the second)
+        cy.on(
+            'select',
+            'node',
+            (e) =>
+                (this.selectedAt = [
+                    ...(this.selectedAt || []).filter((id) => id !== e.target.id()),
+                    e.target.id(),
+                ].slice(-10))
+        );
+        // right click, or a long press on a touch screen
+        cy.on('cxttap taphold', 'node, edge', (e) => this.elementMenu(e.target, e));
+        cy.on('cxttap taphold', (e) => e.target === cy && this.canvasMenu(e));
+        cy.on('grab', 'node', (e) => this.dragStart(e.target));
         cy.on('dbltap', 'node[kind = "identifier"]', (e) => this.openAllUnder(e.target));
         cy.on('tap', (e) => {
             if (e.target === cy) this.closePanel();
@@ -256,9 +313,25 @@ export class GraphView {
         cy.on('mouseover', 'edge', (e) => this.edgeTooltip(e.target, e.renderedPosition));
         cy.on('mouseout', 'edge', () => this.hideTooltip());
         // a node the analyst moved stays where they put it
-        cy.on('dragfree', 'node', (e) => e.target.data('pinned', true));
+        cy.on('dragfree', 'node', (e) => this.dragEnd(e.target));
+        let viewportTimer;
+        cy.on('viewport', () => {
+            clearTimeout(viewportTimer);
+            viewportTimer = setTimeout(() => {
+                if (!this.moved) return;
+                const pan = cy.pan();
+                const now = { zoom: +cy.zoom().toFixed(4), x: Math.round(pan.x), y: Math.round(pan.y) };
+                const before = this.state.data.viewport;
+                if (before && before.zoom === now.zoom && before.x === now.x && before.y === now.y) return;
+                this.state.change((s) => {
+                    s.viewport = now;
+                });
+            }, 400);
+        });
         // until the analyst pans or zooms, a new size fits the graph again
         cy.on('dragpan scrollzoom pinchzoom', () => (this.moved = true));
+        // the browser's own menu would cover the graph's (right click)
+        this.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
         new ResizeObserver(() => {
             cy.resize();
             if (!this.moved && cy.nodes().length) this.fitAll();
@@ -270,10 +343,15 @@ export class GraphView {
     }
 
     fit() {
-        this.cy.animate({ fit: { eles: this.cy.elements(), padding: 40 } }, { duration: motion(300) });
+        this.moved = true;
+        this.cy.animate(
+            { fit: { eles: this.cy.elements().not('.is-hidden'), padding: 40 } },
+            { duration: motion(300) }
+        );
     }
 
     zoomIn() {
+        this.moved = true;
         this.cy.animate(
             { zoom: { level: this.cy.zoom() * 1.3, renderedPosition: this.center() } },
             { duration: motion(150) }
@@ -281,6 +359,7 @@ export class GraphView {
     }
 
     zoomOut() {
+        this.moved = true;
         this.cy.animate(
             { zoom: { level: this.cy.zoom() / 1.3, renderedPosition: this.center() } },
             { duration: motion(150) }
@@ -294,6 +373,7 @@ export class GraphView {
     focusNode(id) {
         const node = this.cy.getElementById(id);
         if (!node.length) return;
+        this.moved = true;
         this.cy.$(':selected').unselect();
         node.select();
         this.cy.animate({ center: { eles: node }, zoom: Math.max(this.cy.zoom(), 0.9) }, { duration: motion(300) });
@@ -306,10 +386,14 @@ export class GraphView {
         this.parentOf = parentOf;
         const duration = animate ? motion(420) : 0;
         const moves = [];
+        const saved = this.state.data.positions;
         this.cy.nodes().forEach((node) => {
-            const to = positions.get(node.id());
+            // where the analyst put it, else its place in the tree
+            const pin = saved[node.id()];
+            if (pin) node.data('pinned', true);
+            const to = pin ? { x: pin[0], y: pin[1] } : positions.get(node.id());
             const isNew = grown?.has(node.id());
-            if (!to || (node.data('pinned') && !isNew)) return;
+            if (!to || (node.data('pinned') && !isNew && duration)) return;
             if (!duration) {
                 node.position(to);
                 return;
@@ -335,23 +419,26 @@ export class GraphView {
     // Opening and folding
     // -----------------------------------------------------------------------
     onTap(node) {
+        if (this.linking) return this.finishLink(node);
         const kind = node.data('kind');
-        if (kind === 'more') return this.loadMore(node);
+        if (kind === 'more') return this.loadMore(node, { record: true });
         if (kind === 'lookup' || kind === 'group') {
-            this.toggle(node);
+            this.toggle(node, { record: true });
             if (!this.panel.classList.contains('hidden')) this.openPanel(node);
             return;
         }
         this.openPanel(node);
     }
 
-    toggle(node) {
+    toggle(node, options = {}) {
         if (node.data('busy')) return;
-        if (node.data('open') && node.outgoers('node').length) return this.fold(node);
-        return this.open(node);
+        if (node.data('open') && node.outgoers('node').length) return this.fold(node, options);
+        return this.open(node, options);
     }
 
-    async open(node) {
+    // record: remember it in the saved view and in undo; quiet: no animation or layout
+    // (several at once while the saved view is put back)
+    async open(node, { record = false, quiet = false } = {}) {
         const id = node.id();
         let added;
         if (this.stash.has(id)) {
@@ -382,10 +469,19 @@ export class GraphView {
             }
         }
         this.setData(node, { open: true });
+        this.attachManualEdges();
+        if (record) {
+            this.state.change((s) => {
+                s.collapsed = s.collapsed.filter((x) => x !== id);
+                if (!s.expanded.includes(id)) s.expanded.push(id);
+            });
+            this.history.push({ undo: () => this.foldById(id), redo: () => this.openById(id) });
+        }
+        if (quiet) return;
         await this.grow(added.nodes(), node);
     }
 
-    async loadMore(more) {
+    async loadMore(more, { record = false, quiet = false } = {}) {
         if (more.data('busy')) return;
         more.data('busy', true);
         let page;
@@ -399,6 +495,10 @@ export class GraphView {
         const from = more.position();
         more.remove();
         const added = this.cy.add(this.elements(page.nodes, page.edges));
+        this.attachManualEdges();
+        if (record) this.state.add('expanded', more.id());
+        if (quiet) return;
+        this.applyVisibility();
         await this.grow(added.nodes(), null, from);
     }
 
@@ -409,6 +509,7 @@ export class GraphView {
             n.position({ x: start.x, y: start.y });
             if (motion(1)) n.style({ opacity: 0, width: 4, height: 4 });
         });
+        this.applyVisibility();
         this.refreshFoldable(this.cy.nodes());
         this.updateStats();
         await this.relayout({ grown: new Set(nodes.map((n) => n.id())) });
@@ -416,9 +517,9 @@ export class GraphView {
 
     // What hangs only under this node, in the tree: what folds into it. A node another
     // branch also links to stays (with what hangs under it).
-    branch(node) {
+    branch(node, parentOf = this.parentOf) {
         const children = new Map();
-        this.parentOf.forEach((parent, child) => {
+        parentOf.forEach((parent, child) => {
             if (!children.has(parent)) children.set(parent, []);
             children.get(parent).push(child);
         });
@@ -449,7 +550,15 @@ export class GraphView {
         return this.cy.nodes().filter((n) => under.has(n.id()));
     }
 
-    async fold(node) {
+    async fold(node, { record = false, quiet = false } = {}) {
+        const id = node.id();
+        if (record) {
+            this.state.change((s) => {
+                s.expanded = s.expanded.filter((x) => x !== id);
+                if (!s.collapsed.includes(id)) s.collapsed.push(id);
+            });
+            this.history.push({ undo: () => this.openById(id), redo: () => this.foldById(id) });
+        }
         const folding = this.branch(node);
         if (!folding.length) {
             this.setData(node, { open: false });
@@ -458,7 +567,7 @@ export class GraphView {
         const edges = folding.connectedEdges();
         this.stash.set(node.id(), [...folding.jsons(), ...edges.jsons()]);
         node.data('busy', true);
-        const duration = motion(320);
+        const duration = quiet ? 0 : motion(320);
         if (duration) {
             await Promise.all(
                 folding.map((n) =>
@@ -476,15 +585,34 @@ export class GraphView {
         this.cy.remove(folding);
         node.data('busy', false);
         this.setData(node, { open: false });
+        if (quiet) return;
         this.refreshFoldable(this.cy.nodes());
         this.updateStats();
         await this.relayout();
     }
 
+    async openById(id) {
+        const node = this.cy.getElementById(id);
+        if (node.length && !(node.data('open') && node.outgoers('node').length)) await this.open(node);
+        this.state.change((s) => {
+            s.collapsed = s.collapsed.filter((x) => x !== id);
+            if (!s.expanded.includes(id)) s.expanded.push(id);
+        });
+    }
+
+    async foldById(id) {
+        const node = this.cy.getElementById(id);
+        if (node.length && node.data('open')) await this.fold(node);
+        this.state.change((s) => {
+            s.expanded = s.expanded.filter((x) => x !== id);
+            if (!s.collapsed.includes(id)) s.collapsed.push(id);
+        });
+    }
+
     // Double-click an identifier: open every lookup under it, one level
     async openAllUnder(node) {
         const closed = node.outgoers('node[kind = "lookup"]').filter((n) => !n.data('open'));
-        await Promise.all(closed.map((n) => this.open(n)));
+        await Promise.all(closed.map((n) => this.open(n, { record: true })));
     }
 
     async collapseAll() {
@@ -498,7 +626,7 @@ export class GraphView {
             return d;
         };
         for (const node of open.sort((a, b) => depth(b) - depth(a)).toArray()) {
-            if (node.inside()) await this.fold(node);
+            if (node.inside()) await this.fold(node, { record: true });
         }
         this.fit();
     }
@@ -547,6 +675,9 @@ export class GraphView {
                     'text-amber-300',
                 ]);
             else if (d.timestamp) lines.push([window.fmtDateTime?.(d.timestamp) || d.timestamp, 'text-gray-500']);
+        } else if (d.kind === 'manual') {
+            lines.push([`${typeName(d.type)} · added by you`, 'text-gray-500'], [d.label, 'text-white break-all']);
+            if (d.note) lines.push([d.note.length > 200 ? `${d.note.slice(0, 199)}…` : d.note, 'text-gray-300']);
         } else if (d.kind === 'group') {
             lines.push(
                 [d.label, 'text-white'],
@@ -610,11 +741,13 @@ export class GraphView {
         this.panel.classList.remove('hidden');
         this.panel.innerHTML = this.panelFrame(node.data(), '<p class="text-sm text-gray-500">Loading…</p>');
         let details;
-        try {
-            details = await this.api('graph/node', { node: id });
-        } catch (error) {
-            details = { node: node.data(), error: error.message };
-        }
+        if (node.data('kind') === 'manual') details = { node: node.data() };
+        else
+            try {
+                details = await this.api('graph/node', { node: id });
+            } catch (error) {
+                details = { node: node.data(), error: error.message };
+            }
         if (this.panelNode !== id) return;
         this.panel.innerHTML = this.panelFrame(details.node, this.panelBody(details));
         window.refreshIcons?.();
@@ -632,8 +765,11 @@ export class GraphView {
         } else if (d.kind === 'group') {
             kind = 'Group';
             title = d.label;
+        } else if (d.kind === 'manual') {
+            kind = `${typeName(d.type)} · yours`;
+            title = d.label;
         }
-        const color = d.kind === 'identifier' ? typeColor(d.type) : '#a78bfa';
+        const color = d.kind === 'identifier' ? typeColor(d.type) : d.kind === 'manual' ? d.color : '#a78bfa';
         return `
             <div class="flex items-start justify-between gap-3 px-5 py-4 border-b border-[#24283b]">
                 <div class="min-w-0">
@@ -711,6 +847,24 @@ export class GraphView {
                 details.parent ? section('Follow-up of', lookupRow(details.parent)) : '',
             ].join('');
         }
+        if (d.kind === 'manual') {
+            const picture = d.picture
+                ? `<img src="${window.escapeAttr(d.picture)}" alt="" data-img-error="hideImage" class="w-24 h-24 rounded-full object-cover border-2" style="border-color:${esc(d.color)}">`
+                : '';
+            const link = d.url && window.safeUrl(d.url);
+            return [
+                picture,
+                d.note ? `<div class="text-gray-300 whitespace-pre-line break-words">${esc(d.note)}</div>` : '',
+                link
+                    ? `<a href="${window.escapeAttr(link)}" target="_blank" rel="noopener noreferrer" class="block text-purple-300 hover:text-white break-all">${esc(d.url)}</a>`
+                    : '',
+                `<div class="flex flex-wrap gap-2">
+                    <button type="button" data-panel-edit class="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-xs text-gray-200"><i class="fas fa-pencil-alt mr-1.5"></i>Edit</button>
+                    ${d.type in (window.ENTITY_LABELS || {}) ? '<button type="button" data-panel-add-to-case class="px-3 py-1.5 bg-purple-700 hover:bg-purple-600 rounded-lg text-xs text-white"><i class="fas fa-plus-circle mr-1.5"></i>Add to the investigation</button>' : ''}
+                </div>`,
+                '<p class="text-xs text-gray-500">Added by you in the graph. It is only in this graph until you add it to the investigation.</p>',
+            ].join('');
+        }
         if (d.kind === 'group') {
             return [
                 `<div class="text-gray-300">${esc(d.count)} identifiers, folded. Click the group to open it.</div>`,
@@ -720,3 +874,5 @@ export class GraphView {
         return '';
     }
 }
+
+Object.assign(GraphView.prototype, editing);
