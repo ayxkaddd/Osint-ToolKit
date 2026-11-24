@@ -124,16 +124,47 @@ def test_shared_identifiers_are_shown_with_how_many_cases(client):
     assert nodes["e:username:sharer"]["shared"] == 0
 
 
-def test_running_a_lookup_again_is_not_a_second_finding(client, investigation):
+def test_running_a_lookup_again_is_one_lookup_with_several_runs(client, investigation):
     first = _save(investigation, "username", "lookup_username", {"username": "again"}, _sites("again", 20))
-    second = _save(investigation, "username", "lookup_username", {"username": "again"}, _sites("again", 20))
+    second = _save(investigation, "username", "lookup_username", {"username": "again"},
+                   {**_sites("again", 21), "stats": {"completed": True}})
+    other = _save(investigation, "username", "lookup_username", {"username": "different"}, _sites("different", 2))
     _, nodes, edges = _graph(client, investigation)
-    assert not any(n["kind"] == "identifier" and n["type"] == "url" for n in nodes.values())
-    # each run keeps its own groups, opened from either one
+    lookups = [n for n in nodes.values() if n["kind"] == "lookup"]
+    assert sorted(n["id"] for n in lookups) == sorted([f"r:{first}", f"r:{other}"])
+    lookup = nodes[f"r:{first}"]
+    # the first run's id, the latest run's result; findings of every run
+    assert lookup["rerun"] is True and lookup["result_id"] == second
+    assert [run["result_id"] for run in lookup["runs"]] == [second, first]
+    assert lookup["found"] == 21
+    assert nodes[f"r:{other}"]["rerun"] is False and len(nodes[f"r:{other}"]["runs"]) == 1
+    assert ("e:username:again", f"r:{first}") in edges
     groups = [n for n in nodes.values() if n["kind"] == "group"]
-    assert sorted(g["lookup"] for g in groups) == sorted([f"r:{first}"] * 2 + [f"r:{second}"] * 2)
+    assert sorted((g["lookup"], g["count"]) for g in groups) == [(f"r:{first}", 10), (f"r:{first}", 11)]
+
+    # a site found by both runs was found by one lookup
     page = client.get(f"/api/investigations/{investigation}/graph/expand", params={"node": groups[0]["id"]}).json()
-    assert page["nodes"][0]["found_by"] == 1
+    assert {n["found_by"] for n in page["nodes"]} == {1}
+    # any run opens the lookup
+    by_later_run = client.get(f"/api/investigations/{investigation}/graph/expand", params={"node": f"r:{second}"})
+    assert by_later_run.json()["node"] == f"r:{first}"
+
+
+def test_followups_of_reruns_are_merged_too(client, investigation):
+    first = _save(investigation, "funstat", "lookup_user", {"id": "777000111"}, {"id": 777000111})
+    _save(investigation, "funstat", "stats", {"id": "777000111"}, {"messages": 5}, parent=first)
+    second = _save(investigation, "funstat", "lookup_user", {"id": "777000111"}, {"id": 777000111})
+    _save(investigation, "funstat", "stats", {"id": "777000111"}, {"messages": 6}, parent=second)
+    _, nodes, _ = _graph(client, investigation)
+    lookups = [n for n in nodes.values() if n["kind"] == "lookup"]
+    assert sorted((n["method"], len(n["runs"])) for n in lookups) == [("lookup_user", 2), ("stats", 2)]
+
+
+def test_things_added_by_hand_are_never_merged(client, investigation):
+    for _ in range(2):
+        _save(investigation, "manual", "upload", {"title": "Same title"}, {"kind": "manual", "text": "x@hand.test"})
+    _, nodes, _ = _graph(client, investigation)
+    assert sum(1 for n in nodes.values() if n["kind"] == "lookup") == 2
 
 
 def test_shared_identifiers_give_way_to_the_budget(client):

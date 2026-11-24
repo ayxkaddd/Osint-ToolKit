@@ -11,7 +11,7 @@ TRIAGE_STATUSES = {None, "confirmed", "important", "false_positive"}
 EVENTS_VERSION = 2
 
 # Bump when the graph model changes, so cached graphs are rebuilt
-GRAPH_VERSION = 1
+GRAPH_VERSION = 2
 
 # Nodes in a graph's first view; past it the deepest lookups stay closed
 GRAPH_NODE_BUDGET = 300

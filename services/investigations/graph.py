@@ -4,7 +4,8 @@ Built on the server so the browser only draws what is open. Node ids are stable
 across rebuilds (saved positions and hidden marks refer to them):
 
     e:<entity key>                  an identifier, one per case however many lookups found it
-    r:<result_id>[:<child_id>]      one lookup (a result, or a follow-up attached to one)
+    r:<result_id>[:<child_id>]      one lookup (a result, or a follow-up attached to one); runs of the
+                                    same module on the same identifiers are one lookup, under the first run
     g:<lookup id>:<group key>       a lookup's findings of one type (or site category), folded
     more:<group id>:<offset>        the rest of an opened group, past the first page
 
@@ -17,7 +18,7 @@ from urllib.parse import urlparse
 from uuid import UUID
 
 from services.entities import ENTITY_TYPES, NOISE_DOMAINS, NOISE_EMAIL_LOCALS, Entity, is_noise
-from .constants import GRAPH_INLINE_MAX, GRAPH_NODE_BUDGET, GRAPH_VERSION
+from .constants import GRAPH_INLINE_MAX, GRAPH_NODE_BUDGET, GRAPH_VERSION, MANUAL_SERVICE
 from .storage import _GRAPH_CACHE, _SHARED_CACHE, _read_json
 
 TRIAGE_RANK = {"confirmed": 0, "important": 1, None: 2, "false_positive": 3}
@@ -93,41 +94,64 @@ class GraphMixin:
     def _build_graph_model(self, investigation_id: UUID, raw: dict[str, Any],
                            shared_index: dict[str, list[dict[str, Any]]], noise: bool) -> dict[str, Any]:
         here = str(investigation_id)
-        lookups: dict[str, dict[str, Any]] = {}
+        runs: dict[str, dict[str, Any]] = {}     # each saved lookup: a result, or a follow-up attached to one
         for result_id, entry in self._load_index(investigation_id).items():
-            lookup_id = _lookup_id(result_id)
-            lookups[lookup_id] = {
-                "id": lookup_id, "result_id": result_id, "child_id": None, "parent": None,
+            run_id = _lookup_id(result_id)
+            runs[run_id] = {
+                "id": run_id, "result_id": result_id, "child_id": None, "parent": None,
                 "service": entry.get("service_name") or "", "method": entry.get("method_name") or "",
                 "target": entry.get("target"), "summary": entry.get("summary"),
                 "timestamp": entry.get("timestamp"), "triage": (entry.get("triage") or {}).get("status"),
-                "partial": bool(entry.get("partial")), "searched": [], "found": [],
+                "partial": bool(entry.get("partial")),
             }
             for child in entry.get("children") or []:
                 if child.get("child_id"):
-                    child_lookup = _lookup_id(result_id, child["child_id"])
-                    lookups[child_lookup] = {
-                        **lookups[lookup_id], "id": child_lookup, "child_id": child["child_id"],
-                        "parent": lookup_id, "service": child.get("service_name") or "",
+                    child_run = _lookup_id(result_id, child["child_id"])
+                    runs[child_run] = {
+                        **runs[run_id], "id": child_run, "child_id": child["child_id"],
+                        "parent": run_id, "service": child.get("service_name") or "",
                         "method": child.get("method_name") or "", "target": child.get("target"),
                         "summary": child.get("summary"), "timestamp": child.get("timestamp"),
-                        "triage": None, "partial": False, "searched": [], "found": [],
+                        "triage": None, "partial": False,
                     }
 
+        run_searched: dict[str, set] = {}
+        for key, entity in raw.items():
+            for src in entity.get("sources") or []:
+                if src.get("role") == "searched":
+                    run_searched.setdefault(_lookup_id(src.get("result_id"), src.get("child_id")), set()).add(key)
+        # Running a module again on the same identifiers is one lookup with several runs,
+        # under the id of its first run; the latest run stands for it (pivots attach to it)
+        merged: dict[str, str] = {}              # run id -> lookup id
+        lookups: dict[str, dict[str, Any]] = {}
+        firsts: dict[tuple, str] = {}
+        for run in sorted(runs.values(), key=lambda r: (r["parent"] is not None, r["timestamp"] or "")):
+            parent = merged.get(run["parent"]) if run["parent"] else None
+            searched = frozenset(run_searched.get(run["id"], ()))
+            signature = (run["service"], run["method"], searched or (str(run["target"]), parent),
+                         run["id"] if run["service"] == MANUAL_SERVICE else None)
+            lookup_id = merged[run["id"]] = firsts.setdefault(signature, run["id"])
+            if lookup_id == run["id"]:
+                lookups[lookup_id] = {**run, "parent": parent, "runs": [], "searched": [], "found": []}
+            lookup = lookups[lookup_id]
+            lookup["runs"].insert(0, {k: run[k] for k in ("result_id", "child_id", "timestamp", "partial")})
+            lookup.update({k: run[k] for k in ("result_id", "child_id", "target", "summary", "timestamp",
+                                               "triage", "partial")})
+
         entities: dict[str, dict[str, Any]] = {}
-        paths: dict[tuple[str, str], str] = {}     # (lookup id, entity key) -> where it was found
+        paths: dict[tuple[str, str], tuple[str, str]] = {}   # (lookup id, entity key) -> (run id, where found)
         left_out = {"noise": 0, "false_positive": 0}
         for key, entity in raw.items():
             searched_in, found_in = [], []
             for src in entity.get("sources") or []:
-                lookup_id = _lookup_id(src.get("result_id"), src.get("child_id"))
-                if lookup_id not in lookups:
+                run_id = _lookup_id(src.get("result_id"), src.get("child_id"))
+                if run_id not in merged:
                     continue
                 if src.get("role") == "searched":
-                    searched_in.append(lookup_id)
+                    searched_in.append(merged[run_id])
                 else:
-                    found_in.append(lookup_id)
-                    paths.setdefault((lookup_id, key), src.get("path") or "")
+                    found_in.append(merged[run_id])
+                    paths[(merged[run_id], key)] = (run_id, src.get("path") or "")
             searched_in, found_in = list(dict.fromkeys(searched_in)), list(dict.fromkeys(found_in))
             # Identifiers whose results were all deleted stay only when triaged or noted
             if not searched_in and not found_in and not (entity.get("status") or entity.get("note")):
@@ -140,9 +164,7 @@ class GraphMixin:
                     left_out["noise"] += 1
                     continue
             shared = sum(1 for place in shared_index.get(key, []) if place["investigation_id"] != here)
-            # Running the same lookup again doesn't make a second finding
-            found_by = len({(lookups[lid]["service"], lookups[lid]["method"], str(lookups[lid]["target"]))
-                            for lid in found_in})
+            found_by = len(found_in)
             entities[key] = {"entity": entity, "searched_in": searched_in, "found_in": found_in, "shared": shared,
                              "found_by": found_by,
                              "order": (TRIAGE_RANK.get(entity.get("status"), 2), -found_by,
@@ -162,13 +184,14 @@ class GraphMixin:
                         if key not in must and (info["found_by"] > 1 or info["shared"])),
                        key=lambda k: (-entities[k]["found_by"], -entities[k]["shared"], entities[k]["order"]))
 
-        categories = self._site_categories(investigation_id, lookups)
+        categories = self._site_categories(investigation_id, [runs[run_id] for run_id, _ in paths.values()])
         group_of: dict[tuple[str, str], tuple[str, str]] = {}   # (lookup id, entity key) -> (group key, label)
         for lookup in lookups.values():
             lookup["found"].sort(key=lambda k: entities[k]["order"])
             for key in lookup["found"]:
                 entity_type = entities[key]["entity"].get("type")
-                category = categories.get(lookup["id"], {}).get(paths.get((lookup["id"], key)))
+                run_id, path = paths[(lookup["id"], key)]
+                category = categories.get(run_id, {}).get(path)
                 group_of[(lookup["id"], key)] = (f"category:{category}", f"Accounts · {category}") \
                     if category is not None else (f"type:{entity_type}", ENTITY_TYPES.get(entity_type, "Other"))
 
@@ -205,24 +228,24 @@ class GraphMixin:
                 walk([f"e:{k}" for k in lookup["searched"]] or [lookup["id"]], 0)
 
         return {"lookups": lookups, "entities": entities, "must": must, "extra": extra, "group_of": group_of,
-                "depth": depth, "children": children, "left_out": left_out, "views": {}}
+                "depth": depth, "children": children, "left_out": left_out, "runs": merged, "views": {}}
 
-    def _site_categories(self, investigation_id: UUID, lookups: dict[str, dict[str, Any]]) -> dict[str, dict[str, str]]:
-        """{lookup id: {path of a found site's url: its category}} for username searches."""
+    def _site_categories(self, investigation_id: UUID, runs: list[dict[str, Any]]) -> dict[str, dict[str, str]]:
+        """{run id: {path of a found site's url: its category}} for the username searches among ``runs``."""
         found: dict[str, dict[str, str]] = {}
-        by_result: dict[str, list[dict[str, Any]]] = {}
-        for lookup in lookups.values():
-            if lookup["service"] == "username" and lookup["found"]:
-                by_result.setdefault(lookup["result_id"], []).append(lookup)
+        by_result: dict[str, dict[str, dict[str, Any]]] = {}
+        for run in runs:
+            if run["service"] == "username":
+                by_result.setdefault(run["result_id"], {})[run["id"]] = run
         for result_id, wanted in by_result.items():
             record = self.get_result(investigation_id, result_id) or {}
             parts = {None: record, **{c.get("child_id"): c for c in record.get("children") or []}}
-            for lookup in wanted:
-                result = (parts.get(lookup["child_id"]) or {}).get("result")
+            for run in wanted.values():
+                result = (parts.get(run["child_id"]) or {}).get("result")
                 sites = result.get("results") if isinstance(result, dict) else None
                 if not isinstance(sites, list):
                     continue
-                found[lookup["id"]] = {
+                found[run["id"]] = {
                     f"results[{i}].url": str(site.get("category") or "other").strip()[:60] or "other"
                     for i, site in enumerate(sites) if isinstance(site, dict)}
         return found
@@ -250,6 +273,8 @@ class GraphMixin:
             "service": lookup["service"], "method": lookup["method"], "target": lookup["target"],
             "summary": lookup["summary"], "timestamp": lookup["timestamp"], "triage": lookup["triage"],
             "partial": lookup["partial"], "found": len(lookup["found"]),
+            # newest first; result_id, child_id and timestamp above are the latest run's
+            "runs": lookup["runs"], "rerun": len(lookup["runs"]) > 1,
             "hidden": len(lookup["found"]) - shown,
             "root": not lookup["searched"] and not lookup["parent"],
         }
@@ -368,6 +393,7 @@ class GraphMixin:
         if node_id.startswith("more:"):
             node_id, _, at = node_id[5:].rpartition(":")
             offset = int(at) if at.isdigit() else offset
+        node_id = model["runs"].get(node_id, node_id)     # any run of a lookup opens the lookup
 
         nodes: list[dict[str, Any]] = []
         edges: list[dict[str, Any]] = []
