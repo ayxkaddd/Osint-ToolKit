@@ -77,6 +77,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (location.hash === '#identifiers') switchTab('entities');
     else if (location.hash === '#events') switchTab('events');
+    else if (location.hash === '#graph') switchTab('graph');
     window.addEventListener('hashchange', openLinkedResult);
 });
 
@@ -85,10 +86,17 @@ function switchTab(name) {
     document.getElementById('timelinePanel').classList.toggle('hidden', name !== 'timeline');
     document.getElementById('eventsPanel').classList.toggle('hidden', name !== 'events');
     document.getElementById('entitiesPanel').classList.toggle('hidden', name !== 'entities');
-    const hash = { entities: '#identifiers', events: '#events' }[name] || '';
+    // the graph is outside .page: it takes the whole width under the tabs
+    document.getElementById('graphPanel').classList.toggle('hidden', name !== 'graph');
+    const hash = { entities: '#identifiers', events: '#events', graph: '#graph' }[name] || '';
     history.replaceState(null, '', location.pathname + location.search + hash);
     if (name === 'entities' && !entityState.loaded) loadEntities(true);
     if (name === 'events' && !eventState.loaded) loadEvents();
+    if (name === 'graph') {
+        // the tabs just under the header, the graph filling the screen below them
+        document.querySelector('[role="tablist"]').scrollIntoView({ block: 'start' });
+        document.dispatchEvent(new CustomEvent('graph:show'));
+    }
 }
 
 function debounce(fn, ms) {

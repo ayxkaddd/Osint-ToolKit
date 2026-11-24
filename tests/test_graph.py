@@ -338,3 +338,22 @@ def test_account_pictures_are_shown_unless_they_are_stand_ins(client, investigat
     assert nodes["e:url:https://a.test/pic"]["image"] == "https://a.test/me.png"
     assert nodes["e:url:https://b.test/pic"]["image"] is None
 
+
+def test_graph_tab_and_full_screen_page(client, investigation):
+    page = client.get(f"/api/investigations/{investigation}/view").text
+    assert 'data-tab="graph"' in page and 'id="graphRoot"' in page
+    assert '<script type="module" src="/static/js/graph/index.js"></script>' in page
+    for vendored in ("/static/vendor/cytoscape/cytoscape.min.js", "/static/vendor/d3-hierarchy/d3-hierarchy.min.js"):
+        assert vendored in page
+        assert client.get(vendored).status_code == 200
+
+    full = client.get(f"/investigations/{investigation}/graph")
+    assert full.status_code == 200 and 'data-fullscreen="true"' in full.text
+    assert "script-src 'self'" in full.headers["content-security-policy"]
+    missing = client.get("/investigations/00000000-0000-4000-8000-000000000000/graph", headers={"Accept": "text/html"})
+    assert missing.status_code == 404
+
+
+def test_full_screen_page_needs_login(anon, investigation):
+    response = anon.get(f"/investigations/{investigation}/graph", follow_redirects=False)
+    assert response.status_code in (302, 303, 307)

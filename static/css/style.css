@@ -385,3 +385,11 @@ select:focus-visible {
         scroll-behavior: auto !important;
     }
 }
+
+/* Investigation graph: the app's black with the 40px grid; the grid moves with the graph (graph/view.js) */
+.graph-root {
+    background-color: #000;
+    background-image: linear-gradient(rgba(71, 85, 105, 0.1) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(71, 85, 105, 0.1) 1px, transparent 1px);
+    background-size: 40px 40px;
+}
