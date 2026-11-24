@@ -282,6 +282,26 @@ def get_result_changes(investigation_id: UUID, result_id: str) -> JSONResponse:
                                  "changes": investigation_service.result_changes(investigation_id, result_id)})
 
 
+@router.get("/{investigation_id}/graph")
+def get_investigation_graph(investigation_id: UUID, noise: bool = False) -> JSONResponse:
+    """The graph's first view: identifiers, the lookups between them, big result sets
+    folded into groups (opened with /graph/expand). ``noise``: boilerplate and false positives too."""
+    _require_investigation(investigation_id)
+    return JSONResponse(content=investigation_service.get_graph(investigation_id, noise=noise))
+
+
+@router.get("/{investigation_id}/graph/expand")
+def expand_graph_node(investigation_id: UUID, node: str = Query(..., max_length=2000),
+                      offset: int = Query(0, ge=0), limit: int = Query(40, ge=1, le=200),
+                      noise: bool = False) -> JSONResponse:
+    """The children of one lookup, group or identifier, a page at a time."""
+    _require_investigation(investigation_id)
+    expanded = investigation_service.expand_graph_node(investigation_id, node, offset, limit, noise=noise)
+    if expanded is None:
+        raise HTTPException(status_code=404, detail="Not in the graph")
+    return JSONResponse(content=expanded)
+
+
 @router.get("/{investigation_id}/export")
 def export_investigation(investigation_id: UUID, format: Literal["json", "zip"] = "json"):
     """Export the investigation: its data and results as JSON, or (``format=zip``) a .zip
