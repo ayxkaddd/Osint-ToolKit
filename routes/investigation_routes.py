@@ -290,6 +290,16 @@ def get_investigation_graph(investigation_id: UUID, noise: bool = False) -> JSON
     return JSONResponse(content=investigation_service.get_graph(investigation_id, noise=noise))
 
 
+@router.get("/{investigation_id}/graph/node")
+def get_graph_node(investigation_id: UUID, node: str = Query(..., max_length=2000), noise: bool = False) -> JSONResponse:
+    """One node for the side panel, with the lookups around it."""
+    _require_investigation(investigation_id)
+    details = investigation_service.graph_node_details(investigation_id, node, noise=noise)
+    if details is None:
+        raise HTTPException(status_code=404, detail="Not in the graph")
+    return JSONResponse(content=details)
+
+
 @router.get("/{investigation_id}/graph/expand")
 def expand_graph_node(investigation_id: UUID, node: str = Query(..., max_length=2000),
                       offset: int = Query(0, ge=0), limit: int = Query(40, ge=1, le=200),

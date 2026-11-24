@@ -262,7 +262,7 @@ def test_expand_unknown_node(client, investigation):
     assert client.get("/api/investigations/00000000-0000-4000-8000-000000000000/graph").status_code == 404
 
 
-@pytest.mark.parametrize("path", ["graph", "graph/expand?node=r:x"])
+@pytest.mark.parametrize("path", ["graph", "graph/expand?node=r:x", "graph/node?node=r:x"])
 def test_graph_needs_login_and_this_site(anon, client, investigation, path):
     assert anon.get(f"/api/investigations/{investigation}/{path}").status_code == 401
     assert client.get(f"/api/investigations/{investigation}/{path}",
@@ -284,3 +284,57 @@ def test_a_case_with_5000_identifiers_opens_quickly(client, investigation):
     warm = time.perf_counter() - started
     assert data["stats"]["nodes"] < 60
     assert cold < 0.3 and warm < 0.1, (cold, warm)
+
+
+def test_node_details_for_the_side_panel(client):
+    def new(name):
+        data = client.post("/api/investigations/create", data={"name": name}).json()
+        return data.get("investigation_id") or data["investigation"]["investigation_id"]
+    inv, other = new("Panel case"), new("Panel other")
+    rid = _save(inv, "username", "lookup_username", {"username": "panel"},
+                {"username": "panel", "results": [{"site_name": "S", "url": "https://s.test/panel", "category": "social",
+                                                   "profile_data": {"email": "panel@mail.test"}}]})
+    _save(inv, "ghunt", "lookup_ghunt_email", {"email": "panel@mail.test"}, {"gaia_id": "123456789012345678901"},
+          parent=rid)
+    _save(other, "whois", "lookup_whois", {"domain": "o.test"}, {"email": "panel@mail.test"})
+
+    def node(node_id):
+        response = client.get(f"/api/investigations/{inv}/graph/node", params={"node": node_id})
+        assert response.status_code == 200
+        return response.json()
+
+    email = node("e:email:panel@mail.test")
+    assert email["node"]["kind"] == "identifier"
+    assert [lk["service"] for lk in email["found_in"]] == ["username"]
+    assert [lk["service"] for lk in email["searched_in"]] == ["ghunt"]
+    assert [place["name"] for place in email["elsewhere"]] == ["Panel other"]
+
+    lookup = node(email["searched_in"][0]["id"])
+    # drawn under the email; saved as a follow-up of the username search
+    assert lookup["node"]["service"] == "ghunt" and lookup["parent"]["id"] == f"r:{rid}"
+
+    many = _save(inv, "username", "lookup_username", {"username": "crowded"}, _sites("crowded", 20))
+    group = next(n for n in _graph(client, inv)[0]["nodes"] if n["kind"] == "group")
+    details = node(group["id"])
+    assert details["node"]["count"] == 10 and details["lookup"]["id"] == f"r:{many}"
+
+    assert client.get(f"/api/investigations/{inv}/graph/node", params={"node": "e:email:nobody@x.test"}).status_code == 404
+
+
+def test_account_pictures_are_shown_unless_they_are_stand_ins(client, investigation):
+    from services.investigations.graph import profile_picture
+    site = {"url": "https://site.test/u/pic"}
+    assert profile_picture({**site, "profile_data": {"avatar": "/img/me.png"}}) == "https://site.test/img/me.png"
+    assert profile_picture({**site, "profile_data": {"profile_pic": {"url": "https://cdn.test/a.jpg"}}}) == "https://cdn.test/a.jpg"
+    assert profile_picture({**site, "profile_data": {"avatar": "https://site.test/default_avatar.png"}}) is None
+    assert profile_picture({**site, "profile_data": {"avatar": "javascript:alert(1)"}}) is None
+    assert profile_picture(site) is None
+
+    _save(investigation, "username", "lookup_username", {"username": "pic"}, {"username": "pic", "results": [
+        {"site_name": "A", "url": "https://a.test/pic", "category": "social", "profile_data": {"avatar": "https://a.test/me.png"}},
+        {"site_name": "B", "url": "https://b.test/pic", "category": "social", "profile_data": {"avatar": "https://b.test/placeholder.png"}},
+    ]})
+    _, nodes, _ = _graph(client, investigation)
+    assert nodes["e:url:https://a.test/pic"]["image"] == "https://a.test/me.png"
+    assert nodes["e:url:https://b.test/pic"]["image"] is None
+

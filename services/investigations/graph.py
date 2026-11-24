@@ -12,9 +12,10 @@ across rebuilds (saved positions and hidden marks refer to them):
 Edges run identifier -> lookup (searched), lookup -> identifier or group (found),
 group -> identifier (member) and lookup -> follow-up lookup (followup).
 """
+import re
 import threading
 from typing import Any, Optional
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 from uuid import UUID
 
 from services.entities import ENTITY_TYPES, NOISE_DOMAINS, NOISE_EMAIL_LOCALS, Entity, is_noise
@@ -24,6 +25,14 @@ from .storage import _GRAPH_CACHE, _SHARED_CACHE, _read_json
 TRIAGE_RANK = {"confirmed": 0, "important": 1, None: 2, "false_positive": 3}
 
 GRAPH_CACHE_MAX = 8
+
+# Where username search finds a profile's picture, and the stand-ins sites show when
+# there is none (both as in static/js/services/username.js)
+PICTURE_FIELDS = ("profileImageUrl", "profile_image_url", "profilePic", "profile_pic", "image", "avatar",
+                  "avatar_static", "avatar_url", "icon_img", "logo", "logoUrl", "pic_url", "photo", "photo_url",
+                  "picture")
+DEFAULT_PICTURE = re.compile(r"default[_-]?(avatar|profile|user|photo|image|pic)|(avatar|profile|user)[_-]?default"
+                             r"|/defaults?/|no[_-]?(avatar|photo|image)|placeholder|blank[_-]?(avatar|profile)", re.I)
 
 # Requests run in threads; the cache's order changes on every read
 _GRAPH_LOCK = threading.Lock()
@@ -45,6 +54,24 @@ def graph_noise(entity: dict[str, Any]) -> bool:
     if entity_type == "url":
         return _noise_domain((urlparse(value).hostname or "").lower())
     return is_noise(Entity(entity_type, value))
+
+
+def profile_picture(site: dict[str, Any]) -> Optional[str]:
+    """The picture of a profile a username search found (as the username page finds it),
+    unless it is the site's stand-in for no picture."""
+    profile = site.get("profile_data")
+    if not isinstance(profile, dict):
+        return None
+    for field in PICTURE_FIELDS:
+        value = profile.get(field)
+        if isinstance(value, dict):
+            value = value.get("url")
+        if isinstance(value, str) and value.strip():
+            picture = urljoin(str(site.get("url") or ""), value.strip())
+            if urlparse(picture).scheme in ("http", "https") and not DEFAULT_PICTURE.search(picture):
+                return picture[:2000]
+            return None
+    return None
 
 
 def _lookup_id(result_id: str, child_id: Optional[str] = None) -> str:
@@ -184,14 +211,17 @@ class GraphMixin:
                         if key not in must and (info["found_by"] > 1 or info["shared"])),
                        key=lambda k: (-entities[k]["found_by"], -entities[k]["shared"], entities[k]["order"]))
 
-        categories = self._site_categories(investigation_id, [runs[run_id] for run_id, _ in paths.values()])
+        sites = self._found_sites(investigation_id, [runs[run_id] for run_id, _ in paths.values()])
+        images: dict[str, str] = {}
         group_of: dict[tuple[str, str], tuple[str, str]] = {}   # (lookup id, entity key) -> (group key, label)
         for lookup in lookups.values():
             lookup["found"].sort(key=lambda k: entities[k]["order"])
             for key in lookup["found"]:
                 entity_type = entities[key]["entity"].get("type")
                 run_id, path = paths[(lookup["id"], key)]
-                category = categories.get(run_id, {}).get(path)
+                category, picture = sites.get(run_id, {}).get(path, (None, None))
+                if picture:
+                    images.setdefault(key, picture)
                 group_of[(lookup["id"], key)] = (f"category:{category}", f"Accounts · {category}") \
                     if category is not None else (f"type:{entity_type}", ENTITY_TYPES.get(entity_type, "Other"))
 
@@ -228,11 +258,14 @@ class GraphMixin:
                 walk([f"e:{k}" for k in lookup["searched"]] or [lookup["id"]], 0)
 
         return {"lookups": lookups, "entities": entities, "must": must, "extra": extra, "group_of": group_of,
-                "depth": depth, "children": children, "left_out": left_out, "runs": merged, "views": {}}
+                "depth": depth, "children": children, "left_out": left_out, "runs": merged, "images": images,
+                "views": {}}
 
-    def _site_categories(self, investigation_id: UUID, runs: list[dict[str, Any]]) -> dict[str, dict[str, str]]:
-        """{run id: {path of a found site's url: its category}} for the username searches among ``runs``."""
-        found: dict[str, dict[str, str]] = {}
+    def _found_sites(self, investigation_id: UUID,
+                     runs: list[dict[str, Any]]) -> dict[str, dict[str, tuple[str, Optional[str]]]]:
+        """{run id: {path of a found site's url: (its category, the profile's picture)}}
+        for the username searches among ``runs``."""
+        found: dict[str, dict[str, tuple[str, Optional[str]]]] = {}
         by_result: dict[str, dict[str, dict[str, Any]]] = {}
         for run in runs:
             if run["service"] == "username":
@@ -246,7 +279,8 @@ class GraphMixin:
                 if not isinstance(sites, list):
                     continue
                 found[run["id"]] = {
-                    f"results[{i}].url": str(site.get("category") or "other").strip()[:60] or "other"
+                    f"results[{i}].url": (str(site.get("category") or "other").strip()[:60] or "other",
+                                          profile_picture(site))
                     for i, site in enumerate(sites) if isinstance(site, dict)}
         return found
 
@@ -262,7 +296,7 @@ class GraphMixin:
             "status": entity.get("status"), "note": entity.get("note"),
             "first_seen": entity.get("first_seen"), "last_seen": entity.get("last_seen"),
             "found_by": info["found_by"], "searched_by": len(info["searched_in"]),
-            "shared": info["shared"], "root": not info["found_in"],
+            "shared": info["shared"], "root": not info["found_in"], "image": model["images"].get(key),
         }
 
     @staticmethod
@@ -381,6 +415,35 @@ class GraphMixin:
                 "types": per_type,
             },
         }
+
+    def graph_node_details(self, investigation_id: UUID, node_id: str,
+                           noise: bool = False) -> Optional[dict[str, Any]]:
+        """One node for the side panel, with the lookups around it: for an identifier,
+        the lookups that found it and that looked it up, and the other cases it is in;
+        for a group, its lookup."""
+        model = self._graph_model(investigation_id, noise)
+        lookups = model["lookups"]
+        node_id = model["runs"].get(node_id, node_id)
+
+        def lookup_node(lookup_id):
+            lookup = lookups[lookup_id]
+            return self._lookup_node(model, lookup_id, sum(1 for k in lookup["found"] if k in model["must"]))
+
+        if node_id.startswith("e:") and node_id[2:] in model["entities"]:
+            key = node_id[2:]
+            info = model["entities"][key]
+            return {"node": self._identifier_node(model, key),
+                    "found_in": [lookup_node(lid) for lid in info["found_in"]],
+                    "searched_in": [lookup_node(lid) for lid in info["searched_in"]],
+                    "elsewhere": self.investigations_with([key], exclude=investigation_id).get(key, [])}
+        if node_id in lookups:
+            lookup = lookups[node_id]
+            return {"node": lookup_node(node_id), "parent": lookup_node(lookup["parent"]) if lookup["parent"] else None}
+        if node_id.startswith("g:"):
+            group = self._graph_view(model, GRAPH_NODE_BUDGET)["groups"].get(node_id)
+            if group:
+                return {"node": self._group_node(group), "lookup": lookup_node(group["lookup"])}
+        return None
 
     def expand_graph_node(self, investigation_id: UUID, node_id: str, offset: int = 0, limit: int = 40,
                           noise: bool = False, budget: int = GRAPH_NODE_BUDGET) -> Optional[dict[str, Any]]:
