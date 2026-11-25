@@ -441,14 +441,20 @@ GITFIVE_UNCONFIRMED = {"generated_emails", "all_contribs", "internal_contribs", 
 def username_clues_read(result: dict[str, Any]) -> dict[str, Any]:
     """A username search with each clue's username under a "username" key, so the usernames a
     profile leads to are identifiers found in that account (results[i].clues[j].username)."""
+    from services.username_clues import is_site_own, site_own_names   # it imports this module
+
     results = result.get("results")
     if not isinstance(results, list):
         return result
-    return {**result, "results": [
-        {**r, "clues": [{"username": c.get("value"), **{k: v for k, v in c.items() if k != "value"}}
-                        for c in r["clues"] if isinstance(c, dict)]}
-        if isinstance(r, dict) and isinstance(r.get("clues"), list) else r
-        for r in results]}
+
+    def clues(r: dict) -> list[dict[str, Any]]:
+        # the site's own accounts (saved before they were left out) are not the owner's
+        own = site_own_names(str(r.get("site_name") or ""), None)
+        return [{"username": c.get("value"), **{k: v for k, v in c.items() if k != "value"}}
+                for c in r["clues"] if isinstance(c, dict) and not is_site_own(str(c.get("value") or ""), own)]
+
+    return {**result, "results": [{**r, "clues": clues(r)} if isinstance(r, dict) and isinstance(r.get("clues"), list)
+                                  else r for r in results]}
 
 
 def gitfive_confirmed(result: dict[str, Any]) -> dict[str, Any]:

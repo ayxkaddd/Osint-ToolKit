@@ -162,17 +162,49 @@ def _is_link_field(key: str) -> bool:
     return (short in LINK_KEYS or short.endswith(LINK_SUFFIXES)) and not PICTURE_KEY.search(short)
 
 
+GENERIC_NAME_WORDS = {"user", "users", "channel", "profile", "account", "accounts", "app", "official", "the"}
+
+
+def site_own_names(site_name: str, site: Optional[dict]) -> tuple[set[str], set[str]]:
+    """The ways a site names itself, lowercase letters and digits only: its name (whole and
+    without words like "User": "rumbleuser", "rumble"), its domain ("castingcall", "kofi"),
+    and its initials ("ccc" for Casting Call Club). (names, initials)"""
+    words = [w.lower() for w in re.findall(r"[A-Z]?[a-z]+|[A-Z]+(?![a-z])|\d+", site_name or "")]
+    names = {"".join(words), "".join(w for w in words if w not in GENERIC_NAME_WORDS)}
+    for template in ((site or {}).get("uri_pretty"), (site or {}).get("uri_check")):
+        if template:
+            labels = _host(urlsplit(template.replace(ACCOUNT, PLACEHOLDER)).netloc).split(".")
+            labels = [label for label in labels if PLACEHOLDER not in label]
+            if len(labels) >= 2:
+                names.add(re.sub(r"[^a-z0-9]", "", labels[-2]))
+    initials = {"".join(w[0] for w in words if w not in GENERIC_NAME_WORDS)} if len(words) >= 2 else set()
+    return {n for n in names if len(n) >= 3}, {i for i in initials if len(i) >= 2}
+
+
+def is_site_own(value: str, own: tuple[set[str], set[str]]) -> bool:
+    """A username that is the site's own (its account elsewhere, in a page's footer or the
+    site's own description), not the profile owner's: "castingcallclub" on CastingCallClub,
+    "rumblevideo" on Rumble, "kofi_button" on Ko-fi, "CCC"."""
+    names, initials = own
+    flat = re.sub(r"[^a-z0-9]", "", value.lower())
+    if flat in initials:
+        return True
+    return any(flat == name or (len(name) >= 4 and (flat.startswith(name) or name.startswith(flat) and len(flat) >= 4))
+               for name in names)
+
+
 def find_clues(profile: Optional[dict], site_name: str, searched: str, links: SiteLinks) -> list[Clue]:
     """The clues in one found profile (on ``site_name``, found for ``searched``)."""
     if not isinstance(profile, dict):
         return []
     found: dict[str, Clue] = {}
     searched_key = searched.casefold().lstrip("@")
+    own = site_own_names(site_name, links.site(site_name))
 
     def add(clue: Clue):
         clue.value = clue.value.lstrip("@").strip(".")
         key = clue.value.casefold()
-        if key == searched_key or not plausible_username(clue.value):
+        if key == searched_key or not plausible_username(clue.value) or is_site_own(clue.value, own):
             return
         if clue.site == site_name and clue.kind == "link":
             clue.strength = "weak"   # the same site: often a team, a friend, a repository owner

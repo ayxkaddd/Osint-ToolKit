@@ -187,3 +187,45 @@ def test_clues_are_identifiers_of_the_account_they_were_found_in():
     assert found[("username", "weakone")] == "results[0].clues[1].username"
     assert found[("username", "moon_tw")] == "results[0].profile_data.twitter_username"
     assert ("username", "the_viewer") not in found
+
+
+@pytest.mark.parametrize("site_name, check_url, value, own", [
+    ("CastingCallClub", "https://www.castingcall.club/m/{account}", "CastingCallClub", True),
+    ("CastingCallClub", "https://www.castingcall.club/m/{account}", "CCC", True),            # its initials
+    ("RumbleUser", "https://rumble.com/user/{account}", "rumblevideo", True),
+    ("Ko-Fi", "https://ko-fi.com/{account}", "kofi_button", True),
+    ("Ko-Fi", "https://ko-fi.com/{account}", "johnart", False),
+    ("GitHub (User)", "https://github.com/{account}", "moon_dev", False),
+])
+def test_the_site_own_accounts_are_not_clues(site_name, check_url, value, own):
+    """A profile page names the site's own accounts too (footer links, the site's description):
+    they are never the owner's."""
+    links = SiteLinks([*SITES, {"name": site_name, "uri_check": check_url}])
+    clues = find_clues({"links": f"['https://x.com/{value}']", "alternateName": value}, site_name, "john", links)
+    assert (not clues) is own
+
+
+def test_the_site_description_on_a_profile_page_is_not_the_profile():
+    from services.username_service import _page_profile
+    site = {"@context": "https://schema.org", "@type": "Organization", "name": "Casting Call Club",
+            "alternateName": "CCC", "url": "https://www.castingcall.club",
+            "sameAs": ["https://x.com/CastingCallClub"]}
+    page = f"<html><script type='application/ld+json'>{json.dumps(site)}</script><title>john</title></html>"
+    assert _page_profile(page, "text/html", "john") == (None, None)
+    person = {"@type": "Person", "name": "John", "sameAs": ["https://x.com/john_vo"]}
+    page = page.replace("</html>", f"<script type='application/ld+json'>{json.dumps(person)}</script></html>")
+    assert _page_profile(page, "text/html", "john")[1] == {"name": "John", "sameAs": ["https://x.com/john_vo"]}
+    # an organisation that the page says it is the profile of (a company's page) is still read
+    profile_page = {"@type": "ProfilePage", "mainEntity": {"@type": "Organization", "name": "Acme"}}
+    page = f"<html><script type='application/ld+json'>{json.dumps(profile_page)}</script></html>"
+    assert _page_profile(page, "text/html", "acme")[1] == {"name": "Acme"}
+
+
+def test_site_own_clues_saved_earlier_are_not_identifiers():
+    from services.entities import extract_entities
+    result = {"username": "john", "results": [{
+        "site_name": "CastingCallClub", "url": "https://www.castingcall.club/m/john", "searched": "john",
+        "clues": [{"value": "CastingCallClub", "kind": "link", "action": "follow"},
+                  {"value": "john_vo", "kind": "link", "action": "follow"}]}]}
+    found = {e.value for e, _ in extract_entities(result, "username") if e.type == "username"}
+    assert found == {"john", "john_vo"}   # the searched one, and the clue that is the owner's

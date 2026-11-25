@@ -170,8 +170,14 @@ def _page_profile(text: str, content_type: str, username: str) -> tuple[Optional
         for item in data if isinstance(data, list) else [data]:
             if not isinstance(item, dict):
                 continue
-            person = item.get("mainEntity") if item.get("@type") == "ProfilePage" else item
-            if isinstance(person, dict) and person.get("@type") in ("Person", "Organization"):
+            profile_page = item.get("@type") == "ProfilePage"
+            person = item.get("mainEntity") if profile_page else item
+            kinds = person.get("@type") if isinstance(person, dict) else None
+            kinds = kinds if isinstance(kinds, list) else [kinds]
+            # the account: a Person, or an organisation the page says it is the profile of. Any
+            # other Organization (or WebSite) on a profile page is the site that publishes it,
+            # with the site's own name and accounts (x.com/CastingCallClub), not the user's
+            if "Person" in kinds or ("Organization" in kinds and profile_page):
                 fields = {k: v for k, v in person.items() if not k.startswith("@")}
                 profile = _tidy_profile(fields)
                 if profile:
