@@ -523,3 +523,37 @@ def test_an_identifier_keeps_the_lookup_that_found_it_first_as_its_home(client, 
     assert phone["home"] == f"r:{first}" and phone["found_by"] == 2
     assert (f"r:{later}", "e:phone:+14155550123") in edges
     assert nodes["e:domain:home.test"]["home"] is None      # typed, found by nothing
+
+
+def test_followed_clues_hang_under_the_account_that_named_them(client, investigation):
+    """alexmoon's GitHub links x.com/moon_dev: moon_dev hangs under that account, its accounts
+    under it, the same as in the username page's tree."""
+    moon_accounts = [{"site_name": f"Moon{i}", "url": f"https://moon{i}.test/moon_dev", "category": "social",
+                      "searched": "moon_dev"} for i in range(12)]
+    rid = _save(investigation, "username", "lookup_username", {"username": "alexmoon"}, {
+        "username": "alexmoon",
+        "results": [
+            {"site_name": "GitHub", "url": "https://github.com/alexmoon", "category": "coding", "searched": "alexmoon",
+             "clues": [{"value": "moon_dev", "kind": "link", "strength": "strong", "field": "links",
+                        "link": "https://x.com/moon_dev", "site": "X", "action": "follow"},
+                       {"value": "weakone", "kind": "username", "strength": "weak", "action": "suggest"}]},
+            {"site_name": "Reddit", "url": "https://reddit.com/user/alexmoon", "category": "social",
+             "searched": "alexmoon"},
+            *moon_accounts],
+        "followed": [{"username": "moon_dev", "depth": 1, "found": 12, "checked": 600,
+                      "via": {"username": "alexmoon", "site_name": "GitHub", "url": "https://github.com/alexmoon"}}]})
+    data, nodes, edges = _graph(client, investigation)
+    lookup, github, moon = f"r:{rid}", "e:url:https://github.com/alexmoon", "e:username:moon_dev"
+    # the chain is drawn outside the groups, the account and the username it led to
+    assert github in nodes and moon in nodes and nodes[moon]["home"] is None
+    assert edges[(github, moon)]["kind"] == "clue" and edges[(github, moon)]["label"] == "found in profile"
+    assert (lookup, moon) not in edges and (lookup, github) in edges
+    # moon_dev's 12 accounts are folded under moon_dev, not under the lookup
+    group = next(n for n in nodes.values() if n["kind"] == "group" and n["key"].startswith("username:moon_dev|"))
+    assert group["count"] == 12 and (moon, group["id"]) in edges
+    assert not any(e["source"] == lookup and e["target"] == group["id"] for e in data["edges"])
+    page = client.get(f"/api/investigations/{investigation}/graph/expand", params={"node": group["id"]}).json()
+    assert page["total"] == 12 and all(e["source"] == group["id"] for e in page["edges"])
+    # a weak clue that wasn't followed stays with the lookup's other findings
+    assert all(e["source"] != github for e in data["edges"] if e["target"] != moon)
+    assert all(e["source"] in nodes and e["target"] in nodes for e in data["edges"])

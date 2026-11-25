@@ -101,7 +101,11 @@ export const framing = {
         const shapes = `
             <div class="flex items-center gap-2"><span class="w-5 h-3 rounded border border-[#3b3f57] bg-[#0f1017] shrink-0"></span>Lookup</div>
             <div class="flex items-center gap-2"><span class="w-4 h-4 rounded-full border border-gray-500 outline outline-1 outline-offset-1 outline-gray-600 shrink-0"></span>Group, folded</div>
-            <div class="flex items-center gap-2"><span class="w-4 h-0 border-t border-dashed border-purple-300 shrink-0"></span>Your link</div>`;
+            <div class="flex items-center gap-2"><span class="w-4 h-0 border-t border-dashed border-purple-300 shrink-0"></span>Your link</div>${
+                this.cy.edges('[kind = "clue"]').not(OFF).length
+                    ? `<div class="flex items-center gap-2"><span class="w-4 h-0 border-t border-dashed shrink-0" style="border-color:#fbbf24"></span>Found in a profile</div>`
+                    : ''
+            }`;
         this.legendBody.innerHTML =
             rows + `<div class="mt-1.5 pt-1.5 border-t border-[#24283b] space-y-1 text-gray-400">${shapes}</div>`;
     },

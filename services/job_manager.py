@@ -181,6 +181,8 @@ class JobManager:
                     checked += 1
                     found += data.get("status") == "found"
                     job.progress.update(done=checked, found=found)
+                    if (data.get("progress") or {}).get("total"):   # grows as clues are followed
+                        job.progress["total"] = data["progress"]["total"]
                 elif kind == "domain":
                     job.progress.update(done=data.get("done"), total=data.get("total"))
                 elif kind == "search_completed":
@@ -206,6 +208,9 @@ class JobManager:
         job.status = "done"
         if found or checked:
             job.summary = f"{found} found / {checked} checked"
+            followed = len(((last_event or {}).get("data") or {}).get("followed") or [])
+            if followed:
+                job.summary += f" · {followed} username{'' if followed == 1 else 's'} followed"
         else:
             job.summary = summarize(last_event)
 

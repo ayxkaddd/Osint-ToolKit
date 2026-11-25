@@ -314,7 +314,7 @@ to {
 }
 .username-segmented {
     display: inline-grid;
-    grid-template-columns: repeat(2, minmax(0, auto));
+    grid-template-columns: repeat(3, minmax(0, auto));
     border: 1px solid #293142;
     border-radius: 8px;
     overflow: hidden;
@@ -1121,4 +1121,241 @@ which made
     .username-profile-pic.no-avatar {
         --pic-size: 3.25rem;
     }
+}
+
+/* ---- Following the clues: the bar under the counts, clue lines on cards, the tree ---- */
+.username-clues {
+    border: 1px solid #293142;
+    background: rgba(15, 18, 24, 0.72);
+    border-radius: 8px;
+    padding: 0.65rem 0.75rem;
+    margin-bottom: 0.75rem;
+}
+.username-clues-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #9ca3af;
+    margin-bottom: 0.5rem;
+}
+.username-clues-head i {
+    color: #fbbf24;
+    margin-right: 0.4rem;
+}
+.username-clues-count {
+    text-transform: none;
+    letter-spacing: 0;
+    color: #6b7280;
+}
+.username-clues-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+.username-clue {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    max-width: 100%;
+    padding: 0.3rem 0.5rem;
+    border: 1px dashed #3b3f57;
+    border-radius: 8px;
+    font-size: 0.8rem;
+}
+.username-clue.is-followed {
+    border-color: rgba(251, 191, 36, 0.45);
+}
+.username-clue-from {
+    color: #6b7280;
+    font-size: 0.75rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.username-clue-state {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    color: #9ca3af;
+    font-size: 0.72rem;
+    white-space: nowrap;
+}
+.username-clue-state.is-running {
+    color: #93c5fd;
+}
+.username-clue-state.is-done {
+    color: #6ee7b7;
+}
+.username-clue-search {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.15rem 0.45rem;
+    border-radius: 6px;
+    border: 1px solid #3b3f57;
+    color: #e5e7eb;
+    font-size: 0.72rem;
+    white-space: nowrap;
+}
+.username-clue-search:hover {
+    border-color: #a855f7;
+    color: #fff;
+}
+.username-via {
+    padding: 0.05rem 0.4rem;
+    border-radius: 999px;
+    border: 1px dashed rgba(251, 191, 36, 0.5);
+    color: #fcd34d;
+    font-size: 0.68rem;
+    white-space: nowrap;
+}
+.username-clue-lines {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    margin: 0.35rem 0 0.15rem;
+}
+.username-clue-line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.78rem;
+    min-width: 0;
+}
+.username-clue-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    max-width: 100%;
+    color: #fbbf24;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 0.75rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.username-clue-line.is-suggested .username-clue-link {
+    color: #a8a29e;
+}
+a.username-clue-link:hover {
+    text-decoration: underline;
+}
+.username-clue-arrow {
+    color: #4b5563;
+}
+
+.username-tree {
+    padding: 0.25rem 0 0.5rem;
+}
+.username-tree-name {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.35rem 0.8rem;
+    border-radius: 999px;
+    background: rgba(168, 85, 247, 0.14);
+    border: 1px solid rgba(168, 85, 247, 0.45);
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 0.85rem;
+}
+.username-tree-accounts {
+    list-style: none;
+    margin: 0 0 0 1.1rem;
+    padding: 0.35rem 0 0 0;
+    border-left: 2px solid #3b3f57;
+}
+.username-tree-accounts > li {
+    position: relative;
+    padding: 0.3rem 0 0.3rem 1.25rem;
+}
+.username-tree-accounts > li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 1.05rem;
+    width: 1rem;
+    border-top: 2px solid #3b3f57;
+}
+.username-tree-account {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    max-width: 100%;
+    padding: 0.4rem 0.65rem;
+    border: 1px solid #293142;
+    border-radius: 8px;
+    background: rgba(15, 18, 24, 0.85);
+    font-size: 0.82rem;
+}
+.username-tree-account img {
+    width: 1rem;
+    height: 1rem;
+    border-radius: 3px;
+}
+.username-tree-account > i,
+.username-tree-account a {
+    color: #6b7280;
+}
+.username-tree-account a:hover {
+    color: #c4b5fd;
+}
+.username-tree-handle {
+    color: #9ca3af;
+}
+.username-tree-accounts .username-clue-lines {
+    margin: 0.3rem 0 0 0.65rem;
+}
+/* a username found in this account's profile: a dashed link down to its own branch */
+.username-tree-clue {
+    position: relative;
+    margin: 0.45rem 0 0.2rem 0.65rem;
+    padding: 0.55rem 0 0 1.25rem;
+    border-left: 2px dashed rgba(251, 191, 36, 0.7);
+}
+.username-tree-clue::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 1.15rem;
+    width: 1rem;
+    border-top: 2px dashed rgba(251, 191, 36, 0.7);
+}
+.username-tree-clue > .username-tree-name {
+    background: rgba(251, 191, 36, 0.12);
+    border-color: rgba(251, 191, 36, 0.55);
+}
+.username-tree-more,
+.username-tree-empty {
+    color: #9ca3af;
+    font-size: 0.78rem;
+}
+.username-tree-more:hover {
+    color: #fff;
+}
+.username-tree-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+    margin-top: 0.75rem;
+    color: #6b7280;
+    font-size: 0.75rem;
+}
+.username-tree-legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.username-tree-key {
+    display: inline-block;
+    width: 1.5rem;
+    border-top: 2px solid #3b3f57;
+}
+.username-tree-key.is-clue {
+    border-top: 2px dashed rgba(251, 191, 36, 0.8);
 }

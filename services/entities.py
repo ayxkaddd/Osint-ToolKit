@@ -66,6 +66,8 @@ PLATFORM_DOMAINS = {
     "instagram.com", "twitter.com", "x.com", "t.me", "telegram.me", "vk.com", "ok.ru", "linkedin.com",
     "tiktok.com", "reddit.com", "wikipedia.org", "apple.com", "microsoft.com", "amazonaws.com",
 }
+# "your_username", "email_username" ...: not the owner's username on a service
+NOT_OWNER_PREFIXES = {"your", "viewer", "current", "logged", "my", "email", "mail", "author", "editor", "owner"}
 NOISE_USERNAMES = {"noreply", "no-reply", "web-flow", "github-actions", "dependabot", "actions-user",
                    "root", "test", "guest", "anonymous", "support", "info", "contact"}
 IMAGE_EXT_RE = re.compile(r"\.(png|jpe?g|gif|svg|webp|ico|bmp|css|js|woff2?)(\?|$)", re.I)
@@ -388,6 +390,8 @@ def _key_hint(key: str) -> Optional[str]:
         return "url"
     if k in ("username", "user_name", "login", "screen_name", "nickname", "handle", "usernames"):
         return "username"
+    if k.endswith(("_username", "_screen_name")) and k.split("_", 1)[0] not in NOT_OWNER_PREFIXES:
+        return "username"   # twitter_username: the owner's username on that service
     return None
 
 
@@ -434,6 +438,19 @@ SERVICE_SKIP_KEYS = {
 GITFIVE_UNCONFIRMED = {"generated_emails", "all_contribs", "internal_contribs", "near_names"}
 
 
+def username_clues_read(result: dict[str, Any]) -> dict[str, Any]:
+    """A username search with each clue's username under a "username" key, so the usernames a
+    profile leads to are identifiers found in that account (results[i].clues[j].username)."""
+    results = result.get("results")
+    if not isinstance(results, list):
+        return result
+    return {**result, "results": [
+        {**r, "clues": [{"username": c.get("value"), **{k: v for k, v in c.items() if k != "value"}}
+                        for c in r["clues"] if isinstance(c, dict)]}
+        if isinstance(r, dict) and isinstance(r.get("clues"), list) else r
+        for r in results]}
+
+
 def gitfive_confirmed(result: dict[str, Any]) -> dict[str, Any]:
     """A GitFive result with only what is the target's (see GITFIVE_UNCONFIRMED)."""
     registered = result.get("registered_emails")
@@ -448,6 +465,8 @@ def extract_entities(result: Any, service: str = "") -> list[tuple[Entity, str]]
     out: dict[str, tuple[Entity, str]] = {}
     if service == "gitfive" and isinstance(result, dict):
         result = gitfive_confirmed(result)
+    if service == "username" and isinstance(result, dict):
+        result = username_clues_read(result)
     if isinstance(result, dict) and result.get("kind") == "plugin_result":
         # card pictures and icons are never leads
         result = {**result, "items": [{k: v for k, v in item.items() if k not in ("image", "icon")}

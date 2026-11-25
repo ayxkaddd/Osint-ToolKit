@@ -655,6 +655,30 @@ function mailboxIconFailed(img) {
     img.remove();
 }
 
+// The usernames a username search followed from found profiles: where each came from
+// (the account and the link in it) and how many accounts it had
+function usernameTrailHtml(data) {
+    const followed = (data.followed || []).filter((item) => item && item.username);
+    if (!followed.length) return '';
+    return `<div>
+        <h5 class="text-xs font-semibold text-gray-400 uppercase mb-2">Followed clues (${followed.length})</h5>
+        <div class="space-y-1.5">${followed
+            .map((item) => {
+                const via = item.via || {};
+                const link = via.link ? safeUrl(/^https?:/i.test(via.link) ? via.link : `https://${via.link}`) : '';
+                return `<div class="flex flex-wrap items-center gap-2 text-sm" style="padding-left:${(Math.max(1, item.depth || 1) - 1) * 1.25}rem">
+                    ${pivotText('username', via.username || data.username, '@' + (via.username || data.username))}
+                    <span class="text-gray-500">→ ${escapeHtml(via.site_name || 'a profile')}</span>
+                    ${link ? `<a href="${escapeAttr(link)}" target="_blank" rel="noopener noreferrer" class="text-amber-300 hover:underline font-mono text-xs truncate max-w-[16rem]" title="${escapeAttr(via.link)}">${escapeHtml(String(via.link).replace(/^https?:\/\/(www\.)?/i, ''))}</a>` : `<span class="text-gray-500 text-xs">${escapeHtml(String(via.field || '').replace(/_/g, ' '))}</span>`}
+                    <span class="text-gray-500">→</span>
+                    ${pivotText('username', item.username, '@' + item.username)}
+                    <span class="text-xs text-gray-400">${escapeHtml(item.found ?? 0)} account${item.found === 1 ? '' : 's'}</span>
+                </div>`;
+            })
+            .join('')}</div>
+    </div>`;
+}
+
 function renderUsernameSearch(data) {
     if (!data || typeof data !== 'object' || !Array.isArray(data.results)) return renderValue(data);
     const stats = data.stats || {};
@@ -686,6 +710,7 @@ function renderUsernameSearch(data) {
             </div>`
                     : ''
             }
+            ${usernameTrailHtml(data)}
             ${Object.entries(byCategory)
                 .sort()
                 .map(

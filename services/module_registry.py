@@ -65,6 +65,11 @@ def _q(name: str) -> Callable[[str], dict[str, Any]]:
     return lambda v: {"params": {name: v}}
 
 
+def _username_search(value: str) -> dict:
+    """Profiles read, and the usernames they lead to searched too (as on the page)."""
+    return {"params": {"username": value, "extract_profile": "true", "follow_clues": "true"}}
+
+
 MODULES: list[Module] = [
     Module("phone_info", "Phone number info", "/phone", "phone",
            {"phone": RunSpec("GET", "/api/phone/info", _q("phone"))},
@@ -74,10 +79,8 @@ MODULES: list[Module] = [
            cost=PAID, cost_note="smsc.ru balance", speed="medium", concurrency=1,
            prefill={"input": "#phoneInput"}),
     Module("username", "Username search", "/username", "user-check",
-           {"username": RunSpec("GET", "/api/username/search/stream",
-                                lambda v: {"params": {"username": v, "extract_profile": "true"}}, stream=True),
-            "telegram_username": RunSpec("GET", "/api/username/search/stream",
-                                         lambda v: {"params": {"username": v, "extract_profile": "true"}}, stream=True)},
+           {"username": RunSpec("GET", "/api/username/search/stream", _username_search, stream=True),
+            "telegram_username": RunSpec("GET", "/api/username/search/stream", _username_search, stream=True)},
            speed="slow", concurrency=1, prefill={"input": "#usernameSearchInput"}),
     Module("gitfive", "GitHub (GitFive)", "/gitfive", "github",
            {"username": RunSpec("GET", "/api/gitfive/query", _q("username"))},

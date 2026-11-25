@@ -3,7 +3,7 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 from services import mailbox_service as mailboxes
-from services.username_service import StreamingUsernameSearchService
+from services.username_service import FOLLOW_MAX_DEPTH, FOLLOW_MAX_USERNAMES, StreamingUsernameSearchService
 import asyncio
 import logging
 from typing import Optional
@@ -32,6 +32,10 @@ async def stream_search_sse(
     priority_sites: Optional[list[str]] = Query(None, description="Priority sites to check first"),
     only_sites: Optional[list[str]] = Query(None, description="Check only these sites (retry errors)"),
     check_mailboxes: bool = Query(False, description="Also check whether the username is a mailbox at email providers"),
+    follow_clues: bool = Query(False, description="Also search the usernames that found profiles link to or name "
+                                                  "(needs extract_profile)"),
+    max_depth: int = Query(FOLLOW_MAX_DEPTH, ge=1, le=3, description="Steps from the typed username when following"),
+    max_followed: int = Query(FOLLOW_MAX_USERNAMES, ge=1, le=10, description="How many more usernames to follow"),
 ):
     """
     Server-Sent Events endpoint for streaming search results.
@@ -49,6 +53,9 @@ async def stream_search_sse(
             priority_sites=priority_sites,
             only_sites=only_sites,
             check_mailboxes=check_mailboxes,
+            follow_clues=follow_clues,
+            max_depth=max_depth,
+            max_followed=max_followed,
         ):
             yield event.to_sse()
 

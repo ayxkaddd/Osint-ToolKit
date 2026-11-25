@@ -17,10 +17,16 @@
         <button type="submit" id="searchBtn" class="btn-primary"><i class="fas fa-search"></i><span>Search</span></button>
         <button type="button" id="stopBtn" class="hidden btn-secondary text-red-300" title="Stop"><i class="fas fa-stop"></i></button>
     </form>
-    <label id="mailboxOption" class="flex items-center gap-2 -mt-2 mb-4 text-sm text-gray-400 cursor-pointer w-fit">
-        <input type="checkbox" id="checkMailboxes" class="accent-purple-500">
-        <span>Also check email providers <span class="text-gray-500">(gmail.com, outlook.com, yahoo.com, mail.ru…)</span></span>
-    </label>
+    <div id="searchOptions" class="-mt-2 mb-4 space-y-1.5">
+        <label id="followOption" class="flex items-center gap-2 text-sm text-gray-400 cursor-pointer w-fit">
+            <input type="checkbox" id="followClues" class="accent-purple-500" checked>
+            <span>Follow the clues <span class="text-gray-500">(another username or a link in a found profile: up to 5 more usernames, 2 steps away)</span></span>
+        </label>
+        <label id="mailboxOption" class="flex items-center gap-2 text-sm text-gray-400 cursor-pointer w-fit">
+            <input type="checkbox" id="checkMailboxes" class="accent-purple-500">
+            <span>Also check email providers <span class="text-gray-500">(gmail.com, outlook.com, yahoo.com, mail.ru…)</span></span>
+        </label>
+    </div>
 
     <div class="username-status-row">
         <div class="username-stat">
@@ -45,6 +51,8 @@
         <div id="progressBar" style="width: 0%"></div>
     </div>
 
+    <div id="usernameClues" class="username-clues hidden"></div>
+
     <div id="usernameMailboxes"></div>
 
     <div id="usernameOverview"></div>
@@ -65,7 +73,14 @@
                     <i class="fas fa-layer-group"></i>
                     <span>Grouped</span>
                 </button>
+                <button type="button" id="treeViewBtn" data-view="tree" title="Which username led to which account">
+                    <i class="fas fa-sitemap"></i>
+                    <span>Tree</span>
+                </button>
             </div>
+            <select id="searchedFilter" class="hidden" aria-label="Username">
+                <option value="all">All usernames</option>
+            </select>
             <select id="categoryFilter" class="hidden">
                 <option value="all">All Categories</option>
             </select>
@@ -79,6 +94,7 @@
     <div id="resultsContainer" class="username-results-shell">
         <div id="resultsMasonry" class="username-masonry"></div>
         <div id="groupedResults" class="username-grouped hidden"></div>
+        <div id="treeResults" class="hidden"></div>
     </div>
 </div>
 
