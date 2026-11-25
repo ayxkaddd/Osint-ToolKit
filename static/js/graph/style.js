@@ -167,6 +167,20 @@ export function decorate(data) {
     } else if (data.kind === 'group') {
         add(iconUri('layers', data.color, 0.75));
         badge(pillBadge(data.open ? '−' : String(data.count), data.open ? '#1f2937' : '#6d28d9'), 'top-right');
+    } else if (data.kind === 'pending') {
+        add(
+            iconUri(
+                data.status === 'failed' ? 'triangle-alert' : 'search',
+                data.status === 'failed' ? '#fca5a5' : '#c4b5fd',
+                0.9
+            ),
+            {
+                w: '16px',
+                h: '16px',
+                x: '0%',
+                ox: 12,
+            }
+        );
     } else if (data.kind === 'more') {
         add(iconUri('ellipsis', '#9ca3af', 0.8));
     }
@@ -240,6 +254,33 @@ export function stylesheet() {
             },
         },
         { selector: 'node[kind = "lookup"][?rerun]', style: { 'border-color': '#4c1d95' } },
+        // a lookup still running: a purple arc turning round it (pivot.js moves the dash)
+        {
+            selector: 'node[kind = "pending"]',
+            style: {
+                shape: 'round-rectangle',
+                'corner-radius': 12,
+                'background-color': '#0f1017',
+                'border-color': '#a855f7',
+                'border-width': 2,
+                'border-style': 'dashed',
+                'border-dash-pattern': [26, 70],
+                color: '#ddd6fe',
+                'font-size': 10,
+                'text-valign': 'center',
+                'text-halign': 'center',
+                'text-margin-y': 0,
+                'text-margin-x': 11,
+                'text-wrap': 'wrap',
+                'text-justification': 'left',
+                'line-height': 1.35,
+                'text-outline-width': 0,
+            },
+        },
+        {
+            selector: 'node[kind = "pending"][status = "failed"]',
+            style: { 'border-color': '#ef4444', 'border-style': 'solid', color: '#fca5a5' },
+        },
         {
             selector: 'node[kind = "group"]',
             style: {

@@ -5,6 +5,7 @@ import { MANUAL_TYPES, decorate, stylesheet, typeColor } from './style.js';
 import { treeLayout } from './layout.js';
 import { History, SavedView } from './state.js';
 import { editing } from './edit.js';
+import { pivoting } from './pivot.js';
 
 const REDUCED_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)');
 const motion = (ms) => (REDUCED_MOTION.matches ? 0 : ms);
@@ -48,6 +49,7 @@ export class GraphView {
         this.state = new SavedView(investigationId);
         this.history = new History(() => this.updateToolbar());
         this.build();
+        this.watchJobs();
         this.load();
     }
 
@@ -113,6 +115,9 @@ export class GraphView {
         });
         this.panel.addEventListener('click', (e) => {
             if (e.target.closest('[data-panel-close]')) this.closePanel();
+            const menu = e.target.closest('[data-panel-menu]');
+            const shown = this.panelNode && this.cy.getElementById(this.panelNode);
+            if (menu && shown?.length) window.openContextMenu(menu, this.identifierItems(shown), shown.data('label'));
             if (e.target.closest('[data-panel-edit]')) this.nodeDialog({ editing: this.panelNode });
             if (e.target.closest('[data-panel-add-to-case]'))
                 this.nodeDialog({ editing: this.panelNode, addToCase: true });
@@ -166,6 +171,8 @@ export class GraphView {
             this.moved = false;
             this.fitAll();
         }
+        // lookups already running on this case's identifiers come in as pending nodes (pivot.js)
+        window.refreshJobs?.();
     }
 
     fitAll() {
@@ -421,6 +428,7 @@ export class GraphView {
     onTap(node) {
         if (this.linking) return this.finishLink(node);
         const kind = node.data('kind');
+        if (kind === 'pending') return node.data('status') === 'failed' ? this.dismissPending(node) : undefined;
         if (kind === 'more') return this.loadMore(node, { record: true });
         if (kind === 'lookup' || kind === 'group') {
             this.toggle(node, { record: true });
@@ -504,8 +512,10 @@ export class GraphView {
 
     // New nodes start small and clear at their parent and spring out to their places
     async grow(nodes, parent, from = null) {
-        const start = from || parent.position();
         nodes.forEach((n) => {
+            // from the parent given, else from what links to it, else the middle of the screen
+            const origin = n.incomers('node').not(nodes).first();
+            const start = from || parent?.position() || (origin.length ? origin.position() : this.modelCenter());
             n.position({ x: start.x, y: start.y });
             if (motion(1)) n.style({ opacity: 0, width: 4, height: 4 });
         });
@@ -675,6 +685,13 @@ export class GraphView {
                     'text-amber-300',
                 ]);
             else if (d.timestamp) lines.push([window.fmtDateTime?.(d.timestamp) || d.timestamp, 'text-gray-500']);
+        } else if (d.kind === 'pending') {
+            lines.push([d.module_name, 'text-white'], [d.value, 'text-gray-300 break-all']);
+            lines.push(
+                d.status === 'failed'
+                    ? [d.error || 'Failed', 'text-red-300']
+                    : [d.label.split('\n')[1] || 'running…', 'text-purple-300']
+            );
         } else if (d.kind === 'manual') {
             lines.push([`${typeName(d.type)} · added by you`, 'text-gray-500'], [d.label, 'text-white break-all']);
             if (d.note) lines.push([d.note.length > 200 ? `${d.note.slice(0, 199)}…` : d.note, 'text-gray-300']);
@@ -776,7 +793,10 @@ export class GraphView {
                     <div class="text-[11px] uppercase tracking-wider" style="color:${esc(color)}">${esc(kind)}</div>
                     <div class="text-white font-semibold break-all mt-0.5">${esc(title)}</div>
                 </div>
-                <button type="button" data-panel-close class="text-gray-400 hover:text-white shrink-0" aria-label="Close"><i data-lucide="x" class="w-5 h-5"></i></button>
+                <div class="flex items-center gap-2 shrink-0">
+                    ${d.kind === 'identifier' ? '<button type="button" data-panel-menu class="text-gray-400 hover:text-white" aria-label="More" title="Look up, assess, note"><i data-lucide="ellipsis" class="w-5 h-5"></i></button>' : ''}
+                    <button type="button" data-panel-close class="text-gray-400 hover:text-white" aria-label="Close"><i data-lucide="x" class="w-5 h-5"></i></button>
+                </div>
             </div>
             <div class="flex-1 overflow-y-auto custom-scrollbar px-5 py-4 space-y-5 text-sm">${body}</div>`;
     }
@@ -814,7 +834,8 @@ export class GraphView {
                 .join('');
             return [
                 picture,
-                `<div>${window.pivotChip(d.type, d.value, d.display || d.value)}</div>`,
+                // the chip's lookups are attached under the result that found it, as from the node's menu
+                `<div>${window.pivotChip(d.type, d.value, d.display || d.value).replace('<button ', `<button data-pivot-parent="${window.escapeAttr(this.parentResultFor(this.cy.getElementById(d.id)) || '')}" `)}</div>`,
                 status || d.note
                     ? `<div class="space-y-1">${status ? `<div class="text-purple-300">${esc(status)}</div>` : ''}${d.note ? `<div class="text-gray-300 whitespace-pre-line">${esc(d.note)}</div>` : ''}</div>`
                     : '',
@@ -876,3 +897,4 @@ export class GraphView {
 }
 
 Object.assign(GraphView.prototype, editing);
+Object.assign(GraphView.prototype, pivoting);

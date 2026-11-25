@@ -311,6 +311,13 @@ export const editing = {
         const node = ele;
         const kind = node.data('kind');
         if (kind === 'more') return;
+        if (kind === 'pending') {
+            if (node.data('status') === 'failed')
+                window.openContextMenu(this.pointAt(e), [
+                    { label: 'Dismiss', icon: 'fa-times', onClick: () => this.dismissPending(node) },
+                ]);
+            return;
+        }
         const targets = this.selectedOr(node);
         const many = targets.length > 1;
         const ids = targets.map((n) => n.id());
@@ -336,6 +343,7 @@ export const editing = {
             window.openContextMenu(this.pointAt(e), items, `${ids.length} selected`);
             return;
         }
+        if (kind === 'identifier') items.push(...this.identifierItems(node), { divider: true });
         if (kind === 'lookup' || kind === 'group')
             items.push({
                 label: node.data('open') && node.outgoers('node').length ? 'Fold' : 'Open',
