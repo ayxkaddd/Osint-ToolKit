@@ -20,6 +20,17 @@ class GitFiveError(Exception):
     pass
 
 
+def stored_result(result):
+    """What an investigation keeps of a GitFive result: not the addresses it generated to
+    test (guesses, often hundreds), only how many there were. The module page doesn't
+    show them either."""
+    if not isinstance(result, dict) or "generated_emails" not in result:
+        return result
+    kept = {k: v for k, v in result.items() if k != "generated_emails"}
+    kept["generated_emails_count"] = len(result.get("generated_emails") or [])
+    return kept
+
+
 class GitFiveService:
     def __init__(self):
         self.assets_path = Path('./assets')

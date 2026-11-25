@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Request
+from uuid import UUID
+
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from pathlib import Path
@@ -70,6 +72,15 @@ def username_page(request: Request):
 @router.get('/investigations')
 def investigations_page(request: Request):
     return templates.TemplateResponse(request=request, name="investigations_dash.html")
+
+@router.get('/investigations/{investigation_id}/graph')
+def investigation_graph_page(request: Request, investigation_id: UUID):
+    """The investigation's graph on the whole screen."""
+    info = investigation_service.get_investigation_info(investigation_id)
+    if info is None:
+        raise HTTPException(status_code=404, detail="Investigation not found")
+    return templates.TemplateResponse(request, "investigation_graph.html", {
+        "investigation_id": str(investigation_id), "investigation_name": info.get("name") or "Untitled"})
 
 @router.get('/ghunt')
 def ghunt_page(request: Request):

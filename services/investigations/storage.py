@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import threading
+from collections import OrderedDict
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -21,6 +22,9 @@ _ENTITY_CACHE: dict[str, tuple[Any, dict[str, Any]]] = {}
 
 # Identifiers found in more than one investigation, rebuilt when any entities.json changes
 _SHARED_CACHE: dict[str, Any] = {"versions": None, "index": {}}
+
+# (investigation id, noise shown) -> (versions of its files, graph model); least recently used first
+_GRAPH_CACHE: OrderedDict = OrderedDict()
 
 _MIGRATED_DIRS: set = set()
 

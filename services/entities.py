@@ -427,9 +427,27 @@ SERVICE_SKIP_KEYS = {
 }
 
 
+# GitFive: only what it proved is the target's ("emails", the registered addresses that are
+# the target's, the addresses on the target's own commits elsewhere). Not: the addresses it
+# generates to test, tested addresses that belong to other accounts, and the addresses of
+# everyone who committed to the target's repositories (often thousands of other people)
+GITFIVE_UNCONFIRMED = {"generated_emails", "all_contribs", "internal_contribs", "near_names"}
+
+
+def gitfive_confirmed(result: dict[str, Any]) -> dict[str, Any]:
+    """A GitFive result with only what is the target's (see GITFIVE_UNCONFIRMED)."""
+    registered = result.get("registered_emails")
+    return {**{k: v for k, v in result.items() if k not in GITFIVE_UNCONFIRMED},
+            "registered_emails": {email: info for email, info in registered.items()
+                                  if isinstance(info, dict) and info.get("is_target")}
+            if isinstance(registered, dict) else registered}
+
+
 def extract_entities(result: Any, service: str = "") -> list[tuple[Entity, str]]:
     """(entity, json path) pairs found in a result payload."""
     out: dict[str, tuple[Entity, str]] = {}
+    if service == "gitfive" and isinstance(result, dict):
+        result = gitfive_confirmed(result)
     if isinstance(result, dict) and result.get("kind") == "plugin_result":
         # card pictures and icons are never leads
         result = {**result, "items": [{k: v for k, v in item.items() if k not in ("image", "icon")}

@@ -3,12 +3,21 @@ import re
 
 
 # Bump when the index entry format / summary logic changes
-INDEX_VERSION = 7
+INDEX_VERSION = 8
 
 TRIAGE_STATUSES = {None, "confirmed", "important", "false_positive"}
 
 # Bump when extract_events changes, so cached timelines are rebuilt (on next view)
 EVENTS_VERSION = 2
+
+# Bump when the graph model changes, so cached graphs are rebuilt
+GRAPH_VERSION = 3
+
+# Nodes in a graph's first view; past it the deepest lookups stay closed
+GRAPH_NODE_BUDGET = 300
+
+# A lookup's findings shown one by one; more are folded into groups
+GRAPH_INLINE_MAX = 8
 
 # Results added by hand (data from sites and tools without an API)
 MANUAL_SERVICE = "manual"

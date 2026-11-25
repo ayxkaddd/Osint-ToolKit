@@ -2,13 +2,14 @@
 from typing import Literal, Optional
 from uuid import UUID
 from fastapi import APIRouter, HTTPException, Query, Form, File, UploadFile, Request
-from fastapi.responses import FileResponse, JSONResponse, HTMLResponse
+from fastapi.responses import FileResponse, JSONResponse, HTMLResponse, Response
 from fastapi.concurrency import run_in_threadpool
 from fastapi.templating import Jinja2Templates
 from starlette.background import BackgroundTask
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 from starlette.datastructures import UploadFile as FormUpload
 from utils.investigation_decorator import live_result
+from services.investigations.graph import GraphState
 from services.investigation_service import (
     MANUAL_FILE_MAX_UPLOAD, MANUAL_FILES_MAX, MANUAL_TEXT_MAX, NOTE_IMAGE_MAX_UPLOAD, find_target,
     investigation_service,
@@ -18,6 +19,9 @@ router = APIRouter(prefix="/api/investigations")
 templates = Jinja2Templates(directory="templates")
 
 VALID_STATUSES = {"active", "completed", "archived"}
+
+# The graph's saved view (5000 positions and the rest fit well under it)
+GRAPH_STATE_MAX_BYTES = 2 * 1024 * 1024
 
 # One "add manually" request: several files together
 MANUAL_UPLOAD_MAX = 200 * 1024 * 1024
@@ -280,6 +284,107 @@ def get_result_changes(investigation_id: UUID, result_id: str) -> JSONResponse:
         raise HTTPException(status_code=404, detail="Result not found")
     return JSONResponse(content={"status": "success",
                                  "changes": investigation_service.result_changes(investigation_id, result_id)})
+
+
+@router.get("/{investigation_id}/graph")
+def get_investigation_graph(investigation_id: UUID, noise: bool = False) -> JSONResponse:
+    """The graph's first view: identifiers, the lookups between them, big result sets
+    folded into groups (opened with /graph/expand). ``noise``: boilerplate and false positives too."""
+    _require_investigation(investigation_id)
+    return JSONResponse(content=investigation_service.get_graph(investigation_id, noise=noise))
+
+
+@router.get("/{investigation_id}/graph/state")
+def get_graph_state(investigation_id: UUID) -> JSONResponse:
+    """The saved view: positions, opened and folded nodes, hidden and removed ones,
+    what the analyst added, zoom and filters."""
+    _require_investigation(investigation_id)
+    return JSONResponse(content=investigation_service.get_graph_state(investigation_id))
+
+
+@router.put("/{investigation_id}/graph/state")
+async def put_graph_state(investigation_id: UUID, request: Request) -> JSONResponse:
+    """Replace the saved view (the browser sends it whole, a moment after each change)."""
+    _require_investigation(investigation_id)
+    if int(request.headers.get("content-length") or 0) > GRAPH_STATE_MAX_BYTES:
+        raise HTTPException(status_code=413, detail="The graph view is too large")
+    body = await request.body()
+    if len(body) > GRAPH_STATE_MAX_BYTES:
+        raise HTTPException(status_code=413, detail="The graph view is too large")
+    try:
+        state = GraphState.model_validate_json(body)
+    except ValidationError as e:
+        raise HTTPException(status_code=422, detail=e.errors(include_url=False, include_input=False, include_context=False)) from e
+    saved = await run_in_threadpool(investigation_service.save_graph_state, investigation_id, state)
+    return JSONResponse(content={"status": "success", "updated_at": saved["updated_at"]})
+
+
+@router.get("/{investigation_id}/graph/search")
+def search_graph(investigation_id: UUID, q: str = Query(..., min_length=1, max_length=200),
+                 noise: bool = False) -> JSONResponse:
+    """Identifiers matching ``q``, with what to open to reach the ones that are folded."""
+    _require_investigation(investigation_id)
+    return JSONResponse(content=investigation_service.search_graph(investigation_id, q, noise=noise))
+
+
+@router.get("/{investigation_id}/graph/export")
+def export_graph(investigation_id: UUID, format: Literal["json", "gexf"] = "json", noise: bool = False):
+    """The whole graph to download: JSON, or GEXF for Gephi."""
+    info = _require_investigation(investigation_id)
+    name = "".join(c if c.isalnum() or c in "-_" else "-" for c in (info.get("name") or "investigation"))[:60]
+    if format == "gexf":
+        body = investigation_service.export_graph_gexf(investigation_id, noise=noise)
+        return Response(body, media_type="application/gexf+xml",
+                        headers={"Content-Disposition": f'attachment; filename="{name}-graph.gexf"'})
+    return JSONResponse(content=investigation_service.export_graph(investigation_id, noise=noise),
+                        headers={"Content-Disposition": f'attachment; filename="{name}-graph.json"'})
+
+
+@router.put("/{investigation_id}/graph/image")
+async def put_graph_image(investigation_id: UUID, request: Request) -> JSONResponse:
+    """A picture of the graph as it was left, put in the case report."""
+    _require_investigation(investigation_id)
+    if int(request.headers.get("content-length") or 0) > NOTE_IMAGE_MAX_UPLOAD:
+        raise HTTPException(status_code=413, detail="The picture is too large")
+    data = await request.body()
+    if len(data) > NOTE_IMAGE_MAX_UPLOAD:
+        raise HTTPException(status_code=413, detail="The picture is too large")
+    try:
+        await run_in_threadpool(investigation_service.save_graph_image, investigation_id, data)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    return JSONResponse(content={"status": "success"})
+
+
+@router.get("/{investigation_id}/graph/image")
+def get_graph_image(investigation_id: UUID):
+    _require_investigation(investigation_id)
+    image = investigation_service.graph_image(investigation_id)
+    if image is None:
+        raise HTTPException(status_code=404, detail="No picture of the graph yet")
+    return Response(image, media_type="image/webp", headers={"Cache-Control": "no-store"})
+
+
+@router.get("/{investigation_id}/graph/node")
+def get_graph_node(investigation_id: UUID, node: str = Query(..., max_length=2000), noise: bool = False) -> JSONResponse:
+    """One node for the side panel, with the lookups around it."""
+    _require_investigation(investigation_id)
+    details = investigation_service.graph_node_details(investigation_id, node, noise=noise)
+    if details is None:
+        raise HTTPException(status_code=404, detail="Not in the graph")
+    return JSONResponse(content=details)
+
+
+@router.get("/{investigation_id}/graph/expand")
+def expand_graph_node(investigation_id: UUID, node: str = Query(..., max_length=2000),
+                      offset: int = Query(0, ge=0), limit: int = Query(40, ge=1, le=200),
+                      noise: bool = False) -> JSONResponse:
+    """The children of one lookup, group or identifier, a page at a time."""
+    _require_investigation(investigation_id)
+    expanded = investigation_service.expand_graph_node(investigation_id, node, offset, limit, noise=noise)
+    if expanded is None:
+        raise HTTPException(status_code=404, detail="Not in the graph")
+    return JSONResponse(content=expanded)
 
 
 @router.get("/{investigation_id}/export")

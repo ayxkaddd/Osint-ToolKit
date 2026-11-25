@@ -28,7 +28,7 @@
     </div>
 
     <!-- Tabs -->
-    <div class="flex gap-1 border-b border-gray-800 mb-5" role="tablist">
+    <div class="flex gap-1 border-b border-gray-800 mb-5 scroll-mt-20" role="tablist">
         <button type="button" data-tab="timeline" class="inv-tab active" title="Lookups and added results, in the order they were made">
             <i class="fas fa-layer-group mr-2"></i>Results <span id="resultsCountBadge" class="ml-1 text-xs text-gray-400"></span>
         </button>
@@ -37,6 +37,9 @@
         </button>
         <button type="button" data-tab="entities" class="inv-tab">
             <i class="fas fa-fingerprint mr-2"></i>Identifiers <span id="entitiesCountBadge" class="ml-1 text-xs text-gray-400"></span>
+        </button>
+        <button type="button" data-tab="graph" class="inv-tab" title="The identifiers and the lookups that connect them, as a map">
+            <i class="fas fa-project-diagram mr-2"></i>Graph
         </button>
     </div>
 
@@ -147,6 +150,10 @@
         <div id="entitiesList" class="space-y-1.5"></div>
         <div class="text-center mt-4"><button type="button" id="entitiesMore" class="hidden text-sm text-purple-300 hover:text-white">Show more</button></div>
     </div>
+</div>
+
+<div id="graphPanel" class="hidden px-4 md:px-6 pb-6">
+    <div id="graphRoot" class="graph-root relative h-[600px] rounded-xl border border-[#24283b] overflow-hidden"></div>
 </div>
 
 <!-- Add Manually Modal -->
@@ -302,4 +309,10 @@
 {% block scripts %}
 <script type="application/json" id="investigationId">{{ investigation_id | tojson }}</script>
 <script defer src="/static/js/investigation_results.js"></script>
+<script defer src="/static/vendor/cytoscape/cytoscape.min.js"></script>
+<script defer src="/static/vendor/d3-hierarchy/d3-hierarchy.min.js"></script>
+<script defer src="/static/vendor/cytoscape-fcose/layout-base.js"></script>
+<script defer src="/static/vendor/cytoscape-fcose/cose-base.js"></script>
+<script defer src="/static/vendor/cytoscape-fcose/cytoscape-fcose.js"></script>
+<script type="module" src="/static/js/graph/index.js"></script>
 {% endblock %}

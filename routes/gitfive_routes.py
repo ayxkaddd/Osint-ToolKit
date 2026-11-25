@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException, Response
 from pydantic import ValidationError
 
 from models.gitfive_models import User
-from services.gitfive_service import GitFiveError, GitFiveService
+from services.gitfive_service import GitFiveError, GitFiveService, stored_result
 from utils.investigation_decorator import save_investigation
 
 router = APIRouter(prefix="/api/gitfive")
@@ -12,7 +12,7 @@ gitfive_service = GitFiveService()
 
 
 @router.get("/query")
-@save_investigation(service_name="gitfive", method_name="lookup_gitfive")
+@save_investigation(service_name="gitfive", method_name="lookup_gitfive", store=stored_result)
 async def gitfive_query(username: str, response: Response, refresh: bool = False) -> User:
     """GitFive profile. Results are cached per username; ``refresh=true`` re-runs it."""
     try:
