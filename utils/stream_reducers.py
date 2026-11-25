@@ -58,6 +58,12 @@ def parse_stream(text: str, media_type: Optional[str]) -> Any:
 # Reducers: (events) -> stored result
 # ---------------------------------------------------------------------------
 
+def _clue_outcome(clue: dict[str, Any], actions: dict[str, tuple[str, Optional[str]]]) -> dict[str, Any]:
+    """A profile's clue with what the search did with it (followed, suggested, already searched)."""
+    action, reason = actions.get(str(clue.get("value", "")).casefold(), (None, None))
+    return {**clue, **({"action": action} if action else {}), **({"reason": reason} if reason else {})}
+
+
 def reduce_username_search(events: list[Any]) -> dict[str, Any]:
     """Keep only found profiles (with extracted profile data) and the summary."""
     username = None
@@ -69,6 +75,11 @@ def reduce_username_search(events: list[Any]) -> dict[str, Any]:
     mailboxes: list[dict[str, Any]] = []
     mailbox_checks: dict[str, Any] = {}
     checked = 0
+    latest_total = None
+    clues: dict[str, list[dict[str, Any]]] = {}              # account url -> its clues
+    actions: dict[str, tuple[str, Optional[str]]] = {}       # clue (casefolded) -> what was done with it
+    followed: dict[str, dict[str, Any]] = {}                 # username (casefolded) -> how it was reached
+    per_name: dict[str, dict[str, int]] = {}                 # username (casefolded) -> found, checked
 
     for event in events:
         if not isinstance(event, dict):
@@ -80,11 +91,27 @@ def reduce_username_search(events: list[Any]) -> dict[str, Any]:
             total_sites = data.get("total_sites", total_sites)
         elif kind == "site_result":
             checked += 1
+            latest_total = (data.get("progress") or {}).get("total", latest_total)
+            counts = per_name.setdefault(str(data.get("searched") or username or "").casefold(), {"found": 0, "checked": 0})
+            counts["checked"] += 1
+            counts["found"] += data.get("status") == "found"
             if data.get("status") == "found":
                 entry = {k: v for k, v in data.items() if k not in ("progress", "error_message")}
                 found[entry.get("url") or entry.get("site_name")] = entry
         elif kind == "profile_extracted":
             profiles[data.get("url")] = data.get("profile_data")
+            if data.get("clues"):
+                clues[data.get("url")] = data["clues"]
+        elif kind == "clue_found":
+            clue = data.get("clue") or {}
+            value = str(clue.get("value") or "")
+            actions[value.casefold()] = (data.get("action"), data.get("reason"))
+            if data.get("action") == "follow" and value.casefold() not in followed:
+                via = {"username": data.get("searched"), "site_name": data.get("site_name"), "url": data.get("url"),
+                       "field": clue.get("field"), **({"link": clue["link"]} if clue.get("link") else {})}
+                parent = followed.get(str(data.get("searched") or "").casefold())
+                followed[value.casefold()] = {"username": value, "depth": (parent["depth"] if parent else 0) + 1,
+                                              "via": via}
         elif kind == "duckduckgo_result":
             web_mentions.append(data)
         elif kind == "mailbox_result":
@@ -105,12 +132,17 @@ def reduce_username_search(events: list[Any]) -> dict[str, Any]:
     for url, profile in profiles.items():
         if url in found and profile:
             found[url]["profile_data"] = profile
+    for url, items in clues.items():
+        if url in found:
+            found[url]["clues"] = [_clue_outcome(clue, actions) for clue in items]
+    for key, item in followed.items():
+        item.update(per_name.get(key, {"found": 0, "checked": 0}))
 
     results = sorted(found.values(), key=lambda r: (r.get("category") or "", r.get("site_name") or ""))
     return {
         "username": username,
         "stats": {
-            "total": total_sites if total_sites is not None else completed.get("total_checked"),
+            "total": latest_total or (total_sites if total_sites is not None else completed.get("total_checked")),
             "checked": completed.get("total_checked", checked),
             "found": len(results),
             "errors": completed.get("total_errors"),
@@ -120,6 +152,7 @@ def reduce_username_search(events: list[Any]) -> dict[str, Any]:
         "results": results,
         "web_mentions": web_mentions,
         **({"mailboxes": mailboxes, "mailbox_checks": mailbox_checks} if mailboxes or mailbox_checks else {}),
+        **({"followed": list(followed.values())} if followed else {}),
     }
 
 

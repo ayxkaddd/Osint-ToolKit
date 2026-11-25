@@ -23,7 +23,7 @@ from xml.etree import ElementTree
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
 
-from services.entities import ENTITY_TYPES, NOISE_DOMAINS, NOISE_EMAIL_LOCALS, Entity, is_noise
+from services.entities import ENTITY_TYPES, NOISE_DOMAINS, NOISE_EMAIL_LOCALS, Entity, is_noise, make_entity
 from .constants import GRAPH_INLINE_MAX, GRAPH_NODE_BUDGET, GRAPH_VERSION, MANUAL_SERVICE, NOTE_IMAGE_NAME
 from .images import process_note_image
 from .storage import _GRAPH_CACHE, _SHARED_CACHE, _STORE_LOCK, _read_json, _write_json_atomic
@@ -327,7 +327,7 @@ class GraphMixin:
                         if key not in must and (info["found_by"] > 1 or info["shared"])),
                        key=lambda k: (-entities[k]["found_by"], -entities[k]["shared"], entities[k]["order"]))
 
-        sites = self._found_sites(investigation_id, [runs[run_id] for run_id, _ in paths.values()])
+        sites, chains = self._found_sites(investigation_id, [runs[run_id] for run_id, _ in paths.values()])
         images: dict[str, str] = {}
         group_of: dict[tuple[str, str], tuple[str, str]] = {}   # (lookup id, entity key) -> (group key, label)
         for lookup in lookups.values():
@@ -340,6 +340,26 @@ class GraphMixin:
                     images.setdefault(key, picture)
                 group_of[(lookup["id"], key)] = (f"category:{category}", f"Accounts · {category}") \
                     if category is not None else (f"type:{entity_type}", ENTITY_TYPES.get(entity_type, "Other"))
+
+        # A username search that followed clues: each followed username hangs under the account
+        # that named it, and the accounts found for it under it (account -> clue -> accounts)
+        under: dict[str, str] = {}               # identifier key -> the identifier it hangs under
+        for lookup in lookups.values():
+            for key in lookup["found"]:
+                run_id, _ = paths[(lookup["id"], key)]
+                parent = chains.get(run_id, {}).get(key)
+                if parent and parent != key and parent in entities and entities[key]["home"] == lookup["id"]:
+                    under[key] = parent
+        for key in list(under):                  # never a loop
+            seen, node = {key}, under.get(key)
+            while node is not None and key in under:
+                if node in seen:
+                    del under[key]
+                seen.add(node)
+                node = under.get(node)
+        # the chain is always drawn: a lead is never folded into a group
+        must |= set(under.values())
+        extra = [key for key in extra if key not in must]
 
         # Depth from the roots (what was typed, and lookups that searched nothing)
         children: dict[str, list[str]] = {}
@@ -375,13 +395,17 @@ class GraphMixin:
 
         return {"lookups": lookups, "entities": entities, "must": must, "extra": extra, "group_of": group_of,
                 "depth": depth, "children": children, "left_out": left_out, "runs": merged, "images": images,
-                "views": {}}
+                "under": under, "views": {}}
 
-    def _found_sites(self, investigation_id: UUID,
-                     runs: list[dict[str, Any]]) -> dict[str, dict[str, tuple[str, Optional[str]]]]:
-        """{run id: {path of a found site's url: (its category, the profile's picture)}}
-        for the username searches among ``runs``."""
+    def _found_sites(self, investigation_id: UUID, runs: list[dict[str, Any]]
+                     ) -> tuple[dict[str, dict[str, tuple[str, Optional[str]]]], dict[str, dict[str, tuple[str, str]]]]:
+        """For the username searches among ``runs``: {run id: {path of a found site's url:
+        (its category, the profile's picture)}}, and the clues they followed: {run id:
+        {identifier key: the key it hangs under}} - an account found for a followed username
+        under that username, the followed username under the account that named it. By key,
+        not path: an account's address is often first seen as a link in another profile."""
         found: dict[str, dict[str, tuple[str, Optional[str]]]] = {}
+        chains: dict[str, dict[str, str]] = {}
         by_result: dict[str, dict[str, dict[str, Any]]] = {}
         for run in runs:
             if run["service"] == "username":
@@ -398,9 +422,35 @@ class GraphMixin:
                     f"results[{i}].url": (str(site.get("category") or "other").strip()[:60] or "other",
                                           profile_picture(site))
                     for i, site in enumerate(sites) if isinstance(site, dict)}
-        return found
+                followed = {str(f.get("username") or "").casefold() for f in result.get("followed") or []
+                            if isinstance(f, dict)}
+                chain = chains[run["id"]] = {}
+                for site in sites if followed else []:
+                    account = make_entity("url", str(site.get("url") or "")) if isinstance(site, dict) else None
+                    if account is None:
+                        continue
+                    searched = str(site.get("searched") or "")
+                    if searched.casefold() in followed:
+                        name = make_entity("username", searched)
+                        if name is not None:
+                            chain.setdefault(account.key, name.key)
+                    for clue in site.get("clues") or []:
+                        value = str(clue.get("value") or "") if isinstance(clue, dict) else ""
+                        name = make_entity("username", value) if value.casefold() in followed else None
+                        if name is not None:
+                            chain.setdefault(name.key, account.key)
+        return found, chains
 
     # -- what is sent to the browser --
+
+    @staticmethod
+    def _chain_edge(model: dict[str, Any], source: str, key: str, lookup: Optional[dict[str, Any]]) -> dict[str, Any]:
+        """The link to a finding: from its lookup, or in a chain of clues from the account that
+        named a username ("clue", "found in profile") or from the username to its account."""
+        edge = _edge(source, f"e:{key}", "found", lookup)
+        if source.startswith("e:") and model["entities"][key]["entity"].get("type") == "username":
+            edge.update(kind="clue", label="found in profile")
+        return edge
 
     @staticmethod
     def _identifier_node(model: dict[str, Any], key: str) -> dict[str, Any]:
@@ -413,7 +463,7 @@ class GraphMixin:
             "first_seen": entity.get("first_seen"), "last_seen": entity.get("last_seen"),
             "found_by": info["found_by"], "searched_by": len(info["searched_in"]),
             "shared": info["shared"], "root": not info["found_in"], "image": model["images"].get(key),
-            "home": info["home"],
+            "home": None if key in model["under"] else info["home"],
         }
 
     @staticmethod
@@ -437,25 +487,34 @@ class GraphMixin:
 
     @staticmethod
     def _open_children(model: dict[str, Any], lookup: dict[str, Any], pinned: set,
-                       groups: dict[str, dict[str, Any]]) -> list[tuple[str, str]]:
+                       groups: dict[str, dict[str, Any]]) -> list[tuple[str, str, str]]:
         """What an opened lookup shows besides the identifiers shown anyway:
-        [(kind, id)] - each finding when there are few, else a group per type (or
-        site category), with a group of one shown as its identifier. Adds the groups to ``groups``."""
-        if len(lookup["found"]) <= GRAPH_INLINE_MAX:
-            return [("identifier", key) for key in lookup["found"] if key not in pinned]
-        found: dict[str, dict[str, Any]] = {}
-        for key in lookup["found"]:
-            if key not in pinned:
-                group_key, label = model["group_of"][(lookup["id"], key)]
-                found.setdefault(group_key, {"id": f"g:{lookup['id']}:{group_key}", "lookup": lookup["id"],
-                                             "key": group_key, "label": label, "members": []})["members"].append(key)
+        [(kind, id, the node it hangs under)] - each finding when there are few, else a group
+        per type (or site category), with a group of one shown as its identifier. Findings in a
+        chain of clues hang under their identifier, not the lookup. Adds the groups to ``groups``."""
+        under = model["under"]
         children = []
-        for group in found.values():
-            if len(group["members"]) > 1:
-                groups[group["id"]] = group
-                children.append(("group", group["id"]))
-            else:
-                children.append(("identifier", group["members"][0]))
+        for parent in [None, *dict.fromkeys(under[k] for k in lookup["found"] if k in under)]:
+            mine = [key for key in lookup["found"] if under.get(key) == parent]
+            source = lookup["id"] if parent is None else f"e:{parent}"
+            if len(mine) <= GRAPH_INLINE_MAX:
+                children += [("identifier", key, source) for key in mine if key not in pinned]
+                continue
+            found: dict[str, dict[str, Any]] = {}
+            for key in mine:
+                if key not in pinned:
+                    group_key, label = model["group_of"][(lookup["id"], key)]
+                    if parent is not None:
+                        group_key = f"{parent}|{group_key}"
+                    found.setdefault(group_key, {"id": f"g:{lookup['id']}:{group_key}", "lookup": lookup["id"],
+                                                 "key": group_key, "label": label, "parent": source,
+                                                 "members": []})["members"].append(key)
+            for group in found.values():
+                if len(group["members"]) > 1:
+                    groups[group["id"]] = group
+                    children.append(("group", group["id"], source))
+                else:
+                    children.append(("identifier", group["members"][0], source))
         return children
 
     def _graph_view(self, model: dict[str, Any], budget: int) -> dict[str, Any]:
@@ -495,13 +554,13 @@ class GraphMixin:
             nodes[f"e:{key}"] = self._identifier_node(model, key)
         for lid, lookup in lookups.items():
             shown = sum(1 for k in lookup["found"] if k in pinned)
-            for kind, child in opened[lid]:
+            for kind, child, source in opened[lid]:
                 if kind == "group":
                     nodes[child] = self._group_node(view["groups"][child])
-                    edges[f"{lid}>{child}"] = _edge(lid, child, "found", lookup)
+                    edges[f"{source}>{child}"] = _edge(source, child, "found", lookup)
                 else:
                     nodes[f"e:{child}"] = self._identifier_node(model, child)
-                    edges[f"{lid}>e:{child}"] = _edge(lid, f"e:{child}", "found", lookup)
+                    edges[f"{source}>e:{child}"] = self._chain_edge(model, source, child, lookup)
                     shown += 1
             node = self._lookup_node(model, lid, shown)
             node["open"] = bool(opened[lid]) or not node["hidden"]
@@ -510,7 +569,8 @@ class GraphMixin:
                 edges[f"e:{key}>{lid}"] = _edge(f"e:{key}", lid, "searched", lookup)
             for key in lookup["found"]:
                 if key in pinned:
-                    edges[f"{lid}>e:{key}"] = _edge(lid, f"e:{key}", "found", lookup)
+                    source = f"e:{model['under'][key]}" if key in model["under"] else lid
+                    edges[f"{source}>e:{key}"] = self._chain_edge(model, source, key, lookup)
             if lookup["parent"] and not lookup["searched"]:
                 edges[f"{lookup['parent']}>{lid}"] = _edge(lookup["parent"], lid, "followup", lookup)
 
@@ -680,34 +740,39 @@ class GraphMixin:
 
         nodes: list[dict[str, Any]] = []
         edges: list[dict[str, Any]] = []
+        under = model["under"]
         if node_id in lookups:
             lookup = lookups[node_id]
-            children = [("identifier", k) for k in lookup["found"] if k in pinned] \
+            children = [("identifier", k, f"e:{under[k]}" if k in under else node_id)
+                        for k in lookup["found"] if k in pinned] \
                 + self._open_children(model, lookup, pinned, {})
-            children += [("lookup", lid) for lid in model["children"].get(node_id, [])]
+            children += [("lookup", lid, node_id) for lid in model["children"].get(node_id, [])]
         elif node_id in groups:
             lookup = lookups[groups[node_id]["lookup"]]
-            children = [("identifier", k) for k in groups[node_id]["members"]]
+            children = [("identifier", k, node_id) for k in groups[node_id]["members"]]
         elif node_id.startswith("e:") and node_id[2:] in model["entities"]:
             info = model["entities"][node_id[2:]]
             lookup = None
-            children = [("lookup", lid) for lid in info["searched_in"]]
+            children = [("lookup", lid, node_id) for lid in info["searched_in"]]
         else:
             return None
 
         page = children[offset:offset + limit]
-        for kind, child in page:
+        for kind, child, source in page:
             if kind == "group":
                 nodes.append(self._group_node(groups[child]))
-                edges.append(_edge(node_id, child, "found", lookup))
+                edges.append(_edge(source, child, "found", lookup))
             elif kind == "lookup":
                 child_lookup = lookups[child]
                 shown = sum(1 for k in child_lookup["found"] if k in pinned)
                 nodes.append(self._lookup_node(model, child, shown))
-                edges.append(_edge(node_id, child, "followup" if node_id in lookups else "searched", child_lookup))
+                edges.append(_edge(source, child, "followup" if source in lookups else "searched", child_lookup))
+            elif source in groups:
+                nodes.append(self._identifier_node(model, child))
+                edges.append(_edge(source, f"e:{child}", "member", lookup))
             else:
                 nodes.append(self._identifier_node(model, child))
-                edges.append(_edge(node_id, f"e:{child}", "member" if node_id in groups else "found", lookup))
+                edges.append(self._chain_edge(model, source, child, lookup))
         rest = len(children) - offset - len(page)
         if rest > 0:
             more_id = f"more:{node_id}:{offset + len(page)}"

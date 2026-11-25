@@ -17,6 +17,9 @@ export const pivoting = {
     // (the one it hangs under in the tree, else any). Nothing for what was typed.
     parentResultFor(node) {
         let lookup = this.cy.getElementById(this.parentOf.get(node.id()) || '');
+        // in a chain of clues (account -> username it names -> its accounts): up to the lookup
+        for (let hops = 0; lookup.data('kind') === 'identifier' && hops < 20; hops++)
+            lookup = this.cy.getElementById(this.parentOf.get(lookup.id()) || '');
         if (lookup.data('kind') === 'group') lookup = this.cy.getElementById(lookup.data('lookup'));
         if (lookup.data('kind') !== 'lookup') lookup = node.incomers('node[kind = "lookup"]').first();
         return lookup.length ? lookup.data('result_id') : null;

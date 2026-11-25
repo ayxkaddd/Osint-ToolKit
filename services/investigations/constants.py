@@ -3,7 +3,7 @@ import re
 
 
 # Bump when the index entry format / summary logic changes
-INDEX_VERSION = 8
+INDEX_VERSION = 10
 
 TRIAGE_STATUSES = {None, "confirmed", "important", "false_positive"}
 
@@ -11,7 +11,7 @@ TRIAGE_STATUSES = {None, "confirmed", "important", "false_positive"}
 EVENTS_VERSION = 2
 
 # Bump when the graph model changes, so cached graphs are rebuilt
-GRAPH_VERSION = 3
+GRAPH_VERSION = 4
 
 # Nodes in a graph's first view; past it the deepest lookups stay closed
 GRAPH_NODE_BUDGET = 300

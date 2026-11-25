@@ -18,6 +18,12 @@ class OSINTSearch {
             found: 0,
             unchecked: 0,
         };
+        // Following the clues: the typed username, every clue by username (lowercase), which
+        // usernames the cards show, and the tree branches unfolded past their first rows
+        this.rootUsername = '';
+        this.clues = new Map();
+        this.searchedFilter = 'all';
+        this.treeOpen = new Set();
 
         this.initializeElements();
         this.bindEvents();
@@ -49,6 +55,11 @@ class OSINTSearch {
             overview: document.getElementById('usernameOverview'),
             mailboxes: document.getElementById('usernameMailboxes'),
             checkMailboxes: document.getElementById('checkMailboxes'),
+            followClues: document.getElementById('followClues'),
+            clueBar: document.getElementById('usernameClues'),
+            treeViewBtn: document.getElementById('treeViewBtn'),
+            treeResults: document.getElementById('treeResults'),
+            searchedFilter: document.getElementById('searchedFilter'),
         };
     }
 
@@ -84,6 +95,7 @@ class OSINTSearch {
             });
         }
         this.bindMailboxEvents();
+        this.bindClueEvents();
     }
 
     // ---------------------------------------------------------------------------
@@ -391,6 +403,7 @@ class OSINTSearch {
             this.updateStats();
         } else {
             this.resetResults();
+            this.rootUsername = username;
         }
         this.lastUsername = username;
         this.erroredSites = [];
@@ -406,7 +419,9 @@ class OSINTSearch {
         const mailboxes = !retrySites && this.elements.checkMailboxes && this.elements.checkMailboxes.checked;
         if (!retrySites) this.resetMailboxes(mailboxes);
         if (mailboxes) this.loadMailboxStatus().then(() => this.queueMailboxes());
-        const url = `/api/username/search/stream?username=${encodeURIComponent(username)}&include_duckduckgo=false&extract_profile=true${mailboxes ? '&check_mailboxes=true' : ''}${only}`;
+        // Following clues: not on a re-check either (the usernames were followed the first time)
+        const follow = !retrySites && this.elements.followClues?.checked;
+        const url = `/api/username/search/stream?username=${encodeURIComponent(username)}&include_duckduckgo=false&extract_profile=true${mailboxes ? '&check_mailboxes=true' : ''}${follow ? '&follow_clues=true' : ''}${only}`;
 
         this.eventSource = new EventSource(url);
 
@@ -437,12 +452,14 @@ class OSINTSearch {
                 break;
 
             case 'site_result':
+                this.countForClue(event.data);
                 if (event.data.status === 'found') {
                     this.handleFoundResult(event.data);
                 } else if (event.data.status === 'error' || event.data.status === 'rate_limited') {
                     // The site couldn't be checked: "not found" would be wrong
                     this.stats.unchecked++;
-                    if (event.data.site_name) {
+                    // only the typed username's sites are offered for a re-check
+                    if (event.data.site_name && this.isRoot(event.data.searched)) {
                         this.erroredSites.push(event.data.site_name);
                         this.errorReasons[event.data.site_name] = event.data.error_message || event.data.status;
                     }
@@ -465,6 +482,23 @@ class OSINTSearch {
                 this.handleProfileExtracted(event.data);
                 break;
 
+            case 'clue_found':
+                this.handleClue(event.data);
+                break;
+
+            case 'username_started':
+                this.updateClue(event.data.username, { status: 'searching', checked: 0, found: 0 });
+                this.addSearchedOption(event.data.username);
+                break;
+
+            case 'username_completed':
+                this.updateClue(event.data.username, {
+                    status: 'done',
+                    checked: event.data.checked,
+                    found: event.data.found,
+                });
+                break;
+
             case 'search_completed':
                 this.handleSearchCompleted(event.data);
                 break;
@@ -485,22 +519,32 @@ class OSINTSearch {
             profileData: data.profile_data,
             responseTime: data.response_time,
             checkedAt: data.checked_at,
-            // The account is under this name, also when the profile doesn't repeat it
-            searched: this.lastUsername,
+            // The account is under this name, also when the profile doesn't repeat it (a
+            // followed clue's accounts are under that username)
+            searched: data.searched || this.lastUsername,
+            clues: data.clues || [],
         };
 
+        const early = this.earlyProfiles?.get(`${result.siteName}\n${result.url}`);
+        if (early) {
+            this.earlyProfiles.delete(`${result.siteName}\n${result.url}`);
+            result.profileData = early.profile_data;
+            result.clues = early.clues || result.clues;
+        }
         this.results.push(result);
+        result.clues.forEach((clue) => this.noteClue(clue, result));
 
         if (!this.resultsByCategory[result.category]) {
             this.resultsByCategory[result.category] = [];
         }
         this.resultsByCategory[result.category].push(result);
 
-        this.addResultCard(result);
+        if (this.shows(result)) this.addResultCard(result);
         this.stats.found++;
         this.updateStats();
         this.updateCategoryStats();
         this.queueOverview();
+        this.queueTree();
     }
 
     // Who the accounts point to (photos, names, handles, places, when it was active), in the
@@ -661,6 +705,7 @@ class OSINTSearch {
                         ${faviconUrl ? `<img src="${escapeAttr(faviconUrl)}" alt="" loading="lazy" class="username-profile-favicon" data-img-error="removeImage">` : ''}
                         <span>${escapeHtml(result.siteName)}</span>
                         ${result.category ? `<span class="username-profile-cat">${escapeHtml(result.category)}</span>` : ''}
+                        ${this.viaTagHtml(result)}
                     </div>
                     ${
                         info.fullName
@@ -677,6 +722,8 @@ class OSINTSearch {
                     }
                 </div>
             </div>
+
+            ${this.clueLinesHtml(result)}
 
             ${info.bio ? `<p class="username-card-bio" title="${escapeAttr(String(info.bio))}">${pivotInText(String(info.bio))}</p>` : ''}
 
@@ -845,11 +892,21 @@ class OSINTSearch {
     handleProfileExtracted(data) {
         const result = this.results.find((item) => item.url === data.url && item.siteName === data.site_name);
 
-        if (!result) return;
+        if (!result) {
+            // the profile came before its site's result (both go out as soon as they are ready)
+            this.earlyProfiles = this.earlyProfiles || new Map();
+            this.earlyProfiles.set(`${data.site_name}\n${data.url}`, data);
+            return;
+        }
 
         result.profileData = data.profile_data;
-        this.replaceResultCard(result);
+        if (data.clues) {
+            result.clues = data.clues;
+            result.clues.forEach((clue) => this.noteClue(clue, result));
+        }
+        if (this.shows(result)) this.replaceResultCard(result);
         this.queueOverview();
+        this.queueTree();
     }
 
     copyToClipboard(text, button) {
@@ -933,6 +990,7 @@ class OSINTSearch {
 
     filterByCategory(category) {
         this.activeCategory = category;
+        if (this.viewMode === 'tree') this.queueTree();
         const sections = this.elements.groupedResults.querySelectorAll('[data-category]');
 
         sections.forEach((section) => {
@@ -948,9 +1006,11 @@ class OSINTSearch {
         this.viewMode = viewMode;
         this.elements.flatViewBtn.classList.toggle('active', viewMode === 'flat');
         this.elements.groupedViewBtn.classList.toggle('active', viewMode === 'grouped');
-        this.elements.categoryFilter.classList.toggle('hidden', viewMode !== 'grouped');
+        this.elements.treeViewBtn?.classList.toggle('active', viewMode === 'tree');
+        this.elements.categoryFilter.classList.toggle('hidden', viewMode === 'flat');
         this.elements.resultsMasonry.classList.toggle('hidden', viewMode !== 'flat');
         this.elements.groupedResults.classList.toggle('hidden', viewMode !== 'grouped');
+        this.elements.treeResults?.classList.toggle('hidden', viewMode !== 'tree');
         this.renderResults();
     }
 
@@ -972,22 +1032,28 @@ class OSINTSearch {
         masonryLayout(this.elements.resultsMasonry);
         this.elements.groupedResults.innerHTML = '';
 
-        if (this.viewMode === 'grouped') {
+        if (this.viewMode === 'tree') {
+            this.renderTree();
+        } else if (this.viewMode === 'grouped') {
             Object.keys(this.resultsByCategory)
                 .sort()
                 .forEach((category) => {
+                    const shown = this.resultsByCategory[category].filter((result) => this.shows(result));
+                    if (!shown.length) return;
                     const section = this.createGroupedCategory(category);
                     const grid = section.querySelector('.username-category-results');
-                    this.resultsByCategory[category].forEach((result) => {
+                    shown.forEach((result) => {
                         masonryAppend(grid, createCard(result));
                     });
                     this.elements.groupedResults.appendChild(section);
                 });
             this.filterByCategory(this.activeCategory);
         } else {
-            this.results.forEach((result) => {
-                masonryAppend(this.elements.resultsMasonry, createCard(result));
-            });
+            this.results
+                .filter((result) => this.shows(result))
+                .forEach((result) => {
+                    masonryAppend(this.elements.resultsMasonry, createCard(result));
+                });
         }
     }
 
@@ -1868,6 +1934,15 @@ class OSINTSearch {
         this.elements.categoryStats.classList.add('hidden');
         this.elements.filterSection.classList.add('hidden');
         this.elements.categoryFilter.classList.add('hidden');
+        this.elements.treeViewBtn?.classList.remove('active');
+        this.elements.treeResults?.classList.add('hidden');
+        if (this.elements.treeResults) this.elements.treeResults.innerHTML = '';
+        this.clues = new Map();
+        this.earlyProfiles = new Map();
+        this.treeOpen = new Set();
+        this.searchedFilter = 'all';
+        this.updateSearchedFilter();
+        this.renderClues();
         if (this.elements.overview) this.elements.overview.innerHTML = '';
         this.overviewHtml = '';
         document.getElementById('usernameRetryBox')?.remove(); // belongs to the previous search
@@ -1879,8 +1954,331 @@ class OSINTSearch {
         this.elements.progressPercent.textContent = '0%';
     }
 
+    // ---------------------------------------------------------------------------
+    // Following the clues: a found profile that names another username or links to an
+    // account elsewhere leads to that username. The server follows the strong ones (up to
+    // its limits) in the same search; the rest are suggested here with a Search button.
+    // ---------------------------------------------------------------------------
+
+    bindClueEvents() {
+        const box = this.elements.followClues;
+        if (box) {
+            try {
+                box.checked = localStorage.getItem('username.followClues') !== '0';
+            } catch (error) {
+                // no storage (private window): following stays on
+            }
+            box.addEventListener('change', () => {
+                try {
+                    localStorage.setItem('username.followClues', box.checked ? '1' : '0');
+                } catch (error) {
+                    // not remembered, still used for this search
+                }
+            });
+        }
+        this.elements.treeViewBtn?.addEventListener('click', () => this.switchView('tree'));
+        this.elements.searchedFilter?.addEventListener('change', (event) => {
+            this.searchedFilter = event.target.value;
+            this.renderResults();
+        });
+        const onClick = (event) => {
+            const search = event.target.closest('[data-clue-search]');
+            if (search) this.searchClue(search.dataset.clueSearch);
+            const more = event.target.closest('[data-tree-more]');
+            if (more) {
+                this.treeOpen.add(more.dataset.treeMore);
+                this.renderTree();
+            }
+        };
+        this.elements.clueBar?.addEventListener('click', onClick);
+        this.elements.treeResults?.addEventListener('click', onClick);
+        this.elements.resultsContainer?.addEventListener('click', (event) => {
+            if (!this.elements.treeResults?.contains(event.target)) onClick(event);
+        });
+    }
+
+    isRoot(name) {
+        return !name || String(name).toLowerCase() === String(this.rootUsername || this.lastUsername).toLowerCase();
+    }
+
+    // Whether a card is shown with the "Username" filter
+    shows(result) {
+        return this.searchedFilter === 'all' || String(result.searched).toLowerCase() === this.searchedFilter;
+    }
+
+    // A clue, from an event or a saved result, kept once per username: where it was first
+    // seen, or the account it was followed from
+    noteClue(clue, from) {
+        if (!clue?.value || this.isRoot(clue.value)) return;
+        const key = clue.value.toLowerCase();
+        const entry = this.clues.get(key) || { value: clue.value, status: 'suggested', checked: 0, found: 0 };
+        const followed = clue.action === 'follow';
+        if (!entry.from || (followed && entry.action !== 'follow')) {
+            entry.from = { searched: from.searched, siteName: from.siteName, url: from.url };
+            Object.assign(entry, { kind: clue.kind, link: clue.link, field: clue.field, site: clue.site });
+        }
+        if (clue.action && entry.action !== 'follow') {
+            entry.action = clue.action;
+            entry.reason = clue.reason;
+        }
+        if (followed && entry.status === 'suggested') entry.status = 'queued';
+        if (clue.action === 'searched') entry.status = 'searched';
+        this.clues.set(key, entry);
+        this.queueClues();
+    }
+
+    updateClue(value, changes) {
+        const entry = this.clues.get(String(value).toLowerCase());
+        if (!entry) return;
+        Object.assign(entry, changes);
+        this.queueClues();
+    }
+
+    handleClue(data) {
+        const clue = { ...data.clue, action: data.action, reason: data.reason };
+        const result = this.results.find((item) => item.url === data.url && item.siteName === data.site_name);
+        // the card shows what was done with each of its clues
+        if (result) {
+            result.clues = (result.clues || []).map((c) =>
+                String(c.value).toLowerCase() === String(clue.value).toLowerCase() ? { ...c, ...clue } : c
+            );
+            if (!result.clues.some((c) => String(c.value).toLowerCase() === String(clue.value).toLowerCase()))
+                result.clues.push(clue);
+            if (this.shows(result)) this.replaceResultCard(result);
+        }
+        this.noteClue(clue, { searched: data.searched, siteName: data.site_name, url: data.url });
+        this.queueTree();
+    }
+
+    // A followed username's sites, as they answer
+    countForClue(data) {
+        if (this.isRoot(data.searched)) return;
+        const entry = this.clues.get(String(data.searched).toLowerCase());
+        if (!entry) return;
+        entry.checked = (entry.checked || 0) + 1;
+        if (data.status === 'found') entry.found = (entry.found || 0) + 1;
+        this.queueClues();
+    }
+
+    addSearchedOption(name) {
+        this.searchedNames = this.searchedNames || [];
+        if (!this.searchedNames.some((n) => n.toLowerCase() === String(name).toLowerCase()))
+            this.searchedNames.push(name);
+        this.updateSearchedFilter();
+    }
+
+    updateSearchedFilter() {
+        const select = this.elements.searchedFilter;
+        if (!select) return;
+        const names = this.clues.size ? this.searchedNames || [] : [];
+        if (!this.clues.size) this.searchedNames = [];
+        select.classList.toggle('hidden', !names.length);
+        const root = this.rootUsername || this.lastUsername;
+        select.innerHTML = [
+            ['all', 'All usernames'],
+            [String(root).toLowerCase(), root],
+            ...names.map((n) => [n.toLowerCase(), n]),
+        ]
+            .map(
+                ([value, label]) =>
+                    `<option value="${escapeAttr(value)}" ${this.searchedFilter === value ? 'selected' : ''}>${escapeHtml(value === 'all' ? label : '@' + label)}</option>`
+            )
+            .join('');
+    }
+
+    // A suggested username, searched on its own (saved to the investigation like any lookup;
+    // the graph hangs it under the account that named it)
+    async searchClue(value) {
+        const job = await startJob('username', 'username', value);
+        if (job) this.updateClue(value, { status: 'job', jobId: job.id });
+    }
+
+    queueClues() {
+        if (this.cluesQueued) return;
+        this.cluesQueued = true;
+        requestAnimationFrame(() => {
+            this.cluesQueued = false;
+            this.renderClues();
+        });
+    }
+
+    clueStateHtml(entry) {
+        const count = (n) => `${n} account${n === 1 ? '' : 's'}`;
+        switch (entry.status) {
+            case 'searching':
+                return `<span class="username-clue-state is-running"><i class="fas fa-spinner fa-spin"></i>${escapeHtml(entry.checked || 0)} checked${entry.found ? ` · ${escapeHtml(count(entry.found))}` : ''}</span>`;
+            case 'queued':
+                return '<span class="username-clue-state">next</span>';
+            case 'done':
+                return `<span class="username-clue-state is-done">${escapeHtml(count(entry.found || 0))}</span>`;
+            case 'stopped':
+                return `<span class="username-clue-state">stopped${entry.found ? ` · ${escapeHtml(count(entry.found))}` : ''}</span>`;
+            case 'job':
+                return '<span class="username-clue-state is-running">searching in the background</span>';
+            case 'searched':
+                return '<span class="username-clue-state">already searched</span>';
+            default:
+                return `<button type="button" class="username-clue-search" data-clue-search="${escapeAttr(entry.value)}" title="${escapeAttr(entry.reason ? `Not followed: ${entry.reason}` : 'Search this username too')}"><i class="fas fa-search"></i>Search</button>`;
+        }
+    }
+
+    whereFound(entry) {
+        if (!entry.from?.siteName) return '';
+        const how = entry.kind === 'link' ? 'link on' : `${String(entry.field || 'field').replace(/_/g, ' ')} on`;
+        return `${how} ${entry.from.siteName}${this.isRoot(entry.from.searched) ? '' : ` (@${entry.from.searched})`}`;
+    }
+
+    // The bar under the counts: every username a profile led to, followed ones first
+    renderClues() {
+        const bar = this.elements.clueBar;
+        if (!bar) return;
+        const entries = [...this.clues.values()].filter((entry) => entry.status !== 'searched');
+        bar.classList.toggle('hidden', !entries.length);
+        if (!entries.length) {
+            bar.innerHTML = '';
+            return;
+        }
+        const followed = entries.filter((entry) => entry.action === 'follow');
+        const rank = (entry) => (entry.action === 'follow' ? 0 : entry.status === 'job' ? 1 : 2);
+        entries.sort((a, b) => rank(a) - rank(b));
+        bar.innerHTML = `
+            <div class="username-clues-head">
+                <span><i class="fas fa-route"></i>Clues</span>
+                <span class="username-clues-count">${followed.length} followed · ${entries.length - followed.length} suggested</span>
+            </div>
+            <div class="username-clues-list">${entries
+                .map(
+                    (entry) => `
+                <div class="username-clue${entry.action === 'follow' ? ' is-followed' : ''}">
+                    ${pivotText('username', entry.value, '@' + entry.value)}
+                    <span class="username-clue-from" title="${escapeAttr(entry.link || entry.field || '')}">${escapeHtml(this.whereFound(entry))}</span>
+                    ${this.clueStateHtml(entry)}
+                </div>`
+                )
+                .join('')}</div>`;
+        if (this.viewMode === 'tree') this.queueTree();
+    }
+
+    viaTagHtml(result) {
+        if (this.isRoot(result.searched)) return '';
+        return `<span class="username-via" title="Found by following a clue">via @${escapeHtml(result.searched)}</span>`;
+    }
+
+    shortLink(link) {
+        return String(link)
+            .replace(/^https?:\/\/(www\.)?/i, '')
+            .replace(/\/$/, '');
+    }
+
+    // Under the handle: each clue in this profile, the link as the profile had it (on an
+    // icon), the username it leads to as a chip, and what the search did with it
+    clueLinesHtml(result, compact = false) {
+        const clues = (result.clues || []).filter((clue) => clue?.value);
+        if (!clues.length) return '';
+        return `<div class="username-clue-lines">${clues
+            .map((clue) => {
+                const entry = this.clues.get(String(clue.value).toLowerCase()) || clue;
+                const link = clue.link ? safeUrl(/^https?:/i.test(clue.link) ? clue.link : `https://${clue.link}`) : '';
+                // what the search did with it (the card may be drawn before the search decided)
+                const action = clue.action || entry.action;
+                const state = action === 'follow' ? 'followed' : action === 'searched' ? 'searched' : 'suggested';
+                return `<div class="username-clue-line is-${state}">
+                    ${
+                        link
+                            ? `<a href="${escapeAttr(link)}" target="_blank" rel="noopener noreferrer" class="username-clue-link" title="${escapeAttr(clue.link)}"><i class="fas fa-link"></i>${escapeHtml(this.shortLink(clue.link))}</a>`
+                            : `<span class="username-clue-link" title="${escapeAttr(clue.field || '')}"><i class="fas fa-at"></i>${escapeHtml(String(clue.field || '').replace(/_/g, ' '))}</span>`
+                    }
+                    <span class="username-clue-arrow">→</span>
+                    ${pivotText('username', clue.value, '@' + clue.value)}
+                    ${compact ? '' : state === 'suggested' ? this.clueStateHtml({ ...entry, value: clue.value }) : `<span class="username-clue-state${state === 'followed' ? ' is-done' : ''}">${state === 'followed' ? 'followed' : 'already searched'}</span>`}
+                </div>`;
+            })
+            .join('')}</div>`;
+    }
+
+    // ---------------------------------------------------------------------------
+    // Tree: the typed username, its accounts, and under the account that named it each
+    // username followed from there, with its own accounts (solid: same username; dashed:
+    // found in a profile)
+    // ---------------------------------------------------------------------------
+
+    queueTree() {
+        if (this.viewMode !== 'tree' || this.treeQueued) return;
+        this.treeQueued = true;
+        requestAnimationFrame(() => {
+            this.treeQueued = false;
+            this.renderTree();
+        });
+    }
+
+    renderTree() {
+        const container = this.elements.treeResults;
+        if (!container) return;
+        const root = this.searchedFilter !== 'all' ? this.searchedFilter : this.rootUsername || this.lastUsername;
+        if (!root) {
+            container.innerHTML = '';
+            return;
+        }
+        const entry = this.clues.get(String(root).toLowerCase());
+        container.innerHTML = `
+            <div class="username-tree">${this.treeBranch(entry?.value || root, new Set())}</div>
+            <div class="username-tree-legend">
+                <span><i class="username-tree-key"></i>same username</span>
+                <span><i class="username-tree-key is-clue"></i>found in a profile</span>
+            </div>`;
+        if (window.lucide) lucide.createIcons();
+    }
+
+    treeBranch(name, seen) {
+        const key = String(name).toLowerCase();
+        if (seen.has(key)) return '';
+        seen.add(key);
+        const entry = this.clues.get(key);
+        const leads = (result) =>
+            [...this.clues.values()].some(
+                (c) => c.action === 'follow' && c.from?.url === result.url && c.from?.siteName === result.siteName
+            );
+        const accounts = this.results
+            .filter((r) => String(r.searched).toLowerCase() === key)
+            .filter((r) => this.activeCategory === 'all' || r.category === this.activeCategory)
+            // the accounts that lead somewhere first: they are never folded away
+            .sort((a, b) => leads(b) - leads(a));
+        const shown = this.treeOpen.has(key) ? accounts : accounts.slice(0, 12);
+        const rest = accounts.length - shown.length;
+        const state = entry ? this.clueStateHtml(entry) : '';
+        return `
+            <div class="username-tree-name">${pivotText('username', name, name)}${entry ? state : `<span class="username-clue-state">${escapeHtml(accounts.length)} account${accounts.length === 1 ? '' : 's'}</span>`}</div>
+            <ul class="username-tree-accounts">
+                ${shown.map((result) => `<li>${this.treeAccount(result, seen)}</li>`).join('')}
+                ${rest > 0 ? `<li><button type="button" class="username-tree-more" data-tree-more="${escapeAttr(key)}">+${escapeHtml(rest)} more</button></li>` : ''}
+                ${!accounts.length ? `<li class="username-tree-empty">${entry?.status === 'searching' || entry?.status === 'queued' ? 'searching…' : 'no accounts found'}</li>` : ''}
+            </ul>`;
+    }
+
+    treeAccount(result, seen) {
+        const info = this.extractKeyInfo(result.profileData);
+        const domain = this.getDomainFromUrl(result.url);
+        const faviconUrl = domain ? this.getFaviconUrl(domain) : '';
+        const url = safeUrl(result.url);
+        const followed = [...this.clues.values()].filter(
+            (c) => c.action === 'follow' && c.from?.url === result.url && c.from?.siteName === result.siteName
+        );
+        return `
+            <div class="username-tree-account">
+                ${faviconUrl ? `<img src="${escapeAttr(faviconUrl)}" alt="" loading="lazy" data-img-error="removeImage">` : '<i class="fas fa-globe"></i>'}
+                <strong>${escapeHtml(result.siteName)}</strong>
+                <span class="username-tree-handle">${pivotText('username', info.username || result.searched, '@' + (info.username || result.searched))}</span>
+                ${url ? `<a href="${escapeAttr(url)}" target="_blank" rel="noopener noreferrer" title="${escapeAttr(result.url)}"><i class="fas fa-external-link-alt"></i></a>` : ''}
+            </div>
+            ${this.clueLinesHtml(result, true)}
+            ${followed.map((clue) => `<div class="username-tree-clue">${this.treeBranch(clue.value, seen)}</div>`).join('')}`;
+    }
+
     handleSearchCompleted(data) {
         const wasRetry = this.retrying;
+        (data.followed || []).forEach((item) =>
+            this.updateClue(item.username, { status: 'done', found: item.found, checked: item.checked })
+        );
         this.stopSearch();
         const errored = [...new Set(this.erroredSites || [])];
         if (wasRetry) {
@@ -1911,7 +2309,7 @@ class OSINTSearch {
             <button type="button" class="px-3 py-1.5 rounded-lg bg-yellow-700/60 hover:bg-yellow-600/70 text-white shrink-0">Retry ${errored.length} site${errored.length === 1 ? '' : 's'}</button>`;
         box.querySelector('button').addEventListener('click', () => this.startSearch(errored));
         // Below the search box and its options, above the counts
-        const anchor = document.getElementById('mailboxOption') || this.elements.stopBtn.parentElement;
+        const anchor = document.getElementById('searchOptions') || this.elements.stopBtn.parentElement;
         anchor.insertAdjacentElement('afterend', box);
     }
 
@@ -1924,6 +2322,11 @@ class OSINTSearch {
         this.searchActive = false;
         this.retrying = false;
         this.finishMailboxes();
+        // usernames that were still to be searched when the search stopped
+        this.clues.forEach((clue) => {
+            if (clue.status === 'searching' || clue.status === 'queued') clue.status = 'stopped';
+        });
+        this.renderClues();
         this.elements.searchBtn.disabled = false;
         this.elements.searchBtn.innerHTML = '<i class="fas fa-search mr-2"></i>Search Username';
         this.elements.stopBtn.classList.add('hidden');
@@ -1940,6 +2343,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const search = window.osintSearch;
         search.resetResults();
         search.lastUsername = data.username || '';
+        search.rootUsername = data.username || '';
         // Email providers checked with this search: found addresses, and the others by domain
         if (data.mailboxes || data.mailbox_checks) {
             search.resetMailboxes(true);
@@ -1969,7 +2373,22 @@ document.addEventListener('DOMContentLoaded', () => {
         const input = document.getElementById('usernameSearchInput');
         if (data.username && input) input.value = data.username;
 
-        // Load results
+        // The usernames its clues led to, then the accounts (with their clues)
+        (data.followed || []).forEach((item) => {
+            const via = item.via || {};
+            search.noteClue(
+                {
+                    value: item.username,
+                    kind: via.link ? 'link' : 'username',
+                    link: via.link,
+                    field: via.field,
+                    action: 'follow',
+                },
+                { searched: via.username, siteName: via.site_name, url: via.url }
+            );
+            search.updateClue(item.username, { status: 'done', found: item.found, checked: item.checked });
+            search.addSearchedOption(item.username);
+        });
         if (data.results && Array.isArray(data.results)) {
             data.results.forEach((result) => {
                 if (result.status === 'found') {

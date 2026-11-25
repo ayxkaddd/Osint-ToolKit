@@ -18,6 +18,7 @@ import uuid
 
 from services.mailbox_service import FOUND as MAILBOX_FOUND, PROVIDERS as MAILBOX_PROVIDERS
 from services.mailbox_service import check_mailboxes as run_mailbox_checks
+from services.username_clues import SiteLinks, find_clues
 from services.proxy_pool import pool as proxy_pool
 from utils.browser_client import BrowserClient, BrowserResponse, RequestError, RequestTimeout
 from utils.proxy_transport import proxied_get
@@ -26,6 +27,9 @@ from utils.errors import fail
 # Through proxies each check takes several times longer, but the requests come from
 # many addresses (one or two per site), so far more can run at once without
 # hammering anything; direct checks keep the lower limit for this server's own IP.
+# following clues: steps from the typed username, and how many more usernames
+FOLLOW_MAX_DEPTH = 2
+FOLLOW_MAX_USERNAMES = 5
 PROXIED_MAX_CONCURRENT = 150
 # A proxy gets this long to answer a check before another proxy, then a direct
 # connection, is tried - two attempts plus the direct one fit in timeout_seconds.
@@ -140,6 +144,12 @@ def _account_object(data, username: str):
 
 def _profile_from_page(text: str, content_type: str, username: str) -> Optional[dict]:
     """Profile data from a JSON answer or from the metadata a profile page carries."""
+    return _page_profile(text, content_type, username)[0]
+
+
+def _page_profile(text: str, content_type: str, username: str) -> tuple[Optional[dict], Optional[dict]]:
+    """(tidy profile, the fields as found) from a JSON answer or the page's metadata; the
+    fields as found keep their lists, for the clues (services/username_clues.py)."""
     stripped = text.lstrip()
     if "json" in (content_type or "").lower() or stripped[:1] in ("{", "["):
         try:
@@ -148,7 +158,7 @@ def _profile_from_page(text: str, content_type: str, username: str) -> Optional[
             data = None
         if data is not None:
             account = _account_object(data, username)
-            return _tidy_profile(account) if isinstance(account, dict) else None
+            return (_tidy_profile(account), account) if isinstance(account, dict) else (None, None)
 
     soup = BeautifulSoup(text[:MAX_BODY_BYTES], "html.parser")
     # JSON-LD: schema.org Person / ProfilePage, the page's own description of the account
@@ -160,13 +170,19 @@ def _profile_from_page(text: str, content_type: str, username: str) -> Optional[
         for item in data if isinstance(data, list) else [data]:
             if not isinstance(item, dict):
                 continue
-            person = item.get("mainEntity") if item.get("@type") == "ProfilePage" else item
-            if isinstance(person, dict) and person.get("@type") in ("Person", "Organization"):
+            profile_page = item.get("@type") == "ProfilePage"
+            person = item.get("mainEntity") if profile_page else item
+            kinds = person.get("@type") if isinstance(person, dict) else None
+            kinds = kinds if isinstance(kinds, list) else [kinds]
+            # the account: a Person, or an organisation the page says it is the profile of. Any
+            # other Organization (or WebSite) on a profile page is the site that publishes it,
+            # with the site's own name and accounts (x.com/CastingCallClub), not the user's
+            if "Person" in kinds or ("Organization" in kinds and profile_page):
                 fields = {k: v for k, v in person.items() if not k.startswith("@")}
                 profile = _tidy_profile(fields)
                 if profile:
                     profile["extracted_from"] = "page profile data (JSON-LD)"
-                    return profile
+                    return profile, fields
     # OpenGraph / profile meta tags
     meta = {}
     for tag in soup.find_all("meta")[:200]:
@@ -178,8 +194,8 @@ def _profile_from_page(text: str, content_type: str, username: str) -> Optional[
         profile = _tidy_profile(meta)
         if profile:
             profile["extracted_from"] = "page metadata (OpenGraph)"
-            return profile
-    return None
+            return profile, meta
+    return None, None
 
 
 class CheckStatus(Enum):
@@ -205,6 +221,9 @@ class EventType(Enum):
     MAILBOX_STARTED = "mailbox_started"
     MAILBOX_RESULT = "mailbox_result"
     MAILBOX_COMPLETED = "mailbox_completed"
+    CLUE_FOUND = "clue_found"                  # a profile leads to another username
+    USERNAME_STARTED = "username_started"      # following one: its search begins
+    USERNAME_COMPLETED = "username_completed"
 
 
 def serialize_enum_dict(data: dict) -> dict:
@@ -648,18 +667,29 @@ class StreamingUsernameSearchService:
         """Profile data from a found page, without blocking the event loop: socid_extractor
         first, then the account's object in a JSON answer, then the profile the page
         describes about itself (JSON-LD, OpenGraph). Kept to readable, plain fields."""
+        return (await self.extract_profile(text, url, content_type, username))[0]
+
+    async def extract_profile(self, text: str, url: str, content_type: str = "",
+                              username: str = "") -> tuple[Optional[dict], Optional[dict]]:
+        """(profile data as extract_profile_data gives it, the fields as found)."""
         if extract:
             try:
                 data = await asyncio.to_thread(extract, text)
                 if data:
-                    return _tidy_profile(data)
+                    return _tidy_profile(data), data
             except Exception as e:
                 logger.debug('socid_extractor failed for %s: %s', url, e)
         try:
-            return await asyncio.to_thread(_profile_from_page, text, content_type, username)
+            return await asyncio.to_thread(_page_profile, text, content_type, username)
         except Exception as e:
             logger.debug('profile parsing failed for %s: %s', url, e)
-            return None
+            return None, None
+
+    def site_links(self, sites: list[dict]) -> SiteLinks:
+        """Profile links -> (site, username) for this site list (built once per list)."""
+        if getattr(self, "_site_links_for", None) is not sites:
+            self._site_links, self._site_links_for = SiteLinks(sites), sites
+        return self._site_links
 
     DDG_URL = "https://duckduckgo.com/html/?q={query}"
 
@@ -761,25 +791,29 @@ class StreamingUsernameSearchService:
 
     async def _process_site(self, client: BrowserClient, site: dict, username: str,
                             extract_profile: bool, queue_event,
-                            semaphore: Optional[asyncio.Semaphore] = None) -> None:
-        """Check one site and queue its events (checking, result, extracted profile)."""
+                            semaphore: Optional[asyncio.Semaphore] = None,
+                            links: Optional[SiteLinks] = None) -> None:
+        """Check one site and queue its events (checking, result, extracted profile, with
+        the profile's clues when ``links`` is given). Each says which username it was for."""
         await queue_event(StreamEvent(
             event_type=EventType.SITE_CHECKING,
             data={"site_name": site["name"], "category": site.get("cat", "unknown"),
-                  "url": site["uri_check"].replace(ACCOUNT, username)}))
+                  "url": site["uri_check"].replace(ACCOUNT, username), "searched": username}))
         outcome = await self.check_site_with_retry(client, site, username, extract_profile, semaphore)
         result = outcome.result
-        await queue_event(StreamEvent(event_type=EventType.SITE_RESULT, data=result.to_dict()))
+        await queue_event(StreamEvent(event_type=EventType.SITE_RESULT, data={**result.to_dict(), "searched": username}))
 
         if extract_profile and result.status == CheckStatus.FOUND and outcome.response_text:
-            profile_data = await self.extract_profile_data(outcome.response_text, result.url,
+            profile_data, raw = await self.extract_profile(outcome.response_text, result.url,
                                                            outcome.content_type, username)
             if profile_data:
                 result.profile_data = profile_data
+                clues = find_clues(raw, result.site_name, username, links) if links else []
                 await queue_event(StreamEvent(
                     event_type=EventType.PROFILE_EXTRACTED,
                     data={"site_name": result.site_name, "category": result.category, "url": result.url,
-                          "profile_data": profile_data, "checked_at": result.checked_at}))
+                          "profile_data": profile_data, "checked_at": result.checked_at, "searched": username,
+                          **({"clues": [c.to_dict() for c in clues]} if clues else {})}))
 
     async def stream_mailboxes(self, username: str, queue_event) -> None:
         """Whether the username is a mailbox at the email providers, as each one answers."""
@@ -802,21 +836,33 @@ class StreamingUsernameSearchService:
                            categories: Optional[list[str]] = None,
                            priority_sites: Optional[list[str]] = None,
                            only_sites: Optional[list[str]] = None,
-                           check_mailboxes: bool = False) -> AsyncGenerator[StreamEvent, None]:
+                           check_mailboxes: bool = False,
+                           follow_clues: bool = False,
+                           max_depth: int = FOLLOW_MAX_DEPTH,
+                           max_followed: int = FOLLOW_MAX_USERNAMES) -> AsyncGenerator[StreamEvent, None]:
         """Stream search results as they become available. ``check_mailboxes``: also ask the
-        email providers whether the username is a mailbox there (services/mailbox_service.py)."""
+        email providers whether the username is a mailbox there (services/mailbox_service.py).
+
+        ``follow_clues`` (needs ``extract_profile``): a found profile that links to an account
+        elsewhere or names its owner's username on a service leads to that username, which is
+        then searched too, one after another: at most ``max_depth`` steps from the typed
+        username and ``max_followed`` more usernames. Weak clues, and strong ones over the
+        limits, are only reported (``clue_found`` with action "suggest")."""
         search_id = str(uuid.uuid4())
         start_time = time.time()
         metadata = await asyncio.to_thread(self.get_metadata)
         sites = self._select_sites(metadata.get("sites", []), categories, only_sites, priority_sites)
+        links = self.site_links(metadata.get("sites", [])) if extract_profile else None
+        follow_clues = follow_clues and extract_profile
 
         yield StreamEvent(
             event_type=EventType.SEARCH_STARTED,
             data={"search_id": search_id, "username": username, "total_sites": len(sites),
                   "categories": categories, "include_duckduckgo": include_duckduckgo,
-                  "extract_profile": extract_profile})
+                  "extract_profile": extract_profile, "follow_clues": follow_clues})
 
         stats = {"checked": 0, "found": 0, "not_found": 0, "errors": 0}
+        total = len(sites)
         result_queue: asyncio.PriorityQueue = asyncio.PriorityQueue()
         sequence = 0
 
@@ -825,38 +871,107 @@ class StreamingUsernameSearchService:
             sequence += 1
             await result_queue.put((self._event_priority(event), sequence, event))
 
+        # following: who is searched next, what's been searched, and where each clue was seen
+        pending: list[tuple[str, int, Optional[dict]]] = []
+        searched = {username.casefold(): 0}
+        followed: list[dict] = []
+        checked_on: dict[str, set] = {}          # username -> sites already checked through a link
+        seen_on: dict[str, set] = {}             # weak clue -> the sites whose profiles name it
+        per_name: dict[str, dict] = {}           # username -> {found, checked}
+
+        def decide(clue: dict, depth: int) -> tuple[str, str]:
+            key = clue["value"].casefold()
+            if key in searched:
+                return "searched", "already searched"
+            if clue.get("strength") != "strong":
+                return "suggest", "named on one profile only"
+            if not follow_clues:
+                return "suggest", "following clues is off"
+            if depth + 1 > max_depth:
+                return "suggest", f"{max_depth} steps from {username}"
+            if len(followed) >= max_followed:
+                return "suggest", f"{max_followed} usernames followed already"
+            return "follow", ""
+
         proxied = proxy_pool.enabled()
         semaphore = self.proxy_semaphore if proxied else self.semaphore
         width = PROXIED_MAX_CONCURRENT if proxied else self.max_concurrent_requests
         async with BrowserClient(timeout=self.timeout_seconds, connect_timeout=self.connect_timeout_seconds,
                                  max_clients=width, verify=False, max_body=MAX_BODY_BYTES,
                                  attempt_timeout=PROXY_ATTEMPT_TIMEOUT) as client:
-            tasks = [asyncio.create_task(self._process_site(client, site, username, extract_profile,
-                                                            queue_event, semaphore))
-                     for site in sites]
-            if include_duckduckgo:
-                tasks.append(asyncio.create_task(self.stream_duckduckgo_search(client, username, queue_event)))
-            if check_mailboxes:
-                tasks.append(asyncio.create_task(self.stream_mailboxes(username, queue_event)))
+            name, depth, via = username, 0, None
+            while True:
+                if depth:
+                    yield StreamEvent(event_type=EventType.USERNAME_STARTED,
+                                      data={"username": name, "depth": depth, "via": via,
+                                            "total_sites": len(sites)})
+                skip = checked_on.get(name.casefold(), set())
+                current = [site for site in sites if site["name"] not in skip]
+                if depth:
+                    total += len(current)
+                tasks = [asyncio.create_task(self._process_site(client, site, name, extract_profile,
+                                                                queue_event, semaphore, links))
+                         for site in current]
+                if not depth and include_duckduckgo:
+                    tasks.append(asyncio.create_task(self.stream_duckduckgo_search(client, name, queue_event)))
+                if not depth and check_mailboxes:
+                    tasks.append(asyncio.create_task(self.stream_mailboxes(name, queue_event)))
 
-            while any(not task.done() for task in tasks) or not result_queue.empty():
-                try:
-                    _, _, event = await asyncio.wait_for(result_queue.get(), timeout=1.0)
-                except asyncio.TimeoutError:
-                    continue
-                self._count_result(event, stats, len(sites))
-                yield event
-                if event.event_type == EventType.DUCKDUCKGO_RESULT and self.stream_delay > 0:
-                    await asyncio.sleep(self.stream_delay)
+                while any(not task.done() for task in tasks) or not result_queue.empty():
+                    try:
+                        _, _, event = await asyncio.wait_for(result_queue.get(), timeout=1.0)
+                    except asyncio.TimeoutError:
+                        continue
+                    self._count_result(event, stats, total)
+                    if event.event_type == EventType.SITE_RESULT:
+                        counts = per_name.setdefault(event.data.get("searched", name).casefold(),
+                                                     {"found": 0, "checked": 0})
+                        counts["checked"] += 1
+                        counts["found"] += event.data.get("status") == CheckStatus.FOUND.value
+                    yield event
+                    if event.event_type == EventType.DUCKDUCKGO_RESULT and self.stream_delay > 0:
+                        await asyncio.sleep(self.stream_delay)
+                    if event.event_type != EventType.PROFILE_EXTRACTED:
+                        continue
+                    found_for = event.data.get("searched", name)
+                    level = searched.get(found_for.casefold(), depth)
+                    for clue in event.data.get("clues") or []:
+                        key = clue["value"].casefold()
+                        if clue.get("strength") != "strong":
+                            sites_naming = seen_on.setdefault(key, set())
+                            sites_naming.add(event.data["site_name"])
+                            if len(sites_naming) >= 2:
+                                clue = {**clue, "strength": "strong"}
+                        action, reason = decide(clue, level)
+                        clue_via = {"username": found_for, "site_name": event.data["site_name"],
+                                    "url": event.data["url"], "field": clue.get("field"),
+                                    **({"link": clue["link"]} if clue.get("link") else {})}
+                        if action == "follow":
+                            searched[key] = level + 1
+                            followed.append({"username": clue["value"], "depth": level + 1, "via": clue_via})
+                            pending.append((clue["value"], level + 1, clue_via))
+                            linked = links.site(clue.get("site")) if links else None
+                            if linked is not None and linked in sites:
+                                # the link names the account: check it now, not after the queue
+                                checked_on.setdefault(key, set()).add(linked["name"])
+                                total += 1
+                                tasks.append(asyncio.create_task(self._process_site(
+                                    client, linked, clue["value"], extract_profile, queue_event, semaphore, links)))
+                        yield StreamEvent(event_type=EventType.CLUE_FOUND,
+                                          data={"searched": found_for, "site_name": event.data["site_name"],
+                                                "url": event.data["url"], "clue": clue, "action": action,
+                                                **({"reason": reason} if reason else {})})
 
-            await asyncio.gather(*tasks, return_exceptions=True)
-            while not result_queue.empty():
-                _, _, event = await result_queue.get()
-                self._count_result(event, stats, len(sites))
-                yield event
-                if event.event_type == EventType.DUCKDUCKGO_RESULT and self.stream_delay > 0:
-                    await asyncio.sleep(self.stream_delay)
+                await asyncio.gather(*tasks, return_exceptions=True)
+                if depth:
+                    counts = per_name.get(name.casefold(), {"found": 0, "checked": 0})
+                    yield StreamEvent(event_type=EventType.USERNAME_COMPLETED, data={"username": name, **counts})
+                if not pending:
+                    break
+                name, depth, via = pending.pop(0)
 
+        for item in followed:
+            item.update(per_name.get(item["username"].casefold(), {"found": 0, "checked": 0}))
         yield StreamEvent(
             event_type=EventType.SEARCH_COMPLETED,
             data={"search_id": search_id, "username": username,
@@ -864,4 +979,5 @@ class StreamingUsernameSearchService:
                   "total_errors": stats["errors"], "total_checked": stats["checked"],
                   "search_time_seconds": round(time.time() - start_time, 2),
                   **({"mailboxes_found": stats.get("mailboxes_found", 0)} if check_mailboxes else {}),
+                  **({"followed": followed} if followed else {}),
                   "success_rate": round((stats["found"] / stats["checked"]) * 100, 2) if stats["checked"] > 0 else 0})

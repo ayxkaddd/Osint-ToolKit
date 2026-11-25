@@ -394,6 +394,26 @@ export function stylesheet() {
                 'text-background-opacity': 0.9,
             },
         },
+        // a username that a found profile names or links to (the search followed it)
+        {
+            selector: 'edge[kind = "clue"]',
+            style: {
+                'line-style': 'dashed',
+                'line-dash-pattern': [7, 5],
+                'line-color': '#fbbf24',
+                'target-arrow-color': '#fbbf24',
+                'line-opacity': 0.85,
+                width: 2,
+                label: 'data(label)',
+                color: '#fde68a',
+                'font-family': 'JetBrains Mono, ui-monospace, monospace',
+                'font-size': 9,
+                'text-background-color': '#0f1017',
+                'text-background-padding': 2,
+                'text-background-shape': 'roundrectangle',
+                'text-background-opacity': 0.9,
+            },
+        },
         { selector: 'node[kind = "manual"]', style: { 'border-style': 'double', 'border-width': 3 } },
         {
             selector: 'node.link-from',
