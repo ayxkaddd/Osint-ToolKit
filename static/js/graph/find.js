@@ -30,6 +30,7 @@ const KEYS = [
     ['Delete', 'Take the selected nodes off the graph'],
     ['N', 'Add a node'],
     ['L', 'Link two nodes'],
+    ['Ctrl, pressed while dragging', 'Place the node freely (no snapping)'],
     ['Ctrl+Z  /  Ctrl+Shift+Z', 'Undo / redo'],
     ['+  /  -  /  0', 'Zoom in / out / fit'],
     ['Esc', 'Close, clear the search, leave the focus or the path'],

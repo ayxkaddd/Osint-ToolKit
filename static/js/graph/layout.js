@@ -8,8 +8,11 @@
 
 import { OFF } from './style.js';
 
-const COLUMN = 270;
-const ROW = 66;
+// One grid for the layout, the background and snapping (snap.js): rows two cells
+// apart, columns nine, so every node of the tree sits on grid lines
+export const GRID = 32;
+const COLUMN = GRID * 9;
+const ROW = GRID * 2;
 
 // The order of a node's children (and of the trees), the same however and whenever
 // they were drawn, so a reload or a new branch never reorders rows: what was found

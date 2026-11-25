@@ -209,6 +209,7 @@ export const editing = {
         layoutButton.setAttribute('aria-label', layoutButton.title);
         layoutButton.classList.toggle('text-purple-300', web);
         this.root.querySelector('[data-filter-dot]').classList.toggle('hidden', !this.filtersActive());
+        this.updateSnapButton();
     },
 
     toggleTray() {
@@ -815,7 +816,7 @@ export const editing = {
                 if (file) values.image = await this.uploadPicture(file);
                 const place = current
                     ? this.cy.getElementById(current.id).position()
-                    : at || this.freeSpot(this.modelCenter());
+                    : this.snapToGrid(at || this.freeSpot(this.modelCenter()));
                 if (isIdentifierType(type) && f.elements.addToCase.checked)
                     return this.addToInvestigation(values, place, current?.id);
                 if (current) this.updateManualNode(current.id, values);

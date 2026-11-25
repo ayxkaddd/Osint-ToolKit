@@ -400,7 +400,7 @@ select:focus-visible {
         linear-gradient(90deg, var(--grid-mid) 1px, transparent 1px),
         linear-gradient(var(--grid-coarse) 1px, transparent 1px),
         linear-gradient(90deg, var(--grid-coarse) 1px, transparent 1px);
-    background-size: 40px 40px, 40px 40px, 200px 200px, 200px 200px, 1000px 1000px, 1000px 1000px;
+    background-size: 32px 32px, 32px 32px, 160px 160px, 160px 160px, 800px 800px, 800px 800px;
 }
 /* keys work while the graph has focus: a quiet sign of it, not the browser's outline */
 .graph-root:focus { outline: none; }

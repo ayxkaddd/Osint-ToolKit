@@ -2,12 +2,13 @@
 // lookups and groups opening and folding on click, and the side panel.
 // Editing (hide, remove, add, link, undo) is in edit.js; the saved view in state.js.
 import { MANUAL_TYPES, OFF, decorate, labels, stylesheet, typeColor } from './style.js';
-import { box, overlaps, placeNew, treeLayout } from './layout.js';
+import { GRID, box, overlaps, placeNew, treeLayout } from './layout.js';
 import { History, SavedView } from './state.js';
 import { editing } from './edit.js';
 import { pivoting } from './pivot.js';
 import { finding } from './find.js';
 import { framing } from './chrome.js';
+import { snapping } from './snap.js';
 
 const REDUCED_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)');
 const motion = (ms) => (REDUCED_MOTION.matches ? 0 : ms);
@@ -72,6 +73,7 @@ export class GraphView {
     build() {
         this.root.innerHTML = `
             <div class="graph-canvas absolute inset-0" role="application" aria-label="Investigation graph"></div>
+            <canvas class="graph-guides absolute inset-0 w-full h-full pointer-events-none" aria-hidden="true"></canvas>
             <div class="graph-toolbar absolute top-3 left-3 flex items-center gap-1 bg-[#1a1b26] border border-[#24283b] rounded-lg p-1 shadow-xl">
                 <button type="button" data-graph="fit" title="Fit to screen (0)"><i data-lucide="scan" class="w-4 h-4"></i></button>
                 <button type="button" data-graph="zoomIn" title="Zoom in (+)"><i data-lucide="zoom-in" class="w-4 h-4"></i></button>
@@ -81,6 +83,7 @@ export class GraphView {
                 <button type="button" data-graph="openSearch" title="Search (/ or Ctrl+F)"><i data-lucide="search" class="w-4 h-4"></i></button>
                 <button type="button" data-graph="toggleFilters" data-filter-button title="Filters"><i data-lucide="sliders-horizontal" class="w-4 h-4"></i><span data-filter-dot class="hidden ml-0.5 w-1.5 h-1.5 rounded-full bg-purple-400"></span></button>
                 <span class="w-px h-5 bg-[#24283b] mx-1"></span>
+                <button type="button" data-graph="toggleSnap" data-snap-button title="Snapping"><i data-lucide="magnet" class="w-4 h-4"></i></button>
                 <button type="button" data-graph="tidy" title="Tidy up: put the nodes you moved back in their places (Ctrl+Z puts them back)"><i data-lucide="wand-sparkles" class="w-4 h-4"></i></button>
                 <button type="button" data-graph="collapseAll" title="Fold every lookup"><i data-lucide="fold-horizontal" class="w-4 h-4"></i></button>
                 <span class="w-px h-5 bg-[#24283b] mx-1"></span>
@@ -125,6 +128,7 @@ export class GraphView {
         this.panel = this.root.querySelector('.graph-panel');
         this.stats = this.root.querySelector('.graph-stats');
         this.message = this.root.querySelector('.graph-message');
+        this.guides = this.root.querySelector('.graph-guides');
         this.tray = this.root.querySelector('.graph-tray');
         this.modeBar = this.root.querySelector('.graph-mode');
         this.root.querySelectorAll('.graph-toolbar button, .graph-toolbar a').forEach((el) => {
@@ -360,7 +364,7 @@ export class GraphView {
         const grid = () => {
             // three levels of lines, each five times wider apart; zooming out, the finest
             // fades away just as the next level takes its place, so nothing jumps
-            let fine = 40 * cy.zoom();
+            let fine = GRID * cy.zoom();
             while (fine < 12) fine *= 5;
             while (fine >= 60) fine /= 5;
             const t = Math.min(1, (fine - 12) / 48);
@@ -412,7 +416,16 @@ export class GraphView {
         // right click, or a long press on a touch screen
         cy.on('cxttap taphold', 'node, edge', (e) => this.elementMenu(e.target, e));
         cy.on('cxttap taphold', (e) => e.target === cy && this.canvasMenu(e));
-        cy.on('grab', 'node', (e) => this.dragStart(e.target));
+        cy.on('grab', 'node', (e) => {
+            this.dragStart(e.target);
+            // keys (Ctrl+Z after a move) go to the graph, as after a click
+            this.root.focus({ preventScroll: true });
+        });
+        // the node under the pointer (grab fires for every selected node moving with it)
+        cy.on('grabon', 'node', (e) => this.snapStart(e.target));
+        // while dragging: lined up with the nodes around or the grid (snap.js)
+        cy.on('drag', 'node', (e) => this.snapMove(e.target, e));
+        cy.on('free', 'node', () => this.snapEnd());
         cy.on('dbltap', 'node[kind = "identifier"]', (e) => this.openAllUnder(e.target));
         cy.on('tap', (e) => {
             if (e.target === cy) this.closePanel();
@@ -1226,3 +1239,4 @@ Object.assign(GraphView.prototype, editing);
 Object.assign(GraphView.prototype, pivoting);
 Object.assign(GraphView.prototype, finding);
 Object.assign(GraphView.prototype, framing);
+Object.assign(GraphView.prototype, snapping);

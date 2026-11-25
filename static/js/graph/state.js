@@ -5,7 +5,7 @@ const SAVE_DELAY = 800;
 const HISTORY_MAX = 200;
 
 // The layout positions are made for (view.js); a view saved for an older one starts afresh
-export const LAYOUT_VERSION = 2;
+export const LAYOUT_VERSION = 3;
 
 const emptyState = () => ({
     version: LAYOUT_VERSION,

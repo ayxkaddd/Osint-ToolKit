@@ -277,17 +277,23 @@ export const framing = {
         }
     },
 
+    // The scale for a picture of the whole graph, at most ``side`` pixels each way and
+    // 40 megapixels (Cytoscape ignores maxWidth / maxHeight for the whole graph, and a
+    // tall graph made pictures too large for the browser and the server)
+    pictureScale(wanted, side) {
+        const box = this.cy.elements().boundingBox();
+        const fit = Math.min(
+            side / Math.max(box.w, 1),
+            side / Math.max(box.h, 1),
+            Math.sqrt(40e6 / Math.max(box.w * box.h, 1))
+        );
+        return Math.min(wanted, fit);
+    },
+
     async exportPng() {
         try {
             const blob = await this.asPicture(() =>
-                this.cy.png({
-                    output: 'blob-promise',
-                    full: true,
-                    scale: 2,
-                    bg: '#000000',
-                    maxWidth: 12000,
-                    maxHeight: 12000,
-                })
+                this.cy.png({ output: 'blob-promise', full: true, scale: this.pictureScale(2, 12000), bg: '#000000' })
             );
             this.download(blob, await this.fileName('png'));
         } catch (error) {
@@ -393,10 +399,8 @@ ${out.join('\n')}
                     this.cy.png({
                         output: 'blob-promise',
                         full: true,
-                        scale: 1.5,
+                        scale: this.pictureScale(1.5, 4000),
                         bg: '#000000',
-                        maxWidth: 4000,
-                        maxHeight: 4000,
                     }),
                 { forReport: true }
             );
