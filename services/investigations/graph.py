@@ -123,6 +123,8 @@ class GraphState(_Strict):
     in ``positions``."""
     positions: dict[NodeId, tuple[float, float]] = Field(default_factory=dict)
     pinned: Optional[list[NodeId]] = Field(None, max_length=5000)
+    # the browser's layout the positions were made for; older positions are dropped once
+    version: Optional[int] = Field(None, ge=0, le=1000)
     expanded: list[NodeId] = Field(default_factory=list, max_length=5000)
     collapsed: list[NodeId] = Field(default_factory=list, max_length=5000)
     hidden: list[NodeId] = Field(default_factory=list, max_length=5000)

@@ -1,6 +1,6 @@
 // Tree layout: left to right, like osintframework.com. What was typed on the left,
-// each lookup one column right, what it found beyond it. d3-hierarchy places the
-// tree; Cytoscape only moves nodes to the positions.
+// each lookup one column right, what it found beyond it, one row per node. d3-hierarchy
+// walks the tree; Cytoscape only moves nodes to the positions.
 //
 // The graph isn't a tree (an identifier can be found by two lookups), so each node
 // hangs under the first node that reaches it from the roots; its other links are
@@ -11,8 +11,29 @@ import { OFF } from './style.js';
 const COLUMN = 270;
 const ROW = 66;
 
-// order: the order nodes arrived in (server order is most relevant first)
-const byOrder = (a, b) => (a.data('order') ?? 0) - (b.data('order') ?? 0);
+// The order of a node's children (and of the trees), the same however and whenever
+// they were drawn, so a reload or a new branch never reorders rows: what was found
+// first, then groups, "+N more", and the lookups in the order they ran (a new pivot last)
+const KIND_RANK = { identifier: 0, manual: 1, group: 2, more: 3, lookup: 4, pending: 5 };
+const sortKey = (node) => {
+    const d = node.data();
+    const when =
+        d.kind === 'lookup'
+            ? (d.runs?.[d.runs.length - 1]?.timestamp ?? d.timestamp ?? '')
+            : d.kind === 'pending'
+              ? '9999'
+              : d.kind === 'identifier'
+                ? (d.first_seen ?? '')
+                : '';
+    return [KIND_RANK[d.kind] ?? 9, String(when), String(d.value ?? d.key ?? d.offset ?? node.id())];
+};
+const byOrder = (a, b) => {
+    const x = sortKey(a);
+    const y = sortKey(b);
+    if (x[0] !== y[0]) return x[0] - y[0];
+    if (x[1] !== y[1]) return x[1] < y[1] ? -1 : 1;
+    return x[2] < y[2] ? -1 : x[2] > y[2] ? 1 : 0;
+};
 
 // A link the tree follows: found, searched, follow-ups; a drawn link only to a drawn node
 const treeEdge = (edge) => edge.data('kind') !== 'manual' || edge.target().data('kind') === 'manual';
@@ -107,16 +128,24 @@ export function treeLayout(cy) {
     const visible = cy.nodes().not(OFF);
     const { parentOf, childrenOf, topLevel } = spanningTree(visible);
 
+    // Rows: every node has a row of its own and sits level with its first child, so
+    // nothing can overlap, and what grows under a node only pushes the rows below it
+    // down (a lookup's first finding, or a pivot's lookup, takes the row it starts from)
     const build = (id) => ({ id, children: (childrenOf.get(id) || []).map(build) });
     const root = window.d3.hierarchy({ id: null, children: topLevel.map((n) => build(n.id())) });
-    window.d3
-        .tree()
-        .nodeSize([ROW, COLUMN])
-        .separation((a, b) => (a.parent === b.parent ? 1 : 1.25))(root);
-
+    let row = 0;
+    const rowOf = new Map();
+    root.eachBefore((d) => {
+        if (d.data.id === null) return;
+        // the first node of each tree after the first: a blank row between trees
+        if (d.depth === 1 && row > 0) row += 1;
+        // a node shares its row with its first child; a leaf takes the next one
+        rowOf.set(d.data.id, d.parent?.children?.[0] === d && d.depth > 1 ? rowOf.get(d.parent.data.id) : row);
+        if (!d.children) row = rowOf.get(d.data.id) + 1;
+    });
     const positions = new Map();
     root.descendants().forEach((d) => {
-        if (d.data.id !== null) positions.set(d.data.id, { x: (d.depth - 1) * COLUMN, y: d.x });
+        if (d.data.id !== null) positions.set(d.data.id, { x: (d.depth - 1) * COLUMN, y: rowOf.get(d.data.id) * ROW });
     });
 
     cy.batch(() => {
@@ -136,12 +165,12 @@ export function treeLayout(cy) {
 // ---------------------------------------------------------------------------
 const PILLS = new Set(['lookup', 'pending']);
 
-function box(node, at) {
+export function box(node, at) {
     const half = PILLS.has(node.data('kind')) ? node.data('w') / 2 + 10 : 100;
     return { x1: at.x - half, x2: at.x + half, y1: at.y - ROW / 2 + 4, y2: at.y + ROW / 2 - 4 };
 }
 
-const overlaps = (a, b) => a.x1 < b.x2 && b.x1 < a.x2 && a.y1 < b.y2 && b.y1 < a.y2;
+export const overlaps = (a, b) => a.x1 < b.x2 && b.x1 < a.x2 && a.y1 < b.y2 && b.y1 < a.y2;
 
 // fresh: nodes needing a place, in the order they came; parentOf: the tree over every node;
 // settled: Map id -> {node, at} of the nodes that keep (or go back to) their place.

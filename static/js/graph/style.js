@@ -335,16 +335,16 @@ export function stylesheet() {
         {
             selector: 'edge',
             style: {
-                width: 1,
-                'line-color': '#4b5563',
-                'line-opacity': 0.45,
+                width: 1.8,
+                'line-color': '#64748b',
+                'line-opacity': 0.75,
                 'curve-style': 'round-taxi',
                 'taxi-direction': 'rightward',
                 'taxi-turn': '45%',
                 'taxi-radius': 14,
                 'target-arrow-shape': 'triangle',
-                'target-arrow-color': '#4b5563',
-                'arrow-scale': 0.55,
+                'target-arrow-color': '#64748b',
+                'arrow-scale': 0.8,
                 'transition-property': 'line-color, line-opacity, target-arrow-color, opacity',
                 'transition-duration': 180,
             },
@@ -354,15 +354,21 @@ export function stylesheet() {
         // links outside the tree (an identifier found in two branches): a plain curve
         {
             selector: 'edge.cross',
-            style: { 'curve-style': 'unbundled-bezier', 'line-style': 'dashed', 'line-dash-pattern': [4, 4] },
+            style: {
+                'curve-style': 'unbundled-bezier',
+                'line-style': 'dashed',
+                'line-dash-pattern': [6, 4],
+                width: 1.4,
+                'line-opacity': 0.6,
+            },
         },
         {
             selector: 'edge.lit',
             style: {
                 'line-color': 'data(color)',
                 'target-arrow-color': 'data(color)',
-                'line-opacity': 0.95,
-                width: 1.5,
+                'line-opacity': 1,
+                width: 2.6,
             },
         },
         {

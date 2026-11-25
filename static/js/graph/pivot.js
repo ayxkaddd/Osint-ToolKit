@@ -288,6 +288,8 @@ export const pivoting = {
             if (!added.nodes().length) {
                 this.refreshFoldable(this.cy.nodes());
                 this.updateStats();
+                // a pending node may have gone: the rows close up
+                await this.relayout();
                 return;
             }
             this.show('');

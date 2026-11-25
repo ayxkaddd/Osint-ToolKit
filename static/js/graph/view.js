@@ -2,7 +2,7 @@
 // lookups and groups opening and folding on click, and the side panel.
 // Editing (hide, remove, add, link, undo) is in edit.js; the saved view in state.js.
 import { MANUAL_TYPES, OFF, decorate, stylesheet, typeColor } from './style.js';
-import { placeNew, treeLayout } from './layout.js';
+import { box, overlaps, placeNew, treeLayout } from './layout.js';
 import { History, SavedView } from './state.js';
 import { editing } from './edit.js';
 import { pivoting } from './pivot.js';
@@ -81,7 +81,7 @@ export class GraphView {
                 <button type="button" data-graph="openSearch" title="Search (/ or Ctrl+F)"><i data-lucide="search" class="w-4 h-4"></i></button>
                 <button type="button" data-graph="toggleFilters" data-filter-button title="Filters"><i data-lucide="sliders-horizontal" class="w-4 h-4"></i><span data-filter-dot class="hidden ml-0.5 w-1.5 h-1.5 rounded-full bg-purple-400"></span></button>
                 <span class="w-px h-5 bg-[#24283b] mx-1"></span>
-                <button type="button" data-graph="tidy" title="Tidy up: lay everything out again (Ctrl+Z puts it back)"><i data-lucide="wand-sparkles" class="w-4 h-4"></i></button>
+                <button type="button" data-graph="tidy" title="Tidy up: put the nodes you moved back in their places (Ctrl+Z puts them back)"><i data-lucide="wand-sparkles" class="w-4 h-4"></i></button>
                 <button type="button" data-graph="collapseAll" title="Fold every lookup"><i data-lucide="fold-horizontal" class="w-4 h-4"></i></button>
                 <span class="w-px h-5 bg-[#24283b] mx-1"></span>
                 <button type="button" data-graph="addNodeDialog" title="Add a node (N)"><i data-lucide="plus" class="w-4 h-4"></i></button>
@@ -214,6 +214,11 @@ export class GraphView {
         this.statsData = graph.stats;
         // the view as the analyst left it (edit.js)
         await this.state.whileRestoring(() => this.restoreView());
+        // a view saved for an older layout: kept in the new form from now on
+        if (this.state.outdated) {
+            this.state.outdated = false;
+            this.state.change(() => {});
+        }
         this.refreshFoldable(this.cy.nodes());
         this.updateStats();
         this.updateToolbar();
@@ -235,7 +240,7 @@ export class GraphView {
     }
 
     fitAll() {
-        this.cy.fit(undefined, 40);
+        this.cy.fit(undefined, 64);
         if (this.cy.zoom() > 1.1) this.cy.zoom({ level: 1.1, renderedPosition: this.center() });
     }
 
@@ -423,7 +428,7 @@ export class GraphView {
 
     fit() {
         this.moved = true;
-        this.cy.animate({ fit: { eles: this.cy.elements().not(OFF), padding: 40 } }, { duration: motion(300) });
+        this.cy.animate({ fit: { eles: this.cy.elements().not(OFF), padding: 64 } }, { duration: motion(300) });
     }
 
     zoomIn() {
@@ -456,11 +461,10 @@ export class GraphView {
         this.openPanel(node);
     }
 
-    // Where nodes go. Nothing that has a place moves: nodes without one (new, or opened for
-    // the first time) get one next to their parent and grow out of it (placeNew in
-    // layout.js); nodes coming back (opened again, shown again) go back to theirs.
-    // ``full``: everything the analyst didn't move is laid out again (Tidy up, the switch
-    // between tree and web, a case opened for the first time).
+    // Where nodes go. The tree (layout.js) gives every node its own row, the same way each
+    // time: growing pushes only the rows below down, smoothly, and nodes the analyst moved
+    // stay where they were put. The web keeps every place and puts new nodes in free
+    // space beside their parent (placeNew); ``full`` lays the web out again.
     relayout({ animate = true, grown = null, full = false, initial = false } = {}) {
         const { positions: tree, parentOf } = treeLayout(this.cy);
         this.parentOf = parentOf;
@@ -470,22 +474,12 @@ export class GraphView {
         const saved = this.state.data.positions;
         const pinned = new Set(this.pinnedIds());
         const drawn = this.cy.nodes().not(OFF);
-        if (initial) {
-            drawn.forEach((n) => n.data('pinned', pinned.has(n.id())));
-            // a view saved before every position was kept: laid out once, the moved nodes stay
-            const known = drawn.filter((n) => saved[n.id()]).length;
-            if (known < drawn.length / 2) full = true;
-        }
-        if (full && web) return this.runWeb({ animate, fresh: !initial }).then(() => this.keepPlaces(drawn, true));
-        const duration = animate ? motion(420) : 0;
-        const targets = new Map();
         const xy = (p) => ({ x: p[0], y: p[1] });
-        if (full) {
-            drawn.forEach((n) => {
-                const to = pinned.has(n.id()) && saved[n.id()] ? xy(saved[n.id()]) : tree.get(n.id());
-                if (to) targets.set(n.id(), to);
-            });
-        } else {
+        if (initial) drawn.forEach((n) => n.data('pinned', pinned.has(n.id())));
+        const targets = new Map();
+        if (web) {
+            if (initial && drawn.filter((n) => saved[n.id()]).length < drawn.length / 2) full = true;
+            if (full) return this.runWeb({ animate, fresh: !initial }).then(() => this.keepPlaces(drawn, true));
             const fresh = [];
             drawn.forEach((n) => {
                 if (n.data('placed')) return;
@@ -501,22 +495,60 @@ export class GraphView {
             placeNew(this.cy.collection(fresh), parentOf, settled, { web, hints: this.placeHints }).forEach((to, id) =>
                 targets.set(id, to)
             );
-            this.placeHints.clear();
+        } else {
+            drawn.forEach((n) => {
+                if (!(pinned.has(n.id()) && saved[n.id()]) && tree.get(n.id())) targets.set(n.id(), tree.get(n.id()));
+            });
+            // a moved node stays where it was put, unless the tree has grown under it there:
+            // then it goes back to its row (nothing is ever drawn over something else)
+            const taken = [...targets].map(([id, to]) => box(this.cy.getElementById(id), to));
+            const unpin = [];
+            drawn.forEach((n) => {
+                if (targets.has(n.id()) || !saved[n.id()]) return;
+                const at = xy(saved[n.id()]);
+                const b = box(n, at);
+                if (taken.some((t) => overlaps(t, b))) {
+                    unpin.push(n.id());
+                    n.data('pinned', false);
+                    if (tree.get(n.id())) targets.set(n.id(), tree.get(n.id()));
+                    taken.push(box(n, tree.get(n.id()) || at));
+                } else {
+                    targets.set(n.id(), at);
+                    taken.push(b);
+                }
+            });
+            if (unpin.length)
+                this.state.change((s) => {
+                    s.pinned = (s.pinned ?? Object.keys(s.positions)).filter((id) => !unpin.includes(id));
+                    unpin.forEach((id) => delete s.positions[id]);
+                });
+            // the tree needs no saved places but the moved ones
+            if (initial && Object.keys(saved).some((id) => !pinned.has(id)))
+                this.state.change((s) => {
+                    s.pinned = s.pinned ?? Object.keys(s.positions);
+                    s.positions = Object.fromEntries(
+                        Object.entries(s.positions).filter(([id]) => s.pinned.includes(id))
+                    );
+                });
         }
+        this.placeHints.clear();
+        const duration = animate ? motion(380) : 0;
         const moves = [];
         targets.forEach((to, id) => {
             const node = this.cy.getElementById(id);
             const isNew = grown?.has(id);
             node.removeScratch('_to');
             node.data('placed', true);
+            const from = node.position();
             if (!duration) {
                 node.position(to);
                 return;
             }
+            if (!isNew && Math.abs(from.x - to.x) < 0.5 && Math.abs(from.y - to.y) < 0.5) return;
             const style = isNew ? { opacity: 1, width: node.data('w'), height: node.data('h') } : undefined;
             moves.push(
                 node
-                    .animation({ position: to, style }, { duration, easing: isNew ? SPRING : 'ease-out-cubic' })
+                    .animation({ position: to, style }, { duration, easing: isNew ? SPRING : 'ease-in-out-cubic' })
                     .play()
                     .promise()
                     .then(() => isNew && node.removeStyle('opacity width height'))
@@ -527,7 +559,7 @@ export class GraphView {
                 .nodes()
                 .filter((n) => grown.has(n.id()))
                 .removeStyle('opacity width height');
-        if (targets.size) this.keepPlaces(targets, full);
+        if (web && targets.size) this.keepPlaces(targets);
         if (grown?.size && !initial) this.bringIntoView([...grown].map((id) => targets.get(id)).filter(Boolean));
         return Promise.all(moves);
     }
@@ -592,27 +624,42 @@ export class GraphView {
         );
     }
 
-    // Lay everything out again (what the analyst moved stays); undone with Ctrl+Z
+    // Tidy up. The tree: the nodes the analyst moved go back into it. The web: laid out
+    // again. Ctrl+Z puts things back as they were.
     async tidy() {
-        const before = new Map(this.cy.nodes().map((n) => [n.id(), { ...n.position() }]));
-        const apply = async (places) => {
-            const moves = [];
-            places.forEach((to, id) => {
-                const node = this.cy.getElementById(id);
-                if (node.length)
-                    moves.push(
-                        node
-                            .animation({ position: to }, { duration: motion(420), easing: 'ease-out-cubic' })
-                            .play()
-                            .promise()
-                    );
+        const before = { positions: { ...this.state.data.positions }, pinned: [...this.pinnedIds()] };
+        const places = new Map(this.cy.nodes().map((n) => [n.id(), { ...n.position() }]));
+        const restore = async (view) => {
+            this.state.change((s) => {
+                s.positions = { ...view.positions };
+                s.pinned = [...view.pinned];
             });
-            this.keepPlaces(places);
-            await Promise.all(moves);
+            this.cy.nodes().forEach((n) => n.data('pinned', view.pinned.includes(n.id())));
+            if (this.layoutName() === 'web') {
+                await Promise.all(
+                    [...places].map(([id, to]) => {
+                        const node = this.cy.getElementById(id);
+                        return node.length
+                            ? node
+                                  .animation({ position: to }, { duration: motion(380) })
+                                  .play()
+                                  .promise()
+                            : null;
+                    })
+                );
+            } else await this.relayout();
         };
-        await this.relayout({ full: true });
-        const after = new Map(this.cy.nodes().map((n) => [n.id(), { ...n.position() }]));
-        this.history.push({ undo: () => apply(before), redo: () => apply(after) });
+        const tidied = async () => {
+            if (this.layoutName() === 'web') return this.relayout({ full: true });
+            this.state.change((s) => {
+                s.positions = {};
+                s.pinned = [];
+            });
+            this.cy.nodes().data('pinned', false);
+            return this.relayout();
+        };
+        await tidied();
+        this.history.push({ undo: () => restore(before), redo: tidied });
         this.fit();
     }
 

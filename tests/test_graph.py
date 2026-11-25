@@ -394,6 +394,8 @@ def test_graph_view_is_saved_and_comes_back(client, investigation):
     assert "pinned" not in saved          # an older view: every position was a moved node
     client.put(url, json=_state(pinned=["e:email:x@y.test"]))
     assert client.get(url).json()["pinned"] == ["e:email:x@y.test"]
+    client.put(url, json=_state(version=2))
+    assert client.get(url).json()["version"] == 2
     # the first view comes with it
     assert client.get(f"/api/investigations/{investigation}/graph").json()["state"]["hidden"] == ["e:url:https://a.test/"]
 
@@ -413,6 +415,7 @@ def test_graph_view_is_saved_and_comes_back(client, investigation):
     {"layout": "spiral"},
     {"hidden": ["e:x"] * 5001},
     {"pinned": ["e:x"] * 5001},
+    {"version": -1},
 ])
 def test_graph_view_is_checked(client, investigation, change):
     response = client.put(f"/api/investigations/{investigation}/graph/state", json=_state(**change))

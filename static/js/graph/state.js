@@ -4,7 +4,11 @@
 const SAVE_DELAY = 800;
 const HISTORY_MAX = 200;
 
+// The layout positions are made for (view.js); a view saved for an older one starts afresh
+export const LAYOUT_VERSION = 2;
+
 const emptyState = () => ({
+    version: LAYOUT_VERSION,
     positions: {},
     expanded: [],
     collapsed: [],
@@ -33,6 +37,14 @@ export class SavedView {
     load(saved) {
         const data = { ...emptyState(), ...(saved || {}) };
         delete data.updated_at;
+        // positions from an older layout mean nothing in this one (what is open, hidden,
+        // added and linked stays)
+        if ((saved || {}).version !== LAYOUT_VERSION) {
+            this.outdated = Object.keys(data.positions).length > 0;
+            data.positions = {};
+            data.pinned = [];
+            data.version = LAYOUT_VERSION;
+        }
         this.data = data;
     }
 
