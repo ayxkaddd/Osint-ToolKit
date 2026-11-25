@@ -67,7 +67,7 @@ export const pivoting = {
                 onClick: () => this.noteDialog(node.id()),
             },
             { divider: true },
-            { label: 'Focus', icon: 'fa-crosshairs', onClick: () => this.focusNode(node.id()) },
+            { label: 'Focus on it', icon: 'fa-crosshairs', onClick: () => this.focusOn(node.id()) },
             {
                 label: 'Where it was found',
                 icon: 'fa-list',

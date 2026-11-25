@@ -393,3 +393,6 @@ select:focus-visible {
         linear-gradient(90deg, rgba(71, 85, 105, 0.1) 1px, transparent 1px);
     background-size: 40px 40px;
 }
+/* keys work while the graph has focus: a quiet sign of it, not the browser's outline */
+.graph-root:focus { outline: none; }
+.graph-root:focus-visible { border-color: #6d28d9; }

@@ -49,6 +49,9 @@ export const MANUAL_TYPES = {
     image: { label: 'Image', color: '#94a3b8', icon: 'image' },
 };
 
+// Not drawn: hidden or taken off by the analyst, left out by a filter, outside the focus
+export const OFF = '.is-hidden, .filtered, .unfocused';
+
 export const typeColor = (type) => TYPE_COLORS[type] || MANUAL_TYPES[type]?.color || '#9ca3af';
 
 const PURPLE = '#a855f7';
@@ -346,6 +349,8 @@ export function stylesheet() {
                 'transition-duration': 180,
             },
         },
+        // the web layout: straight links
+        { selector: 'edge.web', style: { 'curve-style': 'straight' } },
         // links outside the tree (an identifier found in two branches): a plain curve
         {
             selector: 'edge.cross',
@@ -387,7 +392,22 @@ export function stylesheet() {
             selector: 'node.link-from',
             style: { 'underlay-color': '#c4b5fd', 'underlay-opacity': 0.4, 'underlay-padding': 9 },
         },
-        { selector: '.is-hidden', style: { display: 'none' } },
+        { selector: '.is-hidden, .filtered, .unfocused', style: { display: 'none' } },
+        // search: what matches glows, the rest steps back
+        {
+            selector: 'node.match',
+            style: { 'underlay-color': '#a855f7', 'underlay-opacity': 0.45, 'underlay-padding': 9 },
+        },
+        { selector: '.search-dim', style: { opacity: 0.18 } },
+        // on the way to what a filter shows, without matching it
+        { selector: 'node.filter-dim', style: { opacity: 0.4 } },
+        // a path between two nodes
+        { selector: 'node.on-path', style: { 'border-color': '#c4b5fd', 'border-width': 3 } },
+        {
+            selector: 'edge.on-path',
+            style: { 'line-color': '#c4b5fd', 'target-arrow-color': '#c4b5fd', 'line-opacity': 1, width: 2.5 },
+        },
+        { selector: '.path-dim', style: { opacity: 0.15 } },
         { selector: '.faded', style: { opacity: 0.2 } },
         { selector: 'node[status = "false_positive"].faded', style: { opacity: 0.1 } },
     ];

@@ -6,6 +6,8 @@
 // hangs under the first node that reaches it from the roots; its other links are
 // "cross" links, drawn as curves. Links the analyst drew only place their own nodes.
 
+import { OFF } from './style.js';
+
 const COLUMN = 270;
 const ROW = 66;
 
@@ -70,7 +72,7 @@ export function spanningTree(nodes) {
 // (what folds or hides with a node)
 export function treeLayout(cy) {
     // not ':visible': Cytoscape counts a clear node as not visible, and new nodes start clear
-    const visible = cy.nodes().not('.is-hidden');
+    const visible = cy.nodes().not(OFF);
     const { parentOf, childrenOf, topLevel } = spanningTree(visible);
 
     const build = (id) => ({ id, children: (childrenOf.get(id) || []).map(build) });

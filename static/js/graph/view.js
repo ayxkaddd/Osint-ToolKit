@@ -1,11 +1,13 @@
 // The investigation graph: what the server sends (/graph) drawn with Cytoscape,
 // lookups and groups opening and folding on click, and the side panel.
 // Editing (hide, remove, add, link, undo) is in edit.js; the saved view in state.js.
-import { MANUAL_TYPES, decorate, stylesheet, typeColor } from './style.js';
+import { MANUAL_TYPES, OFF, decorate, stylesheet, typeColor } from './style.js';
 import { treeLayout } from './layout.js';
 import { History, SavedView } from './state.js';
 import { editing } from './edit.js';
 import { pivoting } from './pivot.js';
+import { finding } from './find.js';
+import { framing } from './chrome.js';
 
 const REDUCED_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)');
 const motion = (ms) => (REDUCED_MOTION.matches ? 0 : ms);
@@ -54,6 +56,8 @@ export class GraphView {
     }
 
     api(path, params = {}) {
+        // noise and false positives only when the filter asks for them (find.js)
+        if (path.startsWith('graph') && this.state?.data.filters?.noise) params = { ...params, noise: 1 };
         const query = new URLSearchParams(params).toString();
         return fetch(`/api/investigations/${this.investigationId}/${path}${query ? `?${query}` : ''}`).then((r) => {
             if (!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -71,6 +75,10 @@ export class GraphView {
                 <button type="button" data-graph="fit" title="Fit to screen (0)"><i data-lucide="scan" class="w-4 h-4"></i></button>
                 <button type="button" data-graph="zoomIn" title="Zoom in (+)"><i data-lucide="zoom-in" class="w-4 h-4"></i></button>
                 <button type="button" data-graph="zoomOut" title="Zoom out (-)"><i data-lucide="zoom-out" class="w-4 h-4"></i></button>
+                <button type="button" data-graph="toggleLayout" data-layout-button title="Web layout: shared identifiers pull branches together"><i data-lucide="share-2" class="w-4 h-4"></i></button>
+                <span class="w-px h-5 bg-[#24283b] mx-1"></span>
+                <button type="button" data-graph="openSearch" title="Search (/ or Ctrl+F)"><i data-lucide="search" class="w-4 h-4"></i></button>
+                <button type="button" data-graph="toggleFilters" data-filter-button title="Filters"><i data-lucide="sliders-horizontal" class="w-4 h-4"></i><span data-filter-dot class="hidden ml-0.5 w-1.5 h-1.5 rounded-full bg-purple-400"></span></button>
                 <span class="w-px h-5 bg-[#24283b] mx-1"></span>
                 <button type="button" data-graph="collapseAll" title="Fold every lookup"><i data-lucide="fold-horizontal" class="w-4 h-4"></i></button>
                 <span class="w-px h-5 bg-[#24283b] mx-1"></span>
@@ -80,7 +88,9 @@ export class GraphView {
                 <button type="button" data-graph="redo" title="Redo (Ctrl+Shift+Z)"><i data-lucide="redo-2" class="w-4 h-4"></i></button>
                 <button type="button" data-graph="toggleTray" data-tray-button title="Hidden and removed nodes"><i data-lucide="eye-off" class="w-4 h-4"></i><span data-tray-count class="ml-1 text-[11px]"></span></button>
                 <span class="w-px h-5 bg-[#24283b] mx-1"></span>
+                <button type="button" data-graph="exportMenu" title="Export"><i data-lucide="download" class="w-4 h-4"></i></button>
                 <button type="button" data-graph="reload" title="Reload the graph"><i data-lucide="refresh-cw" class="w-4 h-4"></i></button>
+                <button type="button" data-graph="showKeys" title="Keys (?)"><i data-lucide="keyboard" class="w-4 h-4"></i></button>
                 ${
                     this.fullscreen
                         ? `<a href="/api/investigations/${esc(this.investigationId)}/view#graph" title="Back to the investigation"><i data-lucide="minimize-2" class="w-4 h-4"></i></a>`
@@ -88,7 +98,22 @@ export class GraphView {
                 }
             </div>
             <div class="graph-tray hidden absolute top-14 left-3 z-20 w-80 max-h-[60%] overflow-y-auto custom-scrollbar bg-[#1a1b26] border border-[#24283b] rounded-lg shadow-2xl text-sm"></div>
-            <div class="graph-mode hidden absolute top-3 left-1/2 -translate-x-1/2 z-20 bg-purple-950/90 border border-purple-700 text-purple-100 text-xs rounded-lg px-3 py-2"></div>
+            <div class="graph-mode hidden absolute bottom-3 left-1/2 -translate-x-1/2 z-20 bg-purple-950/90 border border-purple-700 text-purple-100 text-xs rounded-lg px-3 py-2"></div>
+            <div class="graph-search hidden absolute top-14 left-1/2 -translate-x-1/2 z-20 w-96 max-w-[90%] bg-[#1a1b26] border border-[#24283b] rounded-lg shadow-2xl text-sm">
+                <div class="flex items-center gap-2 px-3 py-2">
+                    <i data-lucide="search" class="w-4 h-4 text-gray-500 shrink-0"></i>
+                    <input type="search" aria-label="Search the graph" placeholder="Find an identifier… (Enter: next)" class="flex-1 min-w-0 bg-transparent text-white placeholder-gray-500 focus:outline-none">
+                    <span data-search-count class="text-[11px] text-gray-500 shrink-0"></span>
+                    <button type="button" data-search-close class="text-gray-500 hover:text-white" aria-label="Close the search"><i data-lucide="x" class="w-4 h-4"></i></button>
+                </div>
+                <div data-search-more class="max-h-64 overflow-y-auto custom-scrollbar border-t border-[#24283b] empty:border-0"></div>
+            </div>
+            <div class="graph-filters hidden absolute top-14 left-3 z-20 w-80 max-h-[70%] overflow-y-auto custom-scrollbar bg-[#1a1b26] border border-[#24283b] rounded-lg shadow-2xl text-sm"></div>
+            <div class="graph-legend absolute bottom-10 left-3 z-10 w-52 bg-[#1a1b26]/95 border border-[#24283b] rounded-lg text-[11px] text-gray-300">
+                <button type="button" data-legend-toggle class="w-full flex items-center justify-between px-3 py-1.5 text-gray-400 hover:text-white">Legend<i data-lucide="chevrons-up-down" class="w-3.5 h-3.5"></i></button>
+                <div data-legend-body class="px-3 pb-2 space-y-1 max-h-64 overflow-y-auto custom-scrollbar"></div>
+            </div>
+            <canvas class="graph-minimap absolute bottom-3 right-3 z-10 w-48 h-32 bg-[#0f1017]/90 border border-[#24283b] rounded-lg cursor-pointer" aria-label="Minimap: click to move there"></canvas>
             <div class="graph-stats absolute bottom-3 left-3 text-[11px] text-gray-500 bg-black/60 rounded px-2 py-1 pointer-events-none"></div>
             <div class="graph-tooltip hidden absolute z-20 max-w-sm pointer-events-none bg-[#0f1017] border border-[#24283b] rounded-lg px-3 py-2 text-xs text-gray-200 shadow-2xl"></div>
             <div class="graph-message hidden absolute inset-0 flex items-center justify-center text-sm text-gray-400"></div>
@@ -109,9 +134,32 @@ export class GraphView {
         this.root.tabIndex = 0;
         this.root.addEventListener('keydown', (e) => this.onKey(e));
         this.tray.addEventListener('click', (e) => this.onTrayClick(e));
+        this.buildSearch();
+        this.filterPanel = this.root.querySelector('.graph-filters');
+        this.filterPanel.addEventListener('change', (e) => this.onFilterChange(e));
+        this.filterPanel.addEventListener(
+            'click',
+            (e) => e.target.closest('[data-filter-clear]') && this.setFilters({})
+        );
+        this.legendBody = this.root.querySelector('[data-legend-body]');
+        this.root.querySelector('[data-legend-toggle]').addEventListener('click', () => this.toggleLegend());
+        try {
+            if (localStorage.getItem('graphLegend') === 'closed') this.legendBody.classList.add('hidden');
+        } catch {
+            /* shown */
+        }
+        this.minimap = this.root.querySelector('.graph-minimap');
+        let dragging = false;
+        this.minimap.addEventListener('pointerdown', (e) => {
+            dragging = true;
+            this.minimap.setPointerCapture(e.pointerId);
+            this.minimapPan(e);
+        });
+        this.minimap.addEventListener('pointermove', (e) => dragging && this.minimapPan(e));
+        this.minimap.addEventListener('pointerup', () => (dragging = false));
         this.root.querySelector('.graph-toolbar').addEventListener('click', (e) => {
-            const action = e.target.closest('[data-graph]')?.dataset.graph;
-            if (action) this[action]();
+            const button = e.target.closest('[data-graph]');
+            if (button) this[button.dataset.graph](button);
         });
         this.panel.addEventListener('click', (e) => {
             if (e.target.closest('[data-panel-close]')) this.closePanel();
@@ -140,6 +188,11 @@ export class GraphView {
         let graph;
         try {
             graph = await this.api('graph');
+            // the saved view wants noise shown: ask again with it
+            if (graph.state?.filters?.noise && !this.state.data.filters?.noise) {
+                this.state.load(graph.state);
+                graph = await this.api('graph');
+            }
         } catch (error) {
             this.show(`The graph could not be loaded (${error.message}).`);
             return;
@@ -173,6 +226,10 @@ export class GraphView {
         }
         // lookups already running on this case's identifiers come in as pending nodes (pivot.js)
         window.refreshJobs?.();
+    }
+
+    lookupName(node) {
+        return lookupTitle(node);
     }
 
     fitAll() {
@@ -259,8 +316,10 @@ export class GraphView {
     }
 
     updateStats() {
+        this.renderLegend();
+        this.drawMinimap();
         const s = this.statsData || {};
-        const shown = this.cy.nodes('[kind = "identifier"]').not('.is-hidden').length;
+        const shown = this.cy.nodes('[kind = "identifier"]').not(OFF).length;
         this.stats.textContent = `${shown} of ${s.identifiers ?? '?'} identifiers shown · ${s.lookups ?? 0} lookups${
             s.noise || s.false_positive
                 ? ` · ${(s.noise || 0) + (s.false_positive || 0)} left out (noise, false positives)`
@@ -272,6 +331,11 @@ export class GraphView {
     // Canvas
     // -----------------------------------------------------------------------
     createCanvas() {
+        // the web layout (static/vendor/cytoscape-fcose), once per page
+        if (window.cytoscapeFcose && !window.cytoscape.fcoseAdded) {
+            window.cytoscape.use(window.cytoscapeFcose);
+            window.cytoscape.fcoseAdded = true;
+        }
         this.cy = window.cytoscape({
             container: this.canvas,
             style: stylesheet(),
@@ -293,6 +357,8 @@ export class GraphView {
             this.hideTooltip();
         };
         cy.on('viewport', grid);
+        cy.on('viewport', () => this.drawMinimap(false));
+        cy.on('position add remove', () => this.drawMinimap());
         grid();
 
         cy.on('tap', 'node', (e) => this.onTap(e.target));
@@ -351,10 +417,7 @@ export class GraphView {
 
     fit() {
         this.moved = true;
-        this.cy.animate(
-            { fit: { eles: this.cy.elements().not('.is-hidden'), padding: 40 } },
-            { duration: motion(300) }
-        );
+        this.cy.animate({ fit: { eles: this.cy.elements().not(OFF), padding: 40 } }, { duration: motion(300) });
     }
 
     zoomIn() {
@@ -388,9 +451,13 @@ export class GraphView {
     }
 
     // Move every node to its place in the tree. New nodes grow out of where they start.
-    relayout({ animate = true, grown = null } = {}) {
+    relayout({ animate = true, grown = null, fresh = false } = {}) {
         const { positions, parentOf } = treeLayout(this.cy);
         this.parentOf = parentOf;
+        this.scheduleSnapshot();
+        const web = this.layoutName() === 'web';
+        this.cy.edges().toggleClass('web', web);
+        if (web) return this.runWeb({ animate, grown, fresh });
         const duration = animate ? motion(420) : 0;
         const moves = [];
         const saved = this.state.data.positions;
@@ -898,3 +965,5 @@ export class GraphView {
 
 Object.assign(GraphView.prototype, editing);
 Object.assign(GraphView.prototype, pivoting);
+Object.assign(GraphView.prototype, finding);
+Object.assign(GraphView.prototype, framing);

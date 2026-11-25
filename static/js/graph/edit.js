@@ -2,7 +2,7 @@
 // the tray that brings them back), moving, adding nodes and links, the context
 // menus, keys, and undo / redo. Methods of GraphView (view.js), kept here.
 import { spanningTree } from './layout.js';
-import { MANUAL_TYPES, typeColor } from './style.js';
+import { MANUAL_TYPES, OFF, typeColor } from './style.js';
 import { clip, typeName } from './view.js';
 
 const esc = (value) => window.escapeHtml(value);
@@ -101,7 +101,10 @@ export const editing = {
             }
             this.cy.elements('.is-hidden:selected').unselect();
         });
-        if (this.panelNode && this.cy.getElementById(this.panelNode).hasClass('is-hidden')) this.closePanel();
+        // filters and focus (find.js) hide in the same way
+        this.applyFilters?.();
+        this.applyFocus?.();
+        if (this.panelNode && this.cy.getElementById(this.panelNode).is(OFF)) this.closePanel();
     },
 
     async hideNodes(ids, list = 'hidden', { record = true } = {}) {
@@ -198,6 +201,14 @@ export const editing = {
             : 'Hidden and removed nodes (none)';
         this.root.querySelector('[data-graph="undo"]').disabled = !this.history.done.length;
         this.root.querySelector('[data-graph="redo"]').disabled = !this.history.undone.length;
+        const web = this.layoutName() === 'web';
+        const layoutButton = this.root.querySelector('[data-layout-button]');
+        layoutButton.title = web
+            ? 'Tree layout (left to right)'
+            : 'Web layout: shared identifiers pull branches together';
+        layoutButton.setAttribute('aria-label', layoutButton.title);
+        layoutButton.classList.toggle('text-purple-300', web);
+        this.root.querySelector('[data-filter-dot]').classList.toggle('hidden', !this.filtersActive());
     },
 
     toggleTray() {
@@ -326,6 +337,7 @@ export const editing = {
             items.push(
                 ...(ids.length === 2
                     ? [
+                          { label: 'Show the path between them', icon: 'fa-route', onClick: () => this.showPath() },
                           {
                               label: 'Link these two…',
                               icon: 'fa-link',
@@ -422,6 +434,12 @@ export const editing = {
         const key = e.key.toLowerCase();
         const selected = this.cy?.$('node:selected') || [];
         let handled = true;
+        // the graph's keys aren't the page's too (/ also goes to the lookup box in the header)
+        if (key !== 'escape' && this.onFindKey(e)) {
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+        }
         if (mod && key === 'z' && !e.shiftKey) this.undo();
         else if (mod && ((key === 'z' && e.shiftKey) || key === 'y')) this.redo();
         else if (mod || e.altKey) handled = false;
@@ -436,8 +454,9 @@ export const editing = {
             if (selected.length === 2) this.linkDialog(...this.selectionOrder(selected));
             else this.startLink(selected.length === 1 ? selected : null);
         } else if (key === 'escape') {
-            if (!this.cancelLink()) {
+            if (!this.cancelLink() && !this.leaveSomething()) {
                 if (!this.tray.classList.contains('hidden')) this.tray.classList.add('hidden');
+                else if (!this.filterPanel.classList.contains('hidden')) this.filterPanel.classList.add('hidden');
                 else if (this.panelNode) this.closePanel();
                 else this.cy?.$(':selected').unselect();
             }
@@ -445,7 +464,10 @@ export const editing = {
         else if (key === '+' || key === '=') this.zoomIn();
         else if (key === '-') this.zoomOut();
         else handled = false;
-        if (handled) e.preventDefault();
+        if (handled) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
     },
 
     async undo() {
@@ -692,7 +714,10 @@ export const editing = {
         });
         document.body.appendChild(overlay);
         requestAnimationFrame(() => overlay.classList.add('modal-open'));
-        form.querySelector('input:not([type="hidden"]), select, textarea')?.focus();
+        // the first field, or the button (Esc closes it either way)
+        (
+            form.querySelector('input:not([type="hidden"]), select, textarea') || form.querySelector('[type="submit"]')
+        )?.focus();
         return form;
     },
 
@@ -820,7 +845,7 @@ export const editing = {
     freeSpot(at) {
         const taken = this.cy
             .nodes()
-            .not('.is-hidden')
+            .not(OFF)
             .map((n) => n.position());
         const clear = (p) => taken.every((q) => Math.abs(p.x - q.x) > 150 || Math.abs(p.y - q.y) > 64);
         for (let ring = 0; ring < 12; ring++)
