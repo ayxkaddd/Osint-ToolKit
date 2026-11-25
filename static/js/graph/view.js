@@ -350,10 +350,14 @@ export class GraphView {
 
         // the app's grid, moving with the graph
         const grid = () => {
-            const size = 40 * cy.zoom();
+            // fine lines every 40 units, coarse every 200; zoomed far out, the coarse become the fine
+            let fine = 40 * cy.zoom();
+            while (fine < 12) fine *= 5;
+            const coarse = fine * 5;
             const pan = cy.pan();
-            this.root.style.backgroundSize = `${size}px ${size}px`;
-            this.root.style.backgroundPosition = `${pan.x}px ${pan.y}px`;
+            const at = `${pan.x}px ${pan.y}px`;
+            this.root.style.backgroundSize = [fine, fine, coarse, coarse].map((s) => `${s}px ${s}px`).join(', ');
+            this.root.style.backgroundPosition = [at, at, at, at].join(', ');
             this.hideTooltip();
         };
         cy.on('viewport', grid);

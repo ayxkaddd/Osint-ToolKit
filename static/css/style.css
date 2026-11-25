@@ -386,12 +386,15 @@ select:focus-visible {
     }
 }
 
-/* Investigation graph: the app's black with the 40px grid; the grid moves with the graph (graph/view.js) */
+/* Investigation graph: a dark blue-black with a grid (fine lines, and coarse every five);
+   the grid moves and scales with the graph (graph/view.js) */
 .graph-root {
-    background-color: #000;
-    background-image: linear-gradient(rgba(71, 85, 105, 0.1) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(71, 85, 105, 0.1) 1px, transparent 1px);
-    background-size: 40px 40px;
+    background-color: #090a10;
+    background-image: linear-gradient(rgba(100, 116, 139, 0.11) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(100, 116, 139, 0.11) 1px, transparent 1px),
+        linear-gradient(rgba(139, 152, 179, 0.2) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(139, 152, 179, 0.2) 1px, transparent 1px);
+    background-size: 40px 40px, 40px 40px, 200px 200px, 200px 200px;
 }
 /* keys work while the graph has focus: a quiet sign of it, not the browser's outline */
 .graph-root:focus { outline: none; }

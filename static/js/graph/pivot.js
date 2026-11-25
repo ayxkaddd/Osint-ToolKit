@@ -122,6 +122,13 @@ export const pivoting = {
         document.addEventListener('investigation:updated', (e) => {
             if (!e.detail?.investigationId || e.detail.investigationId === this.investigationId) this.mergeFresh();
         });
+        // lookups started anywhere else (another page or tab) are noticed too, while the
+        // graph is on screen; refreshJobs then follows them every 2 s until they finish
+        this.activeJobs = new Set();
+        setInterval(() => {
+            if (this.cy && document.visibilityState === 'visible' && !this.root.closest('.hidden'))
+                window.refreshJobs?.();
+        }, 8000);
     },
 
     onJobStarted(job) {
@@ -140,15 +147,27 @@ export const pivoting = {
 
     onJobsUpdated(jobs) {
         if (!this.cy) return;
+        let finished = false;
+        // the first list after the page opened: what was already there is not news
+        const first = !this.knownJobs;
+        this.knownJobs = this.knownJobs || new Set();
         for (const job of jobs) {
             if (job.investigation_id !== this.investigationId) continue;
             const pending = this.cy.getElementById(`p:${job.id}`);
             const active = job.status === 'queued' || job.status === 'running';
+            // started and done between two looks (a quick lookup started elsewhere)
+            const wasActive = this.activeJobs.has(job.id) || (!first && !this.knownJobs.has(job.id));
+            this.knownJobs.add(job.id);
+            if (active) this.activeJobs.add(job.id);
+            else this.activeJobs.delete(job.id);
             if (!pending.length) {
                 if (active) this.addPending(job);
+                // done without a pending node (its identifier wasn't drawn): the graph still grows
+                else if (wasActive && job.status === 'done') finished = true;
             } else if (job.status === 'done') this.finishPending(pending, job);
             else if (pending.data('status') !== 'failed') this.setData(pending, this.pendingData(job));
         }
+        if (finished) this.mergeFresh();
     },
 
     pendingData(job) {
