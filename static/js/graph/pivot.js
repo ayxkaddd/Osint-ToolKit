@@ -217,9 +217,10 @@ export const pivoting = {
     // The pending node goes; the lookup it became grows out of the identifier
     async finishPending(pending, job) {
         const from = pending.incomers('node').first();
+        // the lookup takes the pending node's place
+        if (from.length) this.placeHints.set(from.id(), { ...pending.position() });
         pending.remove();
         await this.mergeFresh({ around: from.length ? from : null });
-        if (!this.cy.nodes('[kind = "pending"]').length) this.relayout();
         if (job.result_id && from.length) {
             const lookup = from.outgoers('node[kind = "lookup"]').filter((n) => n.data('result_id') === job.result_id);
             this.pulse(lookup.union(lookup.outgoers('node')));

@@ -127,3 +127,106 @@ export function treeLayout(cy) {
     const all = visible.length === cy.nodes().length ? parentOf : spanningTree(cy.nodes()).parentOf;
     return { positions, parentOf: all };
 }
+
+// ---------------------------------------------------------------------------
+// New nodes, placed without moving anything already on screen. In the tree, the
+// children of a node go in the column to its right, as one block starting level with
+// it (or where ``hints`` says: a finished lookup where its pending node was), moved up
+// or down to the nearest place where they overlap nothing. In the web, around it.
+// ---------------------------------------------------------------------------
+const PILLS = new Set(['lookup', 'pending']);
+
+function box(node, at) {
+    const half = PILLS.has(node.data('kind')) ? node.data('w') / 2 + 10 : 100;
+    return { x1: at.x - half, x2: at.x + half, y1: at.y - ROW / 2 + 4, y2: at.y + ROW / 2 - 4 };
+}
+
+const overlaps = (a, b) => a.x1 < b.x2 && b.x1 < a.x2 && a.y1 < b.y2 && b.y1 < a.y2;
+
+// fresh: nodes needing a place, in the order they came; parentOf: the tree over every node;
+// settled: Map id -> {node, at} of the nodes that keep (or go back to) their place.
+// Returns a Map id -> {x, y} for the fresh ones.
+export function placeNew(fresh, parentOf, settled, { web = false, hints = new Map() } = {}) {
+    const at = new Map();
+    const taken = [...settled.values()].map((s) => box(s.node, s.at));
+    const where = (node) => at.get(node.id()) || settled.get(node.id())?.at || null;
+    const freshIds = new Set(fresh.map((n) => n.id()));
+    // parents first: a fresh child of a fresh node waits until its parent has a place
+    const byParent = new Map();
+    fresh.sort(byOrder).forEach((node) => {
+        const parent = parentOf.get(node.id()) || null;
+        if (!byParent.has(parent)) byParent.set(parent, []);
+        byParent.get(parent).push(node);
+    });
+    const cy = fresh.length ? fresh[0].cy() : null;
+    const bottomLeft = () => {
+        const all = [...taken];
+        if (!all.length) return { x: 0, y: 0 };
+        return { x: Math.min(...all.map((b) => b.x1)) + 100, y: Math.max(...all.map((b) => b.y2)) + ROW * 1.5 };
+    };
+    const fits = (nodes, x, y0) =>
+        nodes.every((node, i) => {
+            const b = box(node, { x, y: y0 + i * ROW });
+            return !taken.some((t) => overlaps(t, b));
+        });
+
+    let pending = [...byParent.keys()];
+    for (let round = 0; pending.length && round < 50; round++) {
+        const later = [];
+        for (const parentId of pending) {
+            const kids = byParent.get(parentId);
+            const parent = parentId ? cy.getElementById(parentId) : null;
+            const origin = parent && where(parent);
+            if (parent && !origin && freshIds.has(parentId)) {
+                later.push(parentId);
+                continue;
+            }
+            if (!origin) {
+                // a new root: under everything, on the left
+                const start = bottomLeft();
+                kids.forEach((node, i) => {
+                    const p = { x: start.x, y: start.y + i * ROW };
+                    at.set(node.id(), p);
+                    taken.push(box(node, p));
+                });
+                continue;
+            }
+            if (web) {
+                kids.forEach((node, i) => {
+                    let p = null;
+                    for (let ring = 1; ring < 30 && !p; ring++)
+                        for (let step = 0; step < ring * 6 && !p; step++) {
+                            const angle = (2 * Math.PI * (step + i * 0.37)) / (ring * 6);
+                            const q = {
+                                x: origin.x + ring * 120 * Math.cos(angle),
+                                y: origin.y + ring * 70 * Math.sin(angle),
+                            };
+                            const b = box(node, q);
+                            if (!taken.some((t) => overlaps(t, b))) p = q;
+                        }
+                    p = p || { x: origin.x + 140, y: origin.y };
+                    at.set(node.id(), p);
+                    taken.push(box(node, p));
+                });
+                continue;
+            }
+            const x = origin.x + COLUMN;
+            const hint = hints.get(parentId);
+            const start = hint ? hint.y : origin.y - ((kids.length - 1) * ROW) / 2;
+            let y0 = null;
+            for (let step = 0; step < 600 && y0 === null; step++) {
+                // 0, +½ row, -½ row, +1, -1, ...: the nearest free place
+                const offset = Math.ceil(step / 2) * (ROW / 2) * (step % 2 ? 1 : -1);
+                if (fits(kids, x, start + offset)) y0 = start + offset;
+            }
+            if (y0 === null) y0 = bottomLeft().y;
+            kids.forEach((node, i) => {
+                const p = { x, y: y0 + i * ROW };
+                at.set(node.id(), p);
+                taken.push(box(node, p));
+            });
+        }
+        pending = later;
+    }
+    return at;
+}

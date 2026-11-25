@@ -2,7 +2,7 @@
 // lookups and groups opening and folding on click, and the side panel.
 // Editing (hide, remove, add, link, undo) is in edit.js; the saved view in state.js.
 import { MANUAL_TYPES, OFF, decorate, stylesheet, typeColor } from './style.js';
-import { treeLayout } from './layout.js';
+import { placeNew, treeLayout } from './layout.js';
 import { History, SavedView } from './state.js';
 import { editing } from './edit.js';
 import { pivoting } from './pivot.js';
@@ -49,6 +49,7 @@ export class GraphView {
         this.parentOf = new Map();
         this.panelNode = null;
         this.state = new SavedView(investigationId);
+        this.placeHints = new Map(); // parent id -> where its next new children start (pivot.js, loadMore)
         this.history = new History(() => this.updateToolbar());
         this.build();
         this.watchJobs();
@@ -80,6 +81,7 @@ export class GraphView {
                 <button type="button" data-graph="openSearch" title="Search (/ or Ctrl+F)"><i data-lucide="search" class="w-4 h-4"></i></button>
                 <button type="button" data-graph="toggleFilters" data-filter-button title="Filters"><i data-lucide="sliders-horizontal" class="w-4 h-4"></i><span data-filter-dot class="hidden ml-0.5 w-1.5 h-1.5 rounded-full bg-purple-400"></span></button>
                 <span class="w-px h-5 bg-[#24283b] mx-1"></span>
+                <button type="button" data-graph="tidy" title="Tidy up: lay everything out again (Ctrl+Z puts it back)"><i data-lucide="wand-sparkles" class="w-4 h-4"></i></button>
                 <button type="button" data-graph="collapseAll" title="Fold every lookup"><i data-lucide="fold-horizontal" class="w-4 h-4"></i></button>
                 <span class="w-px h-5 bg-[#24283b] mx-1"></span>
                 <button type="button" data-graph="addNodeDialog" title="Add a node (N)"><i data-lucide="plus" class="w-4 h-4"></i></button>
@@ -215,7 +217,7 @@ export class GraphView {
         this.refreshFoldable(this.cy.nodes());
         this.updateStats();
         this.updateToolbar();
-        this.relayout({ animate: false });
+        this.relayout({ animate: false, initial: true });
         const viewport = this.state.data.viewport;
         if (viewport) {
             this.cy.viewport({ zoom: viewport.zoom, pan: { x: viewport.x, y: viewport.y } });
@@ -454,24 +456,59 @@ export class GraphView {
         this.openPanel(node);
     }
 
-    // Move every node to its place in the tree. New nodes grow out of where they start.
-    relayout({ animate = true, grown = null, fresh = false } = {}) {
-        const { positions, parentOf } = treeLayout(this.cy);
+    // Where nodes go. Nothing that has a place moves: nodes without one (new, or opened for
+    // the first time) get one next to their parent and grow out of it (placeNew in
+    // layout.js); nodes coming back (opened again, shown again) go back to theirs.
+    // ``full``: everything the analyst didn't move is laid out again (Tidy up, the switch
+    // between tree and web, a case opened for the first time).
+    relayout({ animate = true, grown = null, full = false, initial = false } = {}) {
+        const { positions: tree, parentOf } = treeLayout(this.cy);
         this.parentOf = parentOf;
         this.scheduleSnapshot();
         const web = this.layoutName() === 'web';
         this.cy.edges().toggleClass('web', web);
-        if (web) return this.runWeb({ animate, grown, fresh });
-        const duration = animate ? motion(420) : 0;
-        const moves = [];
         const saved = this.state.data.positions;
-        this.cy.nodes().forEach((node) => {
-            // where the analyst put it, else its place in the tree
-            const pin = saved[node.id()];
-            if (pin) node.data('pinned', true);
-            const to = pin ? { x: pin[0], y: pin[1] } : positions.get(node.id());
-            const isNew = grown?.has(node.id());
-            if (!to || (node.data('pinned') && !isNew && duration)) return;
+        const pinned = new Set(this.pinnedIds());
+        const drawn = this.cy.nodes().not(OFF);
+        if (initial) {
+            drawn.forEach((n) => n.data('pinned', pinned.has(n.id())));
+            // a view saved before every position was kept: laid out once, the moved nodes stay
+            const known = drawn.filter((n) => saved[n.id()]).length;
+            if (known < drawn.length / 2) full = true;
+        }
+        if (full && web) return this.runWeb({ animate, fresh: !initial }).then(() => this.keepPlaces(drawn, true));
+        const duration = animate ? motion(420) : 0;
+        const targets = new Map();
+        const xy = (p) => ({ x: p[0], y: p[1] });
+        if (full) {
+            drawn.forEach((n) => {
+                const to = pinned.has(n.id()) && saved[n.id()] ? xy(saved[n.id()]) : tree.get(n.id());
+                if (to) targets.set(n.id(), to);
+            });
+        } else {
+            const fresh = [];
+            drawn.forEach((n) => {
+                if (n.data('placed')) return;
+                const back = n.scratch('_to') || (saved[n.id()] && xy(saved[n.id()]));
+                if (back) targets.set(n.id(), back);
+                else fresh.push(n);
+            });
+            const settled = new Map();
+            drawn.forEach((n) => {
+                if (targets.has(n.id())) settled.set(n.id(), { node: n, at: targets.get(n.id()) });
+                else if (n.data('placed')) settled.set(n.id(), { node: n, at: { ...n.position() } });
+            });
+            placeNew(this.cy.collection(fresh), parentOf, settled, { web, hints: this.placeHints }).forEach((to, id) =>
+                targets.set(id, to)
+            );
+            this.placeHints.clear();
+        }
+        const moves = [];
+        targets.forEach((to, id) => {
+            const node = this.cy.getElementById(id);
+            const isNew = grown?.has(id);
+            node.removeScratch('_to');
+            node.data('placed', true);
             if (!duration) {
                 node.position(to);
                 return;
@@ -490,7 +527,93 @@ export class GraphView {
                 .nodes()
                 .filter((n) => grown.has(n.id()))
                 .removeStyle('opacity width height');
+        if (targets.size) this.keepPlaces(targets, full);
+        if (grown?.size && !initial) this.bringIntoView([...grown].map((id) => targets.get(id)).filter(Boolean));
         return Promise.all(moves);
+    }
+
+    pinnedIds() {
+        const s = this.state.data;
+        // before "pinned" was saved, every saved position was a node the analyst moved
+        return s.pinned ?? Object.keys(s.positions);
+    }
+
+    // Remember where nodes are (so the case opens as it was left). ``places``: a Map of
+    // id -> {x, y}, or nodes (their positions now)
+    keepPlaces(places, all = false) {
+        const now = {};
+        if (places instanceof Map) places.forEach((p, id) => (now[id] = [Math.round(p.x), Math.round(p.y)]));
+        else places.forEach((n) => (now[n.id()] = [Math.round(n.position('x')), Math.round(n.position('y'))]));
+        Object.keys(now)
+            .filter((id) => id.startsWith('p:'))
+            .forEach((id) => delete now[id]);
+        this.state.change((s) => {
+            s.pinned = s.pinned ?? Object.keys(s.positions);
+            let positions = all ? { ...now } : { ...s.positions, ...now };
+            if (all) s.pinned.forEach((id) => s.positions[id] && !now[id] && (positions[id] = s.positions[id]));
+            // the cap of the saved view: what is pinned or drawn first
+            const ids = Object.keys(positions);
+            if (ids.length > 5000) {
+                const keep = new Set([...s.pinned, ...this.cy.nodes().map((n) => n.id())]);
+                positions = Object.fromEntries(
+                    ids
+                        .filter((id) => keep.has(id))
+                        .slice(0, 5000)
+                        .map((id) => [id, positions[id]])
+                );
+            }
+            s.positions = positions;
+        });
+    }
+
+    // New nodes off the screen (or under the toolbar): the view moves just enough to show
+    // them; the nodes stay where they are
+    bringIntoView(points) {
+        if (!points.length) return;
+        const zoom = this.cy.zoom();
+        const pan = this.cy.pan();
+        const width = this.canvas.clientWidth;
+        const height = this.canvas.clientHeight;
+        // on screen, in pixels; the toolbar covers the top, the legend and minimap the bottom
+        const xs = points.map((p) => p.x * zoom + pan.x);
+        const ys = points.map((p) => p.y * zoom + pan.y);
+        const box = { x1: 60, x2: width - 60, y1: 90, y2: height - 60 };
+        let dx = 0;
+        let dy = 0;
+        if (Math.min(...xs) < box.x1) dx = box.x1 - Math.min(...xs);
+        else if (Math.max(...xs) > box.x2) dx = Math.max(box.x2 - Math.max(...xs), box.x1 - Math.min(...xs));
+        if (Math.min(...ys) < box.y1) dy = box.y1 - Math.min(...ys);
+        else if (Math.max(...ys) > box.y2) dy = Math.max(box.y2 - Math.max(...ys), box.y1 - Math.min(...ys));
+        if (!dx && !dy) return;
+        this.moved = true;
+        this.cy.animate(
+            { pan: { x: pan.x + dx, y: pan.y + dy } },
+            { duration: motion(450), easing: 'ease-in-out-cubic' }
+        );
+    }
+
+    // Lay everything out again (what the analyst moved stays); undone with Ctrl+Z
+    async tidy() {
+        const before = new Map(this.cy.nodes().map((n) => [n.id(), { ...n.position() }]));
+        const apply = async (places) => {
+            const moves = [];
+            places.forEach((to, id) => {
+                const node = this.cy.getElementById(id);
+                if (node.length)
+                    moves.push(
+                        node
+                            .animation({ position: to }, { duration: motion(420), easing: 'ease-out-cubic' })
+                            .play()
+                            .promise()
+                    );
+            });
+            this.keepPlaces(places);
+            await Promise.all(moves);
+        };
+        await this.relayout({ full: true });
+        const after = new Map(this.cy.nodes().map((n) => [n.id(), { ...n.position() }]));
+        this.history.push({ undo: () => apply(before), redo: () => apply(after) });
+        this.fit();
     }
 
     // -----------------------------------------------------------------------
@@ -572,6 +695,7 @@ export class GraphView {
             return;
         }
         const from = more.position();
+        if (more.data('of')) this.placeHints.set(more.data('of'), { ...from });
         more.remove();
         const added = this.cy.add(this.elements(page.nodes, page.edges));
         this.attachManualEdges();
@@ -584,6 +708,11 @@ export class GraphView {
     // New nodes start small and clear at their parent and spring out to their places
     async grow(nodes, parent, from = null) {
         nodes.forEach((n) => {
+            // opened again: it goes back to where it was
+            if (n.data('placed')) {
+                n.scratch('_to', { ...n.position() });
+                n.data('placed', false);
+            }
             // from the parent given, else from what links to it, else the middle of the screen
             const origin = n.incomers('node').not(nodes).first();
             const start = from || parent?.position() || (origin.length ? origin.position() : this.modelCenter());

@@ -46,7 +46,7 @@ export const editing = {
         this.attachManualEdges();
 
         // folded: the deepest first, so each keeps what is folded inside it
-        this.relayout({ animate: false });
+        this.parentOf = spanningTree(this.cy.nodes()).parentOf;
         const depth = (id) => {
             let d = 0;
             for (let at = id; this.parentOf.has(at); at = this.parentOf.get(at)) d++;
@@ -279,16 +279,18 @@ export const editing = {
         if (!moved.length) return;
         const place = (items, which) => {
             this.state.change((s) => {
+                s.pinned = s.pinned ?? Object.keys(s.positions);
                 items.forEach((d) => {
                     const node = this.cy.getElementById(d.id);
                     const at = which === 'to' ? d.to : d.from;
+                    const pin = which === 'to' || d.pinned;
                     if (node.length) {
                         node.position(at);
-                        node.data('pinned', which === 'to' || d.pinned);
+                        node.data('pinned', pin);
                     }
-                    if (which === 'to') s.positions[d.id] = [Math.round(at.x), Math.round(at.y)];
-                    else if (d.saved) s.positions[d.id] = d.saved;
-                    else delete s.positions[d.id];
+                    s.positions[d.id] = [Math.round(at.x), Math.round(at.y)];
+                    s.pinned = s.pinned.filter((id) => id !== d.id);
+                    if (pin) s.pinned.push(d.id);
                 });
             });
         };

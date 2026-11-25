@@ -28,7 +28,7 @@ export const framing = {
             s.layout = web ? 'web' : 'tree';
         });
         this.updateToolbar();
-        await this.relayout({ fresh: true });
+        await this.relayout({ full: true });
         this.fit();
     },
 

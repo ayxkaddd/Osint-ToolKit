@@ -117,8 +117,12 @@ class GraphFilters(_Strict):
 
 class GraphState(_Strict):
     """graph.json. Node ids are the graph's (e:..., r:..., g:..., m:...); ids that are no
-    longer in the graph are kept, so a deleted and re-run lookup comes back as it was."""
+    longer in the graph are kept, so a deleted and re-run lookup comes back as it was.
+    ``positions``: where each node was drawn; ``pinned``: the ones the analyst moved
+    (tidying up leaves them). A view saved before ``pinned`` existed has only moved nodes
+    in ``positions``."""
     positions: dict[NodeId, tuple[float, float]] = Field(default_factory=dict)
+    pinned: Optional[list[NodeId]] = Field(None, max_length=5000)
     expanded: list[NodeId] = Field(default_factory=list, max_length=5000)
     collapsed: list[NodeId] = Field(default_factory=list, max_length=5000)
     hidden: list[NodeId] = Field(default_factory=list, max_length=5000)
