@@ -431,3 +431,77 @@ def test_graph_view_needs_login_and_this_site(anon, client, investigation):
     assert client.put(url, json={}, headers={"Sec-Fetch-Site": "cross-site"}).status_code == 403
     assert client.get(url, headers={"Sec-Fetch-Site": "cross-site"}).status_code == 403
     assert client.put("/api/investigations/00000000-0000-4000-8000-000000000000/graph/state", json={}).status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Search, export and the picture in the report
+# ---------------------------------------------------------------------------
+def test_search_finds_what_is_folded_and_says_how_to_reach_it(client, investigation):
+    rid = _save(investigation, "username", "lookup_username", {"username": "seek"}, _sites("seek", 60))
+    whois = _save(investigation, "whois", "lookup_whois", {"domain": "seek.test"}, {"email": "owner@seek.test"})
+    url = f"/api/investigations/{investigation}/graph/search"
+
+    found = client.get(url, params={"q": "site45.TEST"}).json()
+    assert found["total"] == 1
+    match = found["matches"][0]
+    assert match["id"] == "e:url:https://site45.test/seek"
+    group = match["reveal"]["group"]
+    assert match["reveal"]["lookup"] == f"r:{rid}" and group.startswith(f"g:r:{rid}:category:")
+    # its place in the group: the expand page that has it
+    page = client.get(f"/api/investigations/{investigation}/graph/expand",
+                      params={"node": group, "offset": match["reveal"]["offset"], "limit": 1}).json()
+    assert page["nodes"][0]["id"] == match["id"]
+
+    shown = client.get(url, params={"q": "owner@seek"}).json()["matches"][0]
+    # few findings: under its lookup (opened if the analyst folded it)
+    assert shown["id"] == "e:email:owner@seek.test" and shown["reveal"] == {"lookup": f"r:{whois}"}
+    assert client.get(url, params={"q": "s"}).json() == {"matches": [], "total": 0}
+    assert client.get(url, params={"q": "seek"}).json()["total"] > 30
+    assert len(client.get(url, params={"q": "seek"}).json()["matches"]) == 30
+
+
+def test_whole_graph_exports_as_json_and_gexf(client, investigation):
+    _save(investigation, "username", "lookup_username", {"username": "out"}, _sites("out", 20))
+    _save(investigation, "manual", "upload", {"title": "x"}, {"kind": "manual", "text": "a <b>&</b> \x07 b@c.test"})
+    client.put(f"/api/investigations/{investigation}/graph/state", json={
+        "manual_nodes": [{"id": M1, "type": "person", "label": "Jo <\"&'>"}],
+        "manual_edges": [{"id": "l:" + "d" * 32, "source": M1, "target": "e:username:out", "label": "is"}]})
+    url = f"/api/investigations/{investigation}/graph/export"
+
+    data = client.get(url).json()
+    ids = {n["id"] for n in data["nodes"]}
+    assert {"e:username:out", "e:url:https://site19.test/out", M1} <= ids            # nothing folded
+    assert not any(n["id"].startswith("g:") for n in data["nodes"])
+    assert {"source": M1, "target": "e:username:out"}.items() <= next(e for e in data["edges"] if e["kind"] == "manual").items()
+
+    gexf = client.get(url, params={"format": "gexf"})
+    assert gexf.status_code == 200 and gexf.headers["content-type"].startswith("application/gexf+xml")
+    assert "attachment" in gexf.headers["content-disposition"]
+    from xml.etree import ElementTree
+    root = ElementTree.fromstring(gexf.content)        # well formed, whatever was in the values
+    ns = {"g": "http://gexf.net/1.3"}
+    labels = {n.get("label") for n in root.iterfind(".//g:node", ns)}
+    assert "Jo <\"&'>" in labels and "https://site19.test/out" in labels
+    assert len(root.findall(".//g:edge", ns)) == len(data["edges"])
+
+
+def test_graph_picture_goes_in_the_report(client, investigation):
+    from conftest import png
+    url = f"/api/investigations/{investigation}/graph/image"
+    assert client.get(url).status_code == 404
+    assert "The investigation graph" not in client.get(f"/api/investigations/{investigation}/report").text
+    assert client.put(url, content=b"<svg onload=alert(1)>").status_code == 400
+    assert client.put(url, content=png((300, 200)), headers={"Content-Type": "image/png"}).status_code == 200
+    image = client.get(url)
+    assert image.status_code == 200 and image.content[:4] == b"RIFF" and image.content[8:12] == b"WEBP"
+    report = client.get(f"/api/investigations/{investigation}/report").text
+    assert 'alt="The investigation graph"' in report and 'src="data:image/webp;base64,' in report
+
+
+@pytest.mark.parametrize("method,path", [("get", "graph/search?q=ab"), ("get", "graph/export"),
+                                         ("get", "graph/export?format=gexf"), ("get", "graph/image"),
+                                         ("put", "graph/image")])
+def test_new_graph_endpoints_need_login_and_this_site(anon, client, investigation, method, path):
+    url = f"/api/investigations/{investigation}/{path}"
+    assert getattr(anon, method)(url).status_code == 401
+    assert getattr(client, method)(url, headers={"Sec-Fetch-Site": "cross-site"}).status_code == 403

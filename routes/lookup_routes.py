@@ -1,4 +1,5 @@
 """Search box, background jobs, entities/triage, phone & IP lookups, case report."""
+import base64
 import re
 from collections import Counter, defaultdict
 from datetime import datetime
@@ -314,6 +315,10 @@ def _event_when(date: Optional[str], precision: Optional[str]) -> str:
         return date
 
 
+def _data_uri(data, media_type: str):
+    return f"data:{media_type};base64,{base64.b64encode(data).decode()}" if data else None
+
+
 @router.get("/api/investigations/{investigation_id}/report", response_class=HTMLResponse)
 def case_report(request: Request, investigation_id: UUID, include: str = Query("findings")):
     """Printable case report. ``include=all`` lists every result, otherwise
@@ -365,6 +370,8 @@ def case_report(request: Request, investigation_id: UUID, include: str = Query("
         "events_total": len(events),
         "manual_items": investigation_service.manual_items(investigation_id),
         "tracking_ids": investigation_service.tracking_ids(investigation_id),
+        # the graph as it was left on the Graph tab, in the page itself (a saved copy keeps it)
+        "graph_image": _data_uri(investigation_service.graph_image(investigation_id), "image/webp"),
         "counts": {"results": len(results), "entities": len(entities), "notes": len(notes),
                    "modules": len({r["service_name"] for r in results})},
     })

@@ -19,11 +19,13 @@ from datetime import datetime
 from typing import Annotated, Any, Literal, Optional
 from urllib.parse import urljoin, urlparse
 from uuid import UUID
+from xml.etree import ElementTree
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
 
 from services.entities import ENTITY_TYPES, NOISE_DOMAINS, NOISE_EMAIL_LOCALS, Entity, is_noise
 from .constants import GRAPH_INLINE_MAX, GRAPH_NODE_BUDGET, GRAPH_VERSION, MANUAL_SERVICE, NOTE_IMAGE_NAME
+from .images import process_note_image
 from .storage import _GRAPH_CACHE, _SHARED_CACHE, _STORE_LOCK, _read_json, _write_json_atomic
 
 TRIAGE_RANK = {"confirmed": 0, "important": 1, None: 2, "false_positive": 3}
@@ -549,6 +551,109 @@ class GraphMixin:
             if group:
                 return {"node": self._group_node(group), "lookup": lookup_node(group["lookup"])}
         return None
+
+    # -- finding, exporting and the picture of the graph --
+
+    def search_graph(self, investigation_id: UUID, query: str, noise: bool = False, limit: int = 30,
+                     budget: int = GRAPH_NODE_BUDGET) -> dict[str, Any]:
+        """Identifiers whose value has ``query`` in it, wherever they are folded, with what
+        to open to reach each: {"lookup"} for one found by a closed lookup, {"lookup",
+        "group", "offset"} for one in a group (its place in the group's list)."""
+        model = self._graph_model(investigation_id, noise)
+        view = self._graph_view(model, budget)
+        needle = query.strip().lower()
+        if len(needle) < 2:
+            return {"matches": [], "total": 0}
+        place: dict[str, tuple[str, int]] = {}
+        for group_id, group in view["groups"].items():
+            for index, key in enumerate(group["members"]):
+                place.setdefault(key, (group_id, index))
+        found = [(info["order"], key) for key, info in model["entities"].items()
+                 if needle in f"{info['entity'].get('value') or ''} {info['entity'].get('display') or ''}".lower()]
+        found.sort()
+        matches = []
+        for _, key in found[:limit]:
+            info = model["entities"][key]
+            match = {"id": f"e:{key}", "type": info["entity"].get("type"), "value": info["entity"].get("value"),
+                     "display": info["entity"].get("display") or info["entity"].get("value"), "reveal": {}}
+            if key in place:
+                group_id, index = place[key]
+                match["reveal"] = {"lookup": view["groups"][group_id]["lookup"], "group": group_id, "offset": index}
+            elif key not in view["pinned"] and info["found_in"]:
+                match["reveal"] = {"lookup": info["found_in"][0]}
+            matches.append(match)
+        return {"matches": matches, "total": len(found)}
+
+    def export_graph(self, investigation_id: UUID, noise: bool = False) -> dict[str, Any]:
+        """The whole graph, nothing folded: every identifier and lookup, the links between
+        them, and what the analyst added."""
+        model = self._graph_model(investigation_id, noise)
+        nodes = [self._identifier_node(model, key) for key in model["entities"]]
+        nodes += [self._lookup_node(model, lid, len(lookup["found"])) for lid, lookup in model["lookups"].items()]
+        edges = []
+        for lid, lookup in model["lookups"].items():
+            edges += [_edge(f"e:{key}", lid, "searched", lookup) for key in lookup["searched"]]
+            edges += [_edge(lid, f"e:{key}", "found", lookup) for key in lookup["found"]]
+            if lookup["parent"] and not lookup["searched"]:
+                edges.append(_edge(lookup["parent"], lid, "followup", lookup))
+        state = self.get_graph_state(investigation_id)
+        ids = {n["id"] for n in nodes}
+        for manual in state.get("manual_nodes") or []:
+            nodes.append({**manual, "kind": "manual"})
+            ids.add(manual["id"])
+        edges += [{**e, "kind": "manual"} for e in state.get("manual_edges") or []
+                  if e.get("source") in ids and e.get("target") in ids]
+        return {"nodes": nodes, "edges": edges}
+
+    def export_graph_gexf(self, investigation_id: UUID, noise: bool = False) -> str:
+        """The whole graph as GEXF 1.3 (opens in Gephi)."""
+        graph = self.export_graph(investigation_id, noise)
+        name = (self.get_investigation_info(investigation_id) or {}).get("name") or "Investigation"
+        def clean(value) -> str:
+            # XML can't hold most control characters, even escaped
+            return re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\ufffe\uffff]", "", str(value))
+
+        root = ElementTree.Element("gexf", {"xmlns": "http://gexf.net/1.3", "version": "1.3"})
+        meta = ElementTree.SubElement(root, "meta", {"lastmodifieddate": datetime.now().strftime("%Y-%m-%d")})
+        ElementTree.SubElement(meta, "creator").text = "OSINT Toolkit"
+        ElementTree.SubElement(meta, "description").text = clean(name)
+        body = ElementTree.SubElement(root, "graph", {"defaultedgetype": "directed", "mode": "static"})
+        fields = ("kind", "type", "status", "service", "method", "found", "timestamp")
+        declared = ElementTree.SubElement(body, "attributes", {"class": "node"})
+        for field in fields:
+            ElementTree.SubElement(declared, "attribute", {"id": field, "title": field, "type": "string"})
+        nodes = ElementTree.SubElement(body, "nodes")
+        for node in graph["nodes"]:
+            label = node.get("display") or node.get("value") or node.get("label") or node.get("target") or node.get("service")
+            element = ElementTree.SubElement(nodes, "node", {"id": clean(node["id"]), "label": clean(label or node["id"])})
+            values = ElementTree.SubElement(element, "attvalues")
+            for field in fields:
+                if node.get(field) not in (None, ""):
+                    ElementTree.SubElement(values, "attvalue", {"for": field, "value": clean(node[field])})
+        edges = ElementTree.SubElement(body, "edges")
+        for index, edge in enumerate(graph["edges"]):
+            ElementTree.SubElement(edges, "edge", {"id": str(index), "source": clean(edge["source"]),
+                                                   "target": clean(edge["target"]),
+                                                   "label": clean(edge.get("label") or edge.get("kind") or "")})
+        return '<?xml version="1.0" encoding="UTF-8"?>\n' + ElementTree.tostring(root, encoding="unicode")
+
+    def _graph_image_file(self, investigation_id):
+        return self._inv_dir(investigation_id) / "graph.webp"
+
+    def save_graph_image(self, investigation_id: UUID, data: bytes) -> None:
+        """The graph as the analyst left it, for the case report. Decoded and stored again,
+        so only pixels are kept."""
+        image = process_note_image(data)
+        path = self._graph_image_file(investigation_id)
+        tmp = path.with_suffix(".webp.tmp")
+        tmp.write_bytes(image)
+        tmp.replace(path)
+
+    def graph_image(self, investigation_id: UUID) -> Optional[bytes]:
+        try:
+            return self._graph_image_file(investigation_id).read_bytes()
+        except FileNotFoundError:
+            return None
 
     def expand_graph_node(self, investigation_id: UUID, node_id: str, offset: int = 0, limit: int = 40,
                           noise: bool = False, budget: int = GRAPH_NODE_BUDGET) -> Optional[dict[str, Any]]:
