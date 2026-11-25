@@ -14,7 +14,7 @@ from typing import Optional
 
 import typer
 
-from . import __version__, config, render
+from . import __version__, config, follow, render
 from .client import ApiError, Client
 
 
@@ -266,20 +266,81 @@ def modules(ready: bool = typer.Option(False, "--ready", help="Only the ones tha
     render.out.print(render.modules(items))
 
 
+def interactive() -> bool:
+    """Whether there is a person at a terminal to pick the modules."""
+    return sys.stdin.isatty() and sys.stdout.isatty()
+
+
+def pick_modules(candidates: list[dict]) -> list[tuple[dict, str]]:
+    """The modules ticked in a checkbox list: (the reading of the value, module id).
+    Modules that need setup are shown but can't be ticked; nothing is ticked at first."""
+    import questionary
+
+    choices: list = []
+    for c in candidates:
+        if not c.get("modules"):
+            continue
+        if len(candidates) > 1:
+            choices.append(questionary.Separator(f"{c.get('label') or c.get('type')}: {c.get('display') or c.get('value')}"))
+        for m in c["modules"]:
+            title = [("", m.get("name") or m.get("id", ""))]
+            if m.get("cost") and m.get("cost") != "free":
+                title.append(("fg:ansiyellow", f"  {m['cost']}" + (f" ({m['cost_note']})" if m.get("cost_note") else "")))
+            if m.get("previous"):
+                title.append(("fg:ansibrightblack", "  looked up before"))
+            todo = [f.get("action") for f in m.get("setup") or [] if f.get("action")] or m.get("problems") or ["see Settings"]
+            disabled = None if m.get("ready") else "needs setup: " + "; ".join(todo)
+            choices.append(questionary.Choice(title, value=(c, m["id"]), disabled=disabled))
+    if not choices:
+        return []
+    picked = questionary.checkbox("Modules to run (space ticks one, enter starts them)", choices=choices,
+                                  instruction=" ").ask()
+    return picked or []   # None: Ctrl+C
+
+
+def _named_modules(module: str, candidates: list[dict], type: Optional[str]) -> tuple[list[tuple[dict, str]], int]:
+    picked, failed = [], 0
+    for module_id in [m.strip() for m in module.split(",") if m.strip()]:
+        reading = next((c for c in candidates if any(m.get("id") == module_id for m in c.get("modules", []))), None)
+        if reading is None:
+            render.err.print(f"[red]{render.escape(module_id)}:[/] doesn't look up this value"
+                             + (f" as {render.escape(type)}" if type else "") + " (see `osint lookup VALUE` or `osint modules`)")
+            failed += 1
+        else:
+            picked.append((reading, module_id))
+    return picked, failed
+
+
+def _follow(api: Client, investigation_id: Optional[str], jobs: list[dict], as_json: bool) -> None:
+    try:
+        finished = follow.follow(api, investigation_id, jobs, quiet=as_json)
+    except KeyboardInterrupt:
+        render.err.print("Stopped following: the lookups go on on the server. "
+                         "`osint follow` shows them again, `osint jobs` lists them")
+        raise typer.Exit(130) from None
+    if as_json:
+        print_json([{"job": f.job, "result": f.record} for f in finished])
+    if any(f.job.get("status") == "failed" for f in finished):
+        raise typer.Exit(1)
+
+
 @app.command()
 @handles_errors
 def lookup(value: str = typer.Argument(..., help="An email, phone number, username, domain, IP, ..."),
            module: Optional[str] = typer.Option(None, "--module", "-m",
-                                                help="Modules to run, comma-separated (see the list without it)"),
+                                                help="Modules to run, comma-separated, instead of picking them"),
            type: Optional[str] = typer.Option(None, "--type", "-t", help="Read the value as this kind"),
+           detach: bool = typer.Option(False, "--detach", "-d", help="Start them and return, without waiting"),
            as_json: bool = JsonOption):
-    """Look a value up in the background, saved to the current investigation.
+    """Look a value up, saved to the current investigation, and show what each module answers.
 
-    Without -m it only lists the modules that can look it up: nothing starts (some cost money)."""
+    At a terminal it asks which modules to run (nothing is ticked: some cost money). Each
+    lookup's answer is printed when it finishes; streaming ones print what they find as it
+    arrives. Without a terminal, -m names the modules; without -m it only lists them."""
     api = client()
     found = api.detect(value)
     candidates = [c for c in found.get("candidates", []) if not type or c.get("type") == type]
-    if not module:
+    if not module and (as_json or not interactive() or not candidates):
         if as_json:
             return print_json(found)
         if not candidates:
@@ -291,14 +352,15 @@ def lookup(value: str = typer.Argument(..., help="An email, phone number, userna
         return
     if not found.get("investigation_id"):
         raise ApiError("No current investigation - lookups are saved there. Pick one with `osint use <id>`")
-    started, failed = [], 0
-    for module_id in [m.strip() for m in module.split(",") if m.strip()]:
-        reading = next((c for c in candidates if any(m.get("id") == module_id for m in c.get("modules", []))), None)
-        if reading is None:
-            render.err.print(f"[red]{render.escape(module_id)}:[/] doesn't look up this value"
-                             + (f" as {render.escape(type)}" if type else "") + " (see `osint lookup VALUE` or `osint modules`)")
-            failed += 1
-            continue
+    if module:
+        picked, failed = _named_modules(module, candidates, type)
+    else:
+        picked, failed = pick_modules(candidates), 0
+        if not picked:
+            render.out.print("Nothing started")
+            return
+    started = []
+    for reading, module_id in picked:
         try:
             job = api.start_job(module_id, reading["type"], reading["value"]).get("job", {})
         except ApiError as e:
@@ -309,12 +371,37 @@ def lookup(value: str = typer.Argument(..., help="An email, phone number, userna
         if not as_json:
             render.out.print(f"Started {render.escape(job.get('module_name') or module_id)} on "
                              f"[bold]{render.escape(reading['value'])}[/] [dim](job {render.escape(job.get('id', ''))})[/]")
-    if as_json:
-        print_json(started)
+    if detach:
+        if as_json:
+            print_json(started)
+        elif started:
+            render.out.print("[dim]Follow them with `osint follow` or `osint jobs`[/]")
     elif started:
-        render.out.print("[dim]Follow them with `osint jobs`[/]")
+        _follow(api, found["investigation_id"], started, as_json)
     if failed:
         raise typer.Exit(1)
+
+
+@app.command("follow")
+@handles_errors
+def follow_jobs(job_ids: Optional[list[str]] = typer.Argument(None, help="Job ids (default: every running lookup "
+                                                                        "of the current investigation)"),
+                as_json: bool = JsonOption):
+    """Wait for background lookups and show what they answer, as `osint lookup` does."""
+    api = client()
+    inv_id = api.current().get("investigation_id")
+    listed = api.jobs(None if job_ids else inv_id, limit=300).get("jobs", [])
+    if job_ids:
+        jobs = [j for j in listed if j.get("id") in job_ids]
+        missing = [j for j in job_ids if j not in {x.get("id") for x in jobs}]
+        if missing:
+            raise ApiError(f"No job {', '.join(missing)} (see `osint jobs --all`)")
+    else:
+        jobs = [j for j in listed if j.get("status") in ("queued", "running")]
+        if not jobs:
+            render.out.print("No lookups running in the current investigation")
+            return
+    _follow(api, inv_id, jobs, as_json)
 
 
 @app.command()

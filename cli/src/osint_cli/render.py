@@ -123,3 +123,125 @@ def candidates(found: list[dict]) -> Tree:
         if not c.get("modules"):
             branch.add("[dim]no module looks this up yet[/]")
     return tree
+
+
+# --- following lookups (osint lookup) ---
+
+TITLE_KEYS = ("site_name", "title", "name", "module", "provider", "email", "username", "domain", "value", "label")
+SUBTITLE_KEYS = ("subtitle", "category", "status", "type")
+URL_KEYS = ("url", "link", "profile_url")
+# the lists that are a module's finds themselves; other lists say what they are
+MAIN_SECTIONS = {"results", "items", "modules", "entries", "domains"}
+LIST_MAX = 50
+
+
+def _scalar(value: Any) -> str:
+    if isinstance(value, bool):
+        return "yes" if value else "no"
+    return str(value)
+
+
+def _empty(value: Any) -> bool:
+    return value is None or value == "" or value == [] or value == {}
+
+
+def _first(item: dict, keys: tuple) -> Optional[str]:
+    for key in keys:
+        value = item.get(key)
+        if not _empty(value) and not isinstance(value, (dict, list)):
+            return _scalar(value)
+    return None
+
+
+def _item_text(item: Any, with_details: bool = True) -> str:
+    """A find on one line: its name, what kind it is, its link; else a few of its fields."""
+    if not isinstance(item, dict):
+        return escape(_scalar(item))
+    title, subtitle, url = _first(item, TITLE_KEYS), _first(item, SUBTITLE_KEYS), _first(item, URL_KEYS)
+    parts = [f"[bold]{escape(title)}[/]"] if title else []
+    if subtitle and subtitle != title:
+        parts.append(f"[dim]{escape(subtitle)}[/]")
+    if url and url != title:
+        parts.append(escape(url))
+    if not parts and with_details:
+        fields = [(k, v) for k, v in item.items() if not _empty(v) and not isinstance(v, (dict, list))][:4]
+        parts = [f"[dim]{escape(str(k))}:[/] {escape(_scalar(v))}" for k, v in fields]
+    return " ".join(parts)
+
+
+def stream_item(module: str, section: str, key: Optional[str], item: Any) -> str:
+    """One find of a streaming lookup, as it arrives."""
+    parts = [f"[cyan]{escape(module)}[/]"]
+    if section not in MAIN_SECTIONS:
+        parts.append(f"[dim]{escape(section.replace('_', ' '))}:[/]")
+    if key is not None:
+        parts.append(f"[bold]{escape(str(key))}[/]")
+    text = _item_text(item, with_details=True)
+    if text:
+        parts.append(text)
+    return " ".join(parts)
+
+
+def _add(node: Tree, value: Any) -> None:
+    if isinstance(value, dict):
+        for key, v in value.items():
+            if _empty(v):
+                continue
+            if isinstance(v, (dict, list)):
+                _add(node.add(f"[bold]{escape(str(key))}[/]"), v)
+            else:
+                node.add(f"[bold]{escape(str(key))}:[/] {escape(_scalar(v))}")
+    elif isinstance(value, list):
+        for v in value[:LIST_MAX]:
+            if isinstance(v, (dict, list)):
+                label = _item_text(v, with_details=False) if isinstance(v, dict) else ""
+                _add(node.add(label or "[dim]-[/]"), v)
+            elif not _empty(v):
+                node.add(escape(_scalar(v)))
+        if len(value) > LIST_MAX:
+            node.add(f"[dim]... {len(value) - LIST_MAX} more (--json shows all)[/]")
+    elif not _empty(value):
+        node.add(escape(_scalar(value)))
+
+
+def answer(module: str, value: Any, result: Any) -> Tree:
+    """A lookup's whole answer, every field, the way the server saved it."""
+    tree = Tree(f"[cyan]{escape(module)}[/] [bold]{escape(str(value or ''))}[/]")
+    _add(tree, result)
+    if not tree.children:
+        tree.add("[dim]empty answer[/]")
+    return tree
+
+
+def _progress(job: dict) -> str:
+    progress = job.get("progress") or {}
+    done, total, found = progress.get("done"), progress.get("total"), progress.get("found")
+    parts = []
+    if done is not None:
+        parts.append(f"{done}/{total} checked" if total else f"{done} checked")
+    if found is not None:
+        parts.append(f"{found} found")
+    return ", ".join(parts)
+
+
+def jobs_waiting(items: list[dict]) -> str:
+    """The spinner's line while lookups run."""
+    parts = []
+    for j in items:
+        state = j.get("status") or "queued"
+        detail = _progress(j) if state == "running" else ""
+        parts.append(f"{escape(j.get('module_name') or j.get('module_id', ''))} "
+                     f"[{STATUS_STYLE.get(state, 'white')}]{escape(detail or state)}[/]")
+    return "Waiting: " + " · ".join(parts)
+
+
+def job_finished(job: dict) -> str:
+    name = escape(job.get("module_name") or job.get("module_id", ""))
+    status = job.get("status")
+    if status == "failed":
+        return f"[red]✗ {name} failed:[/] {escape(str(job.get('error') or 'no reason given'))}"
+    if status == "cancelled":
+        return f"[dim]- {name} was cancelled[/]"
+    summary = f": {escape(str(job['summary']))}" if job.get("summary") else ""
+    saved = f" [dim](result {escape(job['result_id'])})[/]" if job.get("result_id") else ""
+    return f"[green]✓ {name} done[/]{summary}{saved}"

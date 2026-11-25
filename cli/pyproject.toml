@@ -1,10 +1,10 @@
 [project]
 name = "osint-toolkit-cli"
-version = "0.1.0"
+version = "0.2.0"
 description = "Command-line client for an OSINT Toolkit server: investigations, identifiers and background lookups"
 readme = "README.md"
 requires-python = ">=3.10"
-dependencies = ["httpx>=0.28", "typer>=0.12", "rich>=13", "platformdirs>=4"]
+dependencies = ["httpx>=0.28", "typer>=0.12", "rich>=13", "platformdirs>=4", "questionary>=2.0"]
 
 [project.optional-dependencies]
 test = ["pytest>=8"]
