@@ -78,16 +78,16 @@ The CSS is prebuilt (`static/css/tailwind.css`). After changing templates, rebui
 
 ## Command-line client
 
-`osint` works with the same investigations from a terminal: list them, show results and identifiers, start background lookups, export cases. It talks to a running server over its API, so you can use it on another computer too. Install it with [pipx](https://pipx.pypa.io) (or `uv tool install` with the same address) on Windows, macOS or Linux:
+`osint` works with the same investigations from a terminal: list them, show results and identifiers, run lookups and watch their answers arrive, export cases. It talks to a running server over its API, so you can use it on another computer too. Install it with [pipx](https://pipx.pypa.io) (or `uv tool install` with the same address) on Windows, macOS or Linux:
 
 ```bash
 pipx install "git+https://github.com/ayxkaddd/Osint-ToolKit#subdirectory=cli"
 osint login http://127.0.0.1:8000
 osint list
-osint lookup someone@example.com -m holehe   # without -m it only lists the modules that could run
+osint lookup someone@example.com             # pick the modules to run, then see what each one answers
 ```
 
-Read commands take `--json` for `jq`. All commands are in [cli/README.md](cli/README.md).
+`osint lookup` asks which modules to run (nothing is ticked at first, since some cost money), then prints each answer when it finishes; streaming lookups such as username search print what they find as it arrives, like the web page. In scripts, `-m holehe,gravatar` names the modules instead. Read commands take `--json` for `jq`. All commands are in [cli/README.md](cli/README.md).
 
 # Modules Setup
 
