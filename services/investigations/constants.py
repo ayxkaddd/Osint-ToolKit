@@ -3,7 +3,7 @@ import re
 
 
 # Bump when the index entry format / summary logic changes
-INDEX_VERSION = 7
+INDEX_VERSION = 8
 
 TRIAGE_STATUSES = {None, "confirmed", "important", "false_positive"}
 
