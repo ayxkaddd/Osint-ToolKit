@@ -100,6 +100,11 @@ class Client:
     def investigation(self, investigation_id: str) -> dict:
         return self.get(f"/api/investigations/{investigation_id}")
 
+    def result(self, investigation_id: str, result_id: str) -> dict:
+        """One result in full; a lookup still streaming comes with ``running: true``
+        and what it has found so far."""
+        return self.get(f"/api/investigations/{investigation_id}/results/{result_id}").get("result") or {}
+
     def results(self, investigation_id: str) -> dict:
         return self.get(f"/api/investigations/{investigation_id}/results")
 
