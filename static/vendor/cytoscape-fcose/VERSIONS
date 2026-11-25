@@ -1,0 +1,2 @@
+cytoscape-fcose 2.2.0, cose-base 2.2.0, layout-base 2.0.1 (npm), MIT; loaded in this order:
+layout-base.js, cose-base.js, cytoscape-fcose.js
