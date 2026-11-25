@@ -1,7 +1,7 @@
 // The investigation graph: what the server sends (/graph) drawn with Cytoscape,
 // lookups and groups opening and folding on click, and the side panel.
 // Editing (hide, remove, add, link, undo) is in edit.js; the saved view in state.js.
-import { MANUAL_TYPES, OFF, decorate, stylesheet, typeColor } from './style.js';
+import { MANUAL_TYPES, OFF, decorate, labels, stylesheet, typeColor } from './style.js';
 import { box, overlaps, placeNew, treeLayout } from './layout.js';
 import { History, SavedView } from './state.js';
 import { editing } from './edit.js';
@@ -240,6 +240,7 @@ export class GraphView {
     }
 
     fitAll() {
+        this.stopZoom();
         this.cy.fit(undefined, 64);
         if (this.cy.zoom() > 1.1) this.cy.zoom({ level: 1.1, renderedPosition: this.center() });
     }
@@ -357,17 +358,41 @@ export class GraphView {
 
         // the app's grid, moving with the graph
         const grid = () => {
-            // fine lines every 40 units, coarse every 200; zoomed far out, the coarse become the fine
+            // three levels of lines, each five times wider apart; zooming out, the finest
+            // fades away just as the next level takes its place, so nothing jumps
             let fine = 40 * cy.zoom();
             while (fine < 12) fine *= 5;
-            const coarse = fine * 5;
+            while (fine >= 60) fine /= 5;
+            const t = Math.min(1, (fine - 12) / 48);
+            const sizes = [fine, fine, fine * 5, fine * 5, fine * 25, fine * 25];
             const pan = cy.pan();
             const at = `${pan.x}px ${pan.y}px`;
-            this.root.style.backgroundSize = [fine, fine, coarse, coarse].map((s) => `${s}px ${s}px`).join(', ');
-            this.root.style.backgroundPosition = [at, at, at, at].join(', ');
+            const style = this.root.style;
+            style.backgroundSize = sizes.map((s) => `${s}px ${s}px`).join(', ');
+            style.backgroundPosition = sizes.map(() => at).join(', ');
+            style.setProperty('--grid-fine', `rgba(100, 116, 139, ${(0.11 * t).toFixed(3)})`);
+            style.setProperty('--grid-mid', `rgba(139, 152, 179, ${(0.11 + 0.09 * t).toFixed(3)})`);
+            style.setProperty('--grid-coarse', 'rgba(139, 152, 179, 0.2)');
             this.hideTooltip();
         };
         cy.on('viewport', grid);
+        this.root.addEventListener('wheel', (e) => this.onWheel(e), { capture: true, passive: false });
+        // labels fade out as the graph gets small, instead of vanishing at once
+        // (set on the elements: Cytoscape doesn't read the stylesheet again on zoom)
+        const labelStyle = (eles) =>
+            eles.style({
+                'text-opacity': labels.opacity,
+                'text-outline-opacity': labels.opacity * 0.85,
+                'text-background-opacity': labels.opacity * 0.9,
+            });
+        const fadeLabels = () => {
+            const level = Math.round(Math.max(0, Math.min(1, (cy.zoom() - 0.28) / 0.22)) * 5) / 5;
+            if (level === labels.opacity) return;
+            labels.opacity = level;
+            cy.batch(() => labelStyle(cy.elements()));
+        };
+        cy.on('viewport', fadeLabels);
+        cy.on('add', (e) => labels.opacity < 1 && labelStyle(e.target));
         cy.on('viewport', () => this.drawMinimap(false));
         cy.on('position add remove', () => this.drawMinimap());
         grid();
@@ -427,24 +452,76 @@ export class GraphView {
     }
 
     fit() {
+        this.stopZoom();
         this.moved = true;
         this.cy.animate({ fit: { eles: this.cy.elements().not(OFF), padding: 64 } }, { duration: motion(300) });
     }
 
     zoomIn() {
-        this.moved = true;
-        this.cy.animate(
-            { zoom: { level: this.cy.zoom() * 1.3, renderedPosition: this.center() } },
-            { duration: motion(150) }
-        );
+        this.zoomBy(1.4, this.center());
     }
 
     zoomOut() {
+        this.zoomBy(1 / 1.4, this.center());
+    }
+
+    // Smooth zoom: every wheel notch, pinch or button moves a target, and the view eases
+    // towards it a little each frame, keeping the point under the pointer where it is
+    // (Cytoscape's own wheel zoom jumps a step per notch)
+    zoomBy(factor, at) {
+        const cy = this.cy;
+        if (!cy) return;
         this.moved = true;
-        this.cy.animate(
-            { zoom: { level: this.cy.zoom() / 1.3, renderedPosition: this.center() } },
-            { duration: motion(150) }
-        );
+        const z = this.zooming || (this.zooming = { target: cy.zoom(), at, frame: 0, last: 0 });
+        z.target = Math.min(cy.maxZoom(), Math.max(cy.minZoom(), z.target * factor));
+        z.at = at;
+        if (!motion(1)) {
+            cy.zoom({ level: z.target, renderedPosition: at });
+            this.zooming = null;
+            return;
+        }
+        if (z.frame) return;
+        cy.stop();
+        z.last = performance.now();
+        const step = (time) => {
+            // eased by time, not frames: settled in about 0.4 s however fast the screen draws
+            const done = 1 - Math.exp(-(time - z.last) / 90);
+            z.last = time;
+            const now = cy.zoom();
+            const next = Math.abs(z.target - now) < z.target * 0.003 ? z.target : now + (z.target - now) * done;
+            cy.zoom({ level: next, renderedPosition: z.at });
+            if (next === z.target) {
+                this.zooming = null;
+                return;
+            }
+            z.frame = requestAnimationFrame(step);
+        };
+        z.frame = requestAnimationFrame(step);
+    }
+
+    // a zoom still easing stops (fit, focus and moving to new nodes take the view over)
+    stopZoom() {
+        if (this.zooming?.frame) cancelAnimationFrame(this.zooming.frame);
+        this.zooming = null;
+    }
+
+    onWheel(e) {
+        // the side panel, tray and lists scroll as usual; only the canvas zooms
+        if (!this.cy || !e.target.closest('.graph-canvas')) return;
+        e.preventDefault();
+        e.stopPropagation(); // before Cytoscape's own wheel zoom
+        const box = this.canvas.getBoundingClientRect();
+        const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? box.height : 1; // lines, pages, pixels
+        const dx = e.deltaX * unit;
+        const dy = e.deltaY * unit;
+        // a touchpad's sideways swipe moves the graph; pinch (ctrl + wheel) and the wheel zoom
+        if (!e.ctrlKey && Math.abs(dx) > Math.abs(dy)) {
+            this.moved = true;
+            this.cy.panBy({ x: -dx, y: 0 });
+            return;
+        }
+        const factor = Math.exp(-dy * (e.ctrlKey ? 0.012 : 0.0025));
+        this.zoomBy(factor, { x: e.clientX - box.left, y: e.clientY - box.top });
     }
 
     reload() {
@@ -454,6 +531,7 @@ export class GraphView {
     focusNode(id) {
         const node = this.cy.getElementById(id);
         if (!node.length) return;
+        this.stopZoom();
         this.moved = true;
         this.cy.$(':selected').unselect();
         node.select();
@@ -617,6 +695,7 @@ export class GraphView {
         if (Math.min(...ys) < box.y1) dy = box.y1 - Math.min(...ys);
         else if (Math.max(...ys) > box.y2) dy = Math.max(box.y2 - Math.max(...ys), box.y1 - Math.min(...ys));
         if (!dx && !dy) return;
+        this.stopZoom();
         this.moved = true;
         this.cy.animate(
             { pan: { x: pan.x + dx, y: pan.y + dy } },

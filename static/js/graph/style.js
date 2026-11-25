@@ -52,6 +52,9 @@ export const MANUAL_TYPES = {
 // Not drawn: hidden or taken off by the analyst, left out by a filter, outside the focus
 export const OFF = '.is-hidden, .filtered, .unfocused';
 
+// How visible labels are now, from the zoom (view.js fades them as the graph gets small)
+export const labels = { opacity: 1 };
+
 export const typeColor = (type) => TYPE_COLORS[type] || MANUAL_TYPES[type]?.color || '#9ca3af';
 
 const PURPLE = '#a855f7';
@@ -217,7 +220,6 @@ export function stylesheet() {
                 'text-outline-color': '#000',
                 'text-outline-width': 2,
                 'text-outline-opacity': 0.85,
-                'min-zoomed-font-size': 5,
                 'background-image': layer('uri'),
                 'background-width': layer('w'),
                 'background-height': layer('h'),
@@ -386,11 +388,10 @@ export function stylesheet() {
                 'font-family': 'JetBrains Mono, ui-monospace, monospace',
                 'font-size': 9,
                 'text-background-color': '#0f1017',
-                'text-background-opacity': 0.9,
                 'text-background-padding': 2,
                 'text-background-shape': 'roundrectangle',
                 'text-rotation': 'autorotate',
-                'min-zoomed-font-size': 5,
+                'text-background-opacity': 0.9,
             },
         },
         { selector: 'node[kind = "manual"]', style: { 'border-style': 'double', 'border-width': 3 } },
