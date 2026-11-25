@@ -17,19 +17,38 @@ const byOrder = (a, b) => (a.data('order') ?? 0) - (b.data('order') ?? 0);
 // A link the tree follows: found, searched, follow-ups; a drawn link only to a drawn node
 const treeEdge = (edge) => edge.data('kind') !== 'manual' || edge.target().data('kind') === 'manual';
 
-// Which node each of ``nodes`` hangs under, taking only links between them
+// Which node each of ``nodes`` hangs under, taking only links between them. An identifier
+// found by several lookups hangs under its home (the lookup that found it first, or a
+// group of it) whenever that is drawn, so lookups run later don't move it.
 export function spanningTree(nodes) {
     const inside = new Set(nodes.map((n) => n.id()));
     const parentOf = new Map();
     const childrenOf = new Map();
     const seen = new Set();
-    const kidsOf = (node) =>
-        node
-            .outgoers('edge')
+    const waiting = new Map(); // child id -> the first node that reached it, if its home never does
+
+    const lookupOf = (node) => {
+        const d = node.data();
+        if (d.kind === 'lookup') return node.id();
+        if (d.kind === 'group') return d.lookup;
+        if (d.kind === 'more') return node.cy().getElementById(d.of).data('lookup');
+        return null;
+    };
+    const isHome = (parent, child) => !child.data('home') || lookupOf(parent) === child.data('home');
+    const homeDrawn = (child) =>
+        !!child.data('home') &&
+        child
+            .incomers('edge')
             .filter(treeEdge)
-            .targets()
-            .filter((child) => inside.has(child.id()) && !seen.has(child.id()))
-            .sort(byOrder);
+            .sources()
+            .some((src) => inside.has(src.id()) && isHome(src, child));
+    const attach = (child, parent) => {
+        seen.add(child.id());
+        waiting.delete(child.id());
+        parentOf.set(child.id(), parent.id());
+        if (!childrenOf.has(parent.id())) childrenOf.set(parent.id(), []);
+        childrenOf.get(parent.id()).push(child.id());
+    };
 
     const walk = (starts) => {
         let frontier = starts.filter((n) => !seen.has(n.id()));
@@ -37,15 +56,28 @@ export function spanningTree(nodes) {
         while (frontier.length) {
             const next = [];
             for (const node of frontier) {
-                kidsOf(node).forEach((child) => {
-                    seen.add(child.id());
-                    parentOf.set(child.id(), node.id());
-                    if (!childrenOf.has(node.id())) childrenOf.set(node.id(), []);
-                    childrenOf.get(node.id()).push(child.id());
-                    next.push(child);
-                });
+                node.outgoers('edge')
+                    .filter(treeEdge)
+                    .targets()
+                    .filter((child) => inside.has(child.id()) && !seen.has(child.id()))
+                    .sort(byOrder)
+                    .forEach((child) => {
+                        if (!isHome(node, child) && homeDrawn(child)) {
+                            if (!waiting.has(child.id())) waiting.set(child.id(), node);
+                            return;
+                        }
+                        attach(child, node);
+                        next.push(child);
+                    });
             }
             frontier = next;
+        }
+        // a home that is never reached (a loop of lookups): the first node that reached it
+        for (const [id, parent] of [...waiting]) {
+            if (seen.has(id)) continue;
+            const child = parent.cy().getElementById(id);
+            attach(child, parent);
+            walk([child]);
         }
     };
 

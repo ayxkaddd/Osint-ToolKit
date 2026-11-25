@@ -299,8 +299,11 @@ class GraphMixin:
                     continue
             shared = sum(1 for place in shared_index.get(key, []) if place["investigation_id"] != here)
             found_by = len(found_in)
+            # Its home: the lookup that found it first. Later lookups that find it too link
+            # to it, but it stays drawn where it was (graph/layout.js)
+            home = min(found_in, key=lambda lid: lookups[lid]["runs"][-1]["timestamp"] or "") if found_in else None
             entities[key] = {"entity": entity, "searched_in": searched_in, "found_in": found_in, "shared": shared,
-                             "found_by": found_by,
+                             "found_by": found_by, "home": home,
                              "order": (TRIAGE_RANK.get(entity.get("status"), 2), -found_by,
                                        entity.get("type") or "", entity.get("value") or "")}
             for lookup_id in searched_in:
@@ -404,6 +407,7 @@ class GraphMixin:
             "first_seen": entity.get("first_seen"), "last_seen": entity.get("last_seen"),
             "found_by": info["found_by"], "searched_by": len(info["searched_in"]),
             "shared": info["shared"], "root": not info["found_in"], "image": model["images"].get(key),
+            "home": info["home"],
         }
 
     @staticmethod

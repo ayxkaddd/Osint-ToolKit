@@ -505,3 +505,14 @@ def test_new_graph_endpoints_need_login_and_this_site(anon, client, investigatio
     url = f"/api/investigations/{investigation}/{path}"
     assert getattr(anon, method)(url).status_code == 401
     assert getattr(client, method)(url, headers={"Sec-Fetch-Site": "cross-site"}).status_code == 403
+
+
+def test_an_identifier_keeps_the_lookup_that_found_it_first_as_its_home(client, investigation):
+    first = _save(investigation, "whois", "lookup_whois", {"domain": "home.test"}, {"registrant_phone": "+14155550123"})
+    # later, a lookup that searched nothing (a root) finds it too
+    later = _save(investigation, "manual", "upload", {"title": "later"}, {"kind": "manual", "text": "call +14155550123"})
+    _, nodes, edges = _graph(client, investigation)
+    phone = nodes["e:phone:+14155550123"]
+    assert phone["home"] == f"r:{first}" and phone["found_by"] == 2
+    assert (f"r:{later}", "e:phone:+14155550123") in edges
+    assert nodes["e:domain:home.test"]["home"] is None      # typed, found by nothing
