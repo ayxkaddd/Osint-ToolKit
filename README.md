@@ -17,6 +17,7 @@ A self-hosted web workspace for OSINT investigations. Built with FastAPI and Tai
 - **Pivots**: emails, phones, usernames, domains, IPs and Telegram IDs found in any result can be sent to the matching modules in one click
 - **Shared with other investigations**: identifiers that another investigation has too are marked with the number of investigations, and their menu links to them
 - **Timeline**: when things happened, from the dates inside the results - accounts created, domains registered or expiring, leaks, name changes, messages
+- **Graph**: each investigation as a map - what you looked up on the left, each lookup a column to the right, what it found beyond it, and big results folded into groups that open on a click. Look up any node with another module and watch the new branch grow when it finishes; hide nodes or take them off the graph, add your own nodes (a person, a place, any identifier) and labelled links, undo and redo. Search (also inside folded groups), focus on a node, filters, the path between two nodes, a web layout beside the tree; moved nodes snap into line. The view is kept per investigation, the case report includes a picture of it, and it exports to PNG, SVG, JSON and GEXF (Gephi). Full screen at `/investigations/<id>/graph`
 - **Add manually**: save what you found outside the toolkit (a site without an API, a Telegram bot, a leak) as a result - text, identifiers, a link, a date and files or pasted screenshots
 - **Background lookups**: run a lookup from any identifier's menu and keep working; open it while it runs to watch the results arrive
 - **Universal lookup**: paste an email, phone, @user, domain or IP in the top bar and run a module right from the dropdown, on any page, or open the full list of lookups. A phone number typed without its country code isn't guessed: the full numbers it could be are offered to pick from. The grid icon next to the box opens any module
@@ -113,6 +114,8 @@ python main.py login
 GITFIVE_VENV_PATH=/path/to/GitFive/venv/bin/python
 GITFIVE_SCRIPT_PATH=/path/to/GitFive/main.py
 ```
+
+Only the email addresses GitFive proves are the target's become identifiers in the investigation; the addresses it generates to test, and those of other people who committed to the target's repositories, are shown on the module page but not saved as identifiers.
 
 ## GHunt
 
