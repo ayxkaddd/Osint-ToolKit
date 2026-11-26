@@ -494,6 +494,8 @@ export function stylesheet() {
                 'line-opacity': 0.6,
             },
         },
+        // a link into a grid: the grid's frame has one link for all (lanes.js); shown on hover
+        { selector: 'edge.in-grid', style: { 'line-opacity': 0, 'target-arrow-shape': 'none', label: '' } },
         {
             selector: 'edge.lit',
             style: {

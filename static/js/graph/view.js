@@ -22,6 +22,7 @@ import { finding } from './find.js';
 import { framing } from './chrome.js';
 import { snapping } from './snap.js';
 import { summing } from './summary.js';
+import { laning } from './lanes.js';
 
 const REDUCED_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)');
 const motion = (ms) => (REDUCED_MOTION.matches ? 0 : ms);
@@ -86,7 +87,9 @@ export class GraphView {
     // -----------------------------------------------------------------------
     build() {
         this.root.innerHTML = `
+            <canvas class="graph-under absolute inset-0 w-full h-full pointer-events-none" aria-hidden="true"></canvas>
             <div class="graph-canvas absolute inset-0" role="application" aria-label="Investigation graph"></div>
+            <canvas class="graph-over absolute inset-0 w-full h-full pointer-events-none" aria-hidden="true"></canvas>
             <canvas class="graph-guides absolute inset-0 w-full h-full pointer-events-none" aria-hidden="true"></canvas>
             <div class="graph-toolbar absolute top-3 left-3 flex items-center gap-1 bg-[#1a1b26] border border-[#24283b] rounded-lg p-1 shadow-xl">
                 <button type="button" data-graph="fit" title="Fit to screen (0)"><i data-lucide="scan" class="w-4 h-4"></i></button>
@@ -148,6 +151,7 @@ export class GraphView {
         this.tray = this.root.querySelector('.graph-tray');
         this.modeBar = this.root.querySelector('.graph-mode');
         this.buildSummary();
+        this.buildLanes();
         this.root.querySelectorAll('.graph-toolbar button, .graph-toolbar a').forEach((el) => {
             el.className =
                 'h-8 min-w-8 px-1.5 inline-flex items-center justify-center rounded-md text-gray-400 hover:text-white hover:bg-gray-800 disabled:opacity-40 disabled:hover:bg-transparent focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500';
@@ -464,6 +468,9 @@ export class GraphView {
             if (e.target.isEdge()) e.target.toggleClass('labelled', cy.zoom() >= 0.85);
         });
         cy.on('viewport', () => this.drawMinimap(false));
+        // the lanes, grids and clusters under the graph (lanes.js) follow it
+        cy.on('viewport', () => this.scheduleLanes());
+        cy.on('position', 'node', () => this.scheduleLanes());
         cy.on('position add remove', () => this.drawMinimap());
         grid();
 
@@ -525,6 +532,7 @@ export class GraphView {
         this.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
         new ResizeObserver(() => {
             cy.resize();
+            this.scheduleLanes();
             if (!this.moved && cy.nodes().length) this.fitAll();
         }).observe(this.canvas);
     }
@@ -626,11 +634,15 @@ export class GraphView {
     // stay where they were put. The web keeps every place and puts new nodes in free
     // space beside their parent (placeNew); ``full`` lays the web out again.
     relayout({ animate = true, grown = null, full = false, initial = false } = {}) {
-        const { positions: tree, parentOf } = treeLayout(this.cy);
+        const { positions: tree, parentOf, decor } = treeLayout(this.cy);
         this.parentOf = parentOf;
         this.scheduleSnapshot();
         const web = this.layoutName() === 'web';
         this.cy.edges().toggleClass('web', web);
+        // lanes, grids and clusters are the tree's
+        this.decor = web ? null : decor;
+        if (web) this.cy.edges().removeClass('in-grid');
+        this.scheduleLanes();
         const saved = this.state.data.positions;
         const pinned = new Set(this.pinnedIds());
         const drawn = this.cy.nodes().not(OFF);
@@ -1451,3 +1463,4 @@ Object.assign(GraphView.prototype, finding);
 Object.assign(GraphView.prototype, framing);
 Object.assign(GraphView.prototype, snapping);
 Object.assign(GraphView.prototype, summing);
+Object.assign(GraphView.prototype, laning);
