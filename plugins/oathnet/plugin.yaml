@@ -1,6 +1,7 @@
 # Made with the plugin builder (Plugins page). Format: plugins/README.md
 name: OathNet
 site: oathnet.org
+graph: breach
 accepts:
 - email
 - phone

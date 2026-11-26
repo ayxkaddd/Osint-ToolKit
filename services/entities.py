@@ -464,7 +464,8 @@ def _key_hint(key: str) -> Optional[str]:
     k = key.lower()
     if "email" in k or k in ("mail", "e-mail"):
         return "email"
-    if any(h in k for h in ("phone", "msisdn", "mobile", "tel")) and "hotel" not in k:
+    # "tel" only as a word of its own (tel, home_tel), not in telegram or intel
+    if any(h in k for h in ("phone", "msisdn", "mobile")) or re.search(r"(?:^|[_\W])tel(?:$|[_\W])", k):
         return "phone"
     if k in ("vk_id", "vkid"):
         return "vk"
@@ -614,6 +615,12 @@ SERVICE_SKIP_KEYS = {
     "oi": {"raw"},  # the same data is in "modules", flattened
     # links the toolkit builds itself (wa.me/<number>, a Google search): not found anywhere
     "phone": {"links"},
+    # the providers where no mailbox (or no answer) was found: not the target's
+    "username": {"mailbox_checks"},
+    # the whole record as text (its contacts are read from their fields) and the registry's server
+    "whois": {"cleanText", "whoisServer"},
+    # a site's address is its domain again ("final_url", where it leads, is kept)
+    "ns": {"url"},
 }
 
 
@@ -653,7 +660,8 @@ def gitfive_confirmed(result: dict[str, Any]) -> dict[str, Any]:
 
 
 def extract_entities(result: Any, service: str = "", no_country_code: Optional[list[str]] = None,
-                     written: Optional[dict[str, list[str]]] = None) -> list[tuple[Entity, str]]:
+                     written: Optional[dict[str, list[str]]] = None,
+                     everywhere: Optional[list[tuple[str, str]]] = None) -> list[tuple[Entity, str]]:
     """(entity, json path) pairs found in a result payload.
 
     Results added by hand are read more loosely (it is text a person pasted, not an
@@ -661,7 +669,8 @@ def extract_entities(result: Any, service: str = "", no_country_code: Optional[l
     CSV files by their headers. National numbers there are read in the country of
     the full numbers in the same result; the ones that can't be are appended to
     ``no_country_code`` (as written), not guessed. ``written`` collects every way each
-    identifier is written ("067 123 45 67" and "+380671234567"), by key."""
+    identifier is written ("067 123 45 67" and "+380671234567"), by key. ``everywhere``
+    collects (key, path) for every place each identifier is, not only the first."""
     out: dict[str, tuple[Entity, str]] = {}
     if service == "gitfive" and isinstance(result, dict):
         result = gitfive_confirmed(result)
@@ -681,6 +690,9 @@ def extract_entities(result: Any, service: str = "", no_country_code: Optional[l
             forms = written.setdefault(entity.key, [])
             if entity.display and entity.display not in forms:
                 forms.append(entity.display)
+        if entity and everywhere is not None and (entity.key in out or typed or not is_noise(entity)):
+            if entity.key in out or len(out) < MAX_ENTITIES_PER_RESULT:
+                everywhere.append((entity.key, path))
         if entity and entity.key not in out and len(out) < MAX_ENTITIES_PER_RESULT and (typed or not is_noise(entity)):
             out[entity.key] = (entity, path)
             # an email's domain (a company or personal domain) is a lead of its own;

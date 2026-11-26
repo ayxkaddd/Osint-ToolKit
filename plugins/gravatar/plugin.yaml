@@ -3,6 +3,7 @@ name: Gravatar profile
 description: Gravatar profile of an email address - name, photo, location, job and the accounts the person verified.
 icon: circle-user
 site: gravatar.com
+graph: account
 accepts: [email]
 placeholder: someone@example.com
 

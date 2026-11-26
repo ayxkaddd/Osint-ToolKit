@@ -1,6 +1,7 @@
 # Made with the plugin builder (Plugins page). Format: plugins/README.md
 name: hunter.io
 site: hunter.io
+graph: person
 settings:
   HUNTER_IO_API_KEY:
     label: API key

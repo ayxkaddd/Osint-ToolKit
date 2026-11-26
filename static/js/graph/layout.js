@@ -1,10 +1,11 @@
-// Tree layout: left to right, like osintframework.com. What was typed on the left,
-// each lookup one column right, what it found beyond it, one row per node. d3-hierarchy
-// walks the tree; Cytoscape only moves nodes to the positions.
+// Tree layout: left to right, like osintframework.com. What was looked up on the left,
+// the cards found for it (accounts, breaches...) one column right, what each card holds
+// beyond it, one row per node. d3-hierarchy walks the tree; Cytoscape only moves nodes.
 //
-// The graph isn't a tree (an identifier can be found by two lookups), so each node
-// hangs under the first node that reaches it from the roots; its other links are
-// "cross" links, drawn as curves. Links the analyst drew only place their own nodes.
+// The graph isn't a tree (an identifier can be in two records), so each node hangs under
+// its home (the server's ``home``), or else the first node that reaches it from the roots;
+// its other links are "cross" links, drawn as curves. Links the analyst drew only place
+// their own nodes.
 
 import { OFF } from './style.js';
 
@@ -15,9 +16,10 @@ const COLUMN = GRID * 9;
 const ROW = GRID * 2;
 
 // The order of a node's children (and of the trees), the same however and whenever
-// they were drawn, so a reload or a new branch never reorders rows: what was found
-// first, then groups, "+N more", and the lookups in the order they ran (a new pivot last)
-const KIND_RANK = { identifier: 0, manual: 1, group: 2, more: 3, lookup: 4, pending: 5 };
+// they were drawn, so a reload or a new branch never reorders rows: the server's order
+// (``rank``: the records that say most first, then what they hold), then groups, "+N
+// more", what the analyst added, and lookups still running last
+const KIND_RANK = { identifier: 0, card: 0, fact: 0, lookup: 0, manual: 1, group: 2, more: 3, pending: 5 };
 const sortKey = (node) => {
     const d = node.data();
     const when =
@@ -25,10 +27,9 @@ const sortKey = (node) => {
             ? (d.runs?.[d.runs.length - 1]?.timestamp ?? d.timestamp ?? '')
             : d.kind === 'pending'
               ? '9999'
-              : d.kind === 'identifier'
-                ? (d.first_seen ?? '')
-                : '';
-    return [KIND_RANK[d.kind] ?? 9, String(when), String(d.value ?? d.key ?? d.offset ?? node.id())];
+              : (d.first_seen ?? '');
+    const rank = d.rank ?? (KIND_RANK[d.kind] ?? 9) * 1_000_000;
+    return [rank, String(when), String(d.value ?? d.key ?? d.offset ?? node.id())];
 };
 const byOrder = (a, b) => {
     const x = sortKey(a);
@@ -51,14 +52,17 @@ export function spanningTree(nodes) {
     const seen = new Set();
     const waiting = new Map(); // child id -> the first node that reached it, if its home never does
 
-    const lookupOf = (node) => {
+    // the node a group (or a group's "+N more") stands in for
+    const ownerOf = (node) => {
         const d = node.data();
-        if (d.kind === 'lookup') return node.id();
-        if (d.kind === 'group') return d.lookup;
-        if (d.kind === 'more') return node.cy().getElementById(d.of).data('lookup');
-        return null;
+        if (d.kind === 'group') return d.owner;
+        if (d.kind === 'more') {
+            const of = node.cy().getElementById(d.of);
+            return of.data('kind') === 'group' ? of.data('owner') : d.of;
+        }
+        return node.id();
     };
-    const isHome = (parent, child) => !child.data('home') || lookupOf(parent) === child.data('home');
+    const isHome = (parent, child) => !child.data('home') || ownerOf(parent) === child.data('home');
     const homeDrawn = (child) =>
         !!child.data('home') &&
         child
@@ -166,7 +170,7 @@ export function treeLayout(cy) {
 // it (or where ``hints`` says: a finished lookup where its pending node was), moved up
 // or down to the nearest place where they overlap nothing. In the web, around it.
 // ---------------------------------------------------------------------------
-const PILLS = new Set(['lookup', 'pending']);
+const PILLS = new Set(['lookup', 'pending', 'card']);
 
 export function box(node, at) {
     const half = PILLS.has(node.data('kind')) ? node.data('w') / 2 + 10 : 100;

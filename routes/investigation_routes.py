@@ -309,8 +309,8 @@ def get_result_changes(investigation_id: UUID, result_id: str) -> JSONResponse:
 
 @router.get("/{investigation_id}/graph")
 def get_investigation_graph(investigation_id: UUID, noise: bool = False) -> JSONResponse:
-    """The graph's first view: identifiers, the lookups between them, big result sets
-    folded into groups (opened with /graph/expand). ``noise``: boilerplate and false positives too."""
+    """The graph's first view: identifiers, the cards (accounts, breaches...) between them, big
+    sets folded into groups (opened with /graph/expand). ``noise``: boilerplate and false positives too."""
     _require_investigation(investigation_id)
     return JSONResponse(content=investigation_service.get_graph(investigation_id, noise=noise))
 
@@ -388,7 +388,7 @@ def get_graph_image(investigation_id: UUID):
 
 @router.get("/{investigation_id}/graph/node")
 def get_graph_node(investigation_id: UUID, node: str = Query(..., max_length=2000), noise: bool = False) -> JSONResponse:
-    """One node for the side panel, with the lookups around it."""
+    """One node for the side panel: its facts, what it holds and the lookups that found it."""
     _require_investigation(investigation_id)
     details = investigation_service.graph_node_details(investigation_id, node, noise=noise)
     if details is None:
@@ -400,7 +400,7 @@ def get_graph_node(investigation_id: UUID, node: str = Query(..., max_length=200
 def expand_graph_node(investigation_id: UUID, node: str = Query(..., max_length=2000),
                       offset: int = Query(0, ge=0), limit: int = Query(40, ge=1, le=200),
                       noise: bool = False) -> JSONResponse:
-    """The children of one lookup, group or identifier, a page at a time."""
+    """The children of one identifier, card or group, a page at a time."""
     _require_investigation(investigation_id)
     expanded = investigation_service.expand_graph_node(investigation_id, node, offset, limit, noise=noise)
     if expanded is None:
@@ -701,3 +701,21 @@ def delete_note(investigation_id: UUID, note_id: UUID) -> JSONResponse:
     if not investigation_service.delete_note(investigation_id, note_id):
         raise HTTPException(status_code=404, detail=f"Note with ID {note_id} not found")
     return JSONResponse(content={"status": "success", "message": f"Note {note_id} deleted successfully"})
+
+
+@router.get("/{investigation_id}/graph/reveal")
+def reveal_graph_node(investigation_id: UUID, node: str = Query(..., max_length=2000),
+                      noise: bool = False) -> JSONResponse:
+    """What to open, from the top, to reach a node wherever it is folded."""
+    _require_investigation(investigation_id)
+    revealed = investigation_service.reveal_graph_node(investigation_id, node, noise=noise)
+    if revealed is None:
+        raise HTTPException(status_code=404, detail="Not in the graph")
+    return JSONResponse(content=revealed)
+
+
+@router.get("/{investigation_id}/graph/summary")
+def graph_summary(investigation_id: UUID, noise: bool = False) -> JSONResponse:
+    """What we know: names, photos, places, contacts, accounts and breaches, counted."""
+    _require_investigation(investigation_id)
+    return JSONResponse(content=investigation_service.graph_summary(investigation_id, noise=noise))

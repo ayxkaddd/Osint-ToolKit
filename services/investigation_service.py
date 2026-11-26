@@ -14,6 +14,7 @@ Layout (all under ``investigation_results/``)::
                                     kept when the result itself is deleted
         notes/snapshots/index.json  {snapshot_id: result_id}
         picture.webp                optional case picture (resized)
+        cards.json                  {result_id: [card]}: the accounts, breaches... each result found (cards.py)
         graph.json                  the graph view: positions, hidden and removed nodes, what was added
 
 A result can carry ``children``: follow-up lookups attached to it (e.g. the WHOIS
@@ -28,6 +29,7 @@ from services.investigations.manual import ManualResultsMixin
 from services.investigations.notes import NotesMixin
 from services.investigations.migration import MigrationMixin
 from services.investigations.graph import GraphMixin
+from services.investigations.cards import CardsMixin
 # imported from here by routes and the saving decorator
 from services.investigations.constants import (  # noqa: F401
     INDEX_VERSION, MANUAL_FILE_MAX_UPLOAD, MANUAL_FILES_MAX, MANUAL_SERVICE, MANUAL_TEXT_MAX, NOTE_IMAGE_MAX_UPLOAD,
@@ -38,7 +40,7 @@ from services.investigations.images import process_note_image, process_picture  
 
 
 class InvestigationService(CaseStore, ResultsMixin, IdentifiersMixin, TimelineMixin, ManualResultsMixin, NotesMixin, MigrationMixin,
-                           GraphMixin):
+                           GraphMixin, CardsMixin):
     """Everything about investigations; each area is a mixin in services/investigations/."""
 
 

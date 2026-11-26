@@ -67,7 +67,7 @@ def draft_plugin(plugin_id: str, manifest: dict[str, Any],
 
 def to_yaml(manifest: dict[str, Any]) -> str:
     """plugin.yaml text, fields in the README's order, empty parts left out."""
-    order = ["name", "description", "icon", "site", "placeholder", "accepts", "cost", "cost_note", "speed",
+    order = ["name", "description", "icon", "site", "placeholder", "accepts", "cost", "cost_note", "speed", "graph",
              "concurrency", "timeout", "settings", "request", "request_by_type", "response", "requests"]
     unknown = [k for k in manifest if k not in order and k != "id"]
     clean = {k: _strip_empty(manifest[k]) for k in order + unknown if k in manifest}

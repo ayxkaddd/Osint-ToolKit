@@ -4,6 +4,7 @@ name: GitHub user
 description: Public GitHub profile of a username - name, company, location, email, links.
 icon: github
 site: github.com
+graph: account
 accepts: [username]
 placeholder: torvalds
 

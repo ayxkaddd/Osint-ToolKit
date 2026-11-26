@@ -7,7 +7,7 @@ import { GRID } from './layout.js';
 import { OFF } from './style.js';
 
 const THRESHOLD = 8; // screen pixels
-const PILLS = new Set(['lookup', 'pending']);
+const PILLS = new Set(['lookup', 'pending', 'card']);
 const STORE_KEY = 'graphSnap';
 
 // The value in sorted ``values`` nearest to ``v``

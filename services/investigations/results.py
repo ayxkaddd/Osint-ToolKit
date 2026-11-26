@@ -112,6 +112,7 @@ class ResultsMixin:
             entities = self._load_entities(investigation_id)
             self._apply_record_entities(entities, record)
             self._save_entities(investigation_id, entities)
+            self._update_cards(investigation_id, [record])
 
     def _rebuild_indexes_if_needed(self) -> None:
         """Rebuild every index.json from the result files when the summary
@@ -122,7 +123,7 @@ class ResultsMixin:
         investigations = self._load_investigations()
         for inv_id in investigations:
             results_dir = self._inv_dir(inv_id) / "results"
-            index = {}
+            index, records = {}, []
             old_entities = self._load_entities(inv_id)
             entities = {k: {**e, "sources": []} for k, e in old_entities.items() if e.get("status") or e.get("note")}
             for path in results_dir.glob("*.json.gz") if results_dir.exists() else []:
@@ -130,12 +131,15 @@ class ResultsMixin:
                 if isinstance(record, dict) and record.get("result_id"):
                     index[record["result_id"]] = self._index_entry(record, path.stat().st_size)
                     self._apply_record_entities(entities, record)
+                    records.append(record)
             for key, entity in entities.items():
                 previous = old_entities.get(key)
                 if previous:
                     entity.update({k: previous[k] for k in ("status", "note", "updated_at") if previous.get(k)})
             self._save_index(inv_id, index)
             self._save_entities(inv_id, entities)
+            self._save_cards(inv_id, {})
+            self._update_cards(inv_id, records)
             self._touch(inv_id, investigations)
         version_file.write_text(str(INDEX_VERSION))
 
@@ -174,6 +178,7 @@ class ResultsMixin:
             entities = self._load_entities(investigation_id)
             self._apply_record_entities(entities, {"result_id": result_id}, remove_only=True)
             self._save_entities(investigation_id, entities)
+            self._update_cards(investigation_id, removed=[result_id])
             self._touch(investigation_id)
             return True
 
@@ -198,13 +203,14 @@ class ResultsMixin:
         entities = self._load_entities(investigation_id)
         self._drop_entity_sources(entities, set(result_ids))
         self._save_entities(investigation_id, entities)
+        self._update_cards(investigation_id, removed=result_ids)
         self._touch(investigation_id)
 
     def move_results(self, investigation_id: UUID, target_id: UUID, result_ids: list[str]) -> list[str]:
         """Move results (with their follow-ups) to another investigation; returns the
         ids that were moved. The copy is written first, so a crash can't lose a result.
         Snapshots stay with the notes that hold them."""
-        moved = []
+        moved, records = [], []
         with _STORE_LOCK:
             source_index = self._load_index(investigation_id)
             target_index = self._load_index(target_id)
@@ -222,11 +228,13 @@ class ResultsMixin:
                 size = _write_gz_atomic(self._result_file(target_id, result_id), record)
                 target_index[result_id] = self._index_entry(record, size)
                 self._apply_record_entities(target_entities, record)
+                records.append(record)
                 moved.append(result_id)
             if moved:
                 # The copies are complete before anything is removed from the source
                 self._save_index(target_id, target_index)
                 self._save_entities(target_id, target_entities)
+                self._update_cards(target_id, records)
                 self._touch(target_id)
                 self._remove_from_store(investigation_id, source_index, [r for r in moved if r in source_index])
         return moved

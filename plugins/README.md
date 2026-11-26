@@ -60,6 +60,9 @@ accepts: [email]                       # required - what it looks up (types belo
 cost: paid                             # free (default) / paid: shown before running
 cost_note: 1 Hunter credit
 speed: fast                            # fast / medium / slow (shown in the lookup box)
+graph: account                         # what each card is on the investigation graph: account, breach,
+                                       # person, registration, network, place, mention, document
+                                       # (default: breach when cards have a password or database field)
 concurrency: 2                         # background lookups at a time (1-5)
 timeout: 120                           # Python plugins: seconds for the whole run
 

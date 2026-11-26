@@ -1,7 +1,19 @@
-// The investigation graph: what the server sends (/graph) drawn with Cytoscape,
-// lookups and groups opening and folding on click, and the side panel.
+// The investigation graph: what the server sends (/graph) drawn with Cytoscape: what
+// was looked up, the cards (accounts, breaches...) found for it and what each exposed;
+// groups opening on click, a node's panel on click, and the summary (summary.js).
 // Editing (hide, remove, add, link, undo) is in edit.js; the saved view in state.js.
-import { MANUAL_TYPES, OFF, decorate, labels, stylesheet, typeColor } from './style.js';
+import {
+    CARD_KINDS,
+    FACT_KINDS,
+    FLAG_NAMES,
+    MANUAL_TYPES,
+    OFF,
+    cardColor,
+    decorate,
+    labels,
+    stylesheet,
+    typeColor,
+} from './style.js';
 import { GRID, box, overlaps, placeNew, treeLayout } from './layout.js';
 import { History, SavedView } from './state.js';
 import { editing } from './edit.js';
@@ -9,12 +21,14 @@ import { pivoting } from './pivot.js';
 import { finding } from './find.js';
 import { framing } from './chrome.js';
 import { snapping } from './snap.js';
+import { summing } from './summary.js';
 
 const REDUCED_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)');
 const motion = (ms) => (REDUCED_MOTION.matches ? 0 : ms);
 // overshoots a little and settles: children spring out of their parent
 const SPRING = 'cubic-bezier(0.34, 1.4, 0.64, 1)';
-const LABEL_MAX = 28;
+const LABEL_MAX = 36;
+const CARD_WIDTH = 236;
 
 export const clip = (text, max = LABEL_MAX) => {
     const s = String(text ?? '').replace(/\s+/g, ' ');
@@ -37,8 +51,8 @@ function lookupTitle(node) {
     return `${info.name} · ${method}`;
 }
 
-// A group of accounts (username search categories) or of one identifier type
-const groupType = (key) => (key.startsWith('type:') ? key.slice(5) : 'username');
+export const cardName = (kind) => CARD_KINDS[kind]?.label || 'Record';
+const flagText = (flags) => (flags || []).map((f) => FLAG_NAMES[f] || f).join(', ');
 
 export class GraphView {
     constructor(root, investigationId, { fullscreen = false } = {}) {
@@ -80,12 +94,13 @@ export class GraphView {
                 <button type="button" data-graph="zoomOut" title="Zoom out (-)"><i data-lucide="zoom-out" class="w-4 h-4"></i></button>
                 <button type="button" data-graph="toggleLayout" data-layout-button title="Web layout: shared identifiers pull branches together"><i data-lucide="share-2" class="w-4 h-4"></i></button>
                 <span class="w-px h-5 bg-[#24283b] mx-1"></span>
+                <button type="button" data-graph="toggleSummary" data-summary-button title="What we know (W)"><i data-lucide="clipboard-list" class="w-4 h-4"></i></button>
                 <button type="button" data-graph="openSearch" title="Search (/ or Ctrl+F)"><i data-lucide="search" class="w-4 h-4"></i></button>
                 <button type="button" data-graph="toggleFilters" data-filter-button title="Filters"><i data-lucide="sliders-horizontal" class="w-4 h-4"></i><span data-filter-dot class="hidden ml-0.5 w-1.5 h-1.5 rounded-full bg-purple-400"></span></button>
                 <span class="w-px h-5 bg-[#24283b] mx-1"></span>
                 <button type="button" data-graph="toggleSnap" data-snap-button title="Snapping"><i data-lucide="magnet" class="w-4 h-4"></i></button>
                 <button type="button" data-graph="tidy" title="Tidy up: put the nodes you moved back in their places (Ctrl+Z puts them back)"><i data-lucide="wand-sparkles" class="w-4 h-4"></i></button>
-                <button type="button" data-graph="collapseAll" title="Fold every lookup"><i data-lucide="fold-horizontal" class="w-4 h-4"></i></button>
+                <button type="button" data-graph="collapseAll" title="Fold everything"><i data-lucide="fold-horizontal" class="w-4 h-4"></i></button>
                 <span class="w-px h-5 bg-[#24283b] mx-1"></span>
                 <button type="button" data-graph="addNodeDialog" title="Add a node (N)"><i data-lucide="plus" class="w-4 h-4"></i></button>
                 <button type="button" data-graph="startLink" title="Link two nodes (L)"><i data-lucide="spline" class="w-4 h-4"></i></button>
@@ -122,6 +137,7 @@ export class GraphView {
             <div class="graph-stats absolute bottom-3 left-3 text-[11px] text-gray-500 bg-black/60 rounded px-2 py-1 pointer-events-none"></div>
             <div class="graph-tooltip hidden absolute z-20 max-w-sm pointer-events-none bg-[#0f1017] border border-[#24283b] rounded-lg px-3 py-2 text-xs text-gray-200 shadow-2xl"></div>
             <div class="graph-message hidden absolute inset-0 flex items-center justify-center text-sm text-gray-400"></div>
+            <aside class="graph-summary hidden absolute top-14 left-3 bottom-12 z-20 w-80 overflow-y-auto custom-scrollbar bg-[#1a1b26] border border-[#24283b] rounded-lg shadow-2xl text-sm" aria-label="What we know"></aside>
             <aside class="graph-panel hidden absolute top-0 right-0 h-full w-full sm:w-[400px] bg-[#1a1b26] border-l border-[#24283b] shadow-2xl z-30 flex flex-col" aria-label="Selected node"></aside>`;
         this.canvas = this.root.querySelector('.graph-canvas');
         this.tooltip = this.root.querySelector('.graph-tooltip');
@@ -131,6 +147,7 @@ export class GraphView {
         this.guides = this.root.querySelector('.graph-guides');
         this.tray = this.root.querySelector('.graph-tray');
         this.modeBar = this.root.querySelector('.graph-mode');
+        this.buildSummary();
         this.root.querySelectorAll('.graph-toolbar button, .graph-toolbar a').forEach((el) => {
             el.className =
                 'h-8 min-w-8 px-1.5 inline-flex items-center justify-center rounded-md text-gray-400 hover:text-white hover:bg-gray-800 disabled:opacity-40 disabled:hover:bg-transparent focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500';
@@ -177,6 +194,8 @@ export class GraphView {
                 this.nodeDialog({ editing: this.panelNode, addToCase: true });
             const focus = e.target.closest('[data-focus-node]');
             if (focus) this.focusNode(focus.dataset.focusNode);
+            const reveal = e.target.closest('[data-reveal-node]');
+            if (reveal) this.revealNode(reveal.dataset.revealNode);
         });
         window.refreshIcons?.();
     }
@@ -214,6 +233,7 @@ export class GraphView {
             return;
         }
         this.show('');
+        if (this.summaryWanted) this.showSummary(true);
         this.cy.add(this.elements(graph.nodes, graph.edges));
         this.statsData = graph.stats;
         // the view as the analyst left it (edit.js)
@@ -247,6 +267,18 @@ export class GraphView {
         this.stopZoom();
         this.cy.fit(undefined, 64);
         if (this.cy.zoom() > 1.1) this.cy.zoom({ level: 1.1, renderedPosition: this.center() });
+        this.besideSummary();
+    }
+
+    // with the summary open on the left, the graph fits in the room beside it
+    besideSummary() {
+        const left = this.summaryOpen() ? this.summary.offsetWidth + 24 : 0;
+        const width = this.canvas.clientWidth;
+        if (!left || width <= left * 2) return;
+        this.cy.zoom({
+            level: (this.cy.zoom() * (width - left)) / width,
+            renderedPosition: { x: width, y: this.canvas.clientHeight / 2 },
+        });
     }
 
     // Server nodes and edges as Cytoscape elements (new ones only)
@@ -260,10 +292,21 @@ export class GraphView {
         }
         for (const edge of edges) {
             if (!known.has(edge.source) || !known.has(edge.target) || this.cy.getElementById(edge.id).length) continue;
-            const { id, source, target, kind, service, method, timestamp } = edge;
+            const { id, source, target, kind, service, method, timestamp, label, card } = edge;
             out.push({
                 group: 'edges',
-                data: { id, source, target, kind, service, method, timestamp, color: '#a78bfa' },
+                data: {
+                    id,
+                    source,
+                    target,
+                    kind,
+                    service,
+                    method,
+                    timestamp,
+                    ...(label ? { label } : {}),
+                    ...(card ? { card } : {}),
+                    color: card ? cardColor(card) : '#a78bfa',
+                },
             });
         }
         return out;
@@ -283,6 +326,18 @@ export class GraphView {
             const shown = String(node.display || node.value);
             data.label = clip(node.type === 'url' ? shown.replace(/^https?:\/\/(www\.)?/i, '') : shown);
             data.w = data.h = node.root ? 42 : 34;
+        } else if (node.kind === 'card') {
+            data.color = cardColor(node.card);
+            // title, then who (the name or username on it), else when
+            const second = node.subtitle || node.date || cardName(node.card);
+            data.label = `${clip(node.title, 26)}\n${clip(second, 27)}`;
+            data.w = CARD_WIDTH;
+            data.h = 52;
+            data.textWidth = CARD_WIDTH - 50;
+        } else if (node.kind === 'fact') {
+            data.color = FACT_KINDS[node.fact]?.color || '#fbbf24';
+            data.label = clip(node.label, 24);
+            data.w = data.h = 30;
         } else if (node.kind === 'lookup') {
             data.icon = moduleOf(node.service).icon || 'terminal';
             const title = clip(lookupTitle(node), 30);
@@ -300,8 +355,8 @@ export class GraphView {
             if (node.image)
                 data.picture = `/api/investigations/${encodeURIComponent(this.investigationId)}/note-images/${encodeURIComponent(node.image)}`;
         } else if (node.kind === 'group') {
-            data.color = typeColor(groupType(node.key));
-            data.label = clip(node.label);
+            data.color = node.card ? cardColor(node.card) : typeColor(node.type || 'url');
+            data.label = clip(node.service ? `${lookupTitle(node)} · ${node.label}` : node.label);
             data.open = false;
             data.w = data.h = 38;
         } else {
@@ -318,9 +373,9 @@ export class GraphView {
         node.data('decor', decorate(node.data()));
     }
 
-    // A lookup or group can fold when something hangs under it
+    // A node can fold when something hangs under it
     refreshFoldable(nodes) {
-        nodes.filter('[kind = "lookup"], [kind = "group"]').forEach((node) => {
+        nodes.filter('[kind = "lookup"], [kind = "group"], [kind = "card"], [kind = "identifier"]').forEach((node) => {
             const foldable = node.outgoers('node').length > 0;
             if (node.data('foldable') !== foldable || (node.data('kind') === 'group' && node.data('open') !== foldable))
                 this.setData(node, { foldable, ...(node.data('kind') === 'group' ? { open: foldable } : {}) });
@@ -332,7 +387,8 @@ export class GraphView {
         this.drawMinimap();
         const s = this.statsData || {};
         const shown = this.cy.nodes('[kind = "identifier"]').not(OFF).length;
-        this.stats.textContent = `${shown} of ${s.identifiers ?? '?'} identifiers shown · ${s.lookups ?? 0} lookups${
+        const cards = this.cy.nodes('[kind = "card"]').not(OFF).length;
+        this.stats.textContent = `${shown} of ${s.identifiers ?? '?'} identifiers · ${cards} of ${s.cards ?? 0} records · ${s.lookups ?? 0} lookups${
             s.noise || s.false_positive
                 ? ` · ${(s.noise || 0) + (s.false_positive || 0)} left out (noise, false positives)`
                 : ''
@@ -383,20 +439,30 @@ export class GraphView {
         this.root.addEventListener('wheel', (e) => this.onWheel(e), { capture: true, passive: false });
         // labels fade out as the graph gets small, instead of vanishing at once
         // (set on the elements: Cytoscape doesn't read the stylesheet again on zoom)
-        const labelStyle = (eles) =>
-            eles.style({
+        const labelStyle = (eles) => {
+            eles.not('[kind = "card"]').style({
                 'text-opacity': labels.opacity,
                 'text-outline-opacity': labels.opacity * 0.85,
                 'text-background-opacity': labels.opacity * 0.9,
             });
+            eles.filter('[kind = "card"]').style({ 'text-opacity': labels.cards });
+        };
         const fadeLabels = () => {
-            const level = Math.round(Math.max(0, Math.min(1, (cy.zoom() - 0.28) / 0.22)) * 5) / 5;
-            if (level === labels.opacity) return;
+            const step = (from, span) => Math.round(Math.max(0, Math.min(1, (cy.zoom() - from) / span)) * 5) / 5;
+            // a card's title reads further out than an identifier's value
+            const level = step(0.28, 0.22);
+            const cards = step(0.16, 0.14);
+            cy.edges().toggleClass('labelled', cy.zoom() >= 0.85);
+            if (level === labels.opacity && cards === labels.cards) return;
             labels.opacity = level;
+            labels.cards = cards;
             cy.batch(() => labelStyle(cy.elements()));
         };
         cy.on('viewport', fadeLabels);
-        cy.on('add', (e) => labels.opacity < 1 && labelStyle(e.target));
+        cy.on('add', (e) => {
+            if (labels.opacity < 1 || labels.cards < 1) labelStyle(e.target);
+            if (e.target.isEdge()) e.target.toggleClass('labelled', cy.zoom() >= 0.85);
+        });
         cy.on('viewport', () => this.drawMinimap(false));
         cy.on('position add remove', () => this.drawMinimap());
         grid();
@@ -426,7 +492,10 @@ export class GraphView {
         // while dragging: lined up with the nodes around or the grid (snap.js)
         cy.on('drag', 'node', (e) => this.snapMove(e.target, e));
         cy.on('free', 'node', () => this.snapEnd());
-        cy.on('dbltap', 'node[kind = "identifier"]', (e) => this.openAllUnder(e.target));
+        // double-click folds what hangs under a node, or opens it
+        cy.on('dbltap', 'node[kind = "identifier"], node[kind = "card"]', (e) =>
+            this.toggle(e.target, { record: true })
+        );
         cy.on('tap', (e) => {
             if (e.target === cy) this.closePanel();
         });
@@ -769,6 +838,9 @@ export class GraphView {
             return;
         }
         this.openPanel(node);
+        // clicking shows what hangs under it too (a double-click folds it)
+        if (['identifier', 'card'].includes(kind) && !node.data('open') && node.data('hidden'))
+            this.open(node, { record: true });
     }
 
     toggle(node, options = {}) {
@@ -797,7 +869,7 @@ export class GraphView {
             );
             added = this.cy.add([...nodes, ...edges]);
         } else {
-            if (node.data('kind') === 'lookup' && !node.data('hidden')) return;
+            if (['lookup', 'identifier', 'card', 'fact'].includes(node.data('kind')) && !node.data('hidden')) return;
             node.data('busy', true);
             try {
                 const page = await this.api('graph/expand', { node: id });
@@ -958,15 +1030,9 @@ export class GraphView {
         });
     }
 
-    // Double-click an identifier: open every lookup under it, one level
-    async openAllUnder(node) {
-        const closed = node.outgoers('node[kind = "lookup"]').filter((n) => !n.data('open'));
-        await Promise.all(closed.map((n) => this.open(n, { record: true })));
-    }
-
     async collapseAll() {
         const open = this.cy
-            .nodes('[kind = "lookup"], [kind = "group"]')
+            .nodes('[kind = "lookup"], [kind = "group"], [kind = "card"], [kind = "identifier"]')
             .filter((n) => n.data('open') && n.outgoers('node').length);
         // deepest first, so each fold keeps what is under it
         const depth = (n) => {
@@ -986,6 +1052,7 @@ export class GraphView {
     hover(node, at) {
         node.addClass('hover');
         const color = node.data('kind') === 'lookup' ? '#a78bfa' : node.data('color');
+        node.connectedEdges().addClass('labelled');
         this.cy.batch(() => {
             this.cy.elements().not(node.closedNeighborhood()).addClass('faded');
             node.connectedEdges().data('color', color).addClass('lit');
@@ -1011,8 +1078,23 @@ export class GraphView {
                     { confirmed: 'Confirmed', important: 'Important', false_positive: 'False positive' }[d.status],
                     'text-purple-300',
                 ]);
-            if (d.found_by > 1) lines.push([`Found by ${d.found_by} lookups`, 'text-gray-400']);
+            if (d.cards > 1) lines.push([`In ${d.cards} records`, 'text-gray-400']);
+            else if (d.found_by > 1) lines.push([`Found by ${d.found_by} lookups`, 'text-gray-400']);
             if (d.shared) lines.push([`Also in ${d.shared} other case${d.shared > 1 ? 's' : ''}`, 'text-indigo-300']);
+            if (d.hidden && !d.open) lines.push([`${d.hidden} more under it · click to open`, 'text-gray-500']);
+        } else if (d.kind === 'card') {
+            lines.push([`${cardName(d.card)}${d.date ? ` · ${d.date}` : ''}`, 'text-gray-500']);
+            lines.push([d.title, 'text-white font-semibold'], [d.subtitle, 'text-gray-300 break-all']);
+            for (const [label, value] of (d.facts || []).slice(0, 4))
+                lines.push([`${label}: ${value.length > 80 ? `${value.slice(0, 79)}…` : value}`, 'text-gray-400']);
+            if (d.card === 'breach' && d.flags?.length) lines.push([`Leaked: ${flagText(d.flags)}`, 'text-red-300']);
+            lines.push([
+                `Found by ${d.services.map((s) => moduleOf(s).name).join(', ')}${d.found_by > 1 ? ` (${d.found_by} lookups)` : ''}`,
+                'text-purple-300',
+            ]);
+            if (d.hidden && !d.open) lines.push([`${d.hidden} more in it · click to open`, 'text-gray-500']);
+        } else if (d.kind === 'fact') {
+            lines.push([`${d.name} in ${d.count} records`, 'text-gray-500'], [d.label, 'text-white']);
         } else if (d.kind === 'lookup') {
             lines.push([lookupTitle(d), 'text-white']);
             if (d.target) lines.push([String(d.target), 'text-gray-300 break-all']);
@@ -1037,7 +1119,10 @@ export class GraphView {
         } else if (d.kind === 'group') {
             lines.push(
                 [d.label, 'text-white'],
-                [`${d.count} identifiers · click to ${d.open ? 'fold' : 'open'}`, 'text-gray-400']
+                [
+                    `${d.count} ${d.card ? 'records' : 'identifiers'} · click to ${d.open ? 'fold' : 'open'}`,
+                    'text-gray-400',
+                ]
             );
         } else {
             lines.push([`${d.count} more · click to load the next ones`, 'text-gray-300']);
@@ -1047,14 +1132,15 @@ export class GraphView {
 
     edgeTooltip(edge, at) {
         const d = edge.data();
-        if (!d.service) return;
+        if (!d.service && !d.label) return;
         const when = d.timestamp ? window.fmtDateTime?.(d.timestamp) || d.timestamp : '';
         const verb =
             { searched: 'Looked up with', found: 'Found by', member: 'Found by', followup: 'Follow-up of' }[d.kind] ||
             '';
         this.showTooltip(
             [
-                [`${verb} ${lookupTitle(d)}`.trim(), 'text-white'],
+                [d.label || '', 'text-white'],
+                [d.service ? `${verb} ${lookupTitle(d)}`.trim() : '', 'text-gray-300'],
                 [when, 'text-gray-500'],
             ],
             at
@@ -1121,11 +1207,24 @@ export class GraphView {
         } else if (d.kind === 'group') {
             kind = 'Group';
             title = d.label;
+        } else if (d.kind === 'card') {
+            kind = cardName(d.card);
+            title = d.title;
+        } else if (d.kind === 'fact') {
+            kind = `${d.name} · shared`;
+            title = d.label;
         } else if (d.kind === 'manual') {
             kind = `${typeName(d.type)} · yours`;
             title = d.label;
         }
-        const color = d.kind === 'identifier' ? typeColor(d.type) : d.kind === 'manual' ? d.color : '#a78bfa';
+        const color =
+            d.kind === 'identifier'
+                ? typeColor(d.type)
+                : d.kind === 'manual'
+                  ? d.color
+                  : d.kind === 'card'
+                    ? cardColor(d.card)
+                    : '#a78bfa';
         return `
             <div class="flex items-start justify-between gap-3 px-5 py-4 border-b border-[#24283b]">
                 <div class="min-w-0">
@@ -1149,6 +1248,22 @@ export class GraphView {
                 : '';
         const resultHref = (lookup) =>
             `/api/investigations/${encodeURIComponent(this.investigationId)}/view#result-${encodeURIComponent(lookup.result_id)}`;
+        // a card or identifier in a list: opens what it is folded in and goes to it
+        const nodeRow = (x) => {
+            const isCard = x.kind === 'card';
+            const color = isCard ? cardColor(x.card) : typeColor(x.type);
+            const icon = isCard ? CARD_KINDS[x.card]?.icon || 'file-text' : 'circle';
+            const main = isCard ? x.title : x.display || x.value;
+            const sub = isCard ? [x.subtitle, x.date].filter(Boolean).join(' · ') : typeName(x.type);
+            return `
+            <button type="button" data-reveal-node="${window.escapeAttr(x.id)}" class="w-full flex items-center gap-2 py-1 text-left hover:text-purple-300">
+                <i data-lucide="${window.escapeAttr(icon)}" class="w-4 h-4 shrink-0" style="color:${esc(color)}"></i>
+                <span class="min-w-0 flex-1">
+                    <span class="block truncate text-gray-200">${esc(main)}${isCard && x.flags?.includes('password') ? ' <span class="text-red-300 text-xs">password</span>' : ''}</span>
+                    ${sub ? `<span class="block truncate text-xs text-gray-500">${esc(sub)}</span>` : ''}
+                </span>
+            </button>`;
+        };
         const lookupRow = (lookup) => `
             <div class="flex items-center gap-2 py-1">
                 <button type="button" data-focus-node="${window.escapeAttr(lookup.id)}" class="min-w-0 flex-1 text-left hover:text-purple-300">
@@ -1178,6 +1293,7 @@ export class GraphView {
                 status || d.note
                     ? `<div class="space-y-1">${status ? `<div class="text-purple-300">${esc(status)}</div>` : ''}${d.note ? `<div class="text-gray-300 whitespace-pre-line">${esc(d.note)}</div>` : ''}</div>`
                     : '',
+                section('In these records', (details.cards || []).map(nodeRow).join('')),
                 section('Looked up with', (details.searched_in || []).map(lookupRow).join('')),
                 section('Found by', (details.found_in || []).map(lookupRow).join('')),
                 section('Also in other cases', elsewhere),
@@ -1225,13 +1341,107 @@ export class GraphView {
                 '<p class="text-xs text-gray-500">Added by you in the graph. It is only in this graph until you add it to the investigation.</p>',
             ].join('');
         }
-        if (d.kind === 'group') {
+        if (d.kind === 'card') return this.cardPanel(details, { section, nodeRow, lookupRow });
+        if (d.kind === 'fact') {
             return [
-                `<div class="text-gray-300">${esc(d.count)} identifiers, folded. Click the group to open it.</div>`,
-                details.lookup ? section('Found by', lookupRow(details.lookup)) : '',
+                `<p class="text-gray-300">The same ${esc(d.name.toLowerCase())} is in ${esc(d.count)} records: they may be the same person.</p>`,
+                section('Records', (details.cards || []).map(nodeRow).join('')),
+            ].join('');
+        }
+        if (d.kind === 'group') {
+            const more =
+                d.count > (details.members || []).length
+                    ? `<p class="text-xs text-gray-500">and ${esc(d.count - details.members.length)} more</p>`
+                    : '';
+            return [
+                `<div class="text-gray-300">${esc(d.count)} ${d.card ? 'records' : 'identifiers'}, folded. Click the group to open it.</div>`,
+                details.owner ? section('Under', nodeRow(details.owner)) : '',
+                section('In it', (details.members || []).map(nodeRow).join('') + more),
             ].join('');
         }
         return '';
+    }
+
+    // A card's panel: everything the record says, what it holds (to look up further), where
+    // it was found
+    cardPanel(details, { section, nodeRow, lookupRow }) {
+        const d = details.node;
+        const color = cardColor(d.card);
+        const parentResult = d.runs?.[0]?.result_id || '';
+        // the chips' lookups are attached under the result the card came from
+        const attach = (html) =>
+            html.replaceAll('<button ', `<button data-pivot-parent="${window.escapeAttr(parentResult)}" `);
+        const cell = (label, value) => {
+            const chip = window.pivotField(label, value);
+            return chip === esc(value) ? window.pivotInText(value) : chip;
+        };
+        const picture = d.picture
+            ? `<img src="${window.escapeAttr(window.safeUrl(d.picture))}" alt="" referrerpolicy="no-referrer" data-img-error="hideImage" class="w-16 h-16 rounded-lg object-cover border-2 shrink-0" style="border-color:${esc(color)}">`
+            : '';
+        const link = d.url && window.safeUrl(d.url);
+        const head = `
+            <div class="flex items-center gap-3">
+                ${picture}
+                <div class="min-w-0 space-y-0.5">
+                    ${d.subtitle ? `<div class="text-gray-200 break-words">${esc(d.subtitle)}</div>` : ''}
+                    ${d.date ? `<div class="text-xs text-gray-500">${esc(d.date)}</div>` : ''}
+                    ${link ? `<a href="${window.escapeAttr(link)}" target="_blank" rel="noopener noreferrer" class="block text-xs text-purple-300 hover:text-white break-all">${esc(d.url)}</a>` : ''}
+                </div>
+            </div>`;
+        const leaked =
+            d.card === 'breach' && d.flags.length
+                ? `<div class="flex items-center gap-2 text-red-300"><i data-lucide="key-round" class="w-4 h-4"></i>Leaked: ${esc(flagText(d.flags))}</div>`
+                : '';
+        const facts = d.facts.length
+            ? `<dl class="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-x-3 gap-y-1.5 text-xs">${d.facts
+                  .map(
+                      ([label, value]) =>
+                          `<dt class="text-gray-500 break-words">${esc(label)}</dt><dd class="text-gray-200 break-words">${cell(label, value)}</dd>`
+                  )
+                  .join('')}</dl>`
+            : '';
+        const holds = (details.exposed || [])
+            .map(
+                (x) => `
+                <div class="flex items-center gap-2 py-0.5">
+                    <span class="min-w-0 flex-1">${attach(window.pivotChip(x.type, x.value, x.display))}</span>
+                    <button type="button" data-reveal-node="${window.escapeAttr(x.id)}" class="text-gray-500 hover:text-purple-300 shrink-0" title="Show it on the graph"><i data-lucide="crosshair" class="w-4 h-4"></i></button>
+                </div>`
+            )
+            .join('');
+        // the card's own identifiers (an account's address, an ID): to look up further too
+        const exposedKeys = new Set((details.exposed || []).map((x) => `${x.type}:${x.value}`));
+        const own = (details.identifiers || [])
+            .filter((x) => !exposedKeys.has(`${x.type}:${x.value}`))
+            .map((x) => `<div class="py-0.5">${attach(window.pivotChip(x.type, x.value))}</div>`)
+            .join('');
+        const shared = (d.traits || [])
+            .filter((t) => t.shared)
+            .map(
+                (t) => `
+                <button type="button" data-reveal-node="${window.escapeAttr(t.id)}" class="w-full flex items-center gap-2 py-1 text-left hover:text-purple-300">
+                    <i data-lucide="${window.escapeAttr(FACT_KINDS[t.kind]?.icon || 'link')}" class="w-4 h-4 shrink-0" style="color:${esc(FACT_KINDS[t.kind]?.color || '#fbbf24')}"></i>
+                    <span class="truncate text-gray-200">${esc(FACT_KINDS[t.kind]?.label || t.kind)} · ${esc(t.shown)}</span>
+                </button>`
+            )
+            .join('');
+        const elsewhere = (details.elsewhere || [])
+            .map(
+                (place) =>
+                    `<a class="block py-1 text-purple-300 hover:text-white truncate" href="/api/investigations/${encodeURIComponent(place.investigation_id)}/view#graph">${esc(place.name)}</a>`
+            )
+            .join('');
+        return [
+            head,
+            leaked,
+            facts,
+            section('Its identifiers', own),
+            section('What it holds', holds),
+            section('Shares with other records', shared),
+            section('Found for', (details.subject || []).map(nodeRow).join('')),
+            section('Found by', (details.lookups || []).map(lookupRow).join('')),
+            section('Also in other cases', elsewhere),
+        ].join('');
     }
 }
 
@@ -1240,3 +1450,4 @@ Object.assign(GraphView.prototype, pivoting);
 Object.assign(GraphView.prototype, finding);
 Object.assign(GraphView.prototype, framing);
 Object.assign(GraphView.prototype, snapping);
+Object.assign(GraphView.prototype, summing);
