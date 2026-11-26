@@ -8,6 +8,7 @@ import { CARD_KINDS } from './style.js';
 // Under this zoom the trees are summed up
 const SUMMARY_ZOOM = 0.32;
 const LANE_NAMES = {
+    sections: 'Results by section',
     identifiers: 'Identifiers',
     facts: 'Shared facts',
     lookups: 'Lookups',

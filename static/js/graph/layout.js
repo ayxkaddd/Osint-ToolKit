@@ -56,7 +56,8 @@ export function spanningTree(nodes) {
     // the node a group (or a group's "+N more") stands in for
     const ownerOf = (node) => {
         const d = node.data();
-        if (d.kind === 'group') return d.owner;
+        // a section is a node of the tree itself: what is in it hangs under it
+        if (d.kind === 'group') return d.section ? node.id() : d.owner;
         if (d.kind === 'more') {
             const of = node.cy().getElementById(d.of);
             return of.data('kind') === 'group' ? of.data('owner') : d.of;
@@ -165,7 +166,7 @@ const LANES = ['account', 'person', 'breach', 'registration', 'network', 'place'
 const laneOf = (node) => {
     const d = node.data();
     if (d.kind === 'card') return d.card;
-    if (d.kind === 'group') return d.card || 'identifiers';
+    if (d.kind === 'group') return d.section ? 'sections' : d.card || 'identifiers';
     if (d.kind === 'more') return laneOf(node.cy().getElementById(d.of));
     if (d.kind === 'fact') return 'facts';
     if (d.kind === 'lookup' || d.kind === 'pending') return 'lookups';
@@ -173,7 +174,7 @@ const laneOf = (node) => {
 };
 const laneRank = (lane) => {
     const i = LANES.indexOf(lane);
-    return i >= 0 ? i : ({ identifiers: 20, facts: 21, lookups: 22 }[lane] ?? 30);
+    return i >= 0 ? i : ({ sections: -1, identifiers: 20, facts: 21, lookups: 22 }[lane] ?? 30);
 };
 
 // How wide a node is, with its label (a circle's label is wider than the circle)

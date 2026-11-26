@@ -655,3 +655,80 @@ def test_links_drawn_to_a_lookup_go_to_what_it_looked_up(client, investigation):
         "manual_edges": [{"id": "l:" + "e" * 32, "source": M1, "target": f"r:{rid}", "label": "owns"}]})
     data, _, _ = _graph(client, investigation)
     assert data["state"]["manual_edges"][0]["target"] == "e:domain:drawn.test"
+
+
+def test_dns_recon_is_in_the_sections_of_its_page(client, investigation):
+    _save(investigation, "dns_recon", "lookup_dns_recon", {"domain": "corp.test"}, {
+        "domain": "corp.test",
+        "whois_info": {"registrar": "Reg", "registrant": "Corp Ltd", "emails": ["admin@corp.test"]},
+        "hosting": [{"ip": "93.184.216.34", "asn": "AS1", "as_name": "Host Inc", "country": "US"}],
+        "subdomains": [{"name": f"s{i}.corp.test", "ips": ["93.184.216.34"], "resolves": True} for i in range(3)],
+        "dns_history": {"virustotal_resolutions": [{"ip": "8.8.4.4", "last_resolved": "2020-01-01"}]},
+        "dns_records": {"A": ["93.184.216.35"], "NS": ["ns1.dnshost.test"]},
+    })
+    _, nodes, edges = _graph(client, investigation)
+    sections = {n["label"]: n for n in sorted(nodes.values(), key=lambda n: n.get("rank", 0))
+                if n["kind"] == "group" and n.get("section")}
+    assert list(sections) == ["Who runs it", "Name servers", "Hosting", "Subdomains", "DNS history",
+                              "Current DNS records"]
+    assert all(g["owner"] == "e:domain:corp.test" and ("e:domain:corp.test", g["id"]) in edges for g in sections.values())
+    assert sections["Subdomains"]["count"] == 3 and sections["Subdomains"]["card"] == "network"
+    assert sections["Hosting"]["count"] == 1      # a group even of one: it can be opened, hidden or removed
+    # folded: what is in them is not drawn until opened
+    assert "e:ip:8.8.4.4" not in nodes
+    page = client.get(f"/api/investigations/{investigation}/graph/expand",
+                      params={"node": sections["DNS history"]["id"]}).json()
+    assert [n["id"] for n in page["nodes"]] == ["e:ip:8.8.4.4"]
+    assert page["nodes"][0]["home"] == sections["DNS history"]["id"]
+    details = client.get(f"/api/investigations/{investigation}/graph/node",
+                         params={"node": sections["Who runs it"]["id"]}).json()
+    assert details["node"]["section"] is True and details["lookup"]["service"] == "dns_recon"
+
+
+def test_ns_domains_are_in_the_same_owner_groups_of_its_page(client, investigation):
+    domains = ["a.test", "b.test", "c.test", "d.test", "e.test"]
+    rid = _save(investigation, "ns", "lookup_ns", {"ns1": "ns1.host.test", "ns2": "ns2.host.test"}, domains)
+    _save(investigation, "ns", "whois_analysis", {"body": {"domains": domains}}, {"domains": {
+        "a.test": {"registrant": "Jo Owner", "email": "jo@owner.test"},
+        "b.test": {"registrant": "Jo Owner", "email": "jo@owner.test"},
+        "c.test": {"registrant": "Privacy service", "email": None},
+    }}, parent=rid)
+    _save(investigation, "ns", "fingerprint", {"body": {"domains": domains}}, {"domains": {
+        "c.test": {"domain": "c.test", "trackers": {"google_analytics": ["G-ABCDEFGH12"]}},
+        "d.test": {"domain": "d.test", "trackers": {"google_analytics": ["G-ABCDEFGH12"]}},
+    }}, parent=rid)
+    _, nodes, _ = _graph(client, investigation)
+    groups = sorted((n["label"], n["count"], n.get("confidence")) for n in nodes.values()
+                    if n["kind"] == "group" and n.get("section"))
+    assert groups == [("Domains", 1, None), ("Group 1 · high same owner", 2, "high"),
+                      ("Group 2 · likely same owner", 2, "likely")]
+    owner = next(n for n in nodes.values() if n.get("label") == "Group 1 · high same owner")
+    assert owner["owner"] == "e:domain:ns1.host.test"
+    assert ["WHOIS contact email", "jo@owner.test"] in owner["reasons"]
+    page = client.get(f"/api/investigations/{investigation}/graph/expand", params={"node": owner["id"]}).json()
+    assert sorted(n["id"] for n in page["nodes"]) == ["e:domain:a.test", "e:domain:b.test"]
+    # a domain's WHOIS hangs under it
+    domain = client.get(f"/api/investigations/{investigation}/graph/expand", params={"node": "e:domain:a.test"}).json()
+    assert [n["card"] for n in domain["nodes"]] == ["registration"]
+
+
+def test_ns_grouping_is_the_pages():
+    """The server's copy of the NS page's grouping (static/js/services/ns_attribution.js)."""
+    from services.ns_attribution import build_signals, clusters, parse_whois
+    whois = {d: parse_whois({"registrant": "Jo", "email": "jo@x.test"}) for d in ("a.test", "b.test")}
+    whois["c.test"] = parse_whois({"error": "timeout"})
+    web = {"c.test": {"title": "Shop"}, "d.test": {"title": "Shop"}, "e.test": {"title": "404 Not Found"},
+           "f.test": {"title": "404 Not Found"}}
+    groups = clusters(build_signals(whois, web))
+    assert [(g["domains"], g["confidence"]) for g in groups] == [(["a.test", "b.test"], "high"),
+                                                                (["c.test", "d.test"], "possible")]
+
+
+def test_sections_are_never_folded_into_other_groups(client, investigation):
+    # a DNS recon that looked up no identifier, with sections and many other findings beside them
+    _save(investigation, "dns_recon", "lookup_dns_recon", {"body": {"x": 1}}, {
+        "hosting": [{"ip": f"93.184.216.{i}", "as_name": f"Host {i}"} for i in range(3)],
+        "found": [f"user{i}@many.test" for i in range(12)],
+    })
+    data, nodes, _ = _graph(client, investigation)
+    assert [n["label"] for n in nodes.values() if n.get("section")] == ["Hosting"]

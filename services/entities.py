@@ -594,6 +594,9 @@ def _service_hints(service: str, parent: dict[str, Any], key: str) -> Optional[s
         return "vk"
     if service == "vk_profile" and k == "username":
         return "vk"
+    # DNS records: the name servers and mail servers are hosts
+    if service == "dns_recon" and key in ("NS", "MX", "CNAME"):
+        return "domain"
     return None
 
 
@@ -676,6 +679,8 @@ def extract_entities(result: Any, service: str = "", no_country_code: Optional[l
         result = gitfive_confirmed(result)
     if service == "username" and isinstance(result, dict):
         result = username_clues_read(result)
+    if service == "ns" and isinstance(result, list):
+        result = {"domains": result}     # the domains on both name servers
     if isinstance(result, dict) and result.get("kind") == "plugin_result":
         # card pictures and icons are never leads
         result = {**result, "items": [{k: v for k, v in item.items() if k not in ("image", "icon")}

@@ -574,6 +574,20 @@ def read_dns_recon(result: dict, method: str, subject: list[str]) -> list[dict[s
         found = _contact_card({**whois, "name": whois.get("registrant") or whois.get("org")}, "whois_info",
                               str(result.get("domain") or ""))
         cards += [found] if found else []
+    for i, sub in enumerate(result.get("subdomains") or []):
+        if isinstance(sub, dict) and sub.get("name"):
+            http = sub.get("httpx_data") if isinstance(sub.get("httpx_data"), dict) else {}
+            title = sub.get("title") or http.get("title")
+            cards.append(card(
+                "network", [f"subdomains[{i}]"], sub["name"], key=f"network:subdomain:{sub['name']}",
+                subtitle=_text(title, 80) or ("alive" if sub.get("is_alive") else "resolves" if sub.get("resolves")
+                                              else "doesn't resolve"),
+                site=_text(sub["name"], 200).lower(), relation="subdomain",
+                url=_text(http.get("url"), 2000) or None,
+                facts=facts_from([("IPs", sub.get("ips")), ("Status", sub.get("status_code") or http.get("status_code")),
+                                  ("Title", title), ("Server", sub.get("server") or http.get("webserver")),
+                                  ("Technologies", sub.get("technologies") or http.get("tech")),
+                                  ("Found by", sub.get("sources")), ("First certificate", sub.get("first_cert"))])))
     for i, hosting in enumerate(result.get("hosting") or []):
         if isinstance(hosting, dict):
             cards.append(card("network", [f"hosting[{i}]"], hosting.get("as_name") or hosting.get("asn") or "Hosting",
@@ -801,7 +815,9 @@ def build_cards(record: dict[str, Any]) -> list[dict[str, Any]]:
         # what was searched, and the domain of a searched email (found again in every record)
         known = set(subject) | {f"domain:{key.rsplit('@', 1)[1]}" for key in subject if key.startswith("email:")}
         specs = _read(service, result, method, subject)
-        if not specs:
+        sectioner = SECTIONS.get(service)
+        sections = sectioner(record, part, result) if sectioner and result is not None else []
+        if not specs and not sections:
             continue
         everywhere: list[tuple[str, str]] = []
         extract_entities(result, service, everywhere=everywhere)
@@ -824,6 +840,7 @@ def build_cards(record: dict[str, Any]) -> list[dict[str, Any]]:
             if key not in claimed:
                 for index in whole:
                     exposed[index][key] = None
+        made: list[dict[str, Any]] = []
         for index, spec in enumerate(specs):
             own = [e.key for t, v in spec.pop("own", []) if v for e in [make_entity(t, v, typed=True)] if e]
             under = spec.pop("under", None)
@@ -848,9 +865,100 @@ def build_cards(record: dict[str, Any]) -> list[dict[str, Any]]:
             if not found.get("key"):
                 found["key"] = f"{found['kind']}:{record.get('result_id')}:{child_id or ''}:{index}"
             out.append(found)
+            made.append(found)
             if child_id is None and parent_card is None and found["kind"] in ("account", "person"):
                 parent_card = found
+        out += _sections(sections, everywhere, made, known, part, record, child_id)
     return out
+
+
+def _sections(sections: list[dict[str, Any]], everywhere: list[tuple[str, str]], cards: list[dict[str, Any]],
+              known: set, part: dict[str, Any], record: dict[str, Any], child_id: Optional[str]) -> list[dict[str, Any]]:
+    """A result's sections, as on its module's page ({"kind": "section"} entries in cards.json):
+    the cards and identifiers in each, by where in the result they are (the longest path that
+    matches), or as the section lists them (``domains``)."""
+    prefixes: dict[str, int] = {}
+    for index, section in enumerate(sections):
+        for path in section.get("paths") or []:
+            prefixes.setdefault(path, index)
+
+    def section_of(path: str) -> Optional[int]:
+        return next((prefixes[p] for p in _prefixes(path) if p and p in prefixes), None)
+
+    members: list[dict[str, None]] = [{} for _ in sections]
+    for index, section in enumerate(sections):
+        for domain in section.get("domains") or []:
+            entity = make_entity("domain", domain, typed=True)
+            if entity:
+                members[index][entity.key] = None
+    listed = {key for m in members for key in m}
+    for key, path in everywhere:
+        index = section_of(path)
+        if index is not None and key not in known and key not in listed:
+            members[index][key] = None
+    held: list[list[str]] = [[] for _ in sections]
+    for card in cards:
+        index = section_of(card["paths"][0]) if card.get("paths") else None
+        if index is not None:
+            held[index].append(card["key"])
+    out = []
+    for index, section in enumerate(sections):
+        if not members[index] and not held[index]:
+            continue
+        entry = {"kind": "section", "key": section["key"], "label": section["label"], "order": index,
+                 "members": list(members[index]), "cards": held[index],
+                 "service": part.get("service_name") or "", "method": part.get("method_name") or "",
+                 "timestamp": part.get("timestamp") or record.get("timestamp")}
+        entry.update({k: section[k] for k in ("reasons", "confidence") if section.get(k)})
+        if child_id:
+            entry["child_id"] = child_id
+        out.append(entry)
+    return out
+
+
+# Results their module's page shows in sections: the graph groups them the same way
+def sections_dns_recon(record: dict[str, Any], part: dict[str, Any], result: Any) -> list[dict[str, Any]]:
+    if not isinstance(result, dict):
+        return []
+    return [
+        {"key": "who", "label": "Who runs it", "paths": ["whois_info", "intel"]},
+        {"key": "nameservers", "label": "Name servers", "paths": ["dns_records.NS", "whois_info.name_servers"]},
+        {"key": "hosting", "label": "Hosting", "paths": ["hosting"]},
+        {"key": "subdomains", "label": "Subdomains", "paths": ["subdomains"]},
+        {"key": "history", "label": "DNS history", "paths": ["dns_history"]},
+        {"key": "records", "label": "Current DNS records", "paths": ["dns_records"]},
+    ]
+
+
+def sections_ns(record: dict[str, Any], part: dict[str, Any], result: Any) -> list[dict[str, Any]]:
+    """The domains on both name servers: in the groups the NS page finds likely to have one
+    owner (from its WHOIS and website follow-ups), then the rest."""
+    from services.ns_attribution import build_signals, clusters, parse_whois
+
+    if part.get("method_name") != "lookup_ns" or not isinstance(result, list):
+        return []
+    children = record.get("children") or []
+
+    def latest(method: str) -> dict[str, Any]:
+        child = next((c for c in reversed(children) if c.get("method_name") == method), None)
+        answer = (child or {}).get("result")
+        domains = answer.get("domains") if isinstance(answer, dict) else None
+        return domains if isinstance(domains, dict) else {}
+
+    groups = clusters(build_signals({d: parse_whois(w) for d, w in latest("whois_analysis").items()},
+                                    latest("fingerprint")))
+    sections = [{"key": f"owner:{g['domains'][0]}", "label": f"Group {i + 1} · {g['confidence']} same owner",
+                 "domains": g["domains"], "confidence": g["confidence"],
+                 "reasons": [[r["label"], str(r["value"])[:120]] for r in g["reasons"][:12]]}
+                for i, g in enumerate(groups)]
+    grouped = {d for g in groups for d in g["domains"]}
+    rest = [d for d in result if isinstance(d, str) and d not in grouped]
+    if rest:
+        sections.append({"key": "domains", "label": "Domains", "domains": rest})
+    return sections
+
+
+SECTIONS = {"dns_recon": sections_dns_recon, "ns": sections_ns}
 
 
 # ---------------------------------------------------------------------------

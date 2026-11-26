@@ -360,7 +360,8 @@ export class GraphView {
                 data.picture = `/api/investigations/${encodeURIComponent(this.investigationId)}/note-images/${encodeURIComponent(node.image)}`;
         } else if (node.kind === 'group') {
             data.color = node.card ? cardColor(node.card) : typeColor(node.type || 'url');
-            data.label = clip(node.service ? `${lookupTitle(node)} · ${node.label}` : node.label);
+            // what a lookup found that no card holds: which lookup (a section says what it is)
+            data.label = clip(node.key.startsWith('lookup:') ? `${lookupTitle(node)} · ${node.label}` : node.label);
             data.open = false;
             data.w = data.h = 38;
         } else {
@@ -1131,6 +1132,7 @@ export class GraphView {
         } else if (d.kind === 'group') {
             lines.push(
                 [d.label, 'text-white'],
+                [d.section ? `From ${lookupTitle(d)}` : '', 'text-purple-300'],
                 [
                     `${d.count} ${d.card ? 'records' : 'identifiers'} · click to ${d.open ? 'fold' : 'open'}`,
                     'text-gray-400',
@@ -1217,7 +1219,7 @@ export class GraphView {
             kind = 'Lookup';
             title = lookupTitle(d);
         } else if (d.kind === 'group') {
-            kind = 'Group';
+            kind = d.section ? `Section · ${lookupTitle(d)}` : 'Group';
             title = d.label;
         } else if (d.kind === 'card') {
             kind = cardName(d.card);
@@ -1368,6 +1370,16 @@ export class GraphView {
             return [
                 `<div class="text-gray-300">${esc(d.count)} ${d.card ? 'records' : 'identifiers'}, folded. Click the group to open it.</div>`,
                 details.owner ? section('Under', nodeRow(details.owner)) : '',
+                // why a group of domains is likely one owner's (the NS page's reasons)
+                section(
+                    'Why together',
+                    (d.reasons || [])
+                        .map(
+                            ([label, value]) =>
+                                `<div class="text-xs py-0.5"><span class="text-gray-400">${esc(label)}</span> <span class="text-gray-200 break-all">${esc(value)}</span></div>`
+                        )
+                        .join('')
+                ),
                 section('In it', (details.members || []).map(nodeRow).join('') + more),
             ].join('');
         }

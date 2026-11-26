@@ -340,10 +340,19 @@ class GraphMixin:
 
         # -- cards: the same thing found by several lookups is one card --
         cards: dict[str, dict[str, Any]] = {}
+        sectioned: dict[str, tuple[str, list[dict[str, Any]]]] = {}   # lookup id -> (run time, its sections)
         for result_id, built in raw_cards.items():
             for found in built if isinstance(built, list) else []:
                 lookup_id = merged.get(_lookup_id(result_id, found.get("child_id")))
                 if lookup_id is None or not found.get("key"):
+                    continue
+                if found.get("kind") == "section":
+                    # the latest run's sections stand for the lookup
+                    when = found.get("timestamp") or ""
+                    if lookup_id not in sectioned or sectioned[lookup_id][0] < when:
+                        sectioned[lookup_id] = (when, [])
+                    if sectioned[lookup_id][0] == when:
+                        sectioned[lookup_id][1].append(found)
                     continue
                 card_id = _card_id(found["key"])
                 card = cards.get(card_id)
@@ -461,6 +470,23 @@ class GraphMixin:
                                   "cards": owners}
                 parent[fact_id] = owners[0]
 
+        # a lookup's results in the sections of its page (DNS recon, NS): a node each under what it
+        # looked up ("g:<owner>:section:<lookup>:<key>", folded at first), what is in it under it
+        sections: dict[str, dict[str, Any]] = {}
+        for lookup_id, (_, rows) in sectioned.items():
+            owner = origins.get(lookup_id)
+            for row in sorted(rows, key=lambda r: r.get("order", 0)):
+                section_id = f"g:{owner}:section:{lookup_id}:{row['key']}"
+                nodes = [_card_id(k) for k in row.get("cards") or []] + [node_of(k) for k in row.get("members") or []
+                                                                         if k in entities]
+                members = [n for n in dict.fromkeys(nodes) if n in parent and parent[n] == owner]
+                if not members or owner not in parent:
+                    continue
+                sections[section_id] = {"owner": owner, "lookup": lookup_id, "row": row}
+                parent[section_id] = owner
+                for node in members:
+                    parent[node] = section_id
+
         children: dict[Optional[str], list[str]] = {}
         for node, owner in parent.items():
             children.setdefault(owner, []).append(node)
@@ -483,6 +509,7 @@ class GraphMixin:
 
         model = {"lookups": lookups, "runs": merged, "entities": entities, "cards": cards, "facts": facts,
                  "alias": alias, "parent": parent, "children": children, "via": via, "origins": origins,
+                 "sections": sections,
                  "must": must, "extra": extra,
                  "left_out": left_out, "views": {}}
         for kids in children.values():
@@ -514,6 +541,8 @@ class GraphMixin:
     def _sibling_order(model: dict[str, Any], node: str) -> tuple:
         """A node's place among its siblings: cards (accounts, breaches...) by how much they say,
         identifiers by assessment and how often they were found, then shared facts."""
+        if node in model["sections"]:
+            return (0, -1, int(model["sections"][node]["row"].get("order") or 0), 0, "", node)
         if node.startswith("c:"):
             card = model["cards"][node]
             leads = sum(1 for k in card["exposed"] if f"e:{k}" in model["must"])
@@ -562,8 +591,14 @@ class GraphMixin:
         few, else the most telling records and a group per kind of card or type of
         identifier (a group of one is shown as it is). Adds the groups to ``groups``."""
         kids = [n for n in model["children"].get(owner, []) if n not in shown]
-        if len(kids) <= GRAPH_INLINE_MAX:
+        # a section's results are listed as they are (a page at a time when opened)
+        if owner in model["sections"]:
             return [("node", n) for n in kids]
+        # sections are groups already: always shown as they are, the others grouped beside them
+        out: list[tuple[str, str]] = [("node", n) for n in kids if n in model["sections"]]
+        kids = [n for n in kids if n not in model["sections"]]
+        if len(kids) <= GRAPH_INLINE_MAX:
+            return out + [("node", n) for n in kids]
         top = [n for n in kids if self._notable(model, n)][:GRAPH_TOP]
         keys = {n: self._group_key(model, n) for n in kids if n not in top}
         # many kinds of site: one group of accounts (its records ordered, the best first)
@@ -575,7 +610,7 @@ class GraphMixin:
         for node, (key, label) in keys.items():
             found.setdefault(key, {"id": f"g:{owner}:{key}", "owner": owner, "key": key, "label": label,
                                    "members": []})["members"].append(node)
-        out = [("node", n) for n in top]
+        out += [("node", n) for n in top]
         for group in found.values():
             if len(group["members"]) > 1:
                 groups[group["id"]] = group
@@ -604,6 +639,11 @@ class GraphMixin:
             following = []
             for node in frontier:
                 if not model["children"].get(node):
+                    continue
+                if node in model["sections"]:
+                    # folded at first: the analyst opens the sections they want
+                    closed.add(node)
+                    following += [n for n in model["children"][node] if n in drawn]
                     continue
                 entries = self._folded_children(model, node, must, {})
                 if len(drawn) + len(entries) <= budget:
@@ -692,7 +732,28 @@ class GraphMixin:
             node["type"] = group["key"][5:]
         return node
 
+    @staticmethod
+    def _section_node(model: dict[str, Any], section_id: str) -> dict[str, Any]:
+        """A section of a lookup's page (DNS recon's "Hosting", an NS same-owner group): a group
+        that is a node of the tree."""
+        section = model["sections"][section_id]
+        row = section["row"]
+        members = model["children"].get(section_id, [])
+        node = {"id": section_id, "kind": "group", "section": True, "owner": section["owner"],
+                "key": f"section:{section['lookup']}:{row['key']}", "label": row.get("label") or "Results",
+                "count": len(members), "service": row.get("service"), "method": row.get("method"),
+                "home": section["owner"], "rank": model["rank"].get(section_id, 0)}
+        node.update({k: row[k] for k in ("reasons", "confidence") if row.get(k)})
+        kinds = {model["cards"][m]["kind"] for m in members if m.startswith("c:")}
+        if len(kinds) == 1 and all(m.startswith("c:") for m in members):
+            node["card"] = kinds.pop()
+        elif members and members[0].startswith("e:"):
+            node["type"] = model["entities"][members[0][2:]]["entity"].get("type")
+        return node
+
     def _node(self, model: dict[str, Any], node: str, full: bool = False) -> dict[str, Any]:
+        if node in model["sections"]:
+            return self._section_node(model, node)
         if node.startswith("c:"):
             return self._card_node(model, node, full)
         if node.startswith("f:"):
@@ -705,6 +766,10 @@ class GraphMixin:
 
     def _tree_edge(self, model: dict[str, Any], source: str, target: str) -> dict[str, Any]:
         """The link from a node to one of its children, saying what it is."""
+        if target in model["sections"]:
+            return _edge(source, target, "found")      # the section's name is on it
+        if source in model["sections"] and not target.startswith("c:"):
+            return _edge(source, target, "member", model["lookups"].get(model["sections"][source]["lookup"]))
         if target.startswith("c:"):
             card = model["cards"][target]
             edge = _edge(source, target, "card")
@@ -745,9 +810,11 @@ class GraphMixin:
                     if card_id != owner and card_id in among and key in model["cards"][card_id]["exposed"]:
                         add({**self._tree_edge(model, card_id, node), "cross": True})
                 # found by another lookup too, which no card of holds it: from what that one searched
+                # (not from what a section it is in hangs under: the section is the way to it)
+                held = model["sections"].get(owner, {}).get("owner")
                 for lookup_id in info["found_in"]:
                     source = model["origins"].get(lookup_id)
-                    if source and source != owner and source != node and source in among \
+                    if source and source not in (owner, node, held) and source in among \
                             and not any(lookup_id in model["cards"][c]["lookups"] for c in info["cards"]):
                         add({**_edge(source, node, "found", model["lookups"][lookup_id]), "cross": True})
             elif node.startswith("f:"):
@@ -781,7 +848,7 @@ class GraphMixin:
         drawn, groups = view["drawn"], view["groups"]
         nodes: dict[str, dict[str, Any]] = {}
         for node in drawn:
-            if node.startswith("g:"):
+            if node.startswith("g:") and node not in model["sections"]:
                 nodes[node] = self._group_node(model, groups[node])
             else:
                 data = self._node(model, node)
@@ -791,7 +858,7 @@ class GraphMixin:
                 data["hidden"] = len(kids) - shown
                 data["open"] = not data["hidden"] and bool(kids)
                 nodes[node] = data
-        edges = self._links(model, {n for n in drawn if not n.startswith("g:")})
+        edges = self._links(model, {n for n in drawn if not n.startswith("g:") or n in model["sections"]})
         edges += [{**_edge(g["owner"], gid, "found"), "label": g["label"]} for gid, g in groups.items()
                   if g["owner"] in drawn]
         return {"nodes": list(nodes.values()), "edges": edges,
@@ -884,6 +951,12 @@ class GraphMixin:
                                      "value": model["entities"][k]["entity"].get("value")} for k in keys],
                     "lookups": [self._lookup_node(model, lid) for lid in card["lookups"]],
                     "elsewhere": next(iter(elsewhere.values()), [])}
+        if node_id in model["sections"]:
+            members = model["children"].get(node_id, [])
+            return {"node": self._section_node(model, node_id),
+                    "members": [self._short(model, m) for m in members[:12]],
+                    "owner": self._short(model, model["sections"][node_id]["owner"]),
+                    "lookup": self._lookup_node(model, model["sections"][node_id]["lookup"])}
         if node_id in model["facts"]:
             fact = model["facts"][node_id]
             return {"node": self._fact_node(model, node_id), "cards": [self._short(model, c) for c in fact["cards"]]}
