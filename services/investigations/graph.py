@@ -20,6 +20,7 @@ one parent (``home``); its other links are cross links.
 """
 import hashlib
 import math
+from itertools import pairwise
 import re
 import threading
 from datetime import datetime
@@ -991,7 +992,7 @@ class GraphMixin:
         chain.reverse()
         pinned = self._graph_view(model, GRAPH_NODE_BUDGET)["pinned"]
         steps = []
-        for owner, child in zip(chain, chain[1:]):
+        for owner, child in pairwise(chain):
             steps.append({"open": owner})
             if child in pinned:
                 continue
