@@ -25,6 +25,7 @@ export const laning = {
 
     // once per frame, whatever asked for it
     scheduleLanes() {
+        this.lanesDirty = true;
         if (this.lanesFrame) return;
         this.lanesFrame = requestAnimationFrame(() => {
             this.lanesFrame = null;
@@ -32,21 +33,14 @@ export const laning = {
         });
     },
 
-    // While the view moves (zoom, pan), what is drawn moves with it as a picture (a CSS
-    // transform: almost free), and is drawn again sharp once it stops for a moment (or every
-    // 300 ms of a long move). Redrawing it every frame was a large part of zooming's cost.
-    moveLanes() {
+    // Drawn in the same frame as the graph (Cytoscape's "render"), so the frames and headings
+    // never lag behind the nodes; only when the view or the nodes changed since the last time
+    syncLanes() {
         const drawn = this.lanesView;
-        if (!this.cy || !drawn) return this.scheduleLanes();
         const zoom = this.cy.zoom();
         const pan = this.cy.pan();
-        const k = zoom / drawn.zoom;
-        const transform = `translate(${pan.x - drawn.pan.x * k}px, ${pan.y - drawn.pan.y * k}px) scale(${k})`;
-        this.under.style.transform = transform;
-        this.over.style.transform = transform;
-        clearTimeout(this.lanesIdle);
-        this.lanesIdle = setTimeout(() => this.scheduleLanes(), 120);
-        if (performance.now() - drawn.at > 300) this.scheduleLanes();
+        if (drawn && !this.lanesDirty && drawn.zoom === zoom && drawn.pan.x === pan.x && drawn.pan.y === pan.y) return;
+        this.drawLanes();
     },
 
     canvasFor(canvas) {
@@ -98,10 +92,8 @@ export const laning = {
         const under = this.canvasFor(this.under);
         const zoom = this.cy.zoom();
         const pan = this.cy.pan();
-        // drawn for this view: no transform (moveLanes)
-        this.lanesView = { zoom, pan: { ...pan }, at: performance.now() };
-        this.under.style.transform = '';
-        this.over.style.transform = '';
+        this.lanesView = { zoom, pan: { ...pan } };
+        this.lanesDirty = false;
         this.drawGrid(under, zoom, pan);
         // the canvas over the graph is cleared only when something was drawn on it
         const over = this.overDrawn || zoom < SUMMARY_ZOOM ? this.canvasFor(this.over) : null;

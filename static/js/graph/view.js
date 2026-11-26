@@ -88,9 +88,9 @@ export class GraphView {
     // -----------------------------------------------------------------------
     build() {
         this.root.innerHTML = `
-            <canvas class="graph-under absolute inset-0 w-full h-full pointer-events-none origin-top-left will-change-transform" aria-hidden="true"></canvas>
+            <canvas class="graph-under absolute inset-0 w-full h-full pointer-events-none" aria-hidden="true"></canvas>
             <div class="graph-canvas absolute inset-0" role="application" aria-label="Investigation graph"></div>
-            <canvas class="graph-over absolute inset-0 w-full h-full pointer-events-none origin-top-left will-change-transform" aria-hidden="true"></canvas>
+            <canvas class="graph-over absolute inset-0 w-full h-full pointer-events-none" aria-hidden="true"></canvas>
             <canvas class="graph-guides absolute inset-0 w-full h-full pointer-events-none" aria-hidden="true"></canvas>
             <div class="graph-toolbar absolute top-3 left-3 flex items-center gap-1 bg-[#1a1b26] border border-[#24283b] rounded-lg p-1 shadow-xl">
                 <button type="button" data-graph="fit" title="Fit to screen (0)"><i data-lucide="scan" class="w-4 h-4"></i></button>
@@ -428,8 +428,8 @@ export class GraphView {
         this.root.addEventListener('wheel', (e) => this.onWheel(e), { capture: true, passive: false });
         cy.on('viewport', () => this.drawMinimap(false));
         // the lanes, grids and clusters under the graph (lanes.js) follow it
-        cy.on('viewport', () => this.moveLanes());
-        cy.on('position', 'node', () => this.scheduleLanes());
+        cy.on('render', () => this.syncLanes());
+        cy.on('position', 'node', () => (this.lanesDirty = true));
         cy.on('position add remove', () => this.drawMinimap());
 
         cy.on('tap', 'node', (e) => this.onTap(e.target));
