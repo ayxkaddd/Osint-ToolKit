@@ -50,7 +50,8 @@ def first(query):
     ("aa-bb-cc-dd-ee-ff", ("bssid", "AA:BB:CC:DD:EE:FF")),
     ("0x52908400098527886E0F7030069857D2E4169EE7", ("crypto_eth", "0x52908400098527886e0f7030069857d2e4169ee7")),
     ("1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa", ("crypto_btc", "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa")),
-    ("John Smith", ("text", "John Smith")),
+    ("John Smith", ("name", "John Smith")),
+    ("петренко олександр", ("name", "Петренко Олександр")),
 ])
 def test_first_reading(query, expected):
     assert first(query) == expected

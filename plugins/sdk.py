@@ -43,7 +43,7 @@ class Item:
     fields    - rows shown on the card: {"Label": value} or [("Label", value), ...]
     entities  - identifiers to pivot on: {"email": "a@b.c", "url": ["...", "..."]}
                 types: email, phone, username, domain, ip, url, telegram_id,
-                telegram_username, vk, gaia_id, bssid, crypto_btc, crypto_eth
+                telegram_username, vk, gaia_id, bssid, crypto_btc, crypto_eth, name
     """
     title: str
     subtitle: str = ""

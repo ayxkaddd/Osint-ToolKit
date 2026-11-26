@@ -267,7 +267,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         ? `
                     <div class="flex items-center mt-1">
                         <i data-lucide="id-card" class="w-4 h-4 mr-2"></i>
-                        ${escapeHtml(info.full_name)}
+                        ${pivotText('name', info.full_name)}
                     </div>
                 `
                         : ''

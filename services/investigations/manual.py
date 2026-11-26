@@ -7,10 +7,11 @@ from pathlib import Path
 from typing import Any, Optional
 from uuid import UUID, uuid4
 
-from services.entities import detect
+from services.entities import (ENTITY_TYPES, Entity, detect, extract_entities,
+                               make_entity)
 from services.events import parse_date
 from .constants import MANUAL_FILES_MAX, MANUAL_FILE_MAX_UPLOAD, MANUAL_FILE_NAME, MANUAL_FILE_TEXT_MAX, MANUAL_SERVICE, MANUAL_TEXT_EXTS, MANUAL_TEXT_MAX
-from .storage import _read_json
+from .storage import _STORE_LOCK, _read_json
 
 
 class ManualResultsMixin:
@@ -110,12 +111,18 @@ class ManualResultsMixin:
                 raise ValueError("The date is not recognised - use YYYY-MM-DD")
 
         entities: dict[str, list[str]] = {}
+        lines: list[str] = []     # "Тел: +380...", "067 123 45 67": read like the text
         skipped = []
         for line in (identifiers or "").splitlines():
             line = line.strip()
             if not line:
                 continue
             found = detect(line)
+            if not found or found[0].type == "text":
+                no_code: list[str] = []
+                if extract_entities({"kind": "manual", "text": line}, MANUAL_SERVICE, no_code) or no_code:
+                    lines.append(line)
+                    continue
             if found:
                 values = entities.setdefault(found[0].type, [])
                 if found[0].value not in values:
@@ -129,7 +136,7 @@ class ManualResultsMixin:
                 data, text = json.loads(text), ""
             except json.JSONDecodeError:
                 pass
-        if not (text or data is not None or entities or files or url):
+        if not (text or data is not None or entities or lines or files or url):
             raise ValueError("Add some text, identifiers, a link or a file")
 
         stored = []
@@ -167,8 +174,11 @@ class ManualResultsMixin:
                 "text": text or None,
                 "data": data,
                 "entities": entities or None,
+                "identifier_lines": lines or None,
                 "files": stored,
             }
+            no_country_code: list[str] = []
+            extract_entities(result, MANUAL_SERVICE, no_country_code)
             parameters = {k: v for k, v in {"title": title, "source": result["source"]}.items() if v}
             result_id = self.save_investigation_result(investigation_id, MANUAL_SERVICE, "upload", parameters,
                                                        result, parent_result_id=parent_result_id)
@@ -176,4 +186,27 @@ class ManualResultsMixin:
             for item in stored:
                 (directory / item["stored"]).unlink(missing_ok=True)
             raise
-        return {"result_id": result_id, "skipped": skipped}
+        return {"result_id": result_id, "skipped": skipped, "no_country_code": no_country_code}
+
+    def add_manual_identifier(self, investigation_id: UUID, result_id: str, child_id: Optional[str],
+                              entity_type: str, value: str) -> Optional[Entity]:
+        """Add an identifier to something added by hand (the full number picked for one
+        written without its country code). None if there is no such manual result."""
+        entity = make_entity(entity_type, value, typed=True)
+        if entity is None:
+            raise ValueError(f"Not a valid {ENTITY_TYPES.get(entity_type, entity_type).lower()}")
+        with _STORE_LOCK:
+            record = self.get_result(investigation_id, result_id)
+            if record is None:
+                return None
+            parts = [record] if not child_id else [c for c in record.get("children", []) if c.get("child_id") == child_id]
+            part = parts[0] if parts else None
+            if not part or part.get("service_name") != MANUAL_SERVICE or not isinstance(part.get("result"), dict):
+                return None
+            listed = part["result"].setdefault("entities", None) or {}
+            values = listed.setdefault(entity.type, [])
+            if entity.value not in values:
+                values.append(entity.value)
+            part["result"]["entities"] = listed
+            self._write_result(investigation_id, record)
+        return entity

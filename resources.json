@@ -426,10 +426,12 @@
             "types": [
                 "email",
                 "domain",
+                "name",
                 "text"
             ],
             "search": {
                 "email": "https://viewdns.info/reversewhois/?q={value}",
+                "name": "https://viewdns.info/reversewhois/?q={value}",
                 "text": "https://viewdns.info/reversewhois/?q={value}"
             }
         },
@@ -668,9 +670,11 @@
             "category": "companies",
             "cost": "freemium",
             "types": [
+                "name",
                 "text"
             ],
             "search": {
+                "name": "https://opencorporates.com/officers?q={value}",
                 "text": "https://opencorporates.com/companies?q={value}"
             }
         },

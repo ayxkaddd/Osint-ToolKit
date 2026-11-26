@@ -73,8 +73,8 @@ settings:                              # API keys etc., entered on the Settings 
 
 Identifier types for `accepts` (and `entities` below): `email`, `phone`, `username`,
 `domain`, `ip`, `url`, `telegram_id`, `telegram_username`, `vk`, `gaia_id`, `bssid`,
-`crypto_btc`, `crypto_eth`, `text`. When a plugin accepts several, its page shows a
-switch and the lookup box offers it for each.
+`crypto_btc`, `crypto_eth`, `name` (a person's name, e.g. "John Smith"), `text`. When a
+plugin accepts several, its page shows a switch and the lookup box offers it for each.
 
 Setting names start with the plugin's id (`hunter_io` -> `HUNTER_IO_...`). A plugin may
 also use a built-in module's key (e.g. `SHODAN_API_KEY`); that needs a review if the

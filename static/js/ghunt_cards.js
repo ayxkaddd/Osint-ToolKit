@@ -148,7 +148,7 @@ function ghuntAccountHtml(data) {
             <div class="p-5 flex flex-col sm:flex-row gap-5">
                 ${ghuntAvatar(photo.url, photo.isDefault)}
                 <div class="min-w-0 flex-1 space-y-2">
-                    <h2 class="text-2xl font-bold text-white break-words">${name ? escapeHtml(name) : '<span class="text-gray-500 font-normal text-lg">Name not public</span>'}</h2>
+                    <h2 class="text-2xl font-bold text-white break-words">${name ? pivotText('name', name) : '<span class="text-gray-500 font-normal text-lg">Name not public</span>'}</h2>
                     <div class="flex flex-wrap items-center gap-2 text-sm">
                         ${email ? `<span class="text-gray-500"><i data-lucide="mail" class="w-3.5 h-3.5 inline mr-1"></i></span>${pivotText('email', email)}` : ''}
                         ${gaiaId ? `<span class="text-gray-500 ml-2" title="Gaia ID: Google's permanent ID of the account"><i data-lucide="hash" class="w-3.5 h-3.5 inline mr-1"></i>Gaia</span>${pivotText('gaia_id', gaiaId)}` : ''}

@@ -62,6 +62,7 @@ import {
     pivotLogin,
     pivotText,
     pivotTypeFor,
+    telegramName,
     trackerTag,
 } from './lib/pivots.js';
 import { externalSitesHtml, sharedCache } from './lib/identifiers.js';
@@ -121,6 +122,7 @@ window.LOOKUP_EXAMPLES_HINT = LOOKUP_EXAMPLES_HINT;
 window.pivotChip = pivotChip;
 window.pivotTypeFor = pivotTypeFor;
 window.pivotText = pivotText;
+window.telegramName = telegramName;
 window.pivotLogin = pivotLogin;
 window.pivotField = pivotField;
 window.pivotInText = pivotInText;

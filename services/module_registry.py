@@ -121,7 +121,8 @@ MODULES: list[Module] = [
     Module("web_search", "Web dorking (SerpAPI)", "/websearch", "search",
            {t: RunSpec("POST", "/web/search",
                        (lambda kind: lambda v: {"json": {"value": v, "input_type": kind, "engines": ["google"]}})(k))
-            for t, k in (("email", "email"), ("username", "username"), ("phone", "phone"), ("text", "full_name"))},
+            for t, k in (("email", "email"), ("username", "username"), ("phone", "phone"), ("name", "full_name"),
+                         ("text", "full_name"))},
            cost=PAID, cost_note="SerpAPI searches (one per dork)", speed="medium", keys=["SERPAPI_KEY"],
            prefill={"input": "#searchInput"}),
 ]

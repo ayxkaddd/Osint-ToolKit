@@ -897,7 +897,7 @@ function renderInstagramCard(data) {
                 `
                 }
                 <div class="flex-1 min-w-0">
-                    <h6 class="font-bold text-white truncate">${escapeHtml(data.full_name || data.username || 'Unknown')}</h6>
+                    <h6 class="font-bold text-white truncate">${data.full_name ? pivotText('name', data.full_name) : escapeHtml(data.username || 'Unknown')}</h6>
                     <span class="text-sm text-purple-400 hover:text-purple-300">${data.username ? pivotText('username', data.username, '@' + data.username) : '@unknown'}</span>
                         <a href="https://instagram.com/${escapeAttr(data.username)}" target="_blank" rel="noopener noreferrer" class="text-sm text-purple-400 hover:text-purple-300 ml-1" title="Open profile"><i class="fas fa-external-link-alt text-[10px]"></i></a>
                     ${
@@ -1506,7 +1506,7 @@ function displayUserBasicInfo(user, savedTmeProfile = null) {
                     </div>
                     <div>
                         <h3 class="text-2xl font-bold text-white">
-                            ${escapeHtml(user.first_name || '')} ${escapeHtml(user.last_name || '')}
+                            ${telegramName(user)}
                         </h3>
                         ${user.username ? `<p class="text-purple-400">${pivotText('telegram_username', user.username, '@' + user.username)}</p>` : ''}
                         <div id="tmeProfile" class="text-sm"></div>
@@ -2422,7 +2422,7 @@ function displayGroupMembers(members) {
                             </div>
                             <div>
                                 <p class="font-medium text-white">
-                                    ${escapeHtml(member.first_name || '')} ${escapeHtml(member.last_name || '')}
+                                    ${telegramName(member)}
                                 </p>
                                 ${
                                     member.username
@@ -2566,7 +2566,7 @@ function displayUsernameResults(data) {
                                 (user) => `
                             <div class="bg-gray-800/50 p-3 rounded-lg flex justify-between items-center">
                                 <div>
-                                    <p class="font-medium text-white">${escapeHtml(user.first_name || '')} ${escapeHtml(user.last_name || '')}</p>
+                                    <p class="font-medium text-white">${telegramName(user)}</p>
                                     <p class="text-sm text-gray-400">ID: ${pivotText('telegram_id', user.id)}</p>
                                 </div>
                                 ${user.is_active ? '<span class="stat-badge px-2 py-1 rounded text-xs text-green-400">Active</span>' : ''}
@@ -2590,7 +2590,7 @@ function displayUsernameResults(data) {
                             .map(
                                 (user) => `
                             <div class="bg-gray-800/50 p-3 rounded-lg">
-                                <p class="font-medium text-white">${escapeHtml(user.first_name || '')} ${escapeHtml(user.last_name || '')}</p>
+                                <p class="font-medium text-white">${telegramName(user)}</p>
                                 <p class="text-sm text-gray-400">ID: ${pivotText('telegram_id', user.id)}</p>
                             </div>
                         `

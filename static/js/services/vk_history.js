@@ -278,7 +278,7 @@ function addEntry(entry) {
                 }
                 <div>
                     <span class="font-semibold">${escapeHtml(entry.year_month || 'Unknown Date')}</span>
-                    ${entry.full_name ? `<div class="text-sm text-gray-400">${escapeHtml(entry.full_name)}</div>` : ''}
+                    ${entry.full_name ? `<div class="text-sm text-gray-400">${pivotText('name', entry.full_name)}</div>` : ''}
                 </div>
             </div>
         </div>
