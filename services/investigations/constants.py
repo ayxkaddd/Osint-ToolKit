@@ -3,7 +3,7 @@ import re
 
 
 # Bump when the index entry format / summary logic changes
-INDEX_VERSION = 10
+INDEX_VERSION = 13
 
 TRIAGE_STATUSES = {None, "confirmed", "important", "false_positive"}
 
@@ -11,13 +11,19 @@ TRIAGE_STATUSES = {None, "confirmed", "important", "false_positive"}
 EVENTS_VERSION = 2
 
 # Bump when the graph model changes, so cached graphs are rebuilt
-GRAPH_VERSION = 4
+GRAPH_VERSION = 6
 
 # Nodes in a graph's first view; past it the deepest lookups stay closed
 GRAPH_NODE_BUDGET = 300
 
-# A lookup's findings shown one by one; more are folded into groups
+# A node's children shown one by one; more are folded into groups
 GRAPH_INLINE_MAX = 8
+
+# With groups: the most telling records (a picture, a leaked password...) still shown on their own
+GRAPH_TOP = 4
+
+# More kinds of site than this under one node: one group of accounts, not one per kind
+GRAPH_GROUPS_MAX = 5
 
 # Results added by hand (data from sites and tools without an API)
 MANUAL_SERVICE = "manual"

@@ -176,7 +176,7 @@ function oiProfileCard(card) {
     // false flags ("private: no") say nothing worth a row
     const rest = fields.filter((f) => !stats.includes(f) && f.value !== false);
     const rows = [
-        ['Name', card.name],
+        ['Name', card.name, 'name'],
         ['Email', card.email],
         ['Phone', card.phone],
         ['Location', card.location],

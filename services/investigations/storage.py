@@ -20,6 +20,9 @@ _STORE_LOCK = threading.RLock()
 # entities.json path -> (file version, {"raw": parsed file, "sorted": decorated list or None, "version"})
 _ENTITY_CACHE: dict[str, tuple[Any, dict[str, Any]]] = {}
 
+# cards.json path -> (file version, {"raw": parsed file, "version"})
+_CARD_CACHE: dict[str, tuple[Any, dict[str, Any]]] = {}
+
 # Identifiers found in more than one investigation, rebuilt when any entities.json changes
 _SHARED_CACHE: dict[str, Any] = {"versions": None, "index": {}}
 

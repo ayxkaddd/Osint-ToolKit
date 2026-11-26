@@ -11,7 +11,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 
-from services.entities import detect, make_entity, norm_phone, phone_suggestions, type_label
+from services.entities import browser_regions, detect, make_entity, norm_phone, phone_suggestions, type_label
 from services.investigation_service import investigation_service
 from services.ip_service import IPLookupError, IPService
 from services.job_manager import job_manager
@@ -73,15 +73,7 @@ async def module_balances():
 # ==================== SEARCH BOX ====================
 
 def _browser_regions(request: Request) -> list[str]:
-    """Countries of the browser's languages ("en-US,ru-RU;q=0.9" -> US, RU), likeliest first."""
-    regions = []
-    for part in (request.headers.get("accept-language") or "").split(","):
-        tag = part.split(";")[0].strip()
-        if "-" in tag:
-            region = tag.rsplit("-", 1)[1].upper()
-            if len(region) == 2 and region.isalpha() and region not in regions:
-                regions.append(region)
-    return regions[:5]
+    return browser_regions(request.headers.get("accept-language"))
 
 
 @router.get("/api/lookup/detect")

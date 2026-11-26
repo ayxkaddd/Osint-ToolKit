@@ -1,7 +1,7 @@
 // Around the graph: the web layout and the switch between layouts, the legend, the
 // minimap, exports (PNG, SVG, JSON, GEXF) and the picture kept for the case report.
 // Methods of GraphView (view.js).
-import { MANUAL_TYPES, OFF, TYPE_ICONS, decorate, iconUri, typeColor } from './style.js';
+import { CARD_KINDS, FACT_KINDS, MANUAL_TYPES, OFF, TYPE_ICONS, decorate, iconUri, typeColor } from './style.js';
 import { typeName } from './view.js';
 
 const esc = (value) => window.escapeHtml(value);
@@ -80,13 +80,37 @@ export const framing = {
     // -----------------------------------------------------------------------
     renderLegend() {
         const counts = new Map();
+        const cards = new Map();
+        const facts = new Map();
         this.cy
             .nodes()
             .not(OFF)
             .forEach((n) => {
                 const d = n.data();
                 if (d.kind === 'identifier' || d.kind === 'manual') counts.set(d.type, (counts.get(d.type) || 0) + 1);
+                if (d.kind === 'card') cards.set(d.card, (cards.get(d.card) || 0) + 1);
+                if (d.kind === 'fact') facts.set(d.fact, (facts.get(d.fact) || 0) + 1);
             });
+        const cardRows = [...cards.entries()]
+            .sort((a, b) => b[1] - a[1])
+            .map(
+                ([kind, count]) => `
+                <div class="flex items-center gap-2">
+                    <span class="w-5 h-3.5 rounded border bg-[#151621] flex items-center justify-center shrink-0" style="border-color:${attr(CARD_KINDS[kind]?.color || '#9ca3af')}">
+                        <img src="${attr(iconUri(CARD_KINDS[kind]?.icon || 'file-text', '#ffffff', 0.8))}" alt="" class="w-2.5 h-2.5"></span>
+                    <span class="flex-1 truncate">${esc(CARD_KINDS[kind]?.plural || kind)}</span><span class="text-gray-500">${count}</span>
+                </div>`
+            )
+            .join('');
+        const factRows = [...facts.entries()]
+            .map(
+                ([kind, count]) => `
+                <div class="flex items-center gap-2">
+                    <span class="w-3 h-3 rotate-45 border bg-[#0f1017] shrink-0 ml-1 mr-0.5" style="border-color:${attr(FACT_KINDS[kind]?.color || '#fbbf24')}"></span>
+                    <span class="flex-1 truncate">Shared ${esc((FACT_KINDS[kind]?.label || kind).toLowerCase())}</span><span class="text-gray-500">${count}</span>
+                </div>`
+            )
+            .join('');
         const rows = [...counts.entries()]
             .sort((a, b) => b[1] - a[1])
             .map(
@@ -99,15 +123,20 @@ export const framing = {
             )
             .join('');
         const shapes = `
-            <div class="flex items-center gap-2"><span class="w-5 h-3 rounded border border-[#3b3f57] bg-[#0f1017] shrink-0"></span>Lookup</div>
+            ${this.cy.nodes('[kind = "lookup"]').not(OFF).length ? '<div class="flex items-center gap-2"><span class="w-5 h-3 rounded border border-[#3b3f57] bg-[#0f1017] shrink-0"></span>Lookup (on no identifier)</div>' : ''}
             <div class="flex items-center gap-2"><span class="w-4 h-4 rounded-full border border-gray-500 outline outline-1 outline-offset-1 outline-gray-600 shrink-0"></span>Group, folded</div>
             <div class="flex items-center gap-2"><span class="w-4 h-0 border-t border-dashed border-purple-300 shrink-0"></span>Your link</div>${
                 this.cy.edges('[kind = "clue"]').not(OFF).length
                     ? `<div class="flex items-center gap-2"><span class="w-4 h-0 border-t border-dashed shrink-0" style="border-color:#fbbf24"></span>Found in a profile</div>`
                     : ''
             }`;
+        const divider = (inner) =>
+            inner ? `<div class="mt-1.5 pt-1.5 border-t border-[#24283b] space-y-1">${inner}</div>` : '';
         this.legendBody.innerHTML =
-            rows + `<div class="mt-1.5 pt-1.5 border-t border-[#24283b] space-y-1 text-gray-400">${shapes}</div>`;
+            (cardRows || '') +
+            (cardRows ? divider(rows) : rows) +
+            divider(factRows) +
+            `<div class="mt-1.5 pt-1.5 border-t border-[#24283b] space-y-1 text-gray-400">${shapes}</div>`;
     },
 
     toggleLegend() {
@@ -128,8 +157,15 @@ export const framing = {
         this.minimapDirty = this.minimapDirty || nodesMoved;
         if (this.minimapQueued) return;
         this.minimapQueued = true;
-        requestAnimationFrame(() => {
+        // at most every 80 ms: while zooming, every frame was a noticeable cost
+        const wait = Math.max(0, 80 - (performance.now() - (this.minimapAt || 0)));
+        setTimeout(() => requestAnimationFrame(() => this.paintMinimap()), wait);
+    },
+
+    paintMinimap() {
+        {
             this.minimapQueued = false;
+            this.minimapAt = performance.now();
             const canvas = this.minimap;
             if (!this.cy || canvas.closest('.hidden')) return;
             const ratio = window.devicePixelRatio || 1;
@@ -139,9 +175,14 @@ export const framing = {
                 this.minimapDirty = false;
                 this.minimapBase = this.drawMinimapBase(width, height, ratio);
             }
-            canvas.width = width * ratio;
-            canvas.height = height * ratio;
+            // resized only when its size changed (resizing a canvas reallocates it)
+            if (canvas.width !== width * ratio || canvas.height !== height * ratio) {
+                canvas.width = width * ratio;
+                canvas.height = height * ratio;
+            }
             const ctx = canvas.getContext('2d');
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.drawImage(this.minimapBase, 0, 0);
             const frame = this.minimapFrame;
             if (!frame) return;
@@ -155,7 +196,7 @@ export const framing = {
                 view.w * frame.scale,
                 view.h * frame.scale
             );
-        });
+        }
     },
 
     drawMinimapBase(width, height, ratio) {
@@ -254,7 +295,7 @@ export const framing = {
     // The graph drawn for a picture: no hover or search dimming, no pictures from other
     // sites; for the report also nothing about other cases. Put back after.
     async asPicture(work, { forReport = false } = {}) {
-        const marks = '.hover, .faded, .lit, .match, .search-dim, .pulse';
+        const marks = '.hover, .near, .lit, .match, .search-dim, .pulse';
         const marked = this.cy.elements(marks).map((e) => [e, e.classes().filter((c) => marks.includes(`.${c}`))]);
         const changed = [];
         this.cy.batch(() => {
@@ -341,9 +382,11 @@ export const framing = {
             const h = n.height();
             const cx = p.x - x0;
             const cy = p.y - y0;
-            const pill = ['lookup', 'pending'].includes(d.kind);
+            const pill = ['lookup', 'pending', 'card'].includes(d.kind);
             const stroke =
                 d.kind === 'lookup' ? '#24283b' : d.status === 'confirmed' ? '#a855f7' : d.color || '#9ca3af';
+            // a card's text starts after its picture
+            const textX = d.kind === 'card' ? 52 : 34;
             out.push(
                 pill
                     ? `<rect x="${(cx - w / 2).toFixed(1)}" y="${(cy - h / 2).toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" rx="12" fill="#0f1017" stroke="${xml(stroke)}" stroke-width="1.5"/>`
@@ -361,7 +404,7 @@ export const framing = {
             if (pill)
                 lines.forEach((line, i) =>
                     out.push(
-                        `<text x="${(cx - w / 2 + 34).toFixed(1)}" y="${(cy - (lines.length - 1) * 6.5 + i * 13 + 3.5).toFixed(1)}" fill="#d1d5db" font-size="10">${xml(line)}</text>`
+                        `<text x="${(cx - w / 2 + textX).toFixed(1)}" y="${(cy - (lines.length - 1) * 6.5 + i * 13 + 3.5).toFixed(1)}" fill="#d1d5db" font-size="10">${xml(line)}</text>`
                     )
                 );
             else

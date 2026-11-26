@@ -345,6 +345,7 @@ export const ENTITY_LABELS = {
     bssid: 'Wi-Fi BSSID',
     crypto_btc: 'Bitcoin address',
     crypto_eth: 'Ethereum address',
+    name: 'Name',
     text: 'Free text',
 };
 

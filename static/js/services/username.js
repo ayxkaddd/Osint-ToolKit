@@ -709,7 +709,7 @@ class OSINTSearch {
                     </div>
                     ${
                         info.fullName
-                            ? `<h3 class="username-profile-name" title="${escapeAttr(String(info.fullName))}">${escapeHtml(String(info.fullName))}${verified}</h3>`
+                            ? `<h3 class="username-profile-name" title="${escapeAttr(String(info.fullName))}">${pivotText('name', String(info.fullName))}${verified}</h3>`
                             : ''
                     }
                     ${

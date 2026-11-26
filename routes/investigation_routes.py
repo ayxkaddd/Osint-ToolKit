@@ -9,9 +9,10 @@ from starlette.background import BackgroundTask
 from pydantic import BaseModel, Field, ValidationError
 from starlette.datastructures import UploadFile as FormUpload
 from utils.investigation_decorator import live_result
+from services.entities import browser_regions, extract_entities, phone_suggestions
 from services.investigations.graph import GraphState
 from services.investigation_service import (
-    MANUAL_FILE_MAX_UPLOAD, MANUAL_FILES_MAX, MANUAL_TEXT_MAX, NOTE_IMAGE_MAX_UPLOAD, find_target,
+    MANUAL_FILE_MAX_UPLOAD, MANUAL_FILES_MAX, MANUAL_SERVICE, MANUAL_TEXT_MAX, NOTE_IMAGE_MAX_UPLOAD, find_target,
     investigation_service,
 )
 
@@ -215,7 +216,7 @@ def get_investigation_results(investigation_id: UUID) -> JSONResponse:
 
 
 @router.get("/{investigation_id}/results/{result_id}")
-def get_investigation_result_detail(investigation_id: UUID, result_id: str) -> JSONResponse:
+def get_investigation_result_detail(investigation_id: UUID, result_id: str, request: Request) -> JSONResponse:
     """Full record for one result, including grouped follow-up lookups (children).
     A lookup still streaming in the background comes back with ``running: true``
     and what it has found so far."""
@@ -225,7 +226,27 @@ def get_investigation_result_detail(investigation_id: UUID, result_id: str) -> J
         raise HTTPException(status_code=404, detail="Result not found")
     # what was looked up, as listings show it (module pages show it with a loaded result)
     record["target"] = find_target(record.get("parameters") or {})
+    _describe_manual(record, browser_regions(request.headers.get("accept-language")))
     return JSONResponse(content={"status": "success", "result": record})
+
+
+def _describe_manual(record: dict, regions: list[str]) -> None:
+    """Things added by hand come with the identifiers found in them (so their text can show
+    them in place) and the phone numbers written without a country code, with the full
+    numbers each could be. Computed on reading: older ones get the current extraction."""
+    for part in [record, *record.get("children", [])]:
+        result = part.get("result")
+        if part.get("service_name") != MANUAL_SERVICE or not isinstance(result, dict):
+            continue
+        no_code: list[str] = []
+        written: dict[str, list[str]] = {}
+        found = extract_entities(result, MANUAL_SERVICE, no_code, written)
+        part["result"] = {
+            **result,
+            "found": [{"type": e.type, "value": e.value, "display": e.display, "path": path,
+                       "written": written.get(e.key, [])} for e, path in found],
+            "no_country_code": [{"typed": raw, "suggestions": phone_suggestions(raw, regions)} for raw in no_code],
+        }
 
 
 @router.get("/{investigation_id}/results/{result_id}/references")
@@ -288,8 +309,8 @@ def get_result_changes(investigation_id: UUID, result_id: str) -> JSONResponse:
 
 @router.get("/{investigation_id}/graph")
 def get_investigation_graph(investigation_id: UUID, noise: bool = False) -> JSONResponse:
-    """The graph's first view: identifiers, the lookups between them, big result sets
-    folded into groups (opened with /graph/expand). ``noise``: boilerplate and false positives too."""
+    """The graph's first view: identifiers, the cards (accounts, breaches...) between them, big
+    sets folded into groups (opened with /graph/expand). ``noise``: boilerplate and false positives too."""
     _require_investigation(investigation_id)
     return JSONResponse(content=investigation_service.get_graph(investigation_id, noise=noise))
 
@@ -367,7 +388,7 @@ def get_graph_image(investigation_id: UUID):
 
 @router.get("/{investigation_id}/graph/node")
 def get_graph_node(investigation_id: UUID, node: str = Query(..., max_length=2000), noise: bool = False) -> JSONResponse:
-    """One node for the side panel, with the lookups around it."""
+    """One node for the side panel: its facts, what it holds and the lookups that found it."""
     _require_investigation(investigation_id)
     details = investigation_service.graph_node_details(investigation_id, node, noise=noise)
     if details is None:
@@ -379,7 +400,7 @@ def get_graph_node(investigation_id: UUID, node: str = Query(..., max_length=200
 def expand_graph_node(investigation_id: UUID, node: str = Query(..., max_length=2000),
                       offset: int = Query(0, ge=0), limit: int = Query(40, ge=1, le=200),
                       noise: bool = False) -> JSONResponse:
-    """The children of one lookup, group or identifier, a page at a time."""
+    """The children of one identifier, card or group, a page at a time."""
     _require_investigation(investigation_id)
     expanded = investigation_service.expand_graph_node(investigation_id, node, offset, limit, noise=noise)
     if expanded is None:
@@ -576,7 +597,31 @@ async def add_manual_result(investigation_id: UUID, request: Request) -> JSONRes
                                         files=files, parent_result_id=parent, **fields)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+    regions = browser_regions(request.headers.get("accept-language"))
+    saved["no_country_code"] = [{"typed": raw, "suggestions": phone_suggestions(raw, regions)}
+                                for raw in saved.get("no_country_code", [])]
     return JSONResponse(content={"status": "success", **saved}, status_code=201)
+
+
+class ManualIdentifier(BaseModel):
+    type: str = Field(..., max_length=40)
+    value: str = Field(..., min_length=1, max_length=500)
+    child_id: Optional[str] = Field(None, max_length=64)
+
+
+@router.post("/{investigation_id}/results/{result_id}/identifiers", status_code=201)
+def add_manual_identifier(investigation_id: UUID, result_id: str, body: ManualIdentifier) -> JSONResponse:
+    """Add an identifier to something added by hand (e.g. the full number picked for a
+    phone number written without its country code)."""
+    _require_investigation(investigation_id)
+    try:
+        entity = investigation_service.add_manual_identifier(investigation_id, result_id, body.child_id,
+                                                             body.type, body.value)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    if entity is None:
+        raise HTTPException(status_code=404, detail="Not something added by hand")
+    return JSONResponse(content={"status": "success", "type": entity.type, "value": entity.value}, status_code=201)
 
 
 @router.get("/{investigation_id}/files/{name}")
@@ -656,3 +701,21 @@ def delete_note(investigation_id: UUID, note_id: UUID) -> JSONResponse:
     if not investigation_service.delete_note(investigation_id, note_id):
         raise HTTPException(status_code=404, detail=f"Note with ID {note_id} not found")
     return JSONResponse(content={"status": "success", "message": f"Note {note_id} deleted successfully"})
+
+
+@router.get("/{investigation_id}/graph/reveal")
+def reveal_graph_node(investigation_id: UUID, node: str = Query(..., max_length=2000),
+                      noise: bool = False) -> JSONResponse:
+    """What to open, from the top, to reach a node wherever it is folded."""
+    _require_investigation(investigation_id)
+    revealed = investigation_service.reveal_graph_node(investigation_id, node, noise=noise)
+    if revealed is None:
+        raise HTTPException(status_code=404, detail="Not in the graph")
+    return JSONResponse(content=revealed)
+
+
+@router.get("/{investigation_id}/graph/summary")
+def graph_summary(investigation_id: UUID, noise: bool = False) -> JSONResponse:
+    """What we know: names, photos, places, contacts, accounts and breaches, counted."""
+    _require_investigation(investigation_id)
+    return JSONResponse(content=investigation_service.graph_summary(investigation_id, noise=noise))

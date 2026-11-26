@@ -156,6 +156,8 @@ const PIVOT_SHAPES = {
     telegram_username: /^@?[\w]{3,64}$/,
     telegram_id: /^\d{5,15}$/,
     gaia_id: /^\d{15,25}$/,
+    // 2-4 words of letters (any alphabet), initials allowed: "John Smith", "Петренко Олександр Іванович"
+    name: /^(?=.*\p{L}{2}.*\s.*\p{L}{2})[\p{L}][\p{L}'’ʼ.-]*(?:\s+[\p{L}][\p{L}'’ʼ.-]*){1,3}$/u,
 };
 
 // The type a value can be offered as, or null (a "username" that is an email is an email)
@@ -178,6 +180,12 @@ export function pivotText(type, value, label = null) {
         type === 'username' || type === 'telegram_username' ? text.replace(/^@/, '') : text,
         label ?? text
     );
+}
+
+// A Telegram account's "first last" name: a pivot chip when it reads as a person's name
+// (emoji and decorated names stay plain text)
+export function telegramName(user) {
+    return pivotText('name', [user && user.first_name, user && user.last_name].filter(Boolean).join(' ').trim());
 }
 
 // A login that is an email or a username
@@ -204,6 +212,13 @@ export function pivotKeyType(key) {
         return 'domain';
     if (/^(ip|ip_address|ipaddress|ip_addr|ips)$/.test(k)) return 'ip';
     if (/gaia/.test(k) || k === 'personid') return 'gaia_id';
+    // a person's whole name ("name" alone is as often a site or a file: callers pass the type)
+    if (
+        /^(full_?name|display_?name|real_?name|person_name|owner_name|registrant_name|contact_name|sender_name|author_name|normalized_name|fio|фио|піб|ф\.и\.(_\(нормал\.\))?)$/.test(
+            k
+        )
+    )
+        return 'name';
     return null;
 }
 
@@ -218,20 +233,47 @@ export function pivotField(key, value, label = null) {
     return type ? pivotText(type, text, label) : escapeHtml(label ?? value);
 }
 
-// Free text (a snippet, bio or message): escaped, with the emails and +phone numbers in it clickable
+// Free text (a snippet, bio or message): escaped, with the emails and +phone numbers in it clickable.
+// known: identifiers the server found in this text [{type, value, display}] (things added by hand:
+// names, numbers written without "+"), made clickable where they are written.
 export const TEXT_IDENTIFIER_RE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,24}|\+\d[\d\s().-]{7,18}\d/g;
 
-export function pivotInText(text) {
+export function pivotInText(text, known = []) {
     const source = String(text ?? '');
-    let out = '';
-    let last = 0;
+    const spans = [];
     for (const match of source.matchAll(TEXT_IDENTIFIER_RE)) {
         const found = match[0];
-        out += escapeHtml(source.slice(last, match.index));
-        out += found.includes('@')
-            ? pivotText('email', found)
-            : pivotText('phone', found.replace(/[\s().-]/g, ''), found);
-        last = match.index + found.length;
+        spans.push({
+            start: match.index,
+            end: match.index + found.length,
+            html: found.includes('@')
+                ? pivotText('email', found)
+                : pivotText('phone', found.replace(/[\s().-]/g, ''), found),
+        });
+    }
+    // names are matched whatever their case (ПЕТРЕНКО Олександр is shown as written)
+    const lower = source.toLowerCase();
+    const haystack = lower.length === source.length ? lower : source;
+    (known || []).forEach((k) => {
+        if (k.type === 'text') return;
+        // every way it is written there ("067 123 45 67" and "+380671234567")
+        new Set([...(k.written || []), k.display || k.value].map(String)).forEach((shown) => {
+            if (shown.length < 3) return;
+            const needle = haystack === lower ? shown.toLowerCase() : shown;
+            for (let at = haystack.indexOf(needle); at !== -1; at = haystack.indexOf(needle, at + needle.length)) {
+                const written = source.slice(at, at + needle.length);
+                spans.push({ start: at, end: at + needle.length, html: pivotChip(k.type, k.value, written) });
+            }
+        });
+    });
+    // the longest wins where two overlap (an email over the domain inside it)
+    spans.sort((a, b) => a.start - b.start || b.end - b.start - (a.end - a.start));
+    let out = '';
+    let last = 0;
+    for (const span of spans) {
+        if (span.start < last) continue;
+        out += escapeHtml(source.slice(last, span.start)) + span.html;
+        last = span.end;
     }
     return out + escapeHtml(source.slice(last));
 }

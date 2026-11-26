@@ -2,7 +2,7 @@
 // the tray that brings them back), moving, adding nodes and links, the context
 // menus, keys, and undo / redo. Methods of GraphView (view.js), kept here.
 import { spanningTree } from './layout.js';
-import { MANUAL_TYPES, OFF, typeColor } from './style.js';
+import { CARD_KINDS, FACT_KINDS, MANUAL_TYPES, OFF, cardColor, typeColor } from './style.js';
 import { clip, typeName } from './view.js';
 
 const esc = (value) => window.escapeHtml(value);
@@ -29,11 +29,24 @@ function describeId(id, manualNodes) {
         return { label: clip(node?.label || 'Added node'), color: node?.color || typeColor(node?.type), kind: 'Yours' };
     }
     if (id.startsWith('g:')) return { label: clip(id.split(':').pop()), color: '#a78bfa', kind: 'Group' };
+    if (id.startsWith('c:')) {
+        // c:<kind>:<site>:<whose>
+        const [kind, site, ...rest] = id.slice(2).split(':');
+        return {
+            label: clip([site, rest.join(':')].filter(Boolean).join(' · ')),
+            color: cardColor(kind),
+            kind: CARD_KINDS[kind]?.label || 'Record',
+        };
+    }
+    if (id.startsWith('f:')) {
+        const kind = id.split(':')[1];
+        return { label: 'Shared', color: FACT_KINDS[kind]?.color || '#fbbf24', kind: FACT_KINDS[kind]?.label || kind };
+    }
     return { label: 'Lookup', color: '#a78bfa', kind: 'Lookup' };
 }
 
 function nodeLabel(node) {
-    return node.data('kind') === 'lookup' ? node.data('label').split('\n')[0] : node.data('label');
+    return ['lookup', 'card'].includes(node.data('kind')) ? node.data('label').split('\n')[0] : node.data('label');
 }
 
 export const editing = {
@@ -217,6 +230,7 @@ export const editing = {
             this.tray.classList.add('hidden');
             return;
         }
+        if (this.summaryOpen()) this.showSummary(false);
         this.renderTray();
         this.tray.classList.remove('hidden');
     },
@@ -359,7 +373,16 @@ export const editing = {
             return;
         }
         if (kind === 'identifier') items.push(...this.identifierItems(node), { divider: true });
-        if (kind === 'lookup' || kind === 'group')
+        if (kind === 'card') {
+            const link = node.data('url') && window.safeUrl(node.data('url'));
+            items.push(
+                { label: 'Everything it says', icon: 'fa-id-card', onClick: () => this.openPanel(node) },
+                ...(link ? [{ label: 'Open the page', icon: 'fa-external-link-alt', href: link, newTab: true }] : []),
+                { label: 'Focus on it', icon: 'fa-crosshairs', onClick: () => this.focusOn(node.id()) },
+                { divider: true }
+            );
+        }
+        if (['lookup', 'group', 'card', 'identifier'].includes(kind) && (node.data('hidden') || node.data('foldable')))
             items.push({
                 label: node.data('open') && node.outgoers('node').length ? 'Fold' : 'Open',
                 icon: 'fa-sitemap',
@@ -453,6 +476,7 @@ export const editing = {
                 'removed'
             );
         else if (key === 'n') this.nodeDialog({});
+        else if (key === 'w') this.toggleSummary();
         else if (key === 'l') {
             if (selected.length === 2) this.linkDialog(...this.selectionOrder(selected));
             else this.startLink(selected.length === 1 ? selected : null);
@@ -460,6 +484,7 @@ export const editing = {
             if (!this.cancelLink() && !this.leaveSomething()) {
                 if (!this.tray.classList.contains('hidden')) this.tray.classList.add('hidden');
                 else if (!this.filterPanel.classList.contains('hidden')) this.filterPanel.classList.add('hidden');
+                else if (this.summaryOpen()) this.toggleSummary(false);
                 else if (this.panelNode) this.closePanel();
                 else this.cy?.$(':selected').unselect();
             }

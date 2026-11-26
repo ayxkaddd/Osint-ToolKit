@@ -6,6 +6,7 @@ site: crt.sh
 accepts: [domain]
 placeholder: example.org
 speed: medium
+graph: mention
 
 request:
   url: https://crt.sh/

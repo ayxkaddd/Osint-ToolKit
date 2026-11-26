@@ -31,7 +31,7 @@ def test_text_identifiers_and_date_are_saved(client, investigation):
     assert record["service_name"] == "manual" and record["result"]["date"] == "2021-06-15"
     assert {"email:someone@mail.test", "phone:+14155552671", "email:backup.person@mail.test"} <= _entities(client, investigation)
     summary = client.get(f"/api/investigations/{investigation}/results").json()["results"][0]
-    assert summary["target"] == "Bot answer" and summary["summary"] == "text · 2 identifiers"
+    assert summary["target"] == "Bot answer" and summary["summary"] == "text · 5 identifiers"
     events = client.get(f"/api/investigations/{investigation}/events").json()["events"]
     assert [(e["date"], e["label"]) for e in events] == [("2021-06-15", "Bot answer")]
 
@@ -137,3 +137,68 @@ def test_added_under_another_result(client, investigation):
         assert response.json()["result_id"] == parent
     children = _record(client, investigation, parent)["children"]
     assert [c["parameters"]["title"] for c in children] == ["First", "Second"]
+
+
+BOT_ANSWER = """Знайдено:
+ПІБ: КОВАЛЬ ОЛЕНА ПЕТРІВНА
+Телефон: 380671234567, 067 765 43 21
+Имя: Иван
+Фамилия: Петров
+ИНН: 771234567890
+Олександр Петренко, тел. 050 111 22 33
+"""
+
+
+def test_text_is_read_like_a_person_wrote_it(client, investigation):
+    """Labelled lines in Ukrainian and Russian, numbers without "+", names: all become
+    identifiers. National numbers are read in the country of the full number next to them."""
+    response = _add(client, investigation, text=BOT_ANSWER)
+    assert response.status_code == 201 and response.json()["no_country_code"] == []
+    found = _entities(client, investigation)
+    assert {"name:Коваль Олена Петрівна", "name:Иван Петров", "name:Олександр Петренко", "phone:+380671234567",
+            "phone:+380677654321", "phone:+380501112233"} <= found
+    assert not any(key.startswith("phone:") and "771234567890"[-6:] in key for key in found)   # the tax number
+
+
+def test_identifier_lines_with_labels_and_several_values(client, investigation):
+    response = _add(client, investigation, identifiers="Тел: +380 67 123 45 67\nМария Иванова\nivan@mail.test, +14155552671")
+    assert response.status_code == 201 and response.json()["skipped"] == []
+    assert {"phone:+380671234567", "name:Мария Иванова", "email:ivan@mail.test",
+            "phone:+14155552671"} <= _entities(client, investigation)
+
+
+def test_numbers_without_a_country_are_not_guessed_but_can_be_picked(client, investigation):
+    response = client.post(f"/api/investigations/{investigation}/manual",
+                           data={"title": "t", "text": "Contact: 067 123 45 67"},
+                           headers={"Accept-Language": "uk-UA,uk;q=0.9"})
+    body = response.json()
+    assert [n["typed"] for n in body["no_country_code"]] == ["067 123 45 67"]
+    assert body["no_country_code"][0]["suggestions"][0]["value"] == "+380671234567"   # the browser's country first
+    assert not any(k.startswith("phone:") for k in _entities(client, investigation))
+    # the card asks the same, and picking a number adds it
+    record = _record(client, investigation, body["result_id"])
+    assert record["result"]["no_country_code"][0]["typed"] == "067 123 45 67"
+    added = client.post(f"/api/investigations/{investigation}/results/{body['result_id']}/identifiers",
+                        json={"type": "phone", "value": "+380671234567"})
+    assert added.status_code == 201
+    assert "phone:+380671234567" in _entities(client, investigation)
+    assert _record(client, investigation, body["result_id"])["result"]["no_country_code"] == []
+
+
+def test_only_manual_results_take_identifiers(client, investigation):
+    from services.investigation_service import investigation_service
+    result_id = investigation_service.save_investigation_result(UUID(investigation), "whois", "lookup", {"domain": "a.test"}, {})
+    response = client.post(f"/api/investigations/{investigation}/results/{result_id}/identifiers",
+                           json={"type": "phone", "value": "+380671234567"})
+    assert response.status_code == 404
+
+
+def test_csv_columns_are_read_by_their_headers(client, investigation):
+    csv_file = "ПІБ;Телефон;Пошта\nОлена Коваль;+380501112233;olena@mail.test\nPetro Ivanenko;0931234567;\n".encode()
+    response = _add(client, investigation, files=[("leak.csv", csv_file, "text/csv")])
+    assert response.status_code == 201
+    assert {"name:Олена Коваль", "name:Petro Ivanenko", "phone:+380501112233", "phone:+380931234567",
+            "email:olena@mail.test"} <= _entities(client, investigation)
+    record = _record(client, investigation, response.json()["result_id"])
+    assert {"type": "phone", "value": "+380931234567"}.items() <= next(
+        f for f in record["result"]["found"] if f["value"] == "+380931234567").items()

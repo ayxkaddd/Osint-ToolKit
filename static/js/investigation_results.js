@@ -1508,6 +1508,39 @@ const MANUAL_FILE_MAX_BYTES = 50 * 1024 * 1024;
 let manualParent = null; // result id when adding to an existing result
 let manualFiles = [];
 
+// A number added by hand without its country code: picking one of the full numbers it
+// could be saves it to that result (result_renderers.js noCountryCodeHtml)
+window.manualPhonePicking = true;
+document.addEventListener('click', async (event) => {
+    const pick = event.target.closest('[data-manual-phone]');
+    const resultId = pick && pick.closest('[data-result-id]')?.dataset.resultId;
+    if (!resultId) return;
+    pick.disabled = true;
+    try {
+        const response = await fetch(
+            `/api/investigations/${investigationId}/results/${encodeURIComponent(resultId)}/identifiers`,
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    type: 'phone',
+                    value: pick.dataset.manualPhone,
+                    child_id: pick.closest('[data-manual-child]')?.dataset.manualChild || null,
+                }),
+            }
+        );
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.detail || `HTTP ${response.status}`);
+        delete detailCache[resultId];
+        entityState.loaded = false;
+        await expandCard(resultId, true);
+        showTemporaryNotification(`Saved ${data.value}`, 'success');
+    } catch (e) {
+        pick.disabled = false;
+        showTemporaryNotification(`Could not save the number: ${e.message}`, 'error');
+    }
+});
+
 function setupManualModal() {
     const input = document.getElementById('manualFiles');
     input.addEventListener('change', () => {
@@ -1634,9 +1667,14 @@ async function submitManualModal(event) {
         eventState.loaded = false;
         await reloadResults();
         const skipped = data.skipped || [];
+        const noCode = (data.no_country_code || []).map((n) => n.typed);
+        const problems = [
+            skipped.length ? `Not recognised as identifiers: ${skipped.join(', ')}` : '',
+            noCode.length ? `No country code (pick it in the result): ${noCode.join(', ')}` : '',
+        ].filter(Boolean);
         showTemporaryNotification(
-            skipped.length ? `Saved. Not recognised as identifiers: ${skipped.join(', ')}` : 'Saved',
-            skipped.length ? 'error' : 'success'
+            problems.length ? `Saved. ${problems.join('. ')}` : 'Saved',
+            problems.length ? 'info' : 'success'
         );
         history.replaceState(null, '', `#result-${encodeURIComponent(data.result_id)}`);
         openLinkedResult();

@@ -5,7 +5,7 @@ const SAVE_DELAY = 800;
 const HISTORY_MAX = 200;
 
 // The layout positions are made for (view.js); a view saved for an older one starts afresh
-export const LAYOUT_VERSION = 3;
+export const LAYOUT_VERSION = 5;
 
 const emptyState = () => ({
     version: LAYOUT_VERSION,
@@ -43,6 +43,8 @@ export class SavedView {
             this.outdated = Object.keys(data.positions).length > 0;
             data.positions = {};
             data.pinned = [];
+            // and where the view was: the graph fits the screen again
+            delete data.viewport;
             data.version = LAYOUT_VERSION;
         }
         this.data = data;

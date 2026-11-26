@@ -165,6 +165,32 @@ function eventDateText(date, precision) {
     return new Date(y, m - 1, d).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
+// Phone numbers in something added by hand that were written without a country code: the
+// full numbers each could be. Picking one adds it (investigation page, investigation_results.js).
+function noCountryCodeHtml(numbers, record) {
+    if (!numbers || !numbers.length || !window.manualPhonePicking) return '';
+    return `<div class="bg-amber-900/20 border border-amber-700/40 rounded-lg p-3 space-y-3 text-sm" data-manual-child="${escapeAttr((record && record.child_id) || '')}">
+        <div class="text-amber-200"><i class="fas fa-phone mr-1.5" aria-hidden="true"></i>${numbers.length === 1 ? 'This number has' : 'These numbers have'} no country code, so ${numbers.length === 1 ? "it isn't saved as a phone number" : "they aren't saved as phone numbers"}. Pick the right one:</div>
+        ${numbers
+            .map(
+                (n) => `<div class="flex flex-wrap items-center gap-1.5">
+            <span class="font-mono text-white mr-1">${escapeHtml(n.typed)}</span>
+            ${
+                (n.suggestions || []).length
+                    ? n.suggestions
+                          .map(
+                              (s) => `<button type="button" data-manual-phone="${escapeAttr(s.value)}"
+                class="inline-flex items-center gap-2 px-2.5 py-1.5 rounded bg-gray-800 hover:bg-purple-700/50 border border-gray-700 text-xs">
+                <span class="font-mono text-purple-200">${escapeHtml(s.display)}</span><span class="text-gray-400">${escapeHtml(s.country)}</span></button>`
+                          )
+                          .join('')
+                    : '<span class="text-xs text-gray-500">not a valid number in any of the likely countries</span>'
+            }</div>`
+            )
+            .join('')}
+    </div>`;
+}
+
 function renderManual(d, record) {
     if (!d || d.kind !== 'manual') return renderValue(d);
     const investigation =
@@ -175,9 +201,12 @@ function renderManual(d, record) {
     const files = d.files || [];
     const images = files.filter((f) => IMAGE_FILE_EXTS.includes(f.stored.split('.').pop()));
     const others = files.filter((f) => !images.includes(f));
-    const entities = Object.entries(d.entities || {}).flatMap(([type, values]) =>
-        (values || []).map((value) => ({ type, value }))
-    );
+    // what the server found in it (names, numbers written without "+"...), shown where it is written
+    const found = d.found || [];
+    const entities = Object.entries(d.entities || {})
+        .flatMap(([type, values]) => (values || []).map((value) => ({ type, value })))
+        // identifier lines that weren't one identifier each ("Тел: +380...", two on a line)
+        .concat(found.filter((f) => String(f.path || '').startsWith('identifier_lines')));
     const meta = [
         d.source ? `<span><i class="fas fa-tag mr-1 text-gray-500"></i>${pivotInText(d.source)}</span>` : '',
         d.date
@@ -191,14 +220,15 @@ function renderManual(d, record) {
         if (f.content === undefined || f.content === null) return '';
         const body =
             typeof f.content === 'string'
-                ? `<pre class="text-xs text-gray-300 whitespace-pre-wrap break-words max-h-96 overflow-y-auto">${pivotInText(f.content.slice(0, 50000))}${f.content.length > 50000 ? '\n…' : ''}</pre>`
+                ? `<pre class="text-xs text-gray-300 whitespace-pre-wrap break-words max-h-96 overflow-y-auto">${pivotInText(f.content.slice(0, 50000), found)}${f.content.length > 50000 ? '\n…' : ''}</pre>`
                 : renderValue(f.content);
         return `<details class="mt-2"><summary class="text-xs text-gray-500 hover:text-gray-300 cursor-pointer select-none">Show contents</summary><div class="mt-2">${body}</div></details>`;
     };
     return `
         <div class="space-y-4">
             ${meta.length ? `<div class="flex flex-wrap gap-x-5 gap-y-1 text-sm text-gray-300">${meta.join('')}</div>` : ''}
-            ${d.text ? `<div class="whitespace-pre-wrap break-words text-sm text-gray-200 bg-gray-900/60 border border-gray-800 rounded-lg p-3 max-h-96 overflow-y-auto">${pivotInText(d.text)}</div>` : ''}
+            ${d.text ? `<div class="whitespace-pre-wrap break-words text-sm text-gray-200 bg-gray-900/60 border border-gray-800 rounded-lg p-3 max-h-96 overflow-y-auto">${pivotInText(d.text, found)}</div>` : ''}
+            ${noCountryCodeHtml(d.no_country_code, record)}
             ${d.data !== null && d.data !== undefined ? renderValue(d.data) : ''}
             ${entities.length ? identifierGroupsHtml(entities) : ''}
             ${
@@ -954,7 +984,7 @@ function renderFunstatUsers(data) {
         <div class="bg-gray-900 rounded-xl p-4 border border-gray-800 flex items-center gap-4">
             <div class="w-12 h-12 rounded-full bg-purple-900/50 flex items-center justify-center text-xl shrink-0">${u.is_bot ? '🤖' : '👤'}</div>
             <div class="min-w-0">
-                <div class="text-lg font-bold text-white">${escapeHtml([u.first_name, u.last_name].filter(Boolean).join(' ') || 'Unknown')}</div>
+                <div class="text-lg font-bold text-white">${u.first_name || u.last_name ? telegramName(u) : 'Unknown'}</div>
                 <div class="text-sm text-gray-400">${u.username ? `${pivotText('telegram_username', u.username, '@' + u.username)} ${link(`https://t.me/${encodeURIComponent(u.username)}`, '↗')} · ` : ''}<span class="font-mono">ID ${pivotText('telegram_id', u.id)}</span></div>
             </div>
         </div>`

@@ -2,7 +2,7 @@
 // the path between two nodes, moving between nodes with the keyboard and the list of
 // keys. Methods of GraphView (view.js).
 import { spanningTree } from './layout.js';
-import { MANUAL_TYPES, OFF, typeColor } from './style.js';
+import { CARD_KINDS, MANUAL_TYPES, OFF, cardColor, typeColor } from './style.js';
 import { clip, typeName } from './view.js';
 
 const esc = (value) => window.escapeHtml(value);
@@ -17,8 +17,9 @@ const TRIAGE_FILTERS = {
 };
 
 const KEYS = [
-    ['Click', 'Open or fold a lookup or group; an identifier: its panel'],
-    ['Double-click', 'Open every lookup under an identifier'],
+    ['Click', 'A record or identifier: its panel, and what is under it; a group: open or fold it'],
+    ['Double-click', 'Fold what is under a record or identifier, or open it'],
+    ['W', 'What we know: the case at a glance'],
     ['Right click / long press', 'The node’s menu'],
     ['Shift + drag', 'Select several nodes'],
     ['← ↑ → ↓', 'Move to a connected node'],
@@ -147,46 +148,78 @@ export const finding = {
                        (
                            m
                        ) => `<button type="button" data-reveal="${attr(JSON.stringify(m))}" class="w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-gray-800/70">
-                        <span class="w-2 h-2 rounded-full shrink-0" style="background:${attr(typeColor(m.type))}"></span>
-                        <span class="flex-1 min-w-0 truncate text-gray-200">${esc(m.display)}</span>
+                        <span class="w-2 h-2 ${m.kind === 'card' ? 'rounded-sm' : 'rounded-full'} shrink-0" style="background:${attr(m.kind === 'card' ? cardColor(m.card) : typeColor(m.type))}"></span>
+                        <span class="flex-1 min-w-0 truncate text-gray-200">${esc(m.kind === 'card' ? [m.title, m.subtitle].filter(Boolean).join(' · ') : m.display)}</span>
                         <span class="text-[10px] text-purple-300 shrink-0">${this.cy.getElementById(m.id).length ? 'show' : 'open'}</span></button>`
                    )
                    .join('')}`
             : '';
     },
 
-    // Open what a match is folded in (its lookup, its group, the group's pages) and go to it
-    async reveal(match) {
-        const { lookup, group, offset } = match.reveal || {};
-        const has = () => this.cy.getElementById(match.id).length > 0;
-        if (!has() && lookup) {
-            const node = this.cy.getElementById(lookup);
-            if (node.length && !node.data('open')) await this.open(node, { record: true });
-        }
-        if (!has() && group) {
-            const node = this.cy.getElementById(group);
-            if (node.length && !node.data('open')) await this.open(node, { record: true });
-            // the group opens 40 at a time: the pages up to it
-            for (let page = 40; !has() && page <= (offset || 0); page += 40) {
-                const more = this.cy.getElementById(`more:${group}:${page}`);
+    // Open what a node is folded in (``steps`` from the server, top first: the nodes it
+    // hangs under, a group and the page of it that has it); true when it is drawn then
+    async openSteps(id, steps) {
+        const has = () => this.cy.getElementById(id).length > 0;
+        for (const step of steps || []) {
+            if (has()) break;
+            const at = step.open || step.group;
+            const node = this.cy.getElementById(at);
+            if (!node.length) continue;
+            if (!node.data('open') || !node.outgoers('node').length) await this.open(node, { record: true });
+            if (step.open) continue;
+            // a group opens 40 at a time: the pages up to it
+            for (let page = 40; !has() && page <= (step.offset || 0); page += 40) {
+                const more = this.cy.getElementById(`more:${at}:${page}`);
                 if (!more.length) break;
                 await this.loadMore(more, { record: true });
             }
         }
+        return has();
+    },
+
+    // A node, wherever it is folded (the panel's lists, the summary): opened up to it, and shown
+    async revealNode(id) {
+        if (!this.cy.getElementById(id).length) {
+            let found;
+            try {
+                found = await this.api('graph/reveal', { node: id });
+            } catch (error) {
+                window.showTemporaryNotification?.(`It could not be found here (${error.message})`, 'error');
+                return;
+            }
+            id = found.id;
+            if (!(await this.openSteps(id, found.steps))) {
+                window.showTemporaryNotification?.(
+                    'It could not be opened here (what it is under may be hidden)',
+                    'error'
+                );
+                return;
+            }
+        }
+        await this.unhideFor(this.cy.getElementById(id));
+        this.focusNode(id);
+    },
+
+    // What hides a node (itself or a node it hangs under) shown again
+    async unhideFor(node) {
+        if (!node.length || !node.is(OFF)) return;
+        const s = this.state.data;
+        const gone = [...s.hidden, ...s.removed];
+        const { parentOf } = spanningTree(this.cy.nodes());
+        const hiders = [];
+        for (let id = node.id(); id; id = parentOf.get(id)) if (gone.includes(id)) hiders.push(id);
+        if (hiders.length) await this.showNodes(hiders);
+    },
+
+    // Open what a match is folded in and go to it
+    async reveal(match) {
+        await this.openSteps(match.id, match.steps);
         const node = this.cy.getElementById(match.id);
         if (!node.length) {
-            window.showTemporaryNotification?.('It could not be opened here (its lookup may be hidden)', 'error');
+            window.showTemporaryNotification?.('It could not be opened here (what it is under may be hidden)', 'error');
             return;
         }
-        if (node.is(OFF)) {
-            const s = this.state.data;
-            const gone = [...s.hidden, ...s.removed];
-            const { parentOf } = spanningTree(this.cy.nodes());
-            // what hides it: itself or a node it hangs under
-            const hiders = [];
-            for (let id = node.id(); id; id = parentOf.get(id)) if (gone.includes(id)) hiders.push(id);
-            if (hiders.length) await this.showNodes(hiders);
-        }
+        await this.unhideFor(node);
         this.searchHere(this.searchBox.querySelector('input').value);
         this.searchFolded(this.searchBox.querySelector('input').value);
         this.focusNode(match.id);
@@ -244,16 +277,19 @@ export const finding = {
     },
 
     // -----------------------------------------------------------------------
-    // Filters: by type, module, assessment, dates, other cases; noise from the server
+    // Filters: by kind of record, type, module, assessment, dates, links; noise from the server
     // -----------------------------------------------------------------------
     filters() {
         return {
+            kinds: [],
             types: [],
             modules: [],
             triage: [],
             date_from: null,
             date_to: null,
             shared_only: false,
+            leaked: false,
+            linked: false,
             noise: false,
             ...(this.state.data.filters || {}),
         };
@@ -262,6 +298,9 @@ export const finding = {
     filtersActive() {
         const f = this.filters();
         return !!(
+            f.kinds.length ||
+            f.leaked ||
+            f.linked ||
             f.types.length ||
             f.modules.length ||
             f.triage.length ||
@@ -272,57 +311,62 @@ export const finding = {
         );
     },
 
-    // Shown: what matches, and the nodes on the way from a root to it (dimmed when they
-    // don't match themselves). A lookup left out by module or date goes with its branch.
+    // Shown: what matches, the nodes on the way from a root to it (dimmed when they don't
+    // match themselves) and, for a record that matches, what it holds.
     applyFilters() {
         this.cy.elements('.filtered, .filter-dim').removeClass('filtered filter-dim');
         const f = this.filters();
         if (!this.filtersActive()) return;
         const day = (value) => (value ? String(value).slice(0, 10) : null);
-        const lookupOut = (d) =>
-            (f.modules.length && !f.modules.includes(d.service)) ||
-            (f.date_from && day(d.timestamp) < f.date_from) ||
-            (f.date_to && day(d.timestamp) > f.date_to);
-        const identifierOut = (d) => {
-            if (f.types.length && !f.types.includes(d.type)) return true;
-            if (d.kind === 'manual') return false;
-            if (f.triage.length && !f.triage.includes(d.status || 'none')) return true;
-            if (f.shared_only && !d.shared) return true;
-            if (f.date_from && day(d.last_seen) && day(d.last_seen) < f.date_from) return true;
-            return !!(f.date_to && day(d.first_seen) && day(d.first_seen) > f.date_to);
+        const dated = (value) =>
+            !(f.date_from && day(value) && day(value) < f.date_from) &&
+            !(f.date_to && day(value) && day(value) > f.date_to);
+        // filters on records, and on identifiers
+        const byCard = !!(f.kinds.length || f.leaked || f.modules.length);
+        const byIdentifier = !!(f.types.length || f.triage.length || f.shared_only || f.linked);
+        const cardMatches = (d) =>
+            (!f.kinds.length || f.kinds.includes(d.card)) &&
+            (!f.modules.length || (d.services || []).some((s) => f.modules.includes(s))) &&
+            (!f.leaked || (d.card === 'breach' && !!d.flags?.includes('password'))) &&
+            (!f.linked || byCard || d.linked) &&
+            dated(d.date || d.first_seen);
+        const identifierMatches = (d) => {
+            if (f.types.length && !f.types.includes(d.type)) return false;
+            if (d.kind === 'manual') return true;
+            if (f.triage.length && !f.triage.includes(d.status || 'none')) return false;
+            if (f.shared_only && !d.shared) return false;
+            if (f.linked && !d.linked) return false;
+            return dated(d.last_seen) || dated(d.first_seen);
         };
-        // a group of accounts holds links; others, one identifier type
-        const groupOut = (d) =>
-            f.types.length > 0 && !f.types.includes(d.key.startsWith('type:') ? d.key.slice(5) : 'url');
+        const matches = (n) => {
+            const d = n.data();
+            if (d.kind === 'card') return (byCard || f.linked || !byIdentifier) && cardMatches(d);
+            if (d.kind === 'identifier' || d.kind === 'manual') return byIdentifier && identifierMatches(d);
+            if (d.kind === 'lookup') return f.modules.includes(d.service) && dated(d.timestamp);
+            if (d.kind === 'group')
+                return d.card
+                    ? byCard && (!f.kinds.length || f.kinds.includes(d.card)) && !f.leaked
+                    : f.types.includes(d.type);
+            if (d.kind === 'more') return matches(this.cy.getElementById(d.of));
+            return d.kind === 'pending';
+        };
         const { parentOf } = spanningTree(this.cy.nodes());
-        let out = this.cy.collection();
-        this.cy.nodes('[kind = "lookup"]').forEach((n) => {
-            if (lookupOut(n.data())) out = out.union(n).union(this.branch(n, parentOf));
+        const keep = new Set();
+        const shown = new Set();
+        this.cy.nodes().forEach((n) => {
+            if (!matches(n)) return;
+            shown.add(n.id());
+            for (let id = n.id(); id && !keep.has(id); id = parentOf.get(id)) keep.add(id);
+            // a record that matches shows what it holds
+            if (n.data('kind') === 'card' && !byIdentifier)
+                n.outgoers('node').forEach((c) => parentOf.get(c.id()) === n.id() && keep.add(c.id()));
         });
-        const dim = [];
-        if (f.types.length || f.triage.length || f.shared_only || f.date_from || f.date_to) {
-            const keep = new Set();
-            const rest = this.cy.nodes().not(out);
-            rest.forEach((n) => {
-                const d = n.data();
-                const passes =
-                    d.kind === 'identifier' || d.kind === 'manual'
-                        ? !identifierOut(d)
-                        : d.kind === 'group'
-                          ? !groupOut(d)
-                          : d.kind === 'more'
-                            ? !groupOut(this.cy.getElementById(d.of).data() || { key: '' })
-                            : d.kind === 'pending';
-                if (passes) for (let id = n.id(); id && !keep.has(id); id = parentOf.get(id)) keep.add(id);
-            });
-            rest.forEach((n) => {
-                if (!keep.has(n.id())) out = out.union(n);
-                else if (['identifier', 'manual'].includes(n.data('kind')) && identifierOut(n.data())) dim.push(n);
-            });
-        }
         this.cy.batch(() => {
-            out.addClass('filtered');
-            dim.forEach((n) => n.addClass('filter-dim'));
+            this.cy.nodes().forEach((n) => {
+                if (!keep.has(n.id())) n.addClass('filtered');
+                else if (!shown.has(n.id()) && ['identifier', 'card', 'manual'].includes(n.data('kind')))
+                    n.addClass('filter-dim');
+            });
         });
     },
 
@@ -332,6 +376,7 @@ export const finding = {
             return;
         }
         this.tray.classList.add('hidden');
+        if (this.summaryOpen()) this.showSummary(false);
         this.renderFilters();
         this.filterPanel.classList.remove('hidden');
     },
@@ -340,11 +385,17 @@ export const finding = {
         const f = this.filters();
         const types = new Map();
         const modules = new Map();
+        const kinds = new Map();
         this.cy.nodes().forEach((n) => {
             const d = n.data();
             if (d.kind === 'identifier' || d.kind === 'manual') types.set(d.type, (types.get(d.type) || 0) + 1);
             if (d.kind === 'lookup') modules.set(d.service, this.lookupName(d));
+            if (d.kind === 'card') {
+                kinds.set(d.card, (kinds.get(d.card) || 0) + 1);
+                for (const service of d.services || []) modules.set(service, this.lookupName({ service }));
+            }
         });
+        f.kinds.forEach((k) => kinds.has(k) || kinds.set(k, 0));
         f.types.forEach((t) => types.has(t) || types.set(t, 0));
         f.modules.forEach((m) => modules.has(m) || modules.set(m, m));
         const box = (group, value, label, checked, extra = '') =>
@@ -359,13 +410,28 @@ export const finding = {
                 <button type="button" data-filter-clear class="text-xs text-purple-300 hover:text-white">Show everything</button>
             </div>
             ${section(
+                'Records',
+                [...kinds.entries()]
+                    .sort((a, b) => b[1] - a[1])
+                    .map(([k, count]) =>
+                        box(
+                            'kinds',
+                            k,
+                            `${CARD_KINDS[k]?.plural || k} · ${count}`,
+                            f.kinds.includes(k),
+                            `<span class="w-2 h-2 rounded-sm shrink-0" style="background:${attr(cardColor(k))}"></span>`
+                        )
+                    )
+                    .join('') || '<p class="text-gray-500 text-xs">None drawn</p>'
+            )}
+            ${section(
                 'Identifiers',
                 [...types.entries()]
                     .sort((a, b) => b[1] - a[1])
                     .map(([t, count]) => box('types', t, `${typeName(t)} · ${count}`, f.types.includes(t), dot(t)))
                     .join('') || '<p class="text-gray-500 text-xs">None drawn</p>'
             )}
-            ${section('Modules', [...modules.entries()].map(([service, name]) => box('modules', service, name, f.modules.includes(service))).join('') || '<p class="text-gray-500 text-xs">None drawn</p>')}
+            ${section('Found by', [...modules.entries()].map(([service, name]) => box('modules', service, name, f.modules.includes(service))).join('') || '<p class="text-gray-500 text-xs">None drawn</p>')}
             ${section(
                 'Assessment',
                 Object.entries(TRIAGE_FILTERS)
@@ -378,6 +444,8 @@ export const finding = {
                 `<div class="flex items-center gap-2"><input type="date" data-filter-date="date_from" value="${attr(f.date_from || '')}" class="flex-1 bg-gray-950 border border-gray-700 rounded px-2 py-1 text-xs text-white"><span class="text-gray-500 text-xs">to</span><input type="date" data-filter-date="date_to" value="${attr(f.date_to || '')}" class="flex-1 bg-gray-950 border border-gray-700 rounded px-2 py-1 text-xs text-white"></div>`
             )}
             <div class="px-3 py-2 space-y-1">
+                ${box('flag', 'leaked', 'Only breaches that leaked a password', f.leaked)}
+                ${box('flag', 'linked', 'Only what links records together', f.linked)}
                 ${box('flag', 'shared_only', 'Only what other cases have too', f.shared_only)}
                 ${box('flag', 'noise', 'Show noise and false positives', f.noise)}
             </div>`;
@@ -476,9 +544,9 @@ export const finding = {
     onFindKey(e) {
         const key = e.key;
         const mod = e.ctrlKey || e.metaKey;
-        if ((mod && key.toLowerCase() === 'f') || (!mod && key === '/')) return this.openSearch(), true;
+        if ((mod && key.toLowerCase() === 'f') || (!mod && key === '/')) return (this.openSearch(), true);
         if (mod || e.altKey) return false;
-        if (key.startsWith('Arrow')) return this.step(key.slice(5).toLowerCase()), true;
+        if (key.startsWith('Arrow')) return (this.step(key.slice(5).toLowerCase()), true);
         if (key === ' ') {
             const node = this.cy.$('node:selected');
             if (node.length === 1 && ['lookup', 'group'].includes(node.data('kind')))
@@ -486,9 +554,9 @@ export const finding = {
             else if (node.length === 1 && node.data('kind') === 'more') this.loadMore(node, { record: true });
             return true;
         }
-        if (key === 'f' || key === 'F') return this.toggleFocus(), true;
-        if (key === 'p' || key === 'P') return this.showPath(), true;
-        if (key === '?') return this.showKeys(), true;
+        if (key === 'f' || key === 'F') return (this.toggleFocus(), true);
+        if (key === 'p' || key === 'P') return (this.showPath(), true);
+        if (key === '?') return (this.showKeys(), true);
         return false;
     },
 

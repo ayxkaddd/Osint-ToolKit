@@ -101,6 +101,9 @@ class Manifest(BaseModel):
     cost: Literal["free", "paid"] = "free"
     cost_note: str = ""
     speed: Literal["fast", "medium", "slow"] = "fast"
+    # what each result card is on the investigation graph (services/investigations/cards.py)
+    graph: Optional[Literal["account", "breach", "person", "registration", "network", "place", "mention",
+                            "document", "record"]] = None
     concurrency: int = Field(2, ge=1, le=5)
     timeout: float = Field(120, ge=5, le=1800)                   # Python plugins: the whole run
     accepts: list[str] = []              # with requests: defaults to what its lookups accept

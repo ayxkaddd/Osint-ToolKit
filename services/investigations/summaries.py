@@ -2,10 +2,10 @@
 import re
 from typing import Any, Optional
 
-from services.entities import SKIP_KEY_RE
+from services.entities import SKIP_KEY_RE, extract_entities
 from services.events import humanize
 from utils.legacy_repr import parse_model_repr
-from .constants import CHANGES_MAX_LEAVES, CHANGES_VOLATILE_KEYS, TARGET_KEYS
+from .constants import CHANGES_MAX_LEAVES, CHANGES_VOLATILE_KEYS, MANUAL_SERVICE, TARGET_KEYS
 
 
 def _leaf_values(result: Any) -> set:
@@ -73,7 +73,8 @@ def summarize(result: Any) -> str:
         return "No data"
     if isinstance(result, dict) and result.get("kind") == "manual":
         files = len(result.get("files") or [])
-        identifiers = sum(len(v) for v in (result.get("entities") or {}).values())
+        # everything found in it: the identifiers listed, and those in its text and files
+        identifiers = sum(1 for e, _ in extract_entities(result, MANUAL_SERVICE) if e.type != "text")
         parts = [f"{files} file{'s' if files != 1 else ''}" if files else "",
                  "text" if result.get("text") or result.get("data") is not None else "",
                  f"{identifiers} identifier{'s' if identifiers != 1 else ''}" if identifiers else ""]

@@ -13,16 +13,18 @@ export const TRIAGE = {
 };
 
 export const pivoting = {
-    // The result a lookup on this identifier is attached under: the lookup that found it
-    // (the one it hangs under in the tree, else any). Nothing for what was typed.
+    // The result a lookup on this node is attached under: the latest result of the record
+    // it is in (the card it hangs under in the tree, or the card itself). Nothing for what
+    // was typed.
     parentResultFor(node) {
-        let lookup = this.cy.getElementById(this.parentOf.get(node.id()) || '');
-        // in a chain of clues (account -> username it names -> its accounts): up to the lookup
-        for (let hops = 0; lookup.data('kind') === 'identifier' && hops < 20; hops++)
-            lookup = this.cy.getElementById(this.parentOf.get(lookup.id()) || '');
-        if (lookup.data('kind') === 'group') lookup = this.cy.getElementById(lookup.data('lookup'));
-        if (lookup.data('kind') !== 'lookup') lookup = node.incomers('node[kind = "lookup"]').first();
-        return lookup.length ? lookup.data('result_id') : null;
+        let at = node.data('kind') === 'card' ? node : this.cy.getElementById(this.parentOf.get(node.id()) || '');
+        for (let hops = 0; at.length && hops < 20; hops++) {
+            const kind = at.data('kind');
+            if (kind === 'card') return at.data('result_ids')?.slice(-1)[0] || null;
+            if (kind === 'lookup') return at.data('result_id') || null;
+            at = this.cy.getElementById((kind === 'group' ? at.data('owner') : this.parentOf.get(at.id())) || '');
+        }
+        return null;
     },
 
     // The app's pivot menu at the node (the menu is placed under an element: one where the node is)
@@ -197,7 +199,14 @@ export const pivoting = {
     },
 
     addPending(job) {
-        const from = this.cy.getElementById(`e:${job.entity_type}:${job.value}`);
+        const key = `${job.entity_type}:${job.value}`;
+        let from = this.cy.getElementById(`e:${key}`);
+        // an account's address or id is drawn as its card
+        if (!from.length)
+            from = this.cy
+                .nodes('[kind = "card"]')
+                .filter((n) => n.data('own')?.includes(key))
+                .first();
         if (!from.length) return;
         const id = `p:${job.id}`;
         const data = {
@@ -217,16 +226,18 @@ export const pivoting = {
         this.spin();
     },
 
-    // The pending node goes; the lookup it became grows out of the identifier
+    // The pending node goes; what the lookup found grows out of the identifier
     async finishPending(pending, job) {
         const from = pending.incomers('node').first();
-        // the lookup takes the pending node's place
+        // its cards take the pending node's place
         if (from.length) this.placeHints.set(from.id(), { ...pending.position() });
         pending.remove();
         await this.mergeFresh({ around: from.length ? from : null });
         if (job.result_id && from.length) {
-            const lookup = from.outgoers('node[kind = "lookup"]').filter((n) => n.data('result_id') === job.result_id);
-            this.pulse(lookup.union(lookup.outgoers('node')));
+            const found = from
+                .outgoers('node')
+                .filter((n) => (n.data('result_ids') || []).includes(job.result_id) || n.data('kind') === 'group');
+            this.pulse(found.union(found.outgoers('node')));
         }
     },
 
@@ -268,9 +279,12 @@ export const pivoting = {
         try {
             const graph = await this.api('graph');
             this.statsData = graph.stats;
+            // folded by the analyst, or closed by the server's budget: what is new waits in it
             const folded = (id) => {
                 const node = this.cy.getElementById(id);
-                return node.length > 0 && ['lookup', 'group'].includes(node.data('kind')) && !node.data('open');
+                if (!node.length || node.data('open')) return false;
+                if (node.data('kind') === 'group') return true;
+                return this.stash.has(id) || this.state.data.collapsed.includes(id) || node.data('hidden') > 0;
             };
             const fresh = [];
             for (const n of graph.nodes) {
@@ -287,6 +301,12 @@ export const pivoting = {
             const added = this.cy.add(this.elements(fresh, graph.edges));
             // and links between nodes that were already drawn
             this.cy.add(this.elements([], graph.edges));
+            // what new children grew under is open now (a double-click folds it)
+            added
+                .nodes()
+                .incomers('node')
+                .not('[kind = "group"]')
+                .forEach((n) => n.data('open') || this.setData(n, { open: true }));
             this.attachManualEdges();
             if (!added.nodes().length) {
                 this.refreshFoldable(this.cy.nodes());
@@ -296,6 +316,7 @@ export const pivoting = {
                 return;
             }
             this.show('');
+            this.loadSummary();
             await this.grow(added.nodes(), around);
             this.pulse(added.nodes());
         } catch (error) {

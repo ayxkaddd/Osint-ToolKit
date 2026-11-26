@@ -49,11 +49,45 @@ export const MANUAL_TYPES = {
     image: { label: 'Image', color: '#94a3b8', icon: 'image' },
 };
 
+// Cards: what a lookup said about one thing (services/investigations/cards.py)
+export const CARD_KINDS = {
+    account: { label: 'Account', plural: 'Accounts', color: '#a78bfa', icon: 'circle-user-round' },
+    person: { label: 'Person', plural: 'People', color: '#f472b6', icon: 'users' },
+    breach: { label: 'Breach', plural: 'Breaches', color: '#f87171', icon: 'shield-alert' },
+    registration: { label: 'Registration', plural: 'Registrations', color: '#fbbf24', icon: 'file-badge' },
+    network: { label: 'Network', plural: 'Networks', color: '#22d3ee', icon: 'network' },
+    place: { label: 'Place', plural: 'Places', color: '#4ade80', icon: 'map-pin' },
+    mention: { label: 'Mention', plural: 'Mentions', color: '#94a3b8', icon: 'message-square-quote' },
+    document: { label: 'Document', plural: 'Documents', color: '#9ca3af', icon: 'file-text' },
+    record: { label: 'Record', plural: 'Records', color: '#9ca3af', icon: 'file-text' },
+};
+
+// Facts two cards share: a node that links them
+export const FACT_KINDS = {
+    password: { label: 'Password', color: '#f87171', icon: 'key-round' },
+    hash: { label: 'Password hash', color: '#fb923c', icon: 'hash' },
+    address: { label: 'Address', color: '#4ade80', icon: 'house' },
+    dob: { label: 'Birth date', color: '#f472b6', icon: 'cake' },
+    city: { label: 'City', color: '#4ade80', icon: 'building-2' },
+};
+
+// What a card's badge says about a breach
+export const FLAG_NAMES = {
+    password: 'password',
+    hash: 'password hash',
+    address: 'address',
+    dob: 'birth date',
+    phone: 'phone',
+    card: 'bank card',
+    id: 'ID number',
+    tor: 'Tor',
+    admin: 'admin',
+};
+
+export const cardColor = (kind) => CARD_KINDS[kind]?.color || '#9ca3af';
+
 // Not drawn: hidden or taken off by the analyst, left out by a filter, outside the focus
 export const OFF = '.is-hidden, .filtered, .unfocused';
-
-// How visible labels are now, from the zoom (view.js fades them as the graph gets small)
-export const labels = { opacity: 1 };
 
 export const typeColor = (type) => TYPE_COLORS[type] || MANUAL_TYPES[type]?.color || '#9ca3af';
 
@@ -145,6 +179,15 @@ const CORNERS = {
     right: ['100%', '50%', 12, 0],
 };
 
+// Edges to cards and from them, by what the card is
+const EDGE_COLORS = {
+    account: '#7c6bb8',
+    person: '#b0628f',
+    breach: '#b45454',
+    registration: '#a5843a',
+    network: '#2b8796',
+};
+
 export function decorate(data) {
     const layers = [];
     const add = (uri, extra) =>
@@ -160,6 +203,24 @@ export function decorate(data) {
         if (data.status === 'confirmed') badge(iconBadge('check', PURPLE), 'top-right');
         else if (data.status === 'important') badge(iconBadge('star', AMBER, '#1f1300'), 'top-right');
         if (data.shared) badge(sharedBadge(data.shared), 'bottom-right');
+        if (!data.open && data.hidden) badge(pillBadge(`+${data.hidden}`, '#6d28d9'), 'right');
+    } else if (data.kind === 'card') {
+        // the picture (or the kind's icon) on the left, the text beside it (stylesheet)
+        const side = { w: '34px', h: '34px', x: '0%', ox: 9 };
+        add(iconUri(CARD_KINDS[data.card]?.icon || 'file-text', data.color, 0.85), {
+            ...side,
+            w: '20px',
+            h: '20px',
+            ox: 16,
+        });
+        if (data.picture) add(data.picture, { ...side, fit: 'cover' });
+        if (data.flags?.includes('password')) badge(iconBadge('key-round', '#b91c1c'), 'top-right');
+        else if (data.flags?.length && data.card === 'breach') badge(iconBadge('shield-alert', '#9a3412'), 'top-right');
+        if (data.found_by > 1) badge(pillBadge(`×${data.found_by}`, '#4c1d95'), 'top-left');
+        if (!data.open && data.hidden) badge(pillBadge(`+${data.hidden}`, '#6d28d9'), 'right');
+    } else if (data.kind === 'fact') {
+        add(iconUri(FACT_KINDS[data.fact]?.icon || 'link', data.color, 0.9), { w: '50%', h: '50%' });
+        badge(pillBadge(String(data.count), '#374151'), 'top-right');
     } else if (data.kind === 'manual') {
         add(iconUri(MANUAL_TYPES[data.type]?.icon || TYPE_ICONS[data.type] || 'circle'));
         if (data.picture) add(data.picture, { w: '100%', h: '100%', fit: 'cover' });
@@ -171,7 +232,9 @@ export function decorate(data) {
         if (data.open && data.foldable) badge(pillBadge('−', '#374151'), 'right');
         else if (!data.open && data.hidden) badge(pillBadge(`+${data.hidden}`, '#6d28d9'), 'right');
     } else if (data.kind === 'group') {
-        add(iconUri('layers', data.color, 0.75));
+        // a group of accounts shows one of their pictures
+        if (data.pictures?.length) add(data.pictures[0], { w: '100%', h: '100%', fit: 'cover' });
+        else add(iconUri(CARD_KINDS[data.card]?.icon || 'layers', data.color, 0.75));
         badge(pillBadge(data.open ? '−' : String(data.count), data.open ? '#1f2937' : '#6d28d9'), 'top-right');
     } else if (data.kind === 'pending') {
         add(
@@ -234,8 +297,9 @@ export function stylesheet() {
                 'background-image-crossorigin': 'null',
                 'background-image-smoothing': 'yes',
                 'overlay-opacity': 0,
-                'transition-property': 'opacity, border-color',
-                'transition-duration': 180,
+                // no label when it would be too small to read: a node's from about zoom 0.45
+                // (decided when drawing: zooming restyles nothing)
+                'min-zoomed-font-size': 5,
             },
         },
         {
@@ -259,6 +323,44 @@ export function stylesheet() {
             },
         },
         { selector: 'node[kind = "lookup"][?rerun]', style: { 'border-color': '#4c1d95' } },
+        // a card: a rounded box, its picture on the left, title and subtitle beside it
+        {
+            selector: 'node[kind = "card"]',
+            style: {
+                shape: 'round-rectangle',
+                'corner-radius': 10,
+                'background-color': '#151621',
+                'border-width': 1.5,
+                'border-color': 'data(color)',
+                'border-opacity': 0.75,
+                color: '#e5e7eb',
+                'font-size': 11,
+                'text-valign': 'center',
+                'text-halign': 'center',
+                'text-margin-y': 0,
+                'text-margin-x': 22,
+                'text-wrap': 'wrap',
+                'text-max-width': 'data(textWidth)',
+                'text-justification': 'left',
+                'line-height': 1.4,
+                'text-outline-width': 0,
+                // a card's title reads further out than an identifier's value (about zoom 0.3)
+                'min-zoomed-font-size': 3.5,
+            },
+        },
+        { selector: 'node[kind = "card"][card = "breach"]', style: { 'background-color': '#1d1418' } },
+        { selector: 'node[kind = "card"]:selected', style: { 'underlay-shape': 'round-rectangle' } },
+        // a fact two records share: a small diamond
+        {
+            selector: 'node[kind = "fact"]',
+            style: {
+                shape: 'diamond',
+                'background-color': '#0f1017',
+                'border-color': 'data(color)',
+                'font-size': 10,
+                color: '#e5e7eb',
+            },
+        },
         // a lookup still running: a purple arc turning round it (pivot.js moves the dash)
         {
             selector: 'node[kind = "pending"]',
@@ -347,8 +449,36 @@ export function stylesheet() {
                 'target-arrow-shape': 'triangle',
                 'target-arrow-color': '#64748b',
                 'arrow-scale': 0.8,
-                'transition-property': 'line-color, line-opacity, target-arrow-color, opacity',
-                'transition-duration': 180,
+            },
+        },
+        // links to a card and from it take the card's colour
+        ...Object.entries(EDGE_COLORS).map(([kind, color]) => ({
+            selector: `edge[card = "${kind}"]`,
+            style: { 'line-color': color, 'target-arrow-color': color },
+        })),
+        {
+            selector: 'edge[kind = "fact"]',
+            style: {
+                'line-style': 'dashed',
+                'line-dash-pattern': [4, 4],
+                'line-color': '#a16207',
+                'target-arrow-shape': 'none',
+            },
+        },
+        // what a link says ("in breach", "named in profile"), when close enough to read it
+        {
+            selector: 'edge[label]',
+            style: {
+                label: 'data(label)',
+                color: '#cbd5e1',
+                'font-family': 'JetBrains Mono, ui-monospace, monospace',
+                'font-size': 9,
+                'text-background-color': '#0f1017',
+                'text-background-padding': 2,
+                'text-background-shape': 'roundrectangle',
+                'text-background-opacity': 0.9,
+                // what a link says, only close enough to read it (about zoom 0.9)
+                'min-zoomed-font-size': 8,
             },
         },
         // the web layout: straight links
@@ -364,6 +494,8 @@ export function stylesheet() {
                 'line-opacity': 0.6,
             },
         },
+        // a link into a grid: the grid's frame has one link for all (lanes.js); shown on hover
+        { selector: 'edge.in-grid', style: { 'line-opacity': 0, 'target-arrow-shape': 'none', label: '' } },
         {
             selector: 'edge.lit',
             style: {
@@ -435,7 +567,7 @@ export function stylesheet() {
             style: { 'line-color': '#c4b5fd', 'target-arrow-color': '#c4b5fd', 'line-opacity': 1, width: 2.5 },
         },
         { selector: '.path-dim', style: { opacity: 0.15 } },
-        { selector: '.faded', style: { opacity: 0.2 } },
-        { selector: 'node[status = "false_positive"].faded', style: { opacity: 0.1 } },
+        // the neighbours of the node under the pointer
+        { selector: 'node.near', style: { 'border-width': 3 } },
     ];
 }
