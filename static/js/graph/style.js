@@ -89,9 +89,6 @@ export const cardColor = (kind) => CARD_KINDS[kind]?.color || '#9ca3af';
 // Not drawn: hidden or taken off by the analyst, left out by a filter, outside the focus
 export const OFF = '.is-hidden, .filtered, .unfocused';
 
-// How visible labels are now, from the zoom (view.js fades them as the graph gets small)
-export const labels = { opacity: 1, cards: 1 };
-
 export const typeColor = (type) => TYPE_COLORS[type] || MANUAL_TYPES[type]?.color || '#9ca3af';
 
 const PURPLE = '#a855f7';
@@ -300,8 +297,9 @@ export function stylesheet() {
                 'background-image-crossorigin': 'null',
                 'background-image-smoothing': 'yes',
                 'overlay-opacity': 0,
-                'transition-property': 'opacity, border-color',
-                'transition-duration': 180,
+                // no label when it would be too small to read: a node's from about zoom 0.45
+                // (decided when drawing: zooming restyles nothing)
+                'min-zoomed-font-size': 5,
             },
         },
         {
@@ -346,6 +344,8 @@ export function stylesheet() {
                 'text-justification': 'left',
                 'line-height': 1.4,
                 'text-outline-width': 0,
+                // a card's title reads further out than an identifier's value (about zoom 0.3)
+                'min-zoomed-font-size': 3.5,
             },
         },
         { selector: 'node[kind = "card"][card = "breach"]', style: { 'background-color': '#1d1418' } },
@@ -449,8 +449,6 @@ export function stylesheet() {
                 'target-arrow-shape': 'triangle',
                 'target-arrow-color': '#64748b',
                 'arrow-scale': 0.8,
-                'transition-property': 'line-color, line-opacity, target-arrow-color, opacity',
-                'transition-duration': 180,
             },
         },
         // links to a card and from it take the card's colour
@@ -469,7 +467,7 @@ export function stylesheet() {
         },
         // what a link says ("in breach", "named in profile"), when close enough to read it
         {
-            selector: 'edge[label].labelled, edge[label].lit',
+            selector: 'edge[label]',
             style: {
                 label: 'data(label)',
                 color: '#cbd5e1',
@@ -479,6 +477,8 @@ export function stylesheet() {
                 'text-background-padding': 2,
                 'text-background-shape': 'roundrectangle',
                 'text-background-opacity': 0.9,
+                // what a link says, only close enough to read it (about zoom 0.9)
+                'min-zoomed-font-size': 8,
             },
         },
         // the web layout: straight links
@@ -567,7 +567,7 @@ export function stylesheet() {
             style: { 'line-color': '#c4b5fd', 'target-arrow-color': '#c4b5fd', 'line-opacity': 1, width: 2.5 },
         },
         { selector: '.path-dim', style: { opacity: 0.15 } },
-        { selector: '.faded', style: { opacity: 0.2 } },
-        { selector: 'node[status = "false_positive"].faded', style: { opacity: 0.1 } },
+        // the neighbours of the node under the pointer
+        { selector: 'node.near', style: { 'border-width': 3 } },
     ];
 }

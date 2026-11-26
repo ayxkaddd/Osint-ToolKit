@@ -10,7 +10,6 @@ import {
     OFF,
     cardColor,
     decorate,
-    labels,
     stylesheet,
     typeColor,
 } from './style.js';
@@ -30,6 +29,8 @@ const motion = (ms) => (REDUCED_MOTION.matches ? 0 : ms);
 const SPRING = 'cubic-bezier(0.34, 1.4, 0.64, 1)';
 const LABEL_MAX = 36;
 const CARD_WIDTH = 236;
+// more nodes than this moving at once are put in place without animating
+const ANIMATE_MAX = 80;
 
 export const clip = (text, max = LABEL_MAX) => {
     const s = String(text ?? '').replace(/\s+/g, ' ');
@@ -87,9 +88,9 @@ export class GraphView {
     // -----------------------------------------------------------------------
     build() {
         this.root.innerHTML = `
-            <canvas class="graph-under absolute inset-0 w-full h-full pointer-events-none" aria-hidden="true"></canvas>
+            <canvas class="graph-under absolute inset-0 w-full h-full pointer-events-none origin-top-left will-change-transform" aria-hidden="true"></canvas>
             <div class="graph-canvas absolute inset-0" role="application" aria-label="Investigation graph"></div>
-            <canvas class="graph-over absolute inset-0 w-full h-full pointer-events-none" aria-hidden="true"></canvas>
+            <canvas class="graph-over absolute inset-0 w-full h-full pointer-events-none origin-top-left will-change-transform" aria-hidden="true"></canvas>
             <canvas class="graph-guides absolute inset-0 w-full h-full pointer-events-none" aria-hidden="true"></canvas>
             <div class="graph-toolbar absolute top-3 left-3 flex items-center gap-1 bg-[#1a1b26] border border-[#24283b] rounded-lg p-1 shadow-xl">
                 <button type="button" data-graph="fit" title="Fit to screen (0)"><i data-lucide="scan" class="w-4 h-4"></i></button>
@@ -421,59 +422,15 @@ export class GraphView {
         });
         const cy = this.cy;
 
-        // the app's grid, moving with the graph
-        const grid = () => {
-            // three levels of lines, each five times wider apart; zooming out, the finest
-            // fades away just as the next level takes its place, so nothing jumps
-            let fine = GRID * cy.zoom();
-            while (fine < 12) fine *= 5;
-            while (fine >= 60) fine /= 5;
-            const t = Math.min(1, (fine - 12) / 48);
-            const sizes = [fine, fine, fine * 5, fine * 5, fine * 25, fine * 25];
-            const pan = cy.pan();
-            const at = `${pan.x}px ${pan.y}px`;
-            const style = this.root.style;
-            style.backgroundSize = sizes.map((s) => `${s}px ${s}px`).join(', ');
-            style.backgroundPosition = sizes.map(() => at).join(', ');
-            style.setProperty('--grid-fine', `rgba(100, 116, 139, ${(0.11 * t).toFixed(3)})`);
-            style.setProperty('--grid-mid', `rgba(139, 152, 179, ${(0.11 + 0.09 * t).toFixed(3)})`);
-            style.setProperty('--grid-coarse', 'rgba(139, 152, 179, 0.2)');
-            this.hideTooltip();
-        };
-        cy.on('viewport', grid);
+        // the app's grid is drawn under the graph with the lanes (lanes.js drawGrid)
+        cy.on('viewport', () => this.hideTooltip());
+        // labels show from a size on screen (min-zoomed-font-size in style.js): zooming restyles nothing
         this.root.addEventListener('wheel', (e) => this.onWheel(e), { capture: true, passive: false });
-        // labels fade out as the graph gets small, instead of vanishing at once
-        // (set on the elements: Cytoscape doesn't read the stylesheet again on zoom)
-        const labelStyle = (eles) => {
-            eles.not('[kind = "card"]').style({
-                'text-opacity': labels.opacity,
-                'text-outline-opacity': labels.opacity * 0.85,
-                'text-background-opacity': labels.opacity * 0.9,
-            });
-            eles.filter('[kind = "card"]').style({ 'text-opacity': labels.cards });
-        };
-        const fadeLabels = () => {
-            const step = (from, span) => Math.round(Math.max(0, Math.min(1, (cy.zoom() - from) / span)) * 5) / 5;
-            // a card's title reads further out than an identifier's value
-            const level = step(0.28, 0.22);
-            const cards = step(0.16, 0.14);
-            cy.edges().toggleClass('labelled', cy.zoom() >= 0.85);
-            if (level === labels.opacity && cards === labels.cards) return;
-            labels.opacity = level;
-            labels.cards = cards;
-            cy.batch(() => labelStyle(cy.elements()));
-        };
-        cy.on('viewport', fadeLabels);
-        cy.on('add', (e) => {
-            if (labels.opacity < 1 || labels.cards < 1) labelStyle(e.target);
-            if (e.target.isEdge()) e.target.toggleClass('labelled', cy.zoom() >= 0.85);
-        });
         cy.on('viewport', () => this.drawMinimap(false));
         // the lanes, grids and clusters under the graph (lanes.js) follow it
-        cy.on('viewport', () => this.scheduleLanes());
+        cy.on('viewport', () => this.moveLanes());
         cy.on('position', 'node', () => this.scheduleLanes());
         cy.on('position add remove', () => this.drawMinimap());
-        grid();
 
         cy.on('tap', 'node', (e) => this.onTap(e.target));
         cy.on('tap', () => this.root.focus({ preventScroll: true }));
@@ -705,7 +662,8 @@ export class GraphView {
                 });
         }
         this.placeHints.clear();
-        const duration = animate ? motion(380) : 0;
+        // many nodes moving at once: put in place (animating hundreds is slow on a modest laptop)
+        const duration = animate && targets.size <= ANIMATE_MAX ? motion(260) : 0;
         const moves = [];
         targets.forEach((to, id) => {
             const node = this.cy.getElementById(id);
@@ -718,20 +676,13 @@ export class GraphView {
                 return;
             }
             if (!isNew && Math.abs(from.x - to.x) < 0.5 && Math.abs(from.y - to.y) < 0.5) return;
-            const style = isNew ? { opacity: 1, width: node.data('w'), height: node.data('h') } : undefined;
             moves.push(
                 node
-                    .animation({ position: to, style }, { duration, easing: isNew ? SPRING : 'ease-in-out-cubic' })
+                    .animation({ position: to }, { duration, easing: isNew ? SPRING : 'ease-in-out-cubic' })
                     .play()
                     .promise()
-                    .then(() => isNew && node.removeStyle('opacity width height'))
             );
         });
-        if (!duration && grown)
-            this.cy
-                .nodes()
-                .filter((n) => grown.has(n.id()))
-                .removeStyle('opacity width height');
         if (web && targets.size) this.keepPlaces(targets);
         if (grown?.size && !initial) this.bringIntoView([...grown].map((id) => targets.get(id)).filter(Boolean));
         return Promise.all(moves);
@@ -941,7 +892,6 @@ export class GraphView {
             const origin = n.incomers('node').not(nodes).first();
             const start = from || parent?.position() || (origin.length ? origin.position() : this.modelCenter());
             n.position({ x: start.x, y: start.y });
-            if (motion(1)) n.style({ opacity: 0, width: 4, height: 4 });
         });
         this.applyVisibility();
         this.refreshFoldable(this.cy.nodes());
@@ -1001,17 +951,11 @@ export class GraphView {
         const edges = folding.connectedEdges();
         this.stash.set(node.id(), [...folding.jsons(), ...edges.jsons()]);
         node.data('busy', true);
-        const duration = quiet ? 0 : motion(320);
+        const duration = quiet || folding.length > ANIMATE_MAX ? 0 : motion(220);
         if (duration) {
             await Promise.all(
                 folding.map((n) =>
-                    n
-                        .animation(
-                            { position: node.position(), style: { opacity: 0, width: 4, height: 4 } },
-                            { duration, easing: 'ease-in-cubic' }
-                        )
-                        .play()
-                        .promise()
+                    n.animation({ position: node.position() }, { duration, easing: 'ease-in-cubic' }).play().promise()
                 )
             );
         }
@@ -1063,11 +1007,11 @@ export class GraphView {
     // Hover: the node, its links and its neighbours stay bright
     // -----------------------------------------------------------------------
     hover(node, at) {
-        node.addClass('hover');
+        // only what touches the node changes (restyling every element is slow on big graphs)
         const color = node.data('kind') === 'lookup' ? '#a78bfa' : node.data('color');
-        node.connectedEdges().addClass('labelled');
         this.cy.batch(() => {
-            this.cy.elements().not(node.closedNeighborhood()).addClass('faded');
+            node.addClass('hover');
+            node.neighborhood('node').addClass('near');
             node.connectedEdges().data('color', color).addClass('lit');
         });
         this.showTooltip(this.nodeTooltip(node.data()), at);
@@ -1075,9 +1019,9 @@ export class GraphView {
 
     unhover() {
         this.cy.batch(() => {
-            this.cy.elements('.hover').removeClass('hover');
-            this.cy.elements('.faded').removeClass('faded');
-            this.cy.edges('.lit').not(':selected').removeClass('lit');
+            this.cy.$('.hover').removeClass('hover');
+            this.cy.$('.near').removeClass('near');
+            this.cy.$('edge.lit').not(':selected').removeClass('lit');
         });
         this.hideTooltip();
     }

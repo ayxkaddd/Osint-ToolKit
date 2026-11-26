@@ -388,21 +388,11 @@ select:focus-visible {
     }
 }
 
-/* Investigation graph: a dark blue-black with a grid on three levels (every 1, 5 and 25
-   steps); it moves and scales with the graph, and as it zooms each level fades in or out
-   (graph/view.js sets the sizes and the --grid-* colours) */
+/* Investigation graph: a dark blue-black; its grid is drawn on a canvas under the graph
+   (graph/lanes.js drawGrid): a CSS gradient grid repainted on every zoom step was the
+   slowest part of zooming on a modest laptop */
 .graph-root {
-    --grid-fine: rgba(100, 116, 139, 0.11);
-    --grid-mid: rgba(139, 152, 179, 0.2);
-    --grid-coarse: rgba(139, 152, 179, 0.2);
     background-color: #090a10;
-    background-image: linear-gradient(var(--grid-fine) 1px, transparent 1px),
-        linear-gradient(90deg, var(--grid-fine) 1px, transparent 1px),
-        linear-gradient(var(--grid-mid) 1px, transparent 1px),
-        linear-gradient(90deg, var(--grid-mid) 1px, transparent 1px),
-        linear-gradient(var(--grid-coarse) 1px, transparent 1px),
-        linear-gradient(90deg, var(--grid-coarse) 1px, transparent 1px);
-    background-size: 32px 32px, 32px 32px, 160px 160px, 160px 160px, 800px 800px, 800px 800px;
 }
 /* keys work while the graph has focus: a quiet sign of it, not the browser's outline */
 .graph-root:focus { outline: none; }

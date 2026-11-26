@@ -3,6 +3,7 @@
 // frames of clusters with what links their trees; over it, zoomed far out, a summary of
 // each tree ("jdoe · 34 accounts · 6 breaches"), when the nodes are too small to read.
 // Methods of GraphView (view.js).
+import { GRID } from './layout.js';
 import { CARD_KINDS } from './style.js';
 
 // Under this zoom the trees are summed up
@@ -31,6 +32,23 @@ export const laning = {
         });
     },
 
+    // While the view moves (zoom, pan), what is drawn moves with it as a picture (a CSS
+    // transform: almost free), and is drawn again sharp once it stops for a moment (or every
+    // 300 ms of a long move). Redrawing it every frame was a large part of zooming's cost.
+    moveLanes() {
+        const drawn = this.lanesView;
+        if (!this.cy || !drawn) return this.scheduleLanes();
+        const zoom = this.cy.zoom();
+        const pan = this.cy.pan();
+        const k = zoom / drawn.zoom;
+        const transform = `translate(${pan.x - drawn.pan.x * k}px, ${pan.y - drawn.pan.y * k}px) scale(${k})`;
+        this.under.style.transform = transform;
+        this.over.style.transform = transform;
+        clearTimeout(this.lanesIdle);
+        this.lanesIdle = setTimeout(() => this.scheduleLanes(), 120);
+        if (performance.now() - drawn.at > 300) this.scheduleLanes();
+    },
+
     canvasFor(canvas) {
         const ratio = window.devicePixelRatio || 1;
         const w = canvas.clientWidth;
@@ -45,17 +63,62 @@ export const laning = {
         return ctx;
     },
 
+    // The app's grid on three levels (every 1, 5 and 25 steps), moving and scaling with the
+    // graph; zooming out, the finest fades just as the next takes its place, so nothing jumps
+    drawGrid(ctx, zoom, pan) {
+        const w = this.under.clientWidth;
+        const h = this.under.clientHeight;
+        let fine = GRID * zoom;
+        while (fine < 12) fine *= 5;
+        while (fine >= 60) fine /= 5;
+        const t = Math.min(1, (fine - 12) / 48);
+        const levels = [
+            [fine, `rgba(100, 116, 139, ${(0.11 * t).toFixed(3)})`],
+            [fine * 5, `rgba(139, 152, 179, ${(0.11 + 0.09 * t).toFixed(3)})`],
+            [fine * 25, 'rgba(139, 152, 179, 0.2)'],
+        ];
+        ctx.lineWidth = 1;
+        for (const [step, color] of levels) {
+            ctx.beginPath();
+            for (let x = ((pan.x % step) + step) % step; x < w; x += step) {
+                ctx.moveTo(Math.round(x) + 0.5, 0);
+                ctx.lineTo(Math.round(x) + 0.5, h);
+            }
+            for (let y = ((pan.y % step) + step) % step; y < h; y += step) {
+                ctx.moveTo(0, Math.round(y) + 0.5);
+                ctx.lineTo(w, Math.round(y) + 0.5);
+            }
+            ctx.strokeStyle = color;
+            ctx.stroke();
+        }
+    },
+
     drawLanes() {
         if (!this.cy || !this.under) return;
         const under = this.canvasFor(this.under);
-        const over = this.canvasFor(this.over);
-        const decor = this.decor;
-        if (!decor) return;
         const zoom = this.cy.zoom();
         const pan = this.cy.pan();
+        // drawn for this view: no transform (moveLanes)
+        this.lanesView = { zoom, pan: { ...pan }, at: performance.now() };
+        this.under.style.transform = '';
+        this.over.style.transform = '';
+        this.drawGrid(under, zoom, pan);
+        // the canvas over the graph is cleared only when something was drawn on it
+        const over = this.overDrawn || zoom < SUMMARY_ZOOM ? this.canvasFor(this.over) : null;
+        this.overDrawn = false;
+        const decor = this.decor;
+        if (!decor) return;
         const sx = (x) => x * zoom + pan.x;
         const sy = (y) => y * zoom + pan.y;
         const far = zoom < SUMMARY_ZOOM;
+        // only what is on screen is drawn
+        const view = {
+            x1: -pan.x / zoom,
+            y1: -pan.y / zoom,
+            x2: (this.under.clientWidth - pan.x) / zoom,
+            y2: (this.under.clientHeight - pan.y) / zoom,
+        };
+        const seen = (b) => b.x2 >= view.x1 && b.x1 <= view.x2 && b.y2 >= view.y1 && b.y1 <= view.y2;
         const round = (ctx, x1, y1, x2, y2, r) => {
             ctx.beginPath();
             ctx.roundRect(sx(x1), sy(y1), (x2 - x1) * zoom, (y2 - y1) * zoom, r * zoom);
@@ -63,6 +126,7 @@ export const laning = {
 
         // clusters: a dashed frame, and what links the trees in it
         for (const c of decor.clusters) {
+            if (!seen(c)) continue;
             round(under, c.x1, c.y1, c.x2, c.y2, 18);
             under.fillStyle = 'rgba(109, 40, 217, 0.06)';
             under.fill();
@@ -81,6 +145,7 @@ export const laning = {
 
         // grids: a soft frame, and one link from the parent to it
         for (const g of decor.grids) {
+            if (!seen({ ...g, x1: g.x1 - 400 })) continue;
             round(under, g.x1, g.y1, g.x2, g.y2, 12);
             under.fillStyle = 'rgba(26, 27, 38, 0.45)';
             under.fill();
@@ -129,6 +194,9 @@ export const laning = {
         under.fillStyle = 'rgba(100, 116, 139, 0.75)';
         under.lineWidth = Math.max(1, 1.8 * zoom);
         for (const bus of decor.buses || []) {
+            const end = bus.columns[bus.columns.length - 1];
+            const bottom = Math.max(...bus.columns.map((c) => c.ticks[c.ticks.length - 1]?.y ?? bus.y));
+            if (!end || !seen({ x1: bus.columns[0].x - 400, x2: end.x + 400, y1: bus.y - 400, y2: bottom })) continue;
             const from = this.cy.getElementById(bus.from);
             if (!from.length || from.is('.is-hidden, .filtered, .unfocused') || !bus.columns.length) continue;
             const p = from.position();
@@ -169,6 +237,7 @@ export const laning = {
                 under.font = `600 ${size}px ${FONT}`;
                 under.textBaseline = 'middle';
                 for (const l of decor.lanes) {
+                    if (!seen({ x1: l.x, x2: l.x + 300, y1: l.y - 10, y2: l.y + 10 })) continue;
                     const kind = CARD_KINDS[l.lane];
                     under.fillStyle = kind?.color || '#94a3b8';
                     under.globalAlpha = 0.9;
@@ -183,7 +252,10 @@ export const laning = {
         }
 
         // far out: each tree summed up over it
-        if (far) for (const u of decor.units) this.drawSummary(over, u, { sx, sy, zoom });
+        if (far && over) {
+            for (const u of decor.units) if (seen(u)) this.drawSummary(over, u, { sx, sy, zoom });
+            this.overDrawn = true;
+        }
     },
 
     // "jdoe@mail.com and 2 more · 34 accounts · 6 breaches (2 passwords) · 12 identifiers"

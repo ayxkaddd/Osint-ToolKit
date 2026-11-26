@@ -157,8 +157,15 @@ export const framing = {
         this.minimapDirty = this.minimapDirty || nodesMoved;
         if (this.minimapQueued) return;
         this.minimapQueued = true;
-        requestAnimationFrame(() => {
+        // at most every 80 ms: while zooming, every frame was a noticeable cost
+        const wait = Math.max(0, 80 - (performance.now() - (this.minimapAt || 0)));
+        setTimeout(() => requestAnimationFrame(() => this.paintMinimap()), wait);
+    },
+
+    paintMinimap() {
+        {
             this.minimapQueued = false;
+            this.minimapAt = performance.now();
             const canvas = this.minimap;
             if (!this.cy || canvas.closest('.hidden')) return;
             const ratio = window.devicePixelRatio || 1;
@@ -168,9 +175,14 @@ export const framing = {
                 this.minimapDirty = false;
                 this.minimapBase = this.drawMinimapBase(width, height, ratio);
             }
-            canvas.width = width * ratio;
-            canvas.height = height * ratio;
+            // resized only when its size changed (resizing a canvas reallocates it)
+            if (canvas.width !== width * ratio || canvas.height !== height * ratio) {
+                canvas.width = width * ratio;
+                canvas.height = height * ratio;
+            }
             const ctx = canvas.getContext('2d');
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.drawImage(this.minimapBase, 0, 0);
             const frame = this.minimapFrame;
             if (!frame) return;
@@ -184,7 +196,7 @@ export const framing = {
                 view.w * frame.scale,
                 view.h * frame.scale
             );
-        });
+        }
     },
 
     drawMinimapBase(width, height, ratio) {
@@ -283,7 +295,7 @@ export const framing = {
     // The graph drawn for a picture: no hover or search dimming, no pictures from other
     // sites; for the report also nothing about other cases. Put back after.
     async asPicture(work, { forReport = false } = {}) {
-        const marks = '.hover, .faded, .lit, .match, .search-dim, .pulse';
+        const marks = '.hover, .near, .lit, .match, .search-dim, .pulse';
         const marked = this.cy.elements(marks).map((e) => [e, e.classes().filter((c) => marks.includes(`.${c}`))]);
         const changed = [];
         this.cy.batch(() => {
